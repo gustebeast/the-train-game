@@ -1,21 +1,21 @@
 ﻿STRING 1
 {
-TypeScript Template
+The Train Game
 }
 
 STRING 2
 {
-Any
+4
 }
 
 STRING 3
 {
-Nondescript
+Don't let the train fall off the rails!
 }
 
 STRING 4
 {
-TriggerHappy
+gustebeast
 }
 
 STRING 5
@@ -23,33 +23,23 @@ STRING 5
 Player 1
 }
 
-STRING 6
+STRING 7
 {
 Player 2
 }
 
-STRING 7
+STRING 8
 {
 Player 3
 }
 
-STRING 8
-{
-Force 1
-}
-
 STRING 9
-{
-Force 2
-}
-
-STRING 10
 {
 Player 4
 }
 
-STRING 11
+STRING 10
 {
-Player 12
+Players
 }
 
