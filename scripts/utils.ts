@@ -101,6 +101,13 @@ export function compileMap(config: IProjectConfig) {
   logger.info(`Building "${config.mapFolder}"...`);
   fs.copySync(`./maps/${config.mapFolder}`, `./dist/${config.mapFolder}`);
 
+  // Lock race selection in the dist copy without touching the source file
+  const distMapLua = `./dist/${config.mapFolder}/war3map.lua`;
+  if (fs.existsSync(distMapLua)) {
+    const lua = fs.readFileSync(distMapLua).toString();
+    fs.writeFileSync(distMapLua, lua.replace(/SetPlayerRaceSelectable\(([^,]+),\s*true\)/g, 'SetPlayerRaceSelectable($1, false)'));
+  }
+
   logger.info("Modifying tsconfig.json to work with war3-transformer...");
   updateTSConfig(config.mapFolder);
 
