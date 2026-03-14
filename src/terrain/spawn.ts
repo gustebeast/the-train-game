@@ -3,16 +3,12 @@ import { Units } from '@objectdata/units';
 import {
   CellType, Grid,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
+  TREE_RAW, ROCK_RAW,
   idx, gridToWorld, isReserved,
 } from './constants';
 import { log } from '../debug';
 import { getNeutralExtra } from '../teams';
-
-// --- Tree destructable type ---
-export const TREE_RAW = 'LTlt';  // SummerTreeWall (Lordaeron Summer)
-
-// --- Rock destructable type ---
-export const ROCK_RAW = 'LTrt';  // RockChunks2 (Lordaeron Summer — 6 variations)
+import { registerResourceDest } from '../harvest';
 
 // Per-variation scales to normalize rock models to ~128-unit footprint.
 const ROCK_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
@@ -52,10 +48,11 @@ export function spawnTerrain(grid: Grid): void {
       switch (cell) {
         case CellType.TREE: {
           const variation = GetRandomInt(0, 9);
-          Destructable.create(
+          const tree = Destructable.create(
             FourCC(TREE_RAW), world.x, world.y,
             GetRandomReal(220, 320), 0.8, variation,
           );
+          if (tree != null) registerResourceDest(tree);
           paintTile(world.x, world.y, TERRAIN_GRASS);
           treeCount++;
           break;
@@ -63,10 +60,11 @@ export function spawnTerrain(grid: Grid): void {
 
         case CellType.ROCK: {
           const variation = GetRandomInt(0, 5);
-          Destructable.create(
+          const rock = Destructable.create(
             FourCC(ROCK_RAW), world.x, world.y,
             GetRandomReal(0, 360), ROCK_SCALES[variation], variation,
           );
+          if (rock != null) registerResourceDest(rock);
           paintTile(world.x, world.y, TERRAIN_DIRT);
           rockCount++;
           break;

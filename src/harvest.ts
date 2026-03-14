@@ -1,12 +1,36 @@
-import { Item, Timer, Trigger, Unit } from 'w3ts';
+import { Destructable, Item, Timer, Trigger, Unit } from 'w3ts';
 import { Items } from '@objectdata/items';
-import { TREE_RAW, ROCK_RAW } from './terrain/spawn';
+import { TREE_RAW, ROCK_RAW } from './terrain/constants';
 import { log } from './debug';
 
 const TREE_DEST_ID = FourCC(TREE_RAW);
 const ROCK_DEST_ID = FourCC(ROCK_RAW);
 const AXE_ID = FourCC(Items.SturdyWarAxe);
 const PICKAXE_ID = FourCC(Items.RustyMiningPick);
+const WOOD_ID = FourCC(Items.IronwoodBranch);
+const STONE_ID = FourCC(Items.GemFragment);
+const MAX_STACK = 3;
+
+// Death triggers for resource drops (initialized by initHarvest, must be called before spawnTerrain)
+let treeDeath!: Trigger;
+let rockDeath!: Trigger;
+
+function dropResource(itemId: number): void {
+  const w = GetTriggerWidget();
+  if (w == null) return;
+  const x = GetWidgetX(w);
+  const y = GetWidgetY(w);
+  Item.create(itemId, x, y);
+}
+
+/** Register a resource destructable so it drops an item on death. */
+export function registerResourceDest(dest: Destructable): void {
+  if (dest.typeId === TREE_DEST_ID) {
+    treeDeath.registerDeathEvent(dest);
+  } else if (dest.typeId === ROCK_DEST_ID) {
+    rockDeath.registerDeathEvent(dest);
+  }
+}
 
 /** Check whether a unit is carrying an item of the given type. */
 function unitHasItemType(u: Unit, itemTypeId: number): boolean {
@@ -47,56 +71,62 @@ function isResourceDest(destTypeId: number): boolean {
   return destTypeId === TREE_DEST_ID || destTypeId === ROCK_DEST_ID;
 }
 
-/** Cancel order + show text if unit lacks the required tool for a destructable. */
-function checkToolAndCancel(unit: Unit, destTypeId: number): void {
+function isResource(itemTypeId: number): boolean {
+  return itemTypeId === WOOD_ID || itemTypeId === STONE_ID;
+}
+
+/**
+ * Unified handler for any order targeting a resource destructable.
+ * - No tool → stop + show "Requires X!"
+ * - Has tool → redirect to attack order on the destructable
+ */
+function handleResourceOrder(unit: Unit, dest: destructable): void {
+  const destTypeId = GetDestructableTypeId(dest);
   const tool = requiredToolForDest(destTypeId);
   if (tool === 0) return;
-  if (unitHasItemType(unit, tool)) return;
 
   const unitHandle = unit.handle;
+
+  if (!unitHasItemType(unit, tool)) {
+    const t = Timer.create();
+    t.start(0, false, () => {
+      IssueImmediateOrder(unitHandle, 'stop');
+      t.destroy();
+    });
+    showRequiresText(unitHandle, toolName(tool));
+    return;
+  }
+
+  // Has tool — always redirect to attack (handles harvest/smart/etc uniformly)
   const t = Timer.create();
   t.start(0, false, () => {
-    IssueImmediateOrder(unitHandle, 'stop');
+    IssueTargetDestructableOrder(unitHandle, 'attack', dest);
     t.destroy();
   });
-  showRequiresText(unitHandle, toolName(tool));
+}
+
+/** Find a resource destructable near coordinates. */
+function findResourceDestAt(x: number, y: number): destructable | null {
+  let found: destructable | null = null;
+  const r = Rect(x - 64, y - 64, x + 64, y + 64);
+  EnumDestructablesInRect(r, undefined, () => {
+    const d = GetEnumDestructable();
+    if (d != null && GetDestructableLife(d) > 0 && isResourceDest(GetDestructableTypeId(d))) {
+      found = d;
+    }
+  });
+  RemoveRect(r);
+  return found;
 }
 
 export function initHarvest(): void {
-  // --- Debug: log ALL order types to find what fires on destructable right-click ---
-  const debugTarget = Trigger.create();
-  debugTarget.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
-  debugTarget.addAction(() => {
-    const orderId = GetIssuedOrderId();
-    const orderStr = OrderId2String(orderId);
-    const destTarget = GetOrderTargetDestructable();
-    const unitTarget = GetOrderTargetUnit();
-    log('TARGET_ORDER: id=' + orderId + ' str=' + (orderStr || 'null') +
-      ' hasDest=' + (destTarget != null) +
-      ' hasUnit=' + (unitTarget != null));
-  });
+  // --- Resource drop triggers (must be initialized before spawnTerrain) ---
+  treeDeath = Trigger.create();
+  treeDeath.addAction(() => dropResource(WOOD_ID));
+  rockDeath = Trigger.create();
+  rockDeath.addAction(() => dropResource(STONE_ID));
 
-  const debugPoint = Trigger.create();
-  debugPoint.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
-  debugPoint.addAction(() => {
-    const orderId = GetIssuedOrderId();
-    const orderStr = OrderId2String(orderId);
-    const x = GetOrderPointX();
-    const y = GetOrderPointY();
-    const destTarget = GetOrderTargetDestructable();
-    log('POINT_ORDER: id=' + orderId + ' str=' + (orderStr || 'null') +
-      ' x=' + x + ' y=' + y + ' hasDest=' + (destTarget != null));
-  });
-
-  const debugNoTarget = Trigger.create();
-  debugNoTarget.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_ORDER);
-  debugNoTarget.addAction(() => {
-    const orderId = GetIssuedOrderId();
-    const orderStr = OrderId2String(orderId);
-    log('NO_TARGET_ORDER: id=' + orderId + ' str=' + (orderStr || 'null'));
-  });
-
-  // --- Intercept destructable target orders (in view) ---
+  // --- Intercept target orders on resource destructables (in view) ---
   const destTargetTrigger = Trigger.create();
   destTargetTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
   destTargetTrigger.addAction(() => {
@@ -106,37 +136,24 @@ export function initHarvest(): void {
 
     const unit = Unit.fromEvent();
     if (unit == null) return;
-    checkToolAndCancel(unit, GetDestructableTypeId(dest));
+    handleResourceOrder(unit, dest);
   });
 
-  // --- Intercept destructable point orders (out of fog) ---
+  // --- Intercept point orders near resource destructables (out of fog) ---
   const destPointTrigger = Trigger.create();
   destPointTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
   destPointTrigger.addAction(() => {
-    if (GetIssuedOrderId() !== OrderId('smart')) return;
-
     const x = GetOrderPointX();
     const y = GetOrderPointY();
     const unit = Unit.fromEvent();
     if (unit == null) return;
 
-    // Check if a resource destructable exists at the click point
-    let foundType = 0;
-    const r = Rect(x - 64, y - 64, x + 64, y + 64);
-    EnumDestructablesInRect(r, undefined, () => {
-      const d = GetEnumDestructable();
-      if (d != null) {
-        const dt = GetDestructableTypeId(d);
-        if (isResourceDest(dt)) foundType = dt;
-      }
-    });
-    RemoveRect(r);
-
-    if (foundType === 0) return;
-    checkToolAndCancel(unit, foundType);
+    const dest = findResourceDestAt(x, y);
+    if (dest == null) return;
+    handleResourceOrder(unit, dest);
   });
 
-  // --- Enforce one item at a time ---
+  // --- Item pickup: enforce one item, stack matching resources ---
   const pickupTrigger = Trigger.create();
   pickupTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
   pickupTrigger.addAction(() => {
@@ -144,18 +161,38 @@ export function initHarvest(): void {
     const picked = Item.fromEvent();
     if (unit == null || picked == null) return;
 
-    // Count items in inventory (excluding the one just picked up)
+    const pickedType = picked.typeId;
+    const pickedIsResource = isResource(pickedType);
+
+    // Scan inventory for existing items (excluding the one just picked up)
     let otherItem: Item | undefined;
+    let matchingResource: Item | undefined;
     for (let slot = 0; slot < 6; slot++) {
       const it = unit.getItemInSlot(slot);
-      if (it != null && it.handle !== picked.handle) {
+      if (it == null || it.handle === picked.handle) continue;
+      if (pickedIsResource && it.typeId === pickedType) {
+        matchingResource = it;
+      } else {
         otherItem = it;
-        break;
       }
     }
 
-    // If carrying another item, drop it
-    if (otherItem != null) {
+    if (matchingResource != null) {
+      // Same resource type — merge charges up to MAX_STACK
+      const total = matchingResource.charges + picked.charges;
+      const kept = math.min(total, MAX_STACK);
+      const remainder = total - kept;
+
+      matchingResource.charges = kept;
+      if (remainder > 0) {
+        // Drop leftover as a new stack at the unit's feet
+        picked.charges = remainder;
+        unit.removeItem(picked);
+      } else {
+        RemoveItem(picked.handle);
+      }
+    } else if (otherItem != null) {
+      // Different item — drop the old one
       unit.removeItem(otherItem);
     }
   });

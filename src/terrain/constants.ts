@@ -54,3 +54,7 @@ export function isReserved(gx: number, gy: number): boolean {
 export function gridToWorld(gx: number, gy: number): { x: number; y: number } {
   return { x: gx * TRACK_SIZE, y: gy * TRACK_SIZE };
 }
+
+// --- Destructable rawcodes ---
+export const TREE_RAW = 'LTlt';  // SummerTreeWall (Lordaeron Summer)
+export const ROCK_RAW = 'LTrt';  // RockChunks2 (Lordaeron Summer — 6 variations)

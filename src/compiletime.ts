@@ -41,7 +41,7 @@ compiletime(({ objectData, constants }) => {
   peasant.structuresBuilt = [
     constants.units.Farm,
   ].join(',');
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.BuildHuman].join(',');
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.BuildHuman, constants.abilities.HarvestGhoulsLumber].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
@@ -70,9 +70,43 @@ compiletime(({ objectData, constants }) => {
   pickaxe.canBeSoldToMerchants = false;
   pickaxe.abilities = '';
 
+  // Wood resource item (IronwoodBranch — normal holdable item)
+  const wood = objectData.items.get(constants.items.IronwoodBranch)!;
+  wood.name = 'Wood';
+  wood.description = 'A bundle of wood harvested from trees.';
+  wood.classification = 'Charged';
+  wood.goldCost = 0;
+  wood.canBeDropped = true;
+  wood.droppedWhenCarrierDies = true;
+  wood.perishable = false;
+  wood.useAutomaticallyWhenAcquired = false;
+  wood.canBeSoldToMerchants = false;
+  wood.abilities = '';
+  wood.numberOfCharges = 1;
+  wood.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNBundleOfLumber.blp';
+  wood.modelUsed = 'Doodads\\Felwood\\Props\\FelwoodLogStraight\\FelwoodLogStraight.mdx';
+  wood.scalingValue = 0.4;
+
+  // Stone resource item (GemFragment — normal holdable item)
+  const stone = objectData.items.get(constants.items.GemFragment)!;
+  stone.name = 'Stone';
+  stone.description = 'A chunk of stone mined from rocks.';
+  stone.classification = 'Charged';
+  stone.goldCost = 0;
+  stone.canBeDropped = true;
+  stone.droppedWhenCarrierDies = true;
+  stone.perishable = false;
+  stone.useAutomaticallyWhenAcquired = false;
+  stone.canBeSoldToMerchants = false;
+  stone.abilities = '';
+  stone.numberOfCharges = 1;
+  stone.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNStoneForm.blp';
+  stone.modelUsed = 'Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_Rock6.mdx';
+  stone.scalingValue = 0.4;
+
   // Tree destructables (SummerTreeWall / LTlt)
   const tree = objectData.destructables.get(constants.destructables.SummerTreeWall)!;
-  tree.hitPoints = 15;
+  tree.hitPoints = 3;
   tree.selectableInGame = false;
 
   // Rock destructables (RockChunks2 / LTrt — 6 variations, same model as granite)

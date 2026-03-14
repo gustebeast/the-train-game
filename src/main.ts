@@ -22,6 +22,9 @@ const TS_VERSION = compiletime(() => require('typescript').version);
 const TSTL_VERSION = compiletime(() => require('typescript-to-lua').version);
 
 function tsMain() {
+  // Init harvest before terrain so death triggers exist for destructable registration
+  initHarvest();
+
   // Generate and spawn procedural terrain
   const grid = generateTerrain(0); // difficulty 0 for round 1
   spawnTerrain(grid);
@@ -54,8 +57,6 @@ function tsMain() {
   const pickPos = gridToWorld(-24, -3);
   Item.create(FourCC(Items.SturdyWarAxe), axePos.x, axePos.y);
   Item.create(FourCC(Items.RustyMiningPick), pickPos.x, pickPos.y);
-
-  initHarvest();
 
   const peasant = Unit.create(Players[0], FourCC(Units.Peasant), (0 / 4 - 23) * TRACK_SIZE, -2 * TRACK_SIZE, 0)!;
   peasant.acquireRange = 0;
