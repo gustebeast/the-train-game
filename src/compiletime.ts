@@ -70,69 +70,15 @@ compiletime(({ objectData, constants }) => {
   pickaxe.canBeSoldToMerchants = false;
   pickaxe.abilities = '';
 
-  // Tree units: 6 variations using different building bases as skins
-  const treeTypes: { [key: string]: string } = {
-    '0': constants.units.ColdTower,
-    '1': constants.units.DeathTower,
-    '2': constants.units.EnergyTower,
-    '3': constants.units.FlameTower,
-    '4': constants.units.DalaranGuardTower,
-    '5': constants.units.HighElvenGuardTower,
-  };
+  // Tree destructables (SummerTreeWall / LTlt)
+  const tree = objectData.destructables.get(constants.destructables.SummerTreeWall)!;
+  tree.hitPoints = 15;
+  tree.selectableInGame = false;
 
-  for (const [variation, unitName] of Object.entries(treeTypes)) {
-    const treeUnit = objectData.units.get(unitName)!;
-    treeUnit.name = 'Tree';
-    treeUnit.modelFile = `war3mapImported\\Tree${variation}.mdx`;
-    treeUnit.hitPointsMaximumBase = 15;
-    treeUnit.defenseType = 'normal';
-    treeUnit.defenseBase = 0;
-    treeUnit.pathingMap = 'PathTextures\\4x4simplesolid.tga';
-    treeUnit.shadowTextureBuilding = 'ShadowCannonTower';
-    treeUnit.groundTexture = 'NONE';
-    treeUnit.scalingValueundefined = 0.8;
-    treeUnit.selectionScale = -1;
-    treeUnit.buildTime = 0;
-    treeUnit.tintingColor1Redundefined = 255;
-    treeUnit.tintingColor2Greenundefined = 255;
-    treeUnit.tintingColor3Blueundefined = 255;
-    treeUnit.hideMinimapDisplay = true;
-  }
-
-  // Rock units: 6 variations using Advanced tower bases
-  const rockTypes: { [key: string]: string } = {
-    '0': constants.units.AdvancedBoulderTower,
-    '1': constants.units.AdvancedColdTower,
-    '2': constants.units.AdvancedDeathTower,
-    '3': constants.units.AdvancedEnergyTower,
-    '4': constants.units.AdvancedFlameTower,
-    '5': constants.units.EarthFuryTower,
-  };
-
-  // Per-variation scales to normalize rock models to ~128-unit footprint
-  const rockScales: { [key: string]: number } = {
-    '0': 0.610, '1': 0.556, '2': 0.628,
-    '3': 0.621, '4': 0.611, '5': 0.748,
-  };
-
-  for (const [variation, unitName] of Object.entries(rockTypes)) {
-    const rockUnit = objectData.units.get(unitName)!;
-    rockUnit.name = 'Rock';
-    rockUnit.modelFile = `Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_Rock${variation}.mdx`;
-    rockUnit.hitPointsMaximumBase = 15;
-    rockUnit.defenseType = 'normal';
-    rockUnit.defenseBase = 0;
-    rockUnit.pathingMap = 'PathTextures\\4x4simplesolid.tga';
-    rockUnit.shadowTextureBuilding = 'ShadowCannonTower';
-    rockUnit.groundTexture = 'NONE';
-    rockUnit.scalingValueundefined = rockScales[variation];
-    rockUnit.selectionScale = -1;
-    rockUnit.buildTime = 0;
-    rockUnit.tintingColor1Redundefined = 255;
-    rockUnit.tintingColor2Greenundefined = 255;
-    rockUnit.tintingColor3Blueundefined = 255;
-    rockUnit.hideMinimapDisplay = true;
-  }
+  // Rock destructables (RockChunks2 / LTrt — 6 variations, same model as granite)
+  const rock = objectData.destructables.get(constants.destructables.RockChunks2)!;
+  rock.hitPoints = 15;
+  rock.selectableInGame = false;
 
   // Water: Burrow repurposed with WaterPlane model, targetable by spells, no shadow
   const water = objectData.units.get(constants.units.Burrow)!;

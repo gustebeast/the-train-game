@@ -1,10 +1,10 @@
 import { Item, Timer, Trigger, Unit } from 'w3ts';
 import { Items } from '@objectdata/items';
-import { TREE_UNIT_RAWS, ROCK_UNIT_RAWS } from './terrain/spawn';
+import { TREE_RAW, ROCK_RAW } from './terrain/spawn';
 import { log } from './debug';
 
-const TREE_IDS = new Set(TREE_UNIT_RAWS.map(r => FourCC(r)));
-const ROCK_IDS = new Set(ROCK_UNIT_RAWS.map(r => FourCC(r)));
+const TREE_DEST_ID = FourCC(TREE_RAW);
+const ROCK_DEST_ID = FourCC(ROCK_RAW);
 const AXE_ID = FourCC(Items.SturdyWarAxe);
 const PICKAXE_ID = FourCC(Items.RustyMiningPick);
 
@@ -17,10 +17,10 @@ function unitHasItemType(u: Unit, itemTypeId: number): boolean {
   return false;
 }
 
-/** Returns the required item type for a target unit, or 0 if no tool needed. */
-function requiredTool(targetTypeId: number): number {
-  if (TREE_IDS.has(targetTypeId)) return AXE_ID;
-  if (ROCK_IDS.has(targetTypeId)) return PICKAXE_ID;
+/** Returns the required tool for a destructable type, or 0 if none needed. */
+function requiredToolForDest(destTypeId: number): number {
+  if (destTypeId === TREE_DEST_ID) return AXE_ID;
+  if (destTypeId === ROCK_DEST_ID) return PICKAXE_ID;
   return 0;
 }
 
@@ -30,9 +30,36 @@ function toolName(itemTypeId: number): string {
   return '';
 }
 
-/** Returns true if the target unit is a resource (tree or rock). */
-function isResourceUnit(typeId: number): boolean {
-  return TREE_IDS.has(typeId) || ROCK_IDS.has(typeId);
+function showRequiresText(unitHandle: unit, name: string): void {
+  const tt = CreateTextTag();
+  if (tt != null) {
+    SetTextTagText(tt, 'Requires ' + name + '!', 0.024);
+    SetTextTagPosUnit(tt, unitHandle, 0);
+    SetTextTagColor(tt, 255, 200, 200, 255);
+    SetTextTagVelocity(tt, 0, 0.03);
+    SetTextTagPermanent(tt, false);
+    SetTextTagLifespan(tt, 2.0);
+    SetTextTagFadepoint(tt, 1.5);
+  }
+}
+
+function isResourceDest(destTypeId: number): boolean {
+  return destTypeId === TREE_DEST_ID || destTypeId === ROCK_DEST_ID;
+}
+
+/** Cancel order + show text if unit lacks the required tool for a destructable. */
+function checkToolAndCancel(unit: Unit, destTypeId: number): void {
+  const tool = requiredToolForDest(destTypeId);
+  if (tool === 0) return;
+  if (unitHasItemType(unit, tool)) return;
+
+  const unitHandle = unit.handle;
+  const t = Timer.create();
+  t.start(0, false, () => {
+    IssueImmediateOrder(unitHandle, 'stop');
+    t.destroy();
+  });
+  showRequiresText(unitHandle, toolName(tool));
 }
 
 export function initHarvest(): void {
@@ -69,87 +96,44 @@ export function initHarvest(): void {
     log('NO_TARGET_ORDER: id=' + orderId + ' str=' + (orderStr || 'null'));
   });
 
-  // --- Intercept target orders on resource units ---
-  const orderTrigger = Trigger.create();
-  orderTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
-  orderTrigger.addAction(() => {
+  // --- Intercept destructable target orders (in view) ---
+  const destTargetTrigger = Trigger.create();
+  destTargetTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
+  destTargetTrigger.addAction(() => {
+    const dest = GetOrderTargetDestructable();
+    if (dest == null) return;
+    if (!isResourceDest(GetDestructableTypeId(dest))) return;
+
+    const unit = Unit.fromEvent();
+    if (unit == null) return;
+    checkToolAndCancel(unit, GetDestructableTypeId(dest));
+  });
+
+  // --- Intercept destructable point orders (out of fog) ---
+  const destPointTrigger = Trigger.create();
+  destPointTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
+  destPointTrigger.addAction(() => {
+    if (GetIssuedOrderId() !== OrderId('smart')) return;
+
+    const x = GetOrderPointX();
+    const y = GetOrderPointY();
     const unit = Unit.fromEvent();
     if (unit == null) return;
 
-    const targetHandle = GetOrderTargetUnit();
-    if (targetHandle != null) {
-      const target = Unit.fromHandle(targetHandle);
-      if (target != null && isResourceUnit(target.typeId)) {
-        const tool = requiredTool(target.typeId);
-        if (tool !== 0 && !unitHasItemType(unit, tool)) {
-          // No tool — cancel order
-          const unitHandle = unit.handle;
-          const t = Timer.create();
-          t.start(0, false, () => {
-            IssueImmediateOrder(unitHandle, 'stop');
-            t.destroy();
-          });
-          const name = toolName(tool);
-          const tt = CreateTextTag();
-          if (tt != null) {
-            SetTextTagText(tt, 'Requires ' + name + '!', 0.024);
-            SetTextTagPosUnit(tt, unitHandle, 0);
-            SetTextTagColor(tt, 255, 200, 200, 255);
-            SetTextTagVelocity(tt, 0, 0.03);
-            SetTextTagPermanent(tt, false);
-            SetTextTagLifespan(tt, 2.0);
-            SetTextTagFadepoint(tt, 1.5);
-          }
-          return;
-        }
-
-        // Has tool — redirect smart/right-click to attack
-        const unitHandle = unit.handle;
-        const targetH = target.handle;
-        const t = Timer.create();
-        t.start(0, false, () => {
-          IssueTargetOrder(unitHandle, 'attack', targetH);
-          t.destroy();
-        });
+    // Check if a resource destructable exists at the click point
+    let foundType = 0;
+    const r = Rect(x - 64, y - 64, x + 64, y + 64);
+    EnumDestructablesInRect(r, undefined, () => {
+      const d = GetEnumDestructable();
+      if (d != null) {
+        const dt = GetDestructableTypeId(d);
+        if (isResourceDest(dt)) foundType = dt;
       }
-    }
-  });
+    });
+    RemoveRect(r);
 
-  // --- Tree hit animation on damage ---
-  const damageTrigger = Trigger.create();
-  damageTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DAMAGED);
-  damageTrigger.addAction(() => {
-    const damaged = Unit.fromHandle(GetTriggerUnit());
-    if (damaged != null && TREE_IDS.has(damaged.typeId)) {
-      SetUnitAnimation(damaged.handle, 'hit');
-      QueueUnitAnimation(damaged.handle, 'stand');
-    }
-  });
-
-  // --- Rock death effect (recreate destructable rock explosion) ---
-  const deathTrigger = Trigger.create();
-  deathTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DEATH);
-  deathTrigger.addAction(() => {
-    const dying = Unit.fromHandle(GetTriggerUnit());
-    if (dying != null && ROCK_IDS.has(dying.typeId)) {
-      const x = dying.x;
-      const y = dying.y;
-      const fx = AddSpecialEffect(
-        'Objects\\Spawnmodels\\Undead\\ImpaleTargetDust\\ImpaleTargetDust.mdl',
-        x, y,
-      );
-      if (fx != null) DestroyEffect(fx);
-      const snd = CreateSound(
-        'Sound\\Destructable\\BoulderMedium\\BoulderMediumHit1.flac',
-        false, false, false, 10, 10, '',
-      );
-      if (snd != null) {
-        SetSoundPosition(snd, x, y, 0);
-        SetSoundVolume(snd, 127);
-        StartSound(snd);
-        KillSoundWhenDone(snd);
-      }
-    }
+    if (foundType === 0) return;
+    checkToolAndCancel(unit, foundType);
   });
 
   // --- Enforce one item at a time ---

@@ -8,25 +8,14 @@ import {
 import { log } from '../debug';
 import { getNeutralExtra } from '../teams';
 
-// --- Tree unit types (6 variations) ---
-export const TREE_UNIT_RAWS = [
-  Units.ColdTower,
-  Units.DeathTower,
-  Units.EnergyTower,
-  Units.FlameTower,
-  Units.DalaranGuardTower,
-  Units.HighElvenGuardTower,
-];
+// --- Tree destructable type ---
+export const TREE_RAW = 'LTlt';  // SummerTreeWall (Lordaeron Summer)
 
-// --- Rock unit types (6 variations) ---
-export const ROCK_UNIT_RAWS = [
-  Units.AdvancedBoulderTower,
-  Units.AdvancedColdTower,
-  Units.AdvancedDeathTower,
-  Units.AdvancedEnergyTower,
-  Units.AdvancedFlameTower,
-  Units.EarthFuryTower,
-];
+// --- Rock destructable type ---
+export const ROCK_RAW = 'LTrt';  // RockChunks2 (Lordaeron Summer — 6 variations)
+
+// Per-variation scales to normalize rock models to ~128-unit footprint.
+const ROCK_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
 
 // --- Destructable rawcodes (Lordaeron Summer) ---
 const GRANITE_RAW = 'LTrc';  // Rock Chunks 1 (tinted dark + unselectable in compiletime)
@@ -62,9 +51,10 @@ export function spawnTerrain(grid: Grid): void {
 
       switch (cell) {
         case CellType.TREE: {
-          Unit.create(
-            getNeutralExtra(), FourCC(TREE_UNIT_RAWS[GetRandomInt(0, 5)]),
-            world.x, world.y, GetRandomReal(220, 320),
+          const variation = GetRandomInt(0, 9);
+          Destructable.create(
+            FourCC(TREE_RAW), world.x, world.y,
+            GetRandomReal(220, 320), 0.8, variation,
           );
           paintTile(world.x, world.y, TERRAIN_GRASS);
           treeCount++;
@@ -72,9 +62,10 @@ export function spawnTerrain(grid: Grid): void {
         }
 
         case CellType.ROCK: {
-          Unit.create(
-            getNeutralExtra(), FourCC(ROCK_UNIT_RAWS[GetRandomInt(0, 5)]),
-            world.x, world.y, GetRandomReal(0, 360),
+          const variation = GetRandomInt(0, 5);
+          Destructable.create(
+            FourCC(ROCK_RAW), world.x, world.y,
+            GetRandomReal(0, 360), ROCK_SCALES[variation], variation,
           );
           paintTile(world.x, world.y, TERRAIN_DIRT);
           rockCount++;
