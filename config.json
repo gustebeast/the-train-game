@@ -6,6 +6,6 @@
   "launchArgs": [
     "-launch",
     "-windowmode",
-    "windowed"
+    "fullscreen"
   ]
 }

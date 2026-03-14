@@ -6,7 +6,8 @@ export function initTeams() {
     p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER
   );
 
-  const ally = MapPlayer.fromIndex(PLAYER_NEUTRAL_PASSIVE);
+  const neutralPassive = MapPlayer.fromIndex(PLAYER_NEUTRAL_PASSIVE);
+  const neutralExtra = MapPlayer.fromIndex(bj_PLAYER_NEUTRAL_EXTRA);
   const enemy = MapPlayer.fromIndex(PLAYER_NEUTRAL_AGGRESSIVE);
 
   humanPlayers.forEach((p: MapPlayer) => {
@@ -14,16 +15,34 @@ export function initTeams() {
     SetPlayerController(p.handle, MAP_CONTROL_USER);
   });
 
-  if (ally) {
-    SetPlayerTeam(ally.handle, 0);
+  // All team members: humans + neutral passive (tracks/crates) + neutral extra (trees/rocks/water)
+  const teamAllied: MapPlayer[] = [...humanPlayers];
+  if (neutralPassive) teamAllied.push(neutralPassive);
+  if (neutralExtra) teamAllied.push(neutralExtra);
 
-    [...humanPlayers, ally].forEach(p => {
-      [...humanPlayers, ally].forEach(q => {
-        if (p !== q) {
-          SetPlayerAllianceStateBJ(p.handle, q.handle, bj_ALLIANCE_ALLIED_VISION);
-        }
-      });
+  // Full allied vision between humans and neutral passive
+  const visionGroup: MapPlayer[] = [...humanPlayers];
+  if (neutralPassive) visionGroup.push(neutralPassive);
+
+  visionGroup.forEach(p => {
+    visionGroup.forEach(q => {
+      if (p !== q) {
+        SetPlayerAllianceStateBJ(p.handle, q.handle, bj_ALLIANCE_ALLIED_VISION);
+      }
     });
+  });
+
+  // Neutral extra: allied (no vision) with all team members
+  if (neutralExtra) {
+    SetPlayerTeam(neutralExtra.handle, 0);
+    for (const p of humanPlayers) {
+      SetPlayerAllianceStateBJ(p.handle, neutralExtra.handle, bj_ALLIANCE_ALLIED);
+      SetPlayerAllianceStateBJ(neutralExtra.handle, p.handle, bj_ALLIANCE_ALLIED);
+    }
+    if (neutralPassive) {
+      SetPlayerAllianceStateBJ(neutralPassive.handle, neutralExtra.handle, bj_ALLIANCE_ALLIED);
+      SetPlayerAllianceStateBJ(neutralExtra.handle, neutralPassive.handle, bj_ALLIANCE_ALLIED);
+    }
   }
 
   if (enemy) {
@@ -39,4 +58,12 @@ export function initTeams() {
 
 export function getNeutralPassive(): MapPlayer {
   return MapPlayer.fromIndex(PLAYER_NEUTRAL_PASSIVE)!;
+}
+
+export function getNeutralExtra(): MapPlayer {
+  return MapPlayer.fromIndex(bj_PLAYER_NEUTRAL_EXTRA)!;
+}
+
+export function getNeutralAggressive(): MapPlayer {
+  return MapPlayer.fromIndex(PLAYER_NEUTRAL_AGGRESSIVE)!;
 }

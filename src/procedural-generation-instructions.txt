@@ -1,0 +1,71 @@
+Note: all ranges are inclusive
+
+=== GRID ===
+- Map uses a tiled grid where each tile is 128x128 game units
+- Player spawn area x=[-26,-21], y=[0,-4] must be empty
+- Victory area x=[21,26], y=[0,-4] must be empty
+- All other area in the grid is usable x=[-26, 26], y=[-10, 10]
+- Total usable tiles: 53 wide * 21 tall = 1113 (minus spawn/victory areas)
+
+=== TERRAIN TEXTURE ===
+- Start and end pieces x=-26 or 26, y=0 should use white marble terrain texture
+- All other area can use a variety of terrain textures within Lordaeron Summer
+- Avoid high frequency terrain changes: terrain types should form large natural regions, not checkerboard patterns
+
+=== DIFFICULTY ===
+- Single difficulty percent (0-100) scales all generation parameters
+
+=== OBJECT TYPES ===
+4x4 grid spaces can be filled with four object types:
+- Trees (destructable)
+- Rocks (destructable)
+- Water (bridgable)
+- Granite (unbreakable, blocks player path)
+
+=== GENERATION ORDER ===
+1. Carve guaranteed path from start to end
+2. Place granite (respecting path and enclosure rules)
+3. Validate connectivity (flood-fill)
+4. Place water
+5. Place trees and rocks
+6. Validate resource counts
+7. Paint terrain textures
+
+=== PATH GENERATION ===
+- Generate a path from start (x=-26, y=0) to end (x=26, y=0)
+- Path should move primarily eastward with occasional N/S meanders
+- 1 tile wide is sufficient
+- For every 3-5 eastward steps, allow up to 1-2 N/S steps before requiring another eastward step
+- Prevent granite from spawning on path tiles
+
+=== GRANITE PLACEMENT ===
+- Granite density scales with difficulty: 10% at difficulty 0, up to 60% at difficulty 100
+- Granite must NEVER enclose other object types (no holes, no circles)
+  If granite were flood-filled from the map edges, all non-granite tiles must be reachable
+- After placing granite, run flood-fill from start to end to verify all non-granite tiles are connected to the path
+
+=== WATER PLACEMENT ===
+- Minimum 10% of usable non-granite tiles must be water (~55+ tiles)
+- Water must form connected shapes (blobs, rivers, lakes) not isolated single tiles
+- Larger bodies of water become more likely at higher difficulty
+- Water should be spread somewhat evenly east to west across the map
+- Water can overlap the guaranteed path (player bridges over it)
+
+=== RESOURCE PLACEMENT (TREES & ROCKS) ===
+- Minimum trees on map: X + Y
+  X = number of track pieces required to follow the generated path
+  Y = number of water tiles on the generated path (bridges needed)
+- Minimum rocks on map: X
+- Resource surplus scales inversely with difficulty:
+  At difficulty 0: minimums are doubled (100% surplus)
+  At difficulty 100: exact minimums (0% surplus)
+  Formula: actual_minimum = base_minimum * (2 - difficulty / 100)
+- Maximum trees/rocks are individually random, but shouldn't exceed 20% above minimum
+
+=== LOW FREQUENCY DETAIL RULE ===
+- Objects should clump into blobs, not scatter individually
+- Avoid high frequency variation where adjacent tiles all have different object types
+- Trees should cluster into groves, rocks into formations, water into bodies
+- Blobs can vary in size and form unexpected organic shapes
+- Small blobs (2-3 tiles) are acceptable occasionally, but single isolated tiles should be rare
+- General principle: if you drew a 3x3 sample anywhere on the map, it should not contain more than 2 different object types (excluding empty)

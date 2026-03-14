@@ -71,7 +71,7 @@ export function initTrackBuildTrigger() {
   trigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_CONSTRUCT_FINISH);
   trigger.addAction(() => {
     const built = Unit.fromHandle(GetConstructedStructure());
-    if (!built) return;
+    if (built == null) return;
     if (!trackFourCCs.includes(built.typeId)) return;
     onTrackBuilt();
   });
