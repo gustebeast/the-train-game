@@ -10,43 +10,116 @@ compiletime(({ objectData, constants }) => {
   };
 
   for (const [orientation, unitName] of Object.entries(trackTypes)) {
-    const unit = objectData.units.get(unitName)!;
-    unit.buildTime = 0;
-    unit.defenseType = 'normal';
-    unit.defenseBase = 0;
-    unit.description = 'A section of railway track.';
-    unit.hitPointsMaximumBase = 5;
-    unit.name = 'Railway Track';
-    unit.modelFile = `war3mapImported\\${orientation}Track.mdx`;
-    unit.scalingValueundefined = 1;
-    unit.shadowTextureBuilding = 'NONE';
-    unit.groundTexture = 'NONE';
-    unit.sightRadiusDay = 400;
-    unit.sightRadiusNight = 400;
-    unit.pathingMap = `PathTextures\\${
+    const track = objectData.units.get(unitName)!;
+    track.buildTime = 0;
+    track.defenseType = 'normal';
+    track.defenseBase = 0;
+    track.description = 'A section of railway track.';
+    track.hitPointsMaximumBase = 5;
+    track.name = 'Railway Track';
+    track.modelFile = `war3mapImported\\${orientation}Track.mdx`;
+    track.scalingValueundefined = 1;
+    track.shadowTextureBuilding = 'NONE';
+    track.groundTexture = 'NONE';
+    track.sightRadiusDay = 400;
+    track.sightRadiusNight = 400;
+    track.pathingMap = `PathTextures\\${
       orientation == 'Omni' ? '4x4simplesolid' : '4x4unbuildable'
     }.tga`;
   }
 
-  const warWagon = objectData.units.get(constants.units.WarWagon)!;
-  warWagon.scalingValueundefined = 0.6;
-  warWagon.selectionScale = 1;
-  warWagon.modelFile = 'war3mapImported\\WarWagon.mdx';
-  warWagon.speedMaximum = 10;
-  warWagon.sightRadiusDay = 400;
-  warWagon.sightRadiusNight = 400;
-  warWagon.collisionSize = 16;
+  const train = objectData.units.get(constants.units.WarWagon)!;
+  train.collisionSize = 16;
+  train.modelFile = 'war3mapImported\\WarWagon.mdx';
+  train.normal = constants.abilities.InventoryHero;
+  train.scalingValueundefined = 0.6;
+  train.selectionScale = 1;
+  train.sightRadiusDay = 400;
+  train.sightRadiusNight = 400;
+  train.speedMaximum = 10;
+  train.manaMaximum = 100;
+  train.manaInitialAmount = 0;
+  train.manaRegeneration = 0;
 
   const peasant = objectData.units.get(constants.units.Peasant)!;
-  peasant.structuresBuilt = [
-    constants.units.Farm,
-  ].join(',');
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.BuildHuman, constants.abilities.HarvestGhoulsLumber].join(',');
+  peasant.structuresBuilt = '';
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.BuildTinyFarm, constants.abilities.HarvestGhoulsLumber, constants.abilities.Channel].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
   peasant.attack1DamageNumberOfDice = 1;
   peasant.attack1DamageSidesPerDie = 1;
+
+  // Give/Place spell (Channel — unit or point target)
+  type ChannelAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { targetType: number; options: number };
+  const give = objectData.abilities.get(constants.abilities.Channel)! as ChannelAbility;
+  give.heroAbility = false;
+  give.levels = 1;
+  give.targetType = 3;
+  give.options = 1;
+  give.targetsAllowed = 'alive,allies,friend,ground,hero,invulnerable,item,mechanical,neutral,nonhero,notself,organic,player,structure,vulnerable';
+  give.castRange = 80;
+  give.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNLoad.blp';
+  give.caster = '';
+  give.target = '';
+  give.effect = '';
+  give.tooltipNormal = 'Give/Take Item';
+  give.tooltipNormalExtended = 'When holding an item, can be used to drop it on the ground or give it to a building/unit. When not holding an item, can be used to pick up an item on the ground or pull from a building. When pulling items from buildings, tracks will be pulled first, then wood, then stone.';
+  give.hotkeyNormal = 'W';
+
+  // Monkey-patch save to fix per-level ability fields (library bug: doesn't set
+  // levelOrVariation/dataPointer for ability-specific fields like Ncl1-Ncl6)
+  const perLevelFields = new Set([
+    'atar', 'acas', 'adur', 'ahdu', 'acdn', 'amcs', 'aare', 'aran',
+    'abuf', 'aeff', 'atp1', 'aub1', 'aut1', 'auu1',
+  ]);
+  function fixAbilityLevels(w3a: any) {
+    for (const table of [w3a.originalTable, w3a.customTable]) {
+      for (const obj of table.objects) {
+        for (const mod of obj.modifications) {
+          if (mod.levelOrVariation !== 0) continue;
+          if (perLevelFields.has(mod.id)) {
+            mod.levelOrVariation = 1;
+          } else {
+            // Ability-specific fields (e.g. Ncl1-6): digit suffix is the dataPointer
+            const match = mod.id.match(/^[A-Za-z]{3}(\d)$/);
+            if (match) {
+              mod.levelOrVariation = 1;
+              mod.dataPointer = parseInt(match[1]);
+            }
+          }
+        }
+      }
+    }
+  }
+  // Channel fields whose real WC3 default differs from the library's stored default
+  // (library thinks 0 is default, so it won't write them — we must inject manually)
+  const Modification = require('mdx-m3-viewer-th/dist/cjs/parsers/w3x/w3u/modification').default;
+  const forcedChannelMods = [
+    { id: 'Ncl1', variableType: 2, dataPointer: 1, value: 0 }, // followThroughTime
+    { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
+    { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
+  ];
+  const originalSave = objectData.save.bind(objectData);
+  objectData.save = () => {
+    const result = originalSave();
+    if (result.w3a) {
+      fixAbilityLevels(result.w3a);
+      for (const obj of result.w3a.originalTable.objects) {
+        if (obj.oldId === 'ANcl') {
+          for (const forced of forcedChannelMods) {
+            if (!obj.modifications.some((m: any) => m.id === forced.id)) {
+              const mod = new Modification();
+              Object.assign(mod, forced, { levelOrVariation: 1, u1: 0 });
+              obj.modifications.push(mod);
+            }
+          }
+        }
+      }
+    }
+    if (result.w3aSkin) fixAbilityLevels(result.w3aSkin);
+    return result;
+  };
 
   // Axe item
   const axe = objectData.items.get(constants.items.SturdyWarAxe)!;
@@ -139,6 +212,23 @@ compiletime(({ objectData, constants }) => {
   crate.normal = constants.abilities.InventoryHero;
   crate.hitPointsMaximumBase = 999999;
   crate.defenseBase = 99;
+
+  // Track piece item (MechanicalCritter — placeholder for track building)
+  const trackPiece = objectData.items.get(constants.items.MechanicalCritter)!;
+  trackPiece.name = 'Track Piece';
+  trackPiece.description = 'A section of railway track, ready to be placed.';
+  trackPiece.classification = 'Charged';
+  trackPiece.goldCost = 0;
+  trackPiece.canBeDropped = true;
+  trackPiece.droppedWhenCarrierDies = true;
+  trackPiece.perishable = false;
+  trackPiece.useAutomaticallyWhenAcquired = false;
+  trackPiece.canBeSoldToMerchants = false;
+  trackPiece.abilities = '';
+  trackPiece.numberOfCharges = 1;
+  trackPiece.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
+  trackPiece.modelUsed = 'war3mapImported\\OmniTrack.mdx';
+  trackPiece.scalingValue = 0.5;
 
   // Granite rocks: dark tint, unselectable, indestructible
   const granite = objectData.destructables.get(constants.destructables.RockChunks1)!;

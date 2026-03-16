@@ -1,15 +1,10 @@
 import { Destructable, Item, Timer, Trigger, Unit } from 'w3ts';
-import { Items } from '@objectdata/items';
 import { TREE_RAW, ROCK_RAW } from './terrain/constants';
+import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, unitHasItemType, rejectOrder } from './items';
 import { log } from './debug';
 
 const TREE_DEST_ID = FourCC(TREE_RAW);
 const ROCK_DEST_ID = FourCC(ROCK_RAW);
-const AXE_ID = FourCC(Items.SturdyWarAxe);
-const PICKAXE_ID = FourCC(Items.RustyMiningPick);
-const WOOD_ID = FourCC(Items.IronwoodBranch);
-const STONE_ID = FourCC(Items.GemFragment);
-const MAX_STACK = 3;
 
 // Death triggers for resource drops (initialized by initHarvest, must be called before spawnTerrain)
 let treeDeath!: Trigger;
@@ -32,15 +27,6 @@ export function registerResourceDest(dest: Destructable): void {
   }
 }
 
-/** Check whether a unit is carrying an item of the given type. */
-function unitHasItemType(u: Unit, itemTypeId: number): boolean {
-  for (let slot = 0; slot < 6; slot++) {
-    const it = u.getItemInSlot(slot);
-    if (it != null && it.typeId === itemTypeId) return true;
-  }
-  return false;
-}
-
 /** Returns the required tool for a destructable type, or 0 if none needed. */
 function requiredToolForDest(destTypeId: number): number {
   if (destTypeId === TREE_DEST_ID) return AXE_ID;
@@ -54,25 +40,8 @@ function toolName(itemTypeId: number): string {
   return '';
 }
 
-function showRequiresText(unitHandle: unit, name: string): void {
-  const tt = CreateTextTag();
-  if (tt != null) {
-    SetTextTagText(tt, 'Requires ' + name + '!', 0.024);
-    SetTextTagPosUnit(tt, unitHandle, 0);
-    SetTextTagColor(tt, 255, 200, 200, 255);
-    SetTextTagVelocity(tt, 0, 0.03);
-    SetTextTagPermanent(tt, false);
-    SetTextTagLifespan(tt, 2.0);
-    SetTextTagFadepoint(tt, 1.5);
-  }
-}
-
 function isResourceDest(destTypeId: number): boolean {
   return destTypeId === TREE_DEST_ID || destTypeId === ROCK_DEST_ID;
-}
-
-function isResource(itemTypeId: number): boolean {
-  return itemTypeId === WOOD_ID || itemTypeId === STONE_ID;
 }
 
 /**
@@ -88,12 +57,7 @@ function handleResourceOrder(unit: Unit, dest: destructable): void {
   const unitHandle = unit.handle;
 
   if (!unitHasItemType(unit, tool)) {
-    const t = Timer.create();
-    t.start(0, false, () => {
-      IssueImmediateOrder(unitHandle, 'stop');
-      t.destroy();
-    });
-    showRequiresText(unitHandle, toolName(tool));
+    rejectOrder(unitHandle, 'Requires ' + toolName(tool) + '!');
     return;
   }
 
@@ -151,50 +115,6 @@ export function initHarvest(): void {
     const dest = findResourceDestAt(x, y);
     if (dest == null) return;
     handleResourceOrder(unit, dest);
-  });
-
-  // --- Item pickup: enforce one item, stack matching resources ---
-  const pickupTrigger = Trigger.create();
-  pickupTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
-  pickupTrigger.addAction(() => {
-    const unit = Unit.fromEvent();
-    const picked = Item.fromEvent();
-    if (unit == null || picked == null) return;
-
-    const pickedType = picked.typeId;
-    const pickedIsResource = isResource(pickedType);
-
-    // Scan inventory for existing items (excluding the one just picked up)
-    let otherItem: Item | undefined;
-    let matchingResource: Item | undefined;
-    for (let slot = 0; slot < 6; slot++) {
-      const it = unit.getItemInSlot(slot);
-      if (it == null || it.handle === picked.handle) continue;
-      if (pickedIsResource && it.typeId === pickedType) {
-        matchingResource = it;
-      } else {
-        otherItem = it;
-      }
-    }
-
-    if (matchingResource != null) {
-      // Same resource type — merge charges up to MAX_STACK
-      const total = matchingResource.charges + picked.charges;
-      const kept = math.min(total, MAX_STACK);
-      const remainder = total - kept;
-
-      matchingResource.charges = kept;
-      if (remainder > 0) {
-        // Drop leftover as a new stack at the unit's feet
-        picked.charges = remainder;
-        unit.removeItem(picked);
-      } else {
-        RemoveItem(picked.handle);
-      }
-    } else if (otherItem != null) {
-      // Different item — drop the old one
-      unit.removeItem(otherItem);
-    }
   });
 
   log('Harvest system initialized');

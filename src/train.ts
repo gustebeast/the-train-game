@@ -4,6 +4,7 @@ import { placedTracks } from './track/state';
 import { TRACK_SIZE } from './track/constants';
 import { getNeutralPassive } from './teams';
 import { log } from './debug';
+import { initProduction, setMoveOrderCallback } from './production';
 
 const OVERSHOOT = 16;
 const ARRIVAL_DIST = 4;
@@ -42,11 +43,30 @@ export function getTrainTarget(): Unit | undefined {
   return placedTracks[targetIdx];
 }
 
+/** Re-issue the train's current move order (call after programmatic inventory changes). */
+export function reissueMoveOrder(): void {
+  const target = placedTracks[targetIdx];
+  if (target == null) return;
+  const center = trackCenter(target);
+  const current = placedTracks[targetIdx - 1];
+  if (current == null) {
+    train.issueOrderAt('move', center.x, center.y);
+    return;
+  }
+  const cur = trackCenter(current);
+  const dx = center.x - cur.x;
+  const dy = center.y - cur.y;
+  const ox = math.abs(dx) >= math.abs(dy) ? OVERSHOOT * (dx > 0 ? 1 : -1) : 0;
+  const oy = math.abs(dy) > math.abs(dx) ? OVERSHOOT * (dy > 0 ? 1 : -1) : 0;
+  train.issueOrderAt('move', center.x + ox, center.y + oy);
+}
+
 export function initTrain() {
   // Spawn the train
   train = Unit.create(getNeutralPassive(), FourCC(Units.WarWagon), CENTER_OFFSET - 26 * TRACK_SIZE, CENTER_OFFSET, 0)!;
-  train.invulnerable = true;
   SetUnitPathing(train.handle, false);
+  initProduction(train);
+  setMoveOrderCallback(() => reissueMoveOrder());
 
   const timer = Timer.create().start(0.1, true, () => {
     const target = placedTracks[targetIdx];
@@ -66,9 +86,9 @@ export function initTrain() {
       timer.destroy();
     }
     if (isStuck) {
-      log('Train stuck: dist2=' + I2S(R2I(newDistance)) + ' pos=(' + I2S(R2I(train.x)) + ',' + I2S(R2I(train.y)) + ') idx=' + targetIdx + ' — reissuing move');
+      // log('Train stuck: dist2=' + I2S(R2I(newDistance)) + ' pos=(' + I2S(R2I(train.x)) + ',' + I2S(R2I(train.y)) + ') idx=' + targetIdx + ' — reissuing move');
       const center = trackCenter(target);
-      train.issueOrderAt('move', center.x, center.y);
+      // train.issueOrderAt('move', center.x, center.y);
     } else if (isNear || isStopped) {
       const reason = isNear ? 'arrived' : 'stopped';
       log('Train tick: ' + reason + ' dist2=' + I2S(R2I(newDistance)) + ' prev1=' + I2S(R2I(prevDist1)) + ' pos=(' + I2S(R2I(train.x)) + ',' + I2S(R2I(train.y)) + ') idx=' + targetIdx);

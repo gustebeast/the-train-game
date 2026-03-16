@@ -1,4 +1,4 @@
-import { Unit, Trigger } from 'w3ts';
+import { Unit, Trigger, Timer } from 'w3ts';
 import {
   SKINS, OPPOSITE, TRACK_UNIT_TYPES, DIRECTIONS, TRACK_SIZE,
   Direction, toOrientationKey,
@@ -18,7 +18,7 @@ function getDirection(from: Unit, to: Unit): Direction {
 }
 
 function onTrackBuilt() {
-  const track0 = Unit.fromHandle(GetConstructedStructure())!;
+  const track0 = Unit.fromHandle(GetConstructingStructure())!;
 
   if (placedTracks.length < 2) {
     track0.destroy();
@@ -44,35 +44,42 @@ function onTrackBuilt() {
     return;
   }
 
-  const dirToTrack1 = getDirection(track0, track1);
-  const dirFromTrack1ToTrack0 = OPPOSITE[dirToTrack1];
-  const dirToTrack2 = getDirection(track1, track2);
+  // Delay replacement so the solid-pathing Farm has time to push the builder away
+  const t = Timer.create();
+  t.start(0, false, () => {
+    t.destroy();
 
-  // Snap track0 to the correct grid position relative to track1
-  const [snapDx, snapDy] = DIRECTIONS[dirFromTrack1ToTrack0];
-  const snapX = track1.x + snapDx;
-  const snapY = track1.y + snapDy;
+    const dirToTrack1 = getDirection(track0, track1);
+    const dirFromTrack1ToTrack0 = OPPOSITE[dirToTrack1];
+    const dirToTrack2 = getDirection(track1, track2);
 
-  // Update track1's skin now that we know both its neighbors
-  const orientationKey1 = toOrientationKey(dirFromTrack1ToTrack0, dirToTrack2);
-  const type1 = SKINS[orientationKey1] ?? SKINS.EW;
-  reskinTrack(track1, type1);
-  track1.invulnerable = true;
+    // Snap track0 to the correct grid position relative to track1
+    const [snapDx, snapDy] = DIRECTIONS[dirFromTrack1ToTrack0];
+    const snapX = track1.x + snapDx;
+    const snapY = track1.y + snapDy;
 
-  // Replace track0 (Farm/solid) with a ScoutTower (walkable) at the snap position
-  const orientationKey0 = toOrientationKey(dirToTrack1, OPPOSITE[dirToTrack1]);
-  const type0 = SKINS[orientationKey0] ?? SKINS.EW;
-  placedTracks.push(replaceTrack(track0, type0, snapX, snapY));
+    // Update track1's skin now that we know both its neighbors
+    const orientationKey1 = toOrientationKey(dirFromTrack1ToTrack0, dirToTrack2);
+    const type1 = SKINS[orientationKey1] ?? SKINS.EW;
+    reskinTrack(track1, type1);
+    track1.invulnerable = true;
+
+    // Replace track0 (Farm/solid) with a ScoutTower (walkable) at the snap position
+    const orientationKey0 = toOrientationKey(dirToTrack1, OPPOSITE[dirToTrack1]);
+    const type0 = SKINS[orientationKey0] ?? SKINS.EW;
+    placedTracks.push(replaceTrack(track0, type0, snapX, snapY));
+  });
 }
 
 export function initTrackBuildTrigger() {
   const trackFourCCs = TRACK_UNIT_TYPES.map(t => FourCC(t));
+
   const trigger = Trigger.create();
-  trigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_CONSTRUCT_FINISH);
+  trigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_CONSTRUCT_START);
   trigger.addAction(() => {
-    const built = Unit.fromHandle(GetConstructedStructure());
-    if (built == null) return;
-    if (!trackFourCCs.includes(built.typeId)) return;
+    const building = Unit.fromHandle(GetConstructingStructure());
+    if (building == null) return;
+    if (!trackFourCCs.includes(building.typeId)) return;
     onTrackBuilt();
   });
 }

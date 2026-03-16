@@ -10,6 +10,8 @@ import { initTrackBuildTrigger } from './track/build';
 import { initTrackDestroyTrigger } from './track/destroy';
 import { initTrain } from './train';
 import { initHarvest } from './harvest';
+import { initItems } from './items';
+import { initGiveTake } from './givetake';
 import { DEFAULT_TRACK, SKINS, TRACK_SIZE } from './track/constants';
 import { placedTracks } from './track/state';
 import { log } from './debug';
@@ -51,6 +53,8 @@ function tsMain() {
   initTrackBuildTrigger();
   initTrackDestroyTrigger();
   initTrain();
+  initItems();
+  initGiveTake();
 
   // Spawn tools in the start area
   const axePos = gridToWorld(-25, -3);
@@ -58,11 +62,25 @@ function tsMain() {
   Item.create(FourCC(Items.SturdyWarAxe), axePos.x, axePos.y);
   Item.create(FourCC(Items.RustyMiningPick), pickPos.x, pickPos.y);
 
+  // Test resources
+  for (let i = 0; i < 10; i++) {
+    const wPos = gridToWorld(-25 + (i % 5), -4 - math.floor(i / 5));
+    const w = Item.create(FourCC(Items.IronwoodBranch), wPos.x, wPos.y);
+    if (w != null) w.charges = 2;
+    const sPos = gridToWorld(-20 + (i % 5), -4 - math.floor(i / 5));
+    const s = Item.create(FourCC(Items.GemFragment), sPos.x, sPos.y);
+    if (s != null) s.charges = 2;
+  }
+
   const peasant = Unit.create(Players[0], FourCC(Units.Peasant), (0 / 4 - 23) * TRACK_SIZE, -2 * TRACK_SIZE, 0)!;
   peasant.acquireRange = 0;
   Players[0].setState(PLAYER_STATE_RESOURCE_GOLD, 5000);
   Players[0].setState(PLAYER_STATE_RESOURCE_LUMBER, 5000);
   SetCameraFieldForPlayer(Players[0].handle, CAMERA_FIELD_TARGET_DISTANCE, 1000, 0);
+
+  // Temporary blue player builder for testing
+  const bluePeasant = Unit.create(Players[1], FourCC(Units.Peasant), (0 / 4 - 22) * TRACK_SIZE, -2 * TRACK_SIZE, 0)!;
+  bluePeasant.acquireRange = 0;
 }
 
 addScriptHook(W3TS_HOOK.MAIN_AFTER, tsMain);
