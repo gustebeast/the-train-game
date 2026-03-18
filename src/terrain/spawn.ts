@@ -6,7 +6,7 @@ import {
   TREE_RAW, ROCK_RAW,
   idx, gridToWorld, isReserved,
 } from './constants';
-import { log } from '../debug';
+
 import { getNeutralExtra } from '../teams';
 import { registerResourceDest } from '../harvest';
 
@@ -65,7 +65,7 @@ export function spawnTerrain(grid: Grid): void {
             GetRandomReal(0, 360), ROCK_SCALES[variation], variation,
           );
           if (rock != null) registerResourceDest(rock);
-          paintTile(world.x, world.y, TERRAIN_DIRT);
+          paintTile(world.x, world.y, TERRAIN_ROCK);
           rockCount++;
           break;
         }
@@ -89,9 +89,7 @@ export function spawnTerrain(grid: Grid): void {
         }
 
         case CellType.EMPTY: {
-          if (grid.path[i]) {
-            paintTile(world.x, world.y, TERRAIN_ROCK);
-          } else if (isReserved(gx, gy)) {
+          if (isReserved(gx, gy)) {
             paintTile(world.x, world.y, TERRAIN_GRASSY_DIRT);
           } else {
             paintTile(world.x, world.y, TERRAIN_GRASS);
@@ -108,5 +106,4 @@ export function spawnTerrain(grid: Grid): void {
   paintTile(startWorld.x, startWorld.y, TERRAIN_WHITE_MARBLE);
   paintTile(endWorld.x, endWorld.y, TERRAIN_WHITE_MARBLE);
 
-  log('Spawned — trees: ' + treeCount + ', rocks: ' + rockCount + ', granite: ' + graniteCount);
 }

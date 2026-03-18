@@ -3,7 +3,7 @@ import {
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, GRID_W, GRID_H,
   idx, idxToCoords, inBounds, isReserved,
 } from './constants';
-import { log } from '../debug';
+
 
 // --- Grid creation ---
 
@@ -311,7 +311,6 @@ function placeWater(grid: Grid, difficulty: number): void {
     attempts++;
   }
 
-  log('Water tiles placed: ' + totalWater + ' (min: ' + minWater + ')');
 }
 
 // ============================================================
@@ -341,8 +340,6 @@ function placeResources(grid: Grid, difficulty: number): void {
   const targetTrees = GetRandomInt(minTrees, maxTrees);
   const targetRocks = GetRandomInt(minRocks, maxRocks);
 
-  log('Resources — target trees: ' + targetTrees + ', target rocks: ' + targetRocks);
-
   // Place tree blobs
   let treesPlaced = 0;
   let attempts = 0;
@@ -365,7 +362,6 @@ function placeResources(grid: Grid, difficulty: number): void {
     attempts++;
   }
 
-  log('Placed trees: ' + treesPlaced + ', rocks: ' + rocksPlaced);
 }
 
 // ============================================================
@@ -374,8 +370,6 @@ function placeResources(grid: Grid, difficulty: number): void {
 
 export function generateTerrain(difficulty: number): Grid {
   const grid = createGrid();
-
-  log('Generating terrain (difficulty: ' + difficulty + ')');
 
   // 1. Generate guaranteed path
   generatePath(grid);
@@ -388,31 +382,6 @@ export function generateTerrain(difficulty: number): Grid {
 
   // 4. Place trees and rocks (clustered blobs)
   placeResources(grid, difficulty);
-
-  // Log grid summary + visual map in a single log call to avoid op limit
-  const counts = [0, 0, 0, 0, 0];
-  for (let i = 0; i < GRID_W * GRID_H; i++) {
-    counts[grid.cells[i]]++;
-  }
-
-  let mapStr = 'Grid: empty=' + counts[0] + ' trees=' + counts[1] + ' rocks=' + counts[2] +
-      ' water=' + counts[3] + ' granite=' + counts[4] + '\n=== TERRAIN MAP ===\n';
-  for (let gy = GRID_MAX_Y; gy >= GRID_MIN_Y; gy--) {
-    for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
-      const i = idx(gx, gy);
-      const cell = grid.cells[i];
-      if (cell === CellType.GRANITE) { mapStr += '#'; }
-      else if (cell === CellType.TREE) { mapStr += 'T'; }
-      else if (cell === CellType.ROCK) { mapStr += 'R'; }
-      else if (cell === CellType.WATER) { mapStr += '~'; }
-      else if (grid.path[i]) { mapStr += '*'; }
-      else if (isReserved(gx, gy)) { mapStr += ' '; }
-      else { mapStr += '.'; }
-    }
-    mapStr += '\n';
-  }
-  mapStr += 'Legend: .=empty T=tree R=rock ~=water #=granite *=path';
-  log(mapStr);
 
   return grid;
 }

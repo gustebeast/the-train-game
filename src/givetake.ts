@@ -8,14 +8,17 @@ import {
   isTrain,
   rejectOrder,
   takeFromStorage,
+  updateBuildAbility,
   validateGive,
   validateTake,
 } from './items';
+import { updateCarryingVisual } from './carrying';
+import { isBurning } from './train';
 
 
 const CHANNEL_ORDER_ID = 852600;
 const SMART_ORDER_ID = 851971;
-const GIVE_ABILITY_ID = FourCC(Abilities.Channel);
+const GIVE_TAKE_ABILITY_ID = FourCC(Abilities.Channel);
 
 export function initGiveTake(): void {
   // --- Intercept Channel spell point orders ---
@@ -69,6 +72,10 @@ export function initGiveTake(): void {
     // Take flow: empty hand + storage, or holding tracks + train
     if ((item != null && item.typeId === TRACK_PIECE_ID && isTrain(target))
         || (item == null && isStorage(target))) {
+      if (isTrain(target) && isBurning()) {
+        rejectOrder(unit.handle, 'The train is on fire!');
+        return;
+      }
       const rejection = validateTake(unit, target);
       if (rejection != null) {
         rejectOrder(unit.handle, rejection);
@@ -94,7 +101,7 @@ export function initGiveTake(): void {
   const channelTrigger = Trigger.create();
   channelTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_CHANNEL);
   channelTrigger.addAction(() => {
-    if (GetSpellAbilityId() !== GIVE_ABILITY_ID) return;
+    if (GetSpellAbilityId() !== GIVE_TAKE_ABILITY_ID) return;
     const unit = Unit.fromEvent();
     if (unit == null) return;
 
@@ -110,14 +117,20 @@ export function initGiveTake(): void {
       // Take tracks from train — re-validate in case order-time rejection lost the race
       if (validateTake(unit, target) == null) {
         takeFromStorage(unit, target);
+        updateBuildAbility(unit);
+        updateCarryingVisual(unit);
       }
     } else if (item == null) {
       // Take from storage (empty hand)
       takeFromStorage(unit, target);
+      updateBuildAbility(unit);
+      updateCarryingVisual(unit);
     } else if (item != null && isStorage(target)) {
       // Give item to storage — re-validate in case order-time rejection lost the race
       if (validateGive(item.typeId, target) == null) {
         giveToStorage(unit, item, target);
+        updateBuildAbility(unit);
+        updateCarryingVisual(unit);
       }
     }
   });

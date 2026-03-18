@@ -1,6 +1,8 @@
 import { Item, Timer, Trigger, Unit } from 'w3ts';
 import { Items } from '@objectdata/items';
 import { Units } from '@objectdata/units';
+import { Abilities } from '@objectdata/abilities';
+import { updateCarryingVisual } from './carrying';
 
 let onTrainInventoryChanged: (() => void) | null = null;
 
@@ -14,9 +16,41 @@ export const PICKAXE_ID = FourCC(Items.RustyMiningPick);
 export const WOOD_ID = FourCC(Items.IronwoodBranch);
 export const STONE_ID = FourCC(Items.GemFragment);
 export const TRACK_PIECE_ID = FourCC(Items.MechanicalCritter);
+export const BUCKET_ID = FourCC(Items.EmptyVial);
+export const BUCKET_FULL_ID = FourCC(Items.FullVial);
 
 const TRAIN_ID = FourCC(Units.WarWagon);
 const CRATE_ID = FourCC(Units.GrainWarehouse);
+const PEASANT_ID = FourCC(Units.Peasant);
+const BUILD_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
+const BRIDGE_ABILITY_ID = FourCC(Abilities.AcidBomb);
+const FILL_ABILITY_ID = FourCC(Abilities.ShadowStrike);
+const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHaze);
+
+/** Grant or revoke item-gated abilities (build track, build bridge). */
+export function updateBuildAbility(u: Unit): void {
+  if (u.typeId !== PEASANT_ID) return;
+  if (findItemByType(u, TRACK_PIECE_ID) != null) {
+    UnitAddAbility(u.handle, BUILD_ABILITY_ID);
+  } else {
+    UnitRemoveAbility(u.handle, BUILD_ABILITY_ID);
+  }
+  if (findItemByType(u, WOOD_ID) != null) {
+    UnitAddAbility(u.handle, BRIDGE_ABILITY_ID);
+  } else {
+    UnitRemoveAbility(u.handle, BRIDGE_ABILITY_ID);
+  }
+  if (findItemByType(u, BUCKET_ID) != null) {
+    UnitAddAbility(u.handle, FILL_ABILITY_ID);
+  } else {
+    UnitRemoveAbility(u.handle, FILL_ABILITY_ID);
+  }
+  if (findItemByType(u, BUCKET_FULL_ID) != null) {
+    UnitAddAbility(u.handle, WATER_TRAIN_ABILITY_ID);
+  } else {
+    UnitRemoveAbility(u.handle, WATER_TRAIN_ABILITY_ID);
+  }
+}
 
 /** Fixed inventory slot for each resource type on storage units (0-indexed). */
 function storageSlot(itemTypeId: number): number {
@@ -287,6 +321,11 @@ export function initItems(): void {
       t.start(0, false, () => {
         pendingGivers.delete(droppedItem);
         t.destroy();
+        const dropper = Unit.fromHandle(dropperHandle);
+        if (dropper != null) {
+          updateBuildAbility(dropper);
+          updateCarryingVisual(dropper);
+        }
       });
     }
   });
@@ -390,5 +429,8 @@ export function initItems(): void {
     if (isTrain(unit)) {
       if (onTrainInventoryChanged != null) onTrainInventoryChanged();
     }
+
+    updateBuildAbility(unit);
+    updateCarryingVisual(unit);
   });
 }

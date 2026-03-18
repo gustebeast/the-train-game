@@ -1,4 +1,4 @@
-import { Item, Unit } from 'w3ts';
+import { Item, Timer, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { W3TS_HOOK, addScriptHook } from 'w3ts/hooks';
 import { Units } from '@objectdata/units';
@@ -12,9 +12,12 @@ import { initTrain } from './train';
 import { initHarvest } from './harvest';
 import { initItems } from './items';
 import { initGiveTake } from './givetake';
+import { initBridge } from './bridge';
+import { initFill } from './fill';
+import { initWaterTrain } from './water';
 import { DEFAULT_TRACK, SKINS, TRACK_SIZE } from './track/constants';
 import { placedTracks } from './track/state';
-import { log } from './debug';
+
 import { generateTerrain } from './terrain/generate';
 import { spawnTerrain } from './terrain/spawn';
 import { GRID_MIN_X, GRID_MAX_X, gridToWorld } from './terrain/constants';
@@ -55,32 +58,35 @@ function tsMain() {
   initTrain();
   initItems();
   initGiveTake();
+  initBridge();
+  initFill();
+  initWaterTrain();
 
   // Spawn tools in the start area
   const axePos = gridToWorld(-25, -3);
   const pickPos = gridToWorld(-24, -3);
+  const bucketPos = gridToWorld(-23, -3);
   Item.create(FourCC(Items.SturdyWarAxe), axePos.x, axePos.y);
   Item.create(FourCC(Items.RustyMiningPick), pickPos.x, pickPos.y);
+  Item.create(FourCC(Items.EmptyVial), bucketPos.x, bucketPos.y);
+  
 
-  // Test resources
-  for (let i = 0; i < 10; i++) {
-    const wPos = gridToWorld(-25 + (i % 5), -4 - math.floor(i / 5));
-    const w = Item.create(FourCC(Items.IronwoodBranch), wPos.x, wPos.y);
-    if (w != null) w.charges = 2;
-    const sPos = gridToWorld(-20 + (i % 5), -4 - math.floor(i / 5));
-    const s = Item.create(FourCC(Items.GemFragment), sPos.x, sPos.y);
-    if (s != null) s.charges = 2;
-  }
+  // Lock camera distance at 1200 for all human players
+  const cameraPosition = 1200;
+  const humanPlayers = Players.filter(
+    p => p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER
+  );
+  Timer.create().start(0.5, true, () => humanPlayers.forEach(({handle}) =>
+    SetCameraFieldForPlayer(handle, CAMERA_FIELD_TARGET_DISTANCE, cameraPosition, 0)
+  ));
 
-  const peasant = Unit.create(Players[0], FourCC(Units.Peasant), (0 / 4 - 23) * TRACK_SIZE, -2 * TRACK_SIZE, 0)!;
-  peasant.acquireRange = 0;
-  Players[0].setState(PLAYER_STATE_RESOURCE_GOLD, 5000);
-  Players[0].setState(PLAYER_STATE_RESOURCE_LUMBER, 5000);
-  SetCameraFieldForPlayer(Players[0].handle, CAMERA_FIELD_TARGET_DISTANCE, 1000, 0);
-
-  // Temporary blue player builder for testing
-  const bluePeasant = Unit.create(Players[1], FourCC(Units.Peasant), (0 / 4 - 22) * TRACK_SIZE, -2 * TRACK_SIZE, 0)!;
-  bluePeasant.acquireRange = 0;
+  humanPlayers.forEach((player, index) => {
+    const spawnPos = gridToWorld(-23 + index, -2);
+    Unit.create(player, FourCC(Units.Peasant), spawnPos.x, spawnPos.y, 0)!;
+    player.setState(PLAYER_STATE_RESOURCE_GOLD, 0);
+    player.setState(PLAYER_STATE_RESOURCE_LUMBER, 0);
+    SetCameraFieldForPlayer(player.handle, CAMERA_FIELD_TARGET_DISTANCE, cameraPosition, 0);
+  });
 }
 
 addScriptHook(W3TS_HOOK.MAIN_AFTER, tsMain);

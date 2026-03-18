@@ -1,7 +1,7 @@
 import { Destructable, Item, Timer, Trigger, Unit } from 'w3ts';
 import { TREE_RAW, ROCK_RAW } from './terrain/constants';
 import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, unitHasItemType, rejectOrder } from './items';
-import { log } from './debug';
+
 
 const TREE_DEST_ID = FourCC(TREE_RAW);
 const ROCK_DEST_ID = FourCC(ROCK_RAW);
@@ -117,5 +117,4 @@ export function initHarvest(): void {
     handleResourceOrder(unit, dest);
   });
 
-  log('Harvest system initialized');
 }

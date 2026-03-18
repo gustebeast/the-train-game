@@ -7,7 +7,7 @@ import {
   getMaxStack,
   setTrainInventoryCallback,
 } from './items';
-import { log } from './debug';
+
 
 let onProductionInventoryChanged: (() => void) | null = null;
 
@@ -17,8 +17,19 @@ export function setMoveOrderCallback(cb: () => void): void {
 }
 
 let train: Unit;
-let productionRate = 10; // mana regen per second when producing
+let productionRate = 12; // mana regen per second when producing
 let producing = false;
+let paused = false;
+
+export function pauseProduction(): void {
+  paused = true;
+  stopProduction();
+}
+
+export function resumeProduction(): void {
+  paused = false;
+  updateProduction();
+}
 
 /** Check if the train has resources to produce and isn't at max tracks. */
 function canProduce(): boolean {
@@ -34,8 +45,6 @@ function canProduce(): boolean {
 
 /** Called when the train's mana reaches 100. */
 function onManaFull(): void {
-  log('Production: mana full, converting resources');
-
   const wood = findItemByType(train, WOOD_ID);
   const stone = findItemByType(train, STONE_ID);
   if (wood == null || stone == null) {
@@ -79,7 +88,6 @@ function onManaFull(): void {
 
 /** Start mana regen. */
 function startProduction(): void {
-  log('Production: starting (rate=' + I2S(R2I(productionRate)) + ')');
   producing = true;
   train.mana = 0;
   BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, productionRate);
@@ -87,7 +95,6 @@ function startProduction(): void {
 
 /** Stop production — reset mana and regen to 0. */
 function stopProduction(): void {
-  log('Production: stopping');
   producing = false;
   train.mana = 0;
   BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);
@@ -98,7 +105,7 @@ function stopProduction(): void {
  * Re-evaluates whether production should be running.
  */
 export function updateProduction(): void {
-  const shouldProduce = canProduce();
+  const shouldProduce = canProduce() && !paused;
 
   if (shouldProduce && !producing) {
     startProduction();
