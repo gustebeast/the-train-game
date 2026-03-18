@@ -49,6 +49,17 @@ export function initTeams() {
     SetPlayerTeam(enemy.handle, 1);
   }
 
+  // Player 23: train owner — no AI, allied with vision to humans and neutral passive
+  const trainPlayer = MapPlayer.fromIndex(23);
+  if (trainPlayer) {
+    SetPlayerTeam(trainPlayer.handle, 0);
+    SetPlayerController(trainPlayer.handle, MAP_CONTROL_NONE);
+    for (const p of [...humanPlayers, neutralPassive, neutralExtra].filter(p => p != null) as MapPlayer[]) {
+      SetPlayerAllianceStateBJ(trainPlayer.handle, p.handle, bj_ALLIANCE_ALLIED_VISION);
+      SetPlayerAllianceStateBJ(p.handle, trainPlayer.handle, bj_ALLIANCE_ALLIED_VISION);
+    }
+  }
+
   humanPlayers.forEach((p: MapPlayer) => {
     SetCameraFieldForPlayer(p.handle, CAMERA_FIELD_TARGET_DISTANCE, 2500, 0);
     p.setState(PLAYER_STATE_RESOURCE_GOLD, 500);
@@ -66,4 +77,8 @@ export function getNeutralExtra(): MapPlayer {
 
 export function getNeutralAggressive(): MapPlayer {
   return MapPlayer.fromIndex(PLAYER_NEUTRAL_AGGRESSIVE)!;
+}
+
+export function getTrainPlayer(): MapPlayer {
+  return MapPlayer.fromIndex(23)!;
 }

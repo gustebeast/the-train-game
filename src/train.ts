@@ -3,7 +3,7 @@ import { Units } from '@objectdata/units';
 import { placedTracks, isVictoryTriggered } from './track/state';
 import { TRACK_SIZE } from './track/constants';
 import { GRID_MIN_X } from './terrain/constants';
-import { getNeutralPassive } from './teams';
+import { getTrainPlayer } from './teams';
 
 import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
 
@@ -58,7 +58,6 @@ function moveToNext() {
   const current = placedTracks[targetIdx];
   const next = placedTracks[targetIdx + 1];
   if (next == null || current == null) return;
-  next.invulnerable = true;
   targetIdx++;
   const cur = trackCenter(current);
   const nxt = trackCenter(next);
@@ -70,6 +69,7 @@ function moveToNext() {
   arrivalRegion.addRect(arrivalRect);
 
   lastMoveTime = os.clock();
+  next.invulnerable = true;
   train.issueOrderAt('move', nxt.x + ox, nxt.y + oy);
 }
 
@@ -91,8 +91,9 @@ export function onTrackPlaced(): void {
 export function reissueMoveOrder(): void {
   // Failsafe: if it's been too long since the last moveToNext, the train
   // likely missed the arrival region — force advance instead of re-issuing.
+  const elapsed = os.clock() - lastMoveTime;
   if (
-    os.clock() - lastMoveTime >= STUCK_TIMEOUT && 
+    elapsed >= STUCK_TIMEOUT &&
     placedTracks[targetIdx + 1] != null &&
     !gameOver
   ) {
@@ -119,7 +120,7 @@ export function getTrain(): Unit {
 
 export function initTrain() {
   // Spawn the train
-  train = Unit.create(getNeutralPassive(), FourCC(Units.WarWagon), CENTER_OFFSET + GRID_MIN_X * TRACK_SIZE, CENTER_OFFSET, 0)!;
+  train = Unit.create(getTrainPlayer(), FourCC(Units.WarWagon), CENTER_OFFSET + GRID_MIN_X * TRACK_SIZE, CENTER_OFFSET, 0)!;
   SetUnitPathing(train.handle, false);
   initProduction(train);
   setMoveOrderCallback(() => reissueMoveOrder());

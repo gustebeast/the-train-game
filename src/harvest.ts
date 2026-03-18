@@ -10,8 +10,13 @@ const GRANITE_DEST_ID = FourCC(GRANITE_RAW);
 // Death triggers for resource drops (initialized by initHarvest, must be called before spawnTerrain)
 let treeDeath!: Trigger;
 let rockDeath!: Trigger;
+let resourceDropsPaused = false;
+
+export function pauseResourceDrops(): void { resourceDropsPaused = true; }
+export function resumeResourceDrops(): void { resourceDropsPaused = false; }
 
 function dropResource(itemId: number): void {
+  if (resourceDropsPaused) return;
   const w = GetTriggerWidget();
   if (w == null) return;
   const x = GetWidgetX(w);

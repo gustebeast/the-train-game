@@ -8,7 +8,9 @@ import {
 } from './constants';
 
 import { getNeutralExtra } from '../teams';
-import { registerResourceDest } from '../harvest';
+import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
+import { TRACK_UNIT_TYPES } from '../track/constants';
+import { placedTracks } from '../track/state';
 
 // Per-variation scales to normalize rock models to ~128-unit footprint.
 const ROCK_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
@@ -44,6 +46,28 @@ export function spawnTerrain(grid: Grid): void {
   let treeCount = 0;
   let rockCount = 0;
   let graniteCount = 0;
+
+  if (cheatMode) {
+    pauseResourceDrops();
+    EnumDestructablesInRect(GetWorldBounds()!, null!, () => RemoveDestructable(GetEnumDestructable()!));
+    resumeResourceDrops();
+
+    const keepHandle0 = placedTracks[0] != null ? placedTracks[0].handle : null;
+    const keepHandle1 = placedTracks[1] != null ? placedTracks[1].handle : null;
+    const trackTypeId0 = FourCC(TRACK_UNIT_TYPES[0]);
+    const trackTypeId1 = FourCC(TRACK_UNIT_TYPES[1]);
+    const waterTypeId = FourCC(Units.Burrow);
+    const g = CreateGroup()!;
+    GroupEnumUnitsInRect(g, GetWorldBounds()!, null!);
+    ForGroup(g, () => {
+      const u = GetEnumUnit();
+      if (u == null || u === keepHandle0 || u === keepHandle1) return;
+      const typeId = GetUnitTypeId(u);
+      if (typeId === trackTypeId0 || typeId === trackTypeId1 || typeId === waterTypeId) RemoveUnit(u);
+    });
+    DestroyGroup(g);
+    placedTracks.splice(2);
+  }
 
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {

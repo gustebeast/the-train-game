@@ -14,9 +14,6 @@ export function initCheat(): void {
   });
   trigger.addAction(() => {
     enableCheatMode();
-    EnumDestructablesInRect(GetWorldBounds()!, null!, () => {
-      RemoveDestructable(GetEnumDestructable()!);
-    });
     const grid = generateTerrain(0);
     spawnTerrain(grid);
     setVictoryTile(GRID_MAX_X * TRACK_SIZE, grid.exitY * TRACK_SIZE);
