@@ -60,9 +60,9 @@ function storageSlot(itemTypeId: number): number {
   return 0;
 }
 
-let crateMaxStack = 5;
-let trainTrackMaxStack = 4;
-let trainCargoMaxStack = 2;
+let crateMaxStack = 10;
+let trainTrackMaxStack = 3;
+let trainCargoMaxStack = 3;
 let peasantMaxStack = 3;
 
 /** Show a rejection message and stop the unit. */

@@ -1,7 +1,8 @@
 import { Unit, Trigger, Timer, Rectangle, Region } from 'w3ts';
 import { Units } from '@objectdata/units';
-import { placedTracks } from './track/state';
+import { placedTracks, isVictoryTriggered } from './track/state';
 import { TRACK_SIZE } from './track/constants';
+import { GRID_MIN_X } from './terrain/constants';
 import { getNeutralPassive } from './teams';
 
 import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
@@ -118,7 +119,7 @@ export function getTrain(): Unit {
 
 export function initTrain() {
   // Spawn the train
-  train = Unit.create(getNeutralPassive(), FourCC(Units.WarWagon), CENTER_OFFSET - 26 * TRACK_SIZE, CENTER_OFFSET, 0)!;
+  train = Unit.create(getNeutralPassive(), FourCC(Units.WarWagon), CENTER_OFFSET + GRID_MIN_X * TRACK_SIZE, CENTER_OFFSET, 0)!;
   SetUnitPathing(train.handle, false);
   initProduction(train);
   setMoveOrderCallback(() => reissueMoveOrder());
@@ -138,6 +139,13 @@ export function initTrain() {
     }
     if (placedTracks[targetIdx + 1] != null) {
       moveToNext();
+      return;
+    }
+    if (isVictoryTriggered()) {
+      const victoryDelay = (REGION_HALF + OVERSHOOT) / train.moveSpeed;
+      Timer.create().start(victoryDelay, false, () => {
+        print('Victory!');
+      });
       return;
     }
     print('Train about to crash!');

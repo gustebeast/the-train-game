@@ -1,0 +1,3 @@
+notes
+- speed up train when last rail is placed
+- roll spell

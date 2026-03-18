@@ -12,8 +12,8 @@ compiletime(({ objectData, constants }) => {
   for (const [orientation, unitName] of Object.entries(trackTypes)) {
     const track = objectData.units.get(unitName)!;
     track.buildTime = 0;
-    track.defenseType = 'normal';
-    track.defenseBase = 0;
+    track.defenseBase = 1;
+    track.defenseType = 'none';
     track.description = 'A section of railway track.';
     track.hitPointsMaximumBase = 5;
     track.name = 'Railway Track';
@@ -48,7 +48,7 @@ compiletime(({ objectData, constants }) => {
   const peasant = objectData.units.get(constants.units.Peasant)!;
   peasant.modelFile = 'war3mapImported\\WeaponlessPeasant.mdx';
   peasant.structuresBuilt = '';
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.HarvestGhoulsLumber, constants.abilities.Channel].join(',');
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
@@ -279,26 +279,37 @@ compiletime(({ objectData, constants }) => {
 
   // Tree destructables (SummerTreeWall / LTlt)
   const tree = objectData.destructables.get(constants.destructables.SummerTreeWall)!;
-  tree.hitPoints = 3;
+  tree.hitPoints = 15;
   tree.selectableInGame = false;
+  tree.occlusionHeight = 0;
+  tree.targetedAs = 'debris';
 
   // Rock destructables (RockChunks2 / LTrt — 6 variations, same model as granite)
   const rock = objectData.destructables.get(constants.destructables.RockChunks2)!;
   rock.hitPoints = 15;
   rock.selectableInGame = false;
+  rock.occlusionHeight = 0;
+
+  // Granite rocks: dark tint, unselectable, indestructible
+  const granite = objectData.destructables.get(constants.destructables.RockChunks1)!;
+  granite.hitPoints = 999999;
+  granite.occlusionHeight = 0;
+  granite.selectableInGame = false;
+  granite.tintingColor1Red = 40;
+  granite.tintingColor2Green = 40;
+  granite.tintingColor3Blue = 40;
 
   // Water: Burrow repurposed with WaterPlane model, targetable by spells, no shadow
   const water = objectData.units.get(constants.units.Burrow)!;
-  water.name = 'Water';
-  water.modelFile = 'war3mapImported\\WaterPlane.mdx';
-  water.hitPointsMaximumBase = 999999;
-  water.defenseBase = 99;
-  water.pathingMap = 'PathTextures\\4x4simplesolid.tga';
-  water.shadowTextureBuilding = 'NONE';
-  water.groundTexture = 'NONE';
-  water.scalingValueundefined = 1;
   water.collisionSize = 32;
+  water.groundTexture = 'NONE';
   water.hideMinimapDisplay = true;
+  water.modelFile = 'war3mapImported\\WaterPlane.mdx';
+  water.name = 'Water';
+  water.occluderHeight = 0;
+  water.pathingMap = 'PathTextures\\4x4simplesolid.tga';
+  water.scalingValueundefined = 1;
+  water.shadowTextureBuilding = 'NONE';
 
   // Storage crate: GrainWarehouse shrunk to 4x4 with crate model and inventory
   const crate = objectData.units.get(constants.units.GrainWarehouse)!;
@@ -310,8 +321,6 @@ compiletime(({ objectData, constants }) => {
   crate.scalingValueundefined = 1;
   crate.shadowTextureBuilding = 'ShadowCrates';
   crate.normal = constants.abilities.InventoryHero;
-  crate.hitPointsMaximumBase = 999999;
-  crate.defenseBase = 99;
 
   // Track piece item (MechanicalCritter — placeholder for track building)
   const trackPiece = objectData.items.get(constants.items.MechanicalCritter)!;
@@ -330,14 +339,6 @@ compiletime(({ objectData, constants }) => {
   trackPiece.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
   trackPiece.modelUsed = 'war3mapImported\\OmniTrack.mdx';
   trackPiece.scalingValue = 0.5;
-
-  // Granite rocks: dark tint, unselectable, indestructible
-  const granite = objectData.destructables.get(constants.destructables.RockChunks1)!;
-  granite.tintingColor1Red = 80;
-  granite.tintingColor2Green = 80;
-  granite.tintingColor3Blue = 80;
-  granite.selectableInGame = false;
-  granite.hitPoints = 999999;
 
   // Bridge spell: AcidBomb repurposed as a no-mana, unit+building-targeting spell
   const bridge = objectData.abilities.get(constants.abilities.AcidBomb)!;

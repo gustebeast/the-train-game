@@ -2,13 +2,14 @@ Note: all ranges are inclusive
 
 === GRID ===
 - Map uses a tiled grid where each tile is 128x128 game units
-- Player spawn area x=[-26,-21], y=[0,-4] must be empty
-- Victory area x=[21,26], y=[0,-4] must be empty
-- All other area in the grid is usable x=[-26, 26], y=[-10, 10]
-- Total usable tiles: 53 wide * 21 tall = 1113 (minus spawn/victory areas)
+- Grid boundaries are x=[-20, 20], y=[-10, 10] (which will be called MAX_X and MAX_Y)
+- Player spawn area x=[-MAX_X,-MAX_X-5], y=[0,-4] must be empty
+- Victory area x=[MAX_X,MAX_X-5], y=[0,-4] must be empty
+- All other area in the grid is usable
+- Total usable tiles: (2*MAX_X + 1) * (2*MAX_Y + 1) - (spawn/victory areas)
 
 === TERRAIN TEXTURE ===
-- Start and end pieces x=-26 or 26, y=0 should use white marble terrain texture
+- Start and end pieces x=-MAX_X or MAX_X, y=(random between MAX_Y - 4, MAX_Y + 4) should use white marble terrain texture
 - All other area can use a variety of terrain textures within Lordaeron Summer
 - Avoid high frequency terrain changes: terrain types should form large natural regions, not checkerboard patterns
 
@@ -32,7 +33,7 @@ Note: all ranges are inclusive
 7. Paint terrain textures
 
 === PATH GENERATION ===
-- Generate a path from start (x=-26, y=0) to end (x=26, y=0)
+- Generate a path from start to end
 - Path should move primarily eastward with occasional N/S meanders
 - 1 tile wide is sufficient
 - For every 3-5 eastward steps, allow up to 1-2 N/S steps before requiring another eastward step

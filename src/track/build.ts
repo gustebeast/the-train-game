@@ -5,9 +5,10 @@ import {
   Direction, toOrientationKey,
 } from './constants';
 import { reskinTrack, replaceTrack } from './helpers';
-import { placedTracks } from './state';
+import { placedTracks, isVictoryTriggered, getVictoryTile } from './state';
 import { TRACK_PIECE_ID, findItemByType, updateBuildAbility } from '../items';
 import { onTrackPlaced } from '../train';
+import { triggerVictory } from '../victory';
 
 const BUILD_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
 
@@ -23,6 +24,7 @@ function getDirection(from: Unit, to: Unit): Direction {
 }
 
 function isValidPlacement(x: number, y: number): boolean {
+  if (isVictoryTriggered()) return false;
   if (placedTracks.length < 2) return false;
   const track1 = placedTracks[placedTracks.length - 1];
   const dx = Math.abs(x - track1.x);
@@ -72,8 +74,13 @@ function onTrackBuilt() {
     // Replace track0 (Farm/solid) with a ScoutTower (walkable) at the snap position
     const orientationKey0 = toOrientationKey(dirToTrack1, OPPOSITE[dirToTrack1]);
     const type0 = SKINS[orientationKey0] ?? SKINS.EW;
-    placedTracks.push(replaceTrack(track0, type0, snapX, snapY));
+    const newTrack = replaceTrack(track0, type0, snapX, snapY);
+    placedTracks.push(newTrack);
     onTrackPlaced();
+    const victoryTile = getVictoryTile();
+    if (snapX === victoryTile.x && snapY === victoryTile.y) {
+      triggerVictory(newTrack);
+    }
   });
 }
 

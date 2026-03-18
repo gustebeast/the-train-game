@@ -12,11 +12,12 @@ import { initTrain } from './train';
 import { initHarvest } from './harvest';
 import { initItems } from './items';
 import { initGiveTake } from './givetake';
+import { initCheat } from './cheat';
 import { initBridge } from './bridge';
 import { initFill } from './fill';
 import { initWaterTrain } from './water';
 import { DEFAULT_TRACK, SKINS, TRACK_SIZE } from './track/constants';
-import { placedTracks } from './track/state';
+import { placedTracks, setVictoryTile } from './track/state';
 
 import { generateTerrain } from './terrain/generate';
 import { spawnTerrain } from './terrain/spawn';
@@ -33,6 +34,7 @@ function tsMain() {
   // Generate and spawn procedural terrain
   const grid = generateTerrain(0); // difficulty 0 for round 1
   spawnTerrain(grid);
+  setVictoryTile(GRID_MAX_X * TRACK_SIZE, grid.exitY * TRACK_SIZE);
 
   // Place storage crates south of start and exit points (neutral extra = allied, no vision)
   const extra = getNeutralExtra();
@@ -45,7 +47,7 @@ function tsMain() {
 
   // Place initial EW track pieces
   const ally = getNeutralPassive();
-  for (const gridX of [-26, -25]) {
+  for (const gridX of [GRID_MIN_X, GRID_MIN_X + 1]) {
     const track = Unit.create(ally, FourCC(DEFAULT_TRACK), gridX * TRACK_SIZE, 0, 0)!;
     track.skin = FourCC(SKINS.EW);
     track.invulnerable = true;
@@ -61,11 +63,12 @@ function tsMain() {
   initBridge();
   initFill();
   initWaterTrain();
+  initCheat();
 
   // Spawn tools in the start area
-  const axePos = gridToWorld(-25, -3);
-  const pickPos = gridToWorld(-24, -3);
-  const bucketPos = gridToWorld(-23, -3);
+  const axePos = gridToWorld(GRID_MIN_X + 1, -3);
+  const pickPos = gridToWorld(GRID_MIN_X + 2, -3);
+  const bucketPos = gridToWorld(GRID_MIN_X + 3, -3);
   Item.create(FourCC(Items.SturdyWarAxe), axePos.x, axePos.y);
   Item.create(FourCC(Items.RustyMiningPick), pickPos.x, pickPos.y);
   Item.create(FourCC(Items.EmptyVial), bucketPos.x, bucketPos.y);
@@ -81,7 +84,7 @@ function tsMain() {
   ));
 
   humanPlayers.forEach((player, index) => {
-    const spawnPos = gridToWorld(-23 + index, -2);
+    const spawnPos = gridToWorld(GRID_MIN_X + 3 + index, -2);
     Unit.create(player, FourCC(Units.Peasant), spawnPos.x, spawnPos.y, 0)!;
     player.setState(PLAYER_STATE_RESOURCE_GOLD, 0);
     player.setState(PLAYER_STATE_RESOURCE_LUMBER, 0);

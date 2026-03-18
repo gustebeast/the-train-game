@@ -33,6 +33,12 @@ function paintTile(worldX: number, worldY: number, terrainFourCC: string): void 
   SetTerrainType(worldX, worldY, FourCC(terrainFourCC), -1, 1, 0);
 }
 
+let cheatMode = false;
+
+export function enableCheatMode(): void {
+  cheatMode = true;
+}
+
 /** Create all WC3 destructables and paint terrain from the generated grid. */
 export function spawnTerrain(grid: Grid): void {
   let treeCount = 0;
@@ -42,10 +48,10 @@ export function spawnTerrain(grid: Grid): void {
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
       const i = idx(gx, gy);
-      const cell = grid.cells[i];
+      const effectiveCell = cheatMode ? CellType.EMPTY : grid.cells[i];
       const world = gridToWorld(gx, gy);
 
-      switch (cell) {
+      switch (effectiveCell) {
         case CellType.TREE: {
           const variation = GetRandomInt(0, 9);
           const tree = Destructable.create(

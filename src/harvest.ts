@@ -1,10 +1,11 @@
-import { Destructable, Item, Timer, Trigger, Unit } from 'w3ts';
-import { TREE_RAW, ROCK_RAW } from './terrain/constants';
+import { Destructable, Item, Trigger, Unit } from 'w3ts';
+import { TREE_RAW, ROCK_RAW, GRANITE_RAW } from './terrain/constants';
 import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, unitHasItemType, rejectOrder } from './items';
 
 
 const TREE_DEST_ID = FourCC(TREE_RAW);
 const ROCK_DEST_ID = FourCC(ROCK_RAW);
+const GRANITE_DEST_ID = FourCC(GRANITE_RAW);
 
 // Death triggers for resource drops (initialized by initHarvest, must be called before spawnTerrain)
 let treeDeath!: Trigger;
@@ -46,27 +47,27 @@ function isResourceDest(destTypeId: number): boolean {
 
 /**
  * Unified handler for any order targeting a resource destructable.
+ * - Granite → stop + show "Granite cannot be destroyed!"
  * - No tool → stop + show "Requires X!"
- * - Has tool → redirect to attack order on the destructable
+ * - Has tool → allow native attack order to proceed
  */
 function handleResourceOrder(unit: Unit, dest: destructable): void {
   const destTypeId = GetDestructableTypeId(dest);
-  const tool = requiredToolForDest(destTypeId);
-  if (tool === 0) return;
 
-  const unitHandle = unit.handle;
-
-  if (!unitHasItemType(unit, tool)) {
-    rejectOrder(unitHandle, 'Requires ' + toolName(tool) + '!');
+  if (destTypeId === GRANITE_DEST_ID) {
+    rejectOrder(unit.handle, 'Granite cannot be destroyed!');
     return;
   }
 
-  // Has tool — always redirect to attack (handles harvest/smart/etc uniformly)
-  const t = Timer.create();
-  t.start(0, false, () => {
-    IssueTargetDestructableOrder(unitHandle, 'attack', dest);
-    t.destroy();
-  });
+  const tool = requiredToolForDest(destTypeId);
+  if (tool === 0) return;
+
+  if (!unitHasItemType(unit, tool)) {
+    rejectOrder(unit.handle, 'Requires ' + toolName(tool) + '!');
+    return;
+  }
+
+  // Has tool — let the native attack order proceed
 }
 
 /** Find a resource destructable near coordinates. */
@@ -75,8 +76,11 @@ function findResourceDestAt(x: number, y: number): destructable | null {
   const r = Rect(x - 64, y - 64, x + 64, y + 64);
   EnumDestructablesInRect(r, undefined, () => {
     const d = GetEnumDestructable();
-    if (d != null && GetDestructableLife(d) > 0 && isResourceDest(GetDestructableTypeId(d))) {
-      found = d;
+    if (d != null && GetDestructableLife(d) > 0) {
+      const dt = GetDestructableTypeId(d);
+      if (isResourceDest(dt) || dt === GRANITE_DEST_ID) {
+        found = d;
+      }
     }
   });
   RemoveRect(r);
@@ -96,7 +100,8 @@ export function initHarvest(): void {
   destTargetTrigger.addAction(() => {
     const dest = GetOrderTargetDestructable();
     if (dest == null) return;
-    if (!isResourceDest(GetDestructableTypeId(dest))) return;
+    const destTypeId = GetDestructableTypeId(dest);
+    if (!isResourceDest(destTypeId) && destTypeId !== GRANITE_DEST_ID) return;
 
     const unit = Unit.fromEvent();
     if (unit == null) return;
@@ -114,6 +119,7 @@ export function initHarvest(): void {
 
     const dest = findResourceDestAt(x, y);
     if (dest == null) return;
+  
     handleResourceOrder(unit, dest);
   });
 

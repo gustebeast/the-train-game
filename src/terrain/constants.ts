@@ -1,17 +1,17 @@
 import { TRACK_SIZE } from '../track/constants';
 
 // Grid dimensions (in tile coordinates)
-export const GRID_MIN_X = -26;
-export const GRID_MAX_X = 26;
+export const GRID_MIN_X = -20;
+export const GRID_MAX_X = 20;
 export const GRID_MIN_Y = -10;
 export const GRID_MAX_Y = 10;
-export const GRID_W = GRID_MAX_X - GRID_MIN_X + 1; // 53
+export const GRID_W = GRID_MAX_X - GRID_MIN_X + 1; // 41
 export const GRID_H = GRID_MAX_Y - GRID_MIN_Y + 1; // 21
 
 // Reserved areas (must remain empty)
-export const SPAWN = { minX: -26, maxX: -21, minY: -4, maxY: 0 };
+export const SPAWN = { minX: GRID_MIN_X, maxX: GRID_MIN_X + 5, minY: -4, maxY: 0 };
 // VICTORY bounds are updated dynamically after path generation: minY = exitY-4, maxY = exitY
-export const VICTORY = { minX: 21, maxX: 26, minY: -4, maxY: 0 };
+export const VICTORY = { minX: GRID_MAX_X - 5, maxX: GRID_MAX_X, minY: -4, maxY: 0 };
 
 export enum CellType {
   EMPTY = 0,
@@ -58,3 +58,4 @@ export function gridToWorld(gx: number, gy: number): { x: number; y: number } {
 // --- Destructable rawcodes ---
 export const TREE_RAW = 'LTlt';  // SummerTreeWall (Lordaeron Summer)
 export const ROCK_RAW = 'LTrt';  // RockChunks2 (Lordaeron Summer — 6 variations)
+export const GRANITE_RAW = 'LTrc';  // RockChunks1 (Lordaeron Summer — indestructible)
