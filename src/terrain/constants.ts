@@ -19,14 +19,28 @@ export enum CellType {
   ROCK = 2,
   WATER = 3,
   GRANITE = 4,
+  ABYSS = 5,
+  MARBLE = 6,
+  CRATE = 7,
+  TRACK = 8,
+  AXE = 9,
+  PICKAXE = 10,
+  BUCKET = 11,
+  PLAYER_1 = 12,
+  PLAYER_2 = 13,
+  PLAYER_3 = 14,
+  PLAYER_4 = 15,
+  START_CIRCLE = 16,
 }
 
 export const DIRS: ReadonlyArray<readonly [number, number]> = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
+export interface GridPos { x: number; y: number; }
+
 export interface Grid {
   cells: CellType[];
   path: boolean[];
-  exitY: number; // Y coordinate where the path exits on the right side
+  exit: GridPos; // Grid coordinate where the path exits on the right side
 }
 
 // --- Grid coordinate helpers ---
@@ -35,7 +49,7 @@ export function idx(gx: number, gy: number): number {
   return (gy - GRID_MIN_Y) * GRID_W + (gx - GRID_MIN_X);
 }
 
-export function idxToCoords(i: number): { x: number; y: number } {
+export function idxToCoords(i: number): GridPos {
   const iy = Math.floor(i / GRID_W);
   const ix = i % GRID_W;
   return { x: ix + GRID_MIN_X, y: iy + GRID_MIN_Y };
@@ -51,8 +65,8 @@ export function isReserved(gx: number, gy: number): boolean {
   return false;
 }
 
-export function gridToWorld(gx: number, gy: number): { x: number; y: number } {
-  return { x: gx * TRACK_SIZE, y: gy * TRACK_SIZE };
+export function gridToWorld(pos: GridPos): GridPos {
+  return { x: pos.x * TRACK_SIZE, y: pos.y * TRACK_SIZE };
 }
 
 // --- Destructable rawcodes ---

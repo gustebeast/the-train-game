@@ -2,7 +2,7 @@ import { Unit, Trigger, Timer, Rectangle, Region } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { placedTracks, isVictoryTriggered } from './track/state';
 import { TRACK_SIZE } from './track/constants';
-import { GRID_MIN_X } from './terrain/constants';
+import { GridPos, GRID_MIN_X } from './terrain/constants';
 import { getTrainPlayer } from './teams';
 
 import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
@@ -40,12 +40,12 @@ export function extinguish(): void {
   resumeProduction();
 }
 
-function trackCenter(track: Unit): { x: number; y: number } {
+function trackCenter(track: Unit): GridPos {
   return { x: track.x + CENTER_OFFSET, y: track.y + CENTER_OFFSET };
 }
 
 /** Compute the overshoot offset direction from current track to next. */
-function overshootOffset(cur: { x: number; y: number }, nxt: { x: number; y: number }): { ox: number; oy: number } {
+function overshootOffset(cur: GridPos, nxt: GridPos): { ox: number; oy: number } {
   const dx = nxt.x - cur.x;
   const dy = nxt.y - cur.y;
   const ox = math.abs(dx) >= math.abs(dy) ? OVERSHOOT * (dx > 0 ? 1 : -1) : 0;
@@ -118,11 +118,63 @@ export function getTrain(): Unit {
   return train;
 }
 
-export function initTrain() {
-  // Spawn the train
+let onVictory: (() => void) | null = null;
+
+export function setVictoryCallback(cb: () => void): void {
+  onVictory = cb;
+}
+
+function enterLobby(): void {
+  if (onVictory != null) onVictory();
+}
+
+let lowHpTrigger: Trigger;
+
+function spawnTrainUnit(): void {
   train = Unit.create(getTrainPlayer(), FourCC(Units.WarWagon), CENTER_OFFSET + GRID_MIN_X * TRACK_SIZE, CENTER_OFFSET, 0)!;
   SetUnitPathing(train.handle, false);
   initProduction(train);
+
+  // Re-register HP trigger for the new unit handle
+  if (lowHpTrigger != null) lowHpTrigger.destroy();
+  lowHpTrigger = Trigger.create();
+  TriggerRegisterUnitStateEvent(lowHpTrigger.handle, train.handle, UNIT_STATE_LIFE, LESS_THAN, 2.0);
+  lowHpTrigger.addAction(() => {
+    if (burning) return;
+    burning = true;
+    SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
+    BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
+    pauseProduction();
+    print('The train is on fire and is losing max HP!');
+    burnTimer = Timer.create();
+    burnTimer.start(1, true, () => {
+      const currentMax = BlzGetUnitMaxHP(train.handle);
+      BlzSetUnitMaxHP(train.handle, currentMax - 1);
+      SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
+    });
+  });
+}
+
+/** Called by spawnTerrain to recreate the train after cleanup. */
+export function respawnTrain(): void {
+  targetIdx = 0;
+  crashDeadline = 0;
+  gameOver = false;
+  burning = false;
+  if (burnTimer != null) {
+    burnTimer.destroy();
+    burnTimer = null;
+  }
+  spawnTrainUnit();
+  train.moveSpeed = 1;
+  Timer.create().start(30, false, () => {
+    train.moveSpeed = trainSpeed;
+  });
+  moveToNext();
+}
+
+export function initTrain() {
+  spawnTrainUnit();
   setMoveOrderCallback(() => reissueMoveOrder());
 
   // Create the arrival region (initially at origin, will be repositioned by moveToNext)
@@ -146,6 +198,7 @@ export function initTrain() {
       const victoryDelay = (REGION_HALF + OVERSHOOT) / train.moveSpeed;
       Timer.create().start(victoryDelay, false, () => {
         print('Victory!');
+        enterLobby();
       });
       return;
     }
@@ -158,24 +211,6 @@ export function initTrain() {
         crashDeadline = 0;
         gameOver = true;
       }
-    });
-  });
-
-  // Intercept train HP decay — enter burning state before death
-  const lowHpTrigger = Trigger.create();
-  TriggerRegisterUnitStateEvent(lowHpTrigger.handle, train.handle, UNIT_STATE_LIFE, LESS_THAN, 2.0);
-  lowHpTrigger.addAction(() => {
-    if (burning) return;
-    burning = true;
-    SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
-    BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
-    pauseProduction();
-    print('The train is on fire and is losing max HP!');
-    burnTimer = Timer.create();
-    burnTimer.start(1, true, () => {
-      const currentMax = BlzGetUnitMaxHP(train.handle);
-      BlzSetUnitMaxHP(train.handle, currentMax - 1);
-      SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
     });
   });
 

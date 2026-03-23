@@ -320,7 +320,7 @@ compiletime(({ objectData, constants }) => {
   crate.selectionScale = 2;
   crate.scalingValueundefined = 1;
   crate.shadowTextureBuilding = 'ShadowCrates';
-  crate.normal = constants.abilities.InventoryHero;
+  crate.normal = [constants.abilities.InventoryHero, constants.abilities.InvulnerableNeutral].join(',');
 
   // Track piece item (MechanicalCritter — placeholder for track building)
   const trackPiece = objectData.items.get(constants.items.MechanicalCritter)!;

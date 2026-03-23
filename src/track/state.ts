@@ -1,9 +1,10 @@
 import { Unit } from 'w3ts';
+import { GridPos } from '../terrain/constants';
 
 export const placedTracks: Unit[] = [];
 
 let _victoryTriggered = false;
-let _victoryTile: { x: number; y: number } = { x: 0, y: 0 };
+let _victoryTile: GridPos = { x: 0, y: 0 };
 
 export function isVictoryTriggered(): boolean {
   return _victoryTriggered;
@@ -17,7 +18,7 @@ export function setVictoryTile(worldX: number, worldY: number): void {
   _victoryTile = { x: worldX, y: worldY };
 }
 
-export function getVictoryTile(): { x: number; y: number } {
+export function getVictoryTile(): GridPos {
   return _victoryTile;
 }
 

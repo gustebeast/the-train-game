@@ -116,16 +116,19 @@ export function updateProduction(): void {
 }
 
 /** Initialize the production system. Must be called after the train is created. */
+let manaTrigger: Trigger | null = null;
+
 export function initProduction(trainUnit: Unit): void {
   train = trainUnit;
   // Train starts with 0 mana, 0 regen — production begins when resources arrive
   train.mana = 0;
   BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);
 
-  // Single persistent trigger that fires each time mana >= 100
-  const t = Trigger.create();
-  t.registerUnitStateEvent(train, UNIT_STATE_MANA, GREATER_THAN_OR_EQUAL, 100);
-  t.addAction(() => {
+  // Destroy previous mana trigger if re-initializing for a new unit
+  if (manaTrigger != null) manaTrigger.destroy();
+  manaTrigger = Trigger.create();
+  manaTrigger.registerUnitStateEvent(train, UNIT_STATE_MANA, GREATER_THAN_OR_EQUAL, 100);
+  manaTrigger.addAction(() => {
     onManaFull();
   });
 

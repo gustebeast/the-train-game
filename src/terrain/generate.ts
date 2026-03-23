@@ -1,5 +1,5 @@
 import {
-  CellType, Grid, DIRS, VICTORY,
+  CellType, Grid, GridPos, DIRS, VICTORY,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, GRID_W, GRID_H,
   idx, idxToCoords, inBounds, isReserved,
 } from './constants';
@@ -15,7 +15,7 @@ function createGrid(): Grid {
     cells[i] = CellType.EMPTY;
     path[i] = false;
   }
-  return { cells, path, exitY: 0 };
+  return { cells, path, exit: { x: GRID_MAX_X, y: 0 } };
 }
 
 // --- Find a random empty tile ---
@@ -23,8 +23,8 @@ function createGrid(): Grid {
 function findEmpty(
   grid: Grid,
   minX: number, maxX: number, minY: number, maxY: number,
-): { x: number; y: number } | null {
-  const candidates: { x: number; y: number }[] = [];
+): GridPos | null {
+  const candidates: GridPos[] = [];
   for (let gy = minY; gy <= maxY; gy++) {
     for (let gx = minX; gx <= maxX; gx++) {
       const i = idx(gx, gy);
@@ -89,7 +89,7 @@ function growBlob(
 // Step 1: Generate guaranteed path from start to end
 // ============================================================
 
-function generatePath(grid: Grid): void {
+function generatePath(grid: Grid, exitX: number): void {
   let x = GRID_MIN_X;
   let y = 0;
   grid.path[idx(x, y)] = true;
@@ -97,14 +97,18 @@ function generatePath(grid: Grid): void {
   // Minimum exit Y so the victory area (exitY-4 to exitY) fits in bounds
   const MIN_EXIT_Y = GRID_MIN_Y + 4;
 
-  while (x < GRID_MAX_X) {
+  // Update VICTORY area X bounds around the target exit
+  VICTORY.minX = exitX - 5;
+  VICTORY.maxX = exitX;
+
+  while (x < exitX) {
     // Take 2-4 eastward steps
     const eastSteps = GetRandomInt(2, 4);
-    for (let i = 0; i < eastSteps && x < GRID_MAX_X; i++) {
+    for (let i = 0; i < eastSteps && x < exitX; i++) {
       x++;
       grid.path[idx(x, y)] = true;
     }
-    if (x >= GRID_MAX_X) break;
+    if (x >= exitX) break;
 
     // How many columns remain to the victory area
     const colsToVictory = VICTORY.minX - x;
@@ -137,8 +141,8 @@ function generatePath(grid: Grid): void {
     }
   }
 
-  // Store exit point and update VICTORY area around it
-  grid.exitY = y;
+  // Store exit point and update VICTORY area Y bounds around it
+  grid.exit = { x: exitX, y };
   VICTORY.minY = y - 4;
   VICTORY.maxY = y;
 }
@@ -368,20 +372,90 @@ function placeResources(grid: Grid, difficulty: number): void {
 // Main orchestrator
 // ============================================================
 
-export function generateTerrain(difficulty: number): Grid {
+// ============================================================
+// Lobby grid (post-victory)
+// ============================================================
+
+// Triangle rows for lobby pattern, tiled 4x for radial symmetry.
+// Row 0 is the outermost border, row 5 is the center cell.
+// W = WATER, M = MARBLE, E = EMPTY (grass)
+const { WATER: _W, MARBLE: _M, EMPTY: _E } = CellType;
+const LOBBY_ROWS: CellType[][] = [
+  [_W,_W,_W,_W,_W,_W,_W,_W,_W,_W,_W],
+  [_M,_M,_M,_M,_M,_M,_M,_M,_M],
+  [_E,_E,_M,_E,_M,_E,_E],
+  [_M,_E,_M,_E,_M],
+  [_E,_M,_E],
+  [_E],
+];
+
+function getLobbyTile(lx: number, ly: number): CellType {
+  const d = Math.min(lx + 5, 5 - lx, ly + 5, 5 - ly);
+  const row = LOBBY_ROWS[d];
+  // Use x-axis position if nearest to top/bottom edge, y-axis if nearest to left/right
+  const pos = (ly + 5 === d || 5 - ly === d) ? lx + 5 - d : ly + 5 - d;
+  return row[pos];
+}
+
+export function generateLobby(): Grid {
   const grid = createGrid();
 
-  // 1. Generate guaranteed path
-  generatePath(grid);
+  // Fill entire grid with ABYSS
+  for (let i = 0; i < GRID_W * GRID_H; i++) {
+    grid.cells[i] = CellType.ABYSS;
+  }
 
-  // 2. Place granite (respecting path, guaranteeing connectivity)
-  placeGranite(grid, difficulty);
+  // Set lobby pattern in center 11x11
+  for (let ly = -5; ly <= 5; ly++) {
+    for (let lx = -5; lx <= 5; lx++) {
+      grid.cells[idx(lx, ly)] = getLobbyTile(lx, ly);
+    }
+  }
 
-  // 3. Place water (spread east-to-west, connected blobs)
-  placeWater(grid, difficulty);
-
-  // 4. Place trees and rocks (clustered blobs)
-  placeResources(grid, difficulty);
+  // Place entities
+  grid.cells[idx(0, -3)] = CellType.START_CIRCLE;
+  grid.cells[idx(0, -2)] = CellType.PLAYER_1;
+  grid.cells[idx(0, -1)] = CellType.PLAYER_2;
+  grid.cells[idx(0, 0)] = CellType.PLAYER_3;
+  grid.cells[idx(0, 1)] = CellType.PLAYER_4;
 
   return grid;
 }
+
+// ============================================================
+// Main orchestrator
+// ============================================================
+
+function placeEntities(grid: Grid): void {
+  grid.cells[idx(GRID_MIN_X, 0)] = CellType.MARBLE;
+  grid.cells[idx(grid.exit.x, grid.exit.y)] = CellType.MARBLE;
+  grid.cells[idx(GRID_MIN_X, -1)] = CellType.CRATE;
+  grid.cells[idx(grid.exit.x, grid.exit.y - 1)] = CellType.CRATE;
+  grid.cells[idx(GRID_MIN_X, 0)] = CellType.TRACK;
+  grid.cells[idx(GRID_MIN_X + 1, 0)] = CellType.TRACK;
+  grid.cells[idx(GRID_MIN_X + 1, -3)] = CellType.AXE;
+  grid.cells[idx(GRID_MIN_X + 2, -3)] = CellType.PICKAXE;
+  grid.cells[idx(GRID_MIN_X + 3, -3)] = CellType.BUCKET;
+  grid.cells[idx(GRID_MIN_X + 3, -2)] = CellType.PLAYER_1;
+  grid.cells[idx(GRID_MIN_X + 4, -2)] = CellType.PLAYER_2;
+  grid.cells[idx(GRID_MIN_X + 5, -2)] = CellType.PLAYER_3;
+  grid.cells[idx(GRID_MIN_X + 6, -2)] = CellType.PLAYER_4;
+}
+
+export function generateTerrain(difficulty: number, exitX = GRID_MAX_X): Grid {
+  const grid = createGrid();
+  generatePath(grid, exitX);
+  placeGranite(grid, difficulty);
+  placeWater(grid, difficulty);
+  placeResources(grid, difficulty);
+  placeEntities(grid);
+  return grid;
+}
+
+export function generateCheatTerrain(exitX = GRID_MAX_X): Grid {
+  const grid = createGrid();
+  generatePath(grid, exitX);
+  placeEntities(grid);
+  return grid;
+}
+
