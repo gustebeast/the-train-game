@@ -10,7 +10,7 @@ export function initCheat(): void {
     TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, '-cheatmode', true);
   });
   trigger.addAction(() => {
-    loadCheatTerrain(GRID_MIN_X + 20);
+    loadCheatTerrain(GRID_MIN_X + 8);
     const trackPos = gridToWorld({ x: GRID_MIN_X + 4, y: -3 });
     const tracks = Item.create(TRACK_PIECE_ID, trackPos.x, trackPos.y)!;
     tracks.charges = 99;

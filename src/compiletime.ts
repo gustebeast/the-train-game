@@ -310,6 +310,8 @@ compiletime(({ objectData, constants }) => {
   water.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   water.scalingValueundefined = 1;
   water.shadowTextureBuilding = 'NONE';
+  water.sightRadiusDay = 320;
+  water.sightRadiusNight = 320;
 
   // Storage crate: GrainWarehouse shrunk to 4x4 with crate model and inventory
   const crate = objectData.units.get(constants.units.GrainWarehouse)!;

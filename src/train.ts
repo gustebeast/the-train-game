@@ -1,8 +1,6 @@
 import { Unit, Trigger, Timer, Rectangle, Region } from 'w3ts';
-import { Units } from '@objectdata/units';
 import { placedTracks, isVictoryTriggered } from './track/state';
-import { TRACK_SIZE } from './track/constants';
-import { GridPos, GRID_MIN_X } from './terrain/constants';
+import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
 
 import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
@@ -10,7 +8,7 @@ import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction
 const OVERSHOOT = 16;
 const REGION_HALF = 2; // 4x4 region → half-size = 2
 const STUCK_TIMEOUT = 35;
-export const CENTER_OFFSET = 16;
+const CENTER_OFFSET = 16;
 let trainHPRegen: number = -1; // HP per second; negative = decay
 let arrivalRect: Rectangle;
 let arrivalRegion: Region;
@@ -130,8 +128,9 @@ function enterLobby(): void {
 
 let lowHpTrigger: Trigger;
 
-function spawnTrainUnit(): void {
-  train = Unit.create(getTrainPlayer(), FourCC(Units.WarWagon), CENTER_OFFSET + GRID_MIN_X * TRACK_SIZE, CENTER_OFFSET, 0)!;
+function initTrainUnit(unit: Unit): void {
+  train = unit;
+  train.owner = getTrainPlayer();
   SetUnitPathing(train.handle, false);
   initProduction(train);
 
@@ -155,8 +154,10 @@ function spawnTrainUnit(): void {
   });
 }
 
-/** Called by spawnTerrain to recreate the train after cleanup. */
-export function respawnTrain(): void {
+let arrivalTrigger: Trigger;
+
+export function initTrain(unit: Unit) {
+  // Reset state from previous train
   targetIdx = 0;
   crashDeadline = 0;
   gameOver = false;
@@ -165,16 +166,13 @@ export function respawnTrain(): void {
     burnTimer.destroy();
     burnTimer = null;
   }
-  spawnTrainUnit();
-  train.moveSpeed = 1;
-  Timer.create().start(30, false, () => {
-    train.moveSpeed = trainSpeed;
-  });
-  moveToNext();
-}
 
-export function initTrain() {
-  spawnTrainUnit();
+  // Destroy previous arrival infrastructure
+  if (arrivalTrigger != null) arrivalTrigger.destroy();
+  if (arrivalRegion != null) arrivalRegion.destroy();
+  if (arrivalRect != null) arrivalRect.destroy();
+
+  initTrainUnit(unit);
   setMoveOrderCallback(() => reissueMoveOrder());
 
   // Create the arrival region (initially at origin, will be repositioned by moveToNext)
@@ -183,7 +181,7 @@ export function initTrain() {
   arrivalRegion.addRect(arrivalRect);
 
   // Trigger fires when the train enters the arrival region
-  const arrivalTrigger = Trigger.create();
+  arrivalTrigger = Trigger.create();
   arrivalTrigger.registerEnterRegion(arrivalRegion.handle, undefined);
   arrivalTrigger.addAction(() => {
     const entering = Unit.fromEvent();

@@ -3,14 +3,14 @@ import { Players } from 'w3ts/globals';
 import { Units } from '@objectdata/units';
 import { Items } from '@objectdata/items';
 import {
-  CellType, Grid,
+  Terrain, Entity, Grid,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
   TREE_RAW, ROCK_RAW,
-  idx, gridToWorld, isReserved,
+  idx, gridToWorld,
 } from './constants';
 import { DEFAULT_TRACK, SKINS } from '../track/constants';
 
-import { getNeutralPassive, getNeutralExtra } from '../teams';
+import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { placedTracks, setVictoryTile } from '../track/state';
 
@@ -26,27 +26,27 @@ const GRANITE_RAW = 'LTrc';  // Rock Chunks 1 (tinted dark + unselectable in com
 const GRANITE_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
 
 // --- Terrain tile FourCCs ---
-const TERRAIN_GRASS = 'Lgrs';
-const TERRAIN_DIRT = 'Ldrt';
-const TERRAIN_GRASSY_DIRT = 'Lgrd';
-const TERRAIN_ROCK = 'Lrok';
-const TERRAIN_ROUGH_DIRT = 'Ldro';
-const TERRAIN_WHITE_MARBLE = 'Xwmb';
-const TERRAIN_ABYSS = 'Oaby';
+const TERRAIN_FOURCC: Record<Terrain, string> = {
+  [Terrain.GRASS]: 'Lgrs',
+  [Terrain.GRASSY_DIRT]: 'Lgrd',
+  [Terrain.ROCK]: 'Lrok',
+  [Terrain.ROUGH_DIRT]: 'Ldro',
+  [Terrain.WHITE_MARBLE]: 'Xwmb',
+  [Terrain.BLACK_BRICKS]: 'Ibkb',
+};
 
-// PLAYER_1..PLAYER_4 cell types mapped to player slot indices
-const PLAYER_CELL_TYPES = [CellType.PLAYER_1, CellType.PLAYER_2, CellType.PLAYER_3, CellType.PLAYER_4];
+// PLAYER_1..PLAYER_4 entity types mapped to player slot indices
+const PLAYER_ENTITIES = [Entity.PLAYER_1, Entity.PLAYER_2, Entity.PLAYER_3, Entity.PLAYER_4];
 
-function paintTile(worldX: number, worldY: number, terrainFourCC: string): void {
-  SetTerrainType(worldX, worldY, FourCC(terrainFourCC), -1, 1, 0);
+const CENTER_OFFSET = 16;
+
+function paintTile(worldX: number, worldY: number, terrain: Terrain): void {
+  SetTerrainType(worldX, worldY, FourCC(TERRAIN_FOURCC[terrain]), -1, 1, 0);
 }
 
-
-/** Create all WC3 destructables and paint terrain from the generated grid. */
-export function spawnTerrain(grid: Grid, skipCleanup = false): void {
-  let treeCount = 0;
-  let rockCount = 0;
-  let graniteCount = 0;
+/** Create all WC3 objects and paint terrain from the generated grid. Returns the train unit if one was spawned. */
+export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
+  let trainUnit: Unit | null = null;
 
   // Resolve human players once for PLAYER_1..4 spawning
   const humanPlayers = Players.filter(
@@ -55,7 +55,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): void {
 
   if (!skipCleanup) {
     pauseResourceDrops();
-    // Remove all destructables and units before respawning
+    // Remove all destructables, units, and items before respawning
     EnumDestructablesInRect(GetWorldBounds()!, null!, () => RemoveDestructable(GetEnumDestructable()!));
     const g = CreateGroup()!;
     GroupEnumUnitsInRect(g, GetWorldBounds()!, null!);
@@ -64,121 +64,118 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): void {
       if (u != null) RemoveUnit(u);
     });
     DestroyGroup(g);
+    EnumItemsInRect(GetWorldBounds()!, null!, () => RemoveItem(GetEnumItem()!));
     resumeResourceDrops();
+    placedTracks.length = 0;
+
+    // Reset fog of war to unexplored for all human players
+    const world = GetWorldBounds()!;
+    for (const p of humanPlayers) {
+      const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_MASKED, world, true, false)!;
+      FogModifierStart(fog);
+      DestroyFogModifier(fog);
+    }
   }
 
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
-      const i = idx(gx, gy);
+      const cell = grid.cells[idx(gx, gy)];
       const world = gridToWorld({ x: gx, y: gy });
 
-      switch (grid.cells[i]) {
-        case CellType.TREE: {
+      // Paint terrain
+      paintTile(world.x, world.y, cell.terrain);
+
+      // Spawn entity
+      switch (cell.entity) {
+        case Entity.TREE: {
           const variation = GetRandomInt(0, 9);
           const tree = Destructable.create(
             FourCC(TREE_RAW), world.x, world.y,
             GetRandomReal(220, 320), 0.8, variation,
           );
           if (tree != null) registerResourceDest(tree);
-          paintTile(world.x, world.y, TERRAIN_GRASS);
-          treeCount++;
           break;
         }
 
-        case CellType.ROCK: {
+        case Entity.ROCK: {
           const variation = GetRandomInt(0, 5);
           const rock = Destructable.create(
             FourCC(ROCK_RAW), world.x, world.y,
             GetRandomReal(0, 360), ROCK_SCALES[variation], variation,
           );
           if (rock != null) registerResourceDest(rock);
-          paintTile(world.x, world.y, TERRAIN_ROCK);
-          rockCount++;
           break;
         }
 
-        case CellType.GRANITE: {
+        case Entity.GRANITE: {
           const variation = GetRandomInt(0, 5);
           Destructable.create(
             FourCC(GRANITE_RAW), world.x, world.y,
             GetRandomReal(0, 360), GRANITE_SCALES[variation], variation,
           );
-          paintTile(world.x, world.y, TERRAIN_ROCK);
-          graniteCount++;
           break;
         }
 
-        case CellType.WATER: {
+        case Entity.WATER: {
           const w = Unit.create(getNeutralExtra(), FourCC(Units.Burrow), world.x, world.y, 0)!;
           w.invulnerable = true;
-          paintTile(world.x, world.y, TERRAIN_ROUGH_DIRT);
           break;
         }
 
-        case CellType.EMPTY: {
-          if (isReserved(gx, gy)) {
-            paintTile(world.x, world.y, TERRAIN_GRASSY_DIRT);
-          } else {
-            paintTile(world.x, world.y, TERRAIN_GRASS);
-          }
+        case Entity.WATER_VISIBLE: {
+          const wv = Unit.create(getTrainPlayer(), FourCC(Units.Burrow), world.x, world.y, 0)!;
+          wv.invulnerable = true;
           break;
         }
 
-        case CellType.ABYSS:
-          paintTile(world.x, world.y, TERRAIN_ABYSS);
-          break;
-
-        case CellType.MARBLE:
-          paintTile(world.x, world.y, TERRAIN_WHITE_MARBLE);
-          break;
-
-        case CellType.CRATE: {
+        case Entity.CRATE:
           Unit.create(getNeutralExtra(), FourCC(Units.GrainWarehouse), world.x, world.y, 270);
-          paintTile(world.x, world.y, TERRAIN_GRASSY_DIRT);
           break;
-        }
 
-        case CellType.TRACK: {
+        case Entity.TRACK: {
           const track = Unit.create(getNeutralPassive(), FourCC(DEFAULT_TRACK), world.x, world.y, 0)!;
           track.skin = FourCC(SKINS.EW);
           track.invulnerable = true;
           placedTracks.push(track);
-          paintTile(world.x, world.y, TERRAIN_GRASSY_DIRT);
           break;
         }
 
-        case CellType.AXE:
+        case Entity.TRACK_WITH_TRAIN: {
+          const track = Unit.create(getNeutralPassive(), FourCC(DEFAULT_TRACK), world.x, world.y, 0)!;
+          track.skin = FourCC(SKINS.EW);
+          track.invulnerable = true;
+          placedTracks.push(track);
+          trainUnit = Unit.create(getNeutralPassive(), FourCC(Units.WarWagon), world.x + CENTER_OFFSET, world.y + CENTER_OFFSET, 0)!;
+          break;
+        }
+
+        case Entity.AXE:
           Item.create(FourCC(Items.SturdyWarAxe), world.x, world.y);
-          paintTile(world.x, world.y, TERRAIN_GRASSY_DIRT);
           break;
 
-        case CellType.PICKAXE:
+        case Entity.PICKAXE:
           Item.create(FourCC(Items.RustyMiningPick), world.x, world.y);
-          paintTile(world.x, world.y, TERRAIN_GRASSY_DIRT);
           break;
 
-        case CellType.BUCKET:
+        case Entity.BUCKET:
           Item.create(FourCC(Items.EmptyVial), world.x, world.y);
-          paintTile(world.x, world.y, TERRAIN_GRASSY_DIRT);
           break;
 
-        case CellType.PLAYER_1:
-        case CellType.PLAYER_2:
-        case CellType.PLAYER_3:
-        case CellType.PLAYER_4: {
-          const playerIdx = PLAYER_CELL_TYPES.indexOf(grid.cells[i]);
+        case Entity.PLAYER_1:
+        case Entity.PLAYER_2:
+        case Entity.PLAYER_3:
+        case Entity.PLAYER_4: {
+          const playerIdx = PLAYER_ENTITIES.indexOf(cell.entity);
           if (playerIdx < humanPlayers.length) {
             Unit.create(humanPlayers[playerIdx], FourCC(Units.Peasant), world.x, world.y, 0);
             PanCameraToTimedForPlayer(humanPlayers[playerIdx].handle, world.x, world.y, 0);
           }
-          paintTile(world.x, world.y, TERRAIN_GRASSY_DIRT);
           break;
         }
 
-        case CellType.START_CIRCLE: {
+        case Entity.START_CIRCLE: {
           const cop = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
           SetUnitScale(cop.handle, 1.5, 1.5, 1.5);
-          paintTile(world.x, world.y, TERRAIN_GRASSY_DIRT);
           break;
         }
       }
@@ -188,4 +185,5 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): void {
   const exitWorld = gridToWorld(grid.exit);
   setVictoryTile(exitWorld.x, exitWorld.y);
 
+  return trainUnit;
 }

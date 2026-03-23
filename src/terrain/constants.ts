@@ -13,24 +13,38 @@ export const SPAWN = { minX: GRID_MIN_X, maxX: GRID_MIN_X + 5, minY: -4, maxY: 0
 // VICTORY bounds are updated dynamically after path generation: minY = exitY-4, maxY = exitY
 export const VICTORY = { minX: GRID_MAX_X - 5, maxX: GRID_MAX_X, minY: -4, maxY: 0 };
 
-export enum CellType {
-  EMPTY = 0,
+export enum Terrain {
+  GRASS = 0,
+  GRASSY_DIRT = 1,
+  ROCK = 2,
+  ROUGH_DIRT = 3,
+  WHITE_MARBLE = 4,
+  BLACK_BRICKS = 5,
+}
+
+export enum Entity {
+  NONE = 0,
   TREE = 1,
   ROCK = 2,
-  WATER = 3,
-  GRANITE = 4,
-  ABYSS = 5,
-  MARBLE = 6,
-  CRATE = 7,
-  TRACK = 8,
-  AXE = 9,
-  PICKAXE = 10,
-  BUCKET = 11,
-  PLAYER_1 = 12,
-  PLAYER_2 = 13,
-  PLAYER_3 = 14,
-  PLAYER_4 = 15,
-  START_CIRCLE = 16,
+  GRANITE = 3,
+  WATER = 4,
+  WATER_VISIBLE = 16,
+  CRATE = 5,
+  TRACK = 6,
+  TRACK_WITH_TRAIN = 7,
+  AXE = 8,
+  PICKAXE = 9,
+  BUCKET = 10,
+  PLAYER_1 = 11,
+  PLAYER_2 = 12,
+  PLAYER_3 = 13,
+  PLAYER_4 = 14,
+  START_CIRCLE = 15,
+}
+
+export interface Cell {
+  terrain: Terrain;
+  entity: Entity;
 }
 
 export const DIRS: ReadonlyArray<readonly [number, number]> = [[0, 1], [0, -1], [1, 0], [-1, 0]];
@@ -38,7 +52,7 @@ export const DIRS: ReadonlyArray<readonly [number, number]> = [[0, 1], [0, -1], 
 export interface GridPos { x: number; y: number; }
 
 export interface Grid {
-  cells: CellType[];
+  cells: Cell[];
   path: boolean[];
   exit: GridPos; // Grid coordinate where the path exits on the right side
 }

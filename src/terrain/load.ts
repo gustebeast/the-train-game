@@ -1,18 +1,20 @@
+import { Unit } from 'w3ts';
 import { GRID_MAX_X } from './constants';
 import { generateTerrain, generateCheatTerrain, generateLobby } from './generate';
 import { spawnTerrain } from './spawn';
-import { respawnTrain, setVictoryCallback } from '../train';
+import { initTrain, setVictoryCallback } from '../train';
 
 setVictoryCallback(() => loadLobby());
 
-export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRID_MAX_X): void {
-  spawnTerrain(generateTerrain(difficulty, exitX), skipCleanup);
-  if (!skipCleanup) respawnTrain();
+export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRID_MAX_X): Unit | null {
+  const trainUnit = spawnTerrain(generateTerrain(difficulty, exitX), skipCleanup);
+  if (trainUnit != null && !skipCleanup) initTrain(trainUnit);
+  return trainUnit;
 }
 
-export function loadCheatTerrain(exitX = GRID_MAX_X): void {
-  spawnTerrain(generateCheatTerrain(exitX));
-  respawnTrain();
+export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
+  const trainUnit = spawnTerrain(generateCheatTerrain(exitX, exitY));
+  if (trainUnit != null) initTrain(trainUnit);
 }
 
 export function loadLobby(): void {

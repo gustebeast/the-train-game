@@ -26,12 +26,12 @@ function tsMain() {
   initHarvest();
 
   // Generate and spawn procedural terrain (includes crates, tracks, items, players)
-  loadTerrain(0, true); // difficulty 0 for round 1, skip cleanup on first load
+  const trainUnit = loadTerrain(0, true); // difficulty 0 for round 1, skip cleanup on first load
 
   initTeams();
   initTrackBuildTrigger();
   initTrackDestroyTrigger();
-  initTrain();
+  initTrain(trainUnit!);
   initItems();
   initGiveTake();
   initBridge();
@@ -44,7 +44,7 @@ function tsMain() {
   const humanPlayers = Players.filter(
     p => p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER
   );
-  Timer.create().start(0.5, true, () => humanPlayers.forEach(({handle}) =>
+  Timer.create().start(0.5, false, () => humanPlayers.forEach(({handle}) =>
     SetCameraFieldForPlayer(handle, CAMERA_FIELD_TARGET_DISTANCE, cameraPosition, 0)
   ));
 

@@ -1,5 +1,5 @@
 import {
-  CellType, Grid, GridPos, DIRS, VICTORY,
+  Terrain, Entity, Cell, Grid, GridPos, DIRS, SPAWN, VICTORY,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, GRID_W, GRID_H,
   idx, idxToCoords, inBounds, isReserved,
 } from './constants';
@@ -9,16 +9,16 @@ import {
 
 function createGrid(): Grid {
   const size = GRID_W * GRID_H;
-  const cells: CellType[] = [];
+  const cells: Cell[] = [];
   const path: boolean[] = [];
   for (let i = 0; i < size; i++) {
-    cells[i] = CellType.EMPTY;
+    cells[i] = { terrain: Terrain.GRASS, entity: Entity.NONE };
     path[i] = false;
   }
   return { cells, path, exit: { x: GRID_MAX_X, y: 0 } };
 }
 
-// --- Find a random empty tile ---
+// --- Find a random empty tile (no entity, not reserved) ---
 
 function findEmpty(
   grid: Grid,
@@ -28,7 +28,7 @@ function findEmpty(
   for (let gy = minY; gy <= maxY; gy++) {
     for (let gx = minX; gx <= maxX; gx++) {
       const i = idx(gx, gy);
-      if (grid.cells[i] === CellType.EMPTY && !isReserved(gx, gy)) {
+      if (grid.cells[i].entity === Entity.NONE && !isReserved(gx, gy)) {
         candidates.push({ x: gx, y: gy });
       }
     }
@@ -43,12 +43,12 @@ function growBlob(
   grid: Grid,
   seedX: number, seedY: number,
   targetSize: number,
-  type: CellType,
+  entity: Entity,
 ): number {
   const seedIdx = idx(seedX, seedY);
-  if (grid.cells[seedIdx] !== CellType.EMPTY) return 0;
+  if (grid.cells[seedIdx].entity !== Entity.NONE) return 0;
 
-  grid.cells[seedIdx] = type;
+  grid.cells[seedIdx].entity = entity;
   let placed = 1;
 
   // Frontier: indices of neighboring empty tiles
@@ -60,7 +60,7 @@ function growBlob(
       const ny = gy + dy;
       if (!inBounds(nx, ny) || isReserved(nx, ny)) continue;
       const ni = idx(nx, ny);
-      if (grid.cells[ni] !== CellType.EMPTY) continue;
+      if (grid.cells[ni].entity !== Entity.NONE) continue;
       frontier.push(ni);
     }
   }
@@ -74,10 +74,10 @@ function growBlob(
     frontier[fi] = frontier[frontier.length - 1];
     frontier.pop();
 
-    if (grid.cells[ci] !== CellType.EMPTY) continue;
+    if (grid.cells[ci].entity !== Entity.NONE) continue;
     const coords = idxToCoords(ci);
 
-    grid.cells[ci] = type;
+    grid.cells[ci].entity = entity;
     placed++;
     addNeighbors(coords.x, coords.y);
   }
@@ -89,54 +89,63 @@ function growBlob(
 // Step 1: Generate guaranteed path from start to end
 // ============================================================
 
-function generatePath(grid: Grid, exitX: number): void {
+function generatePath(grid: Grid, exitX: number, exitY?: number): void {
   let x = GRID_MIN_X;
   let y = 0;
   grid.path[idx(x, y)] = true;
-
-  // Minimum exit Y so the victory area (exitY-4 to exitY) fits in bounds
-  const MIN_EXIT_Y = GRID_MIN_Y + 4;
 
   // Update VICTORY area X bounds around the target exit
   VICTORY.minX = exitX - 5;
   VICTORY.maxX = exitX;
 
-  while (x < exitX) {
-    // Take 2-4 eastward steps
-    const eastSteps = GetRandomInt(2, 4);
-    for (let i = 0; i < eastSteps && x < exitX; i++) {
+  if (exitY != null) {
+    // Fixed exit: straight path to the target
+    while (x < exitX) {
       x++;
       grid.path[idx(x, y)] = true;
     }
-    if (x >= exitX) break;
+    y = exitY;
+  } else {
+    // Minimum exit Y so the victory area (exitY-4 to exitY) fits in bounds
+    const MIN_EXIT_Y = GRID_MIN_Y + 4;
 
-    // How many columns remain to the victory area
-    const colsToVictory = VICTORY.minX - x;
-
-    // If we're too low and running out of room, force northward
-    if (y < MIN_EXIT_Y && colsToVictory <= (MIN_EXIT_Y - y) * 2) {
-      const stepsNeeded = MIN_EXIT_Y - y;
-      for (let i = 0; i < stepsNeeded; i++) {
-        y++;
+    while (x < exitX) {
+      // Take 2-4 eastward steps
+      const eastSteps = GetRandomInt(2, 4);
+      for (let i = 0; i < eastSteps && x < exitX; i++) {
+        x++;
         grid.path[idx(x, y)] = true;
       }
-      continue;
-    }
+      if (x >= exitX) break;
 
-    // Take 1-4 N/S steps in one consistent direction
-    const nsSteps = GetRandomInt(1, 4);
-    let dir: number;
-    if (y < MIN_EXIT_Y && colsToVictory <= 10) {
-      // Bias northward when low and getting close
-      dir = 1;
-    } else {
-      dir = GetRandomInt(0, 1) === 0 ? 1 : -1;
-    }
-    for (let i = 0; i < nsSteps; i++) {
-      const newY = y + dir;
-      if (newY >= GRID_MIN_Y + 1 && newY <= GRID_MAX_Y - 1) {
-        y = newY;
-        grid.path[idx(x, y)] = true;
+      // How many columns remain to the victory area
+      const colsToVictory = VICTORY.minX - x;
+
+      // If we're too low and running out of room, force northward
+      if (y < MIN_EXIT_Y && colsToVictory <= (MIN_EXIT_Y - y) * 2) {
+        const stepsNeeded = MIN_EXIT_Y - y;
+        for (let i = 0; i < stepsNeeded; i++) {
+          y++;
+          grid.path[idx(x, y)] = true;
+        }
+        continue;
+      }
+
+      // Take 1-4 N/S steps in one consistent direction
+      const nsSteps = GetRandomInt(1, 4);
+      let dir: number;
+      if (y < MIN_EXIT_Y && colsToVictory <= 10) {
+        // Bias northward when low and getting close
+        dir = 1;
+      } else {
+        dir = GetRandomInt(0, 1) === 0 ? 1 : -1;
+      }
+      for (let i = 0; i < nsSteps; i++) {
+        const newY = y + dir;
+        if (newY >= GRID_MIN_Y + 1 && newY <= GRID_MAX_Y - 1) {
+          y = newY;
+          grid.path[idx(x, y)] = true;
+        }
       }
     }
   }
@@ -171,7 +180,7 @@ function placeGranite(grid: Grid, difficulty: number): void {
 
   // Start by marking ALL candidates as granite
   for (const ci of candidates) {
-    grid.cells[ci] = CellType.GRANITE;
+    grid.cells[ci].entity = Entity.GRANITE;
   }
 
   // Build initial "open" set: path tiles + reserved tiles + scattered carving seeds
@@ -206,7 +215,7 @@ function placeGranite(grid: Grid, difficulty: number): void {
       for (let dx = 0; dx < aw; dx++) {
         const nx = ax + dx;
         const ny = ay + dy;
-        if (inBounds(nx, ny) && grid.cells[idx(nx, ny)] === CellType.GRANITE) {
+        if (inBounds(nx, ny) && grid.cells[idx(nx, ny)].entity === Entity.GRANITE) {
           anchored[idx(nx, ny)] = true;
         }
       }
@@ -221,7 +230,7 @@ function placeGranite(grid: Grid, difficulty: number): void {
   }
 
   for (const ci of candidates) {
-    if (grid.cells[ci] !== CellType.GRANITE) continue;
+    if (grid.cells[ci].entity !== Entity.GRANITE) continue;
     const coords = idxToCoords(ci);
     for (const [dx, dy] of DIRS) {
       const nx = coords.x + dx;
@@ -242,10 +251,10 @@ function placeGranite(grid: Grid, difficulty: number): void {
     frontier[fi] = frontier[frontier.length - 1];
     frontier.pop();
 
-    if (grid.cells[ci] !== CellType.GRANITE || anchored[ci]) continue;
+    if (grid.cells[ci].entity !== Entity.GRANITE || anchored[ci]) continue;
 
     // Carve this tile
-    grid.cells[ci] = CellType.EMPTY;
+    grid.cells[ci].entity = Entity.NONE;
     open[ci] = true;
     openCount++;
 
@@ -256,7 +265,7 @@ function placeGranite(grid: Grid, difficulty: number): void {
       const ny = coords.y + dy;
       if (!inBounds(nx, ny)) continue;
       const ni = idx(nx, ny);
-      if (grid.cells[ni] === CellType.GRANITE && !inFrontier[ni]) {
+      if (grid.cells[ni].entity === Entity.GRANITE && !inFrontier[ni]) {
         frontier.push(ni);
         inFrontier[ni] = true;
       }
@@ -273,7 +282,7 @@ function placeWater(grid: Grid, difficulty: number): void {
   let nonGranite = 0;
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
-      if (grid.cells[idx(gx, gy)] !== CellType.GRANITE && !isReserved(gx, gy)) {
+      if (grid.cells[idx(gx, gy)].entity !== Entity.GRANITE && !isReserved(gx, gy)) {
         nonGranite++;
       }
     }
@@ -297,24 +306,23 @@ function placeWater(grid: Grid, difficulty: number): void {
 
     const blobsInStrip = GetRandomInt(1, 3);
     for (let b = 0; b < blobsInStrip; b++) {
-      const seed = findEmpty(grid,stripMinX, stripMaxX, GRID_MIN_Y, GRID_MAX_Y);
+      const seed = findEmpty(grid, stripMinX, stripMaxX, GRID_MIN_Y, GRID_MAX_Y);
       if (seed == null) continue;
 
       const blobSize = GetRandomInt(minBlobSize, maxBlobSize);
-      totalWater += growBlob(grid, seed.x, seed.y, blobSize, CellType.WATER);
+      totalWater += growBlob(grid, seed.x, seed.y, blobSize, Entity.WATER);
     }
   }
 
   // Top up if we haven't reached the minimum
   let attempts = 0;
   while (totalWater < minWater && attempts < 50) {
-    const seed = findEmpty(grid,GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y);
+    const seed = findEmpty(grid, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y);
     if (seed == null) break;
     const blobSize = GetRandomInt(minBlobSize, maxBlobSize);
-    totalWater += growBlob(grid, seed.x, seed.y, blobSize, CellType.WATER);
+    totalWater += growBlob(grid, seed.x, seed.y, blobSize, Entity.WATER);
     attempts++;
   }
-
 }
 
 // ============================================================
@@ -328,7 +336,7 @@ function placeResources(grid: Grid, difficulty: number): void {
   for (let i = 0; i < GRID_W * GRID_H; i++) {
     if (grid.path[i]) {
       pathLength++;
-      if (grid.cells[i] === CellType.WATER) {
+      if (grid.cells[i].entity === Entity.WATER) {
         waterOnPath++;
       }
     }
@@ -348,10 +356,10 @@ function placeResources(grid: Grid, difficulty: number): void {
   let treesPlaced = 0;
   let attempts = 0;
   while (treesPlaced < targetTrees && attempts < 200) {
-    const seed = findEmpty(grid,GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y);
+    const seed = findEmpty(grid, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y);
     if (seed == null) break;
     const blobSize = GetRandomInt(3, 10);
-    treesPlaced += growBlob(grid, seed.x, seed.y, blobSize, CellType.TREE);
+    treesPlaced += growBlob(grid, seed.x, seed.y, blobSize, Entity.TREE);
     attempts++;
   }
 
@@ -359,65 +367,67 @@ function placeResources(grid: Grid, difficulty: number): void {
   let rocksPlaced = 0;
   attempts = 0;
   while (rocksPlaced < targetRocks && attempts < 200) {
-    const seed = findEmpty(grid,GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y);
+    const seed = findEmpty(grid, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y);
     if (seed == null) break;
     const blobSize = GetRandomInt(3, 8);
-    rocksPlaced += growBlob(grid, seed.x, seed.y, blobSize, CellType.ROCK);
+    rocksPlaced += growBlob(grid, seed.x, seed.y, blobSize, Entity.ROCK);
     attempts++;
   }
-
 }
-
-// ============================================================
-// Main orchestrator
-// ============================================================
 
 // ============================================================
 // Lobby grid (post-victory)
 // ============================================================
 
-// Triangle rows for lobby pattern, tiled 4x for radial symmetry.
-// Row 0 is the outermost border, row 5 is the center cell.
-// W = WATER, M = MARBLE, E = EMPTY (grass)
-const { WATER: _W, MARBLE: _M, EMPTY: _E } = CellType;
-const LOBBY_ROWS: CellType[][] = [
-  [_W,_W,_W,_W,_W,_W,_W,_W,_W,_W,_W],
-  [_M,_M,_M,_M,_M,_M,_M,_M,_M],
-  [_E,_E,_M,_E,_M,_E,_E],
-  [_M,_E,_M,_E,_M],
-  [_E,_M,_E],
-  [_E],
-];
-
-function getLobbyTile(lx: number, ly: number): CellType {
-  const d = Math.min(lx + 5, 5 - lx, ly + 5, 5 - ly);
-  const row = LOBBY_ROWS[d];
-  // Use x-axis position if nearest to top/bottom edge, y-axis if nearest to left/right
-  const pos = (ly + 5 === d || 5 - ly === d) ? lx + 5 - d : ly + 5 - d;
-  return row[pos];
-}
+// 9x9 lobby grid (no water border).
+// Shorthand: terrain + optional entity
+function c(terrain: Terrain, entity = Entity.NONE): Cell { return { terrain, entity }; }
+const M = c(Terrain.WHITE_MARBLE);
+const G = c(Terrain.GRASSY_DIRT);
+const P1 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_1);
+const P2 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_2);
+const P3 = c(Terrain.GRASSY_DIRT, Entity.PLAYER_3);
+const P4 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_4);
+const SC = c(Terrain.GRASSY_DIRT, Entity.START_CIRCLE);
+// prettier-ignore
+// Laid out as it appears in-game (top = north = +y, bottom = south = -y)
+const LOBBY_GRID: Cell[][] = [
+  [ M, M, M, M, M, M, M, M, M], // y= 4
+  [ M, G, G, M, G, M, G, G, M], // y= 3
+  [ M, G, M, G, M, G, M, G, M], // y= 2
+  [ M, M, G, G,P4, G, G, M, M], // y= 1
+  [ M, G, M, M,P3, M, M, G, M], // y= 0
+  [ M, M, G, G,P2, G, G, M, M], // y=-1
+  [ M, G, M, G,P1, G, M, G, M], // y=-2
+  [ M, G, G, M,SC, M, G, G, M], // y=-3
+  [ M, M, M, M, M, M, M, M, M], // y=-4
+].reverse();
 
 export function generateLobby(): Grid {
   const grid = createGrid();
 
-  // Fill entire grid with ABYSS
-  for (let i = 0; i < GRID_W * GRID_H; i++) {
-    grid.cells[i] = CellType.ABYSS;
-  }
-
-  // Set lobby pattern in center 11x11
-  for (let ly = -5; ly <= 5; ly++) {
-    for (let lx = -5; lx <= 5; lx++) {
-      grid.cells[idx(lx, ly)] = getLobbyTile(lx, ly);
+  // Default terrain is grass; 6-wide water border around the lobby
+  // Inner ring (-5..+5) uses WATER_VISIBLE for shared vision via train player
+  for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
+    for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
+      if (gx >= -10 && gx <= 10 && gy >= -10 && gy <= 10) {
+        const cell = grid.cells[idx(gx, gy)];
+        cell.terrain = Terrain.BLACK_BRICKS;
+        const innerRing = gx >= -5 && gx <= 5 && gy >= -5 && gy <= 5;
+        cell.entity = innerRing ? Entity.WATER_VISIBLE : Entity.WATER;
+      }
     }
   }
 
-  // Place entities
-  grid.cells[idx(0, -3)] = CellType.START_CIRCLE;
-  grid.cells[idx(0, -2)] = CellType.PLAYER_1;
-  grid.cells[idx(0, -1)] = CellType.PLAYER_2;
-  grid.cells[idx(0, 0)] = CellType.PLAYER_3;
-  grid.cells[idx(0, 1)] = CellType.PLAYER_4;
+  // Apply lobby grid to center 9x9
+  for (let ly = -4; ly <= 4; ly++) {
+    for (let lx = -4; lx <= 4; lx++) {
+      const lobbyCell = LOBBY_GRID[ly + 4][lx + 4];
+      const cell = grid.cells[idx(lx, ly)];
+      cell.terrain = lobbyCell.terrain;
+      cell.entity = lobbyCell.entity;
+    }
+  }
 
   return grid;
 }
@@ -427,19 +437,34 @@ export function generateLobby(): Grid {
 // ============================================================
 
 function placeEntities(grid: Grid): void {
-  grid.cells[idx(GRID_MIN_X, 0)] = CellType.MARBLE;
-  grid.cells[idx(grid.exit.x, grid.exit.y)] = CellType.MARBLE;
-  grid.cells[idx(GRID_MIN_X, -1)] = CellType.CRATE;
-  grid.cells[idx(grid.exit.x, grid.exit.y - 1)] = CellType.CRATE;
-  grid.cells[idx(GRID_MIN_X, 0)] = CellType.TRACK;
-  grid.cells[idx(GRID_MIN_X + 1, 0)] = CellType.TRACK;
-  grid.cells[idx(GRID_MIN_X + 1, -3)] = CellType.AXE;
-  grid.cells[idx(GRID_MIN_X + 2, -3)] = CellType.PICKAXE;
-  grid.cells[idx(GRID_MIN_X + 3, -3)] = CellType.BUCKET;
-  grid.cells[idx(GRID_MIN_X + 3, -2)] = CellType.PLAYER_1;
-  grid.cells[idx(GRID_MIN_X + 4, -2)] = CellType.PLAYER_2;
-  grid.cells[idx(GRID_MIN_X + 5, -2)] = CellType.PLAYER_3;
-  grid.cells[idx(GRID_MIN_X + 6, -2)] = CellType.PLAYER_4;
+  // Fill reserved areas with grassy dirt terrain
+  for (let gy = SPAWN.minY; gy <= SPAWN.maxY; gy++) {
+    for (let gx = SPAWN.minX; gx <= SPAWN.maxX; gx++) {
+      grid.cells[idx(gx, gy)].terrain = Terrain.GRASSY_DIRT;
+    }
+  }
+  for (let gy = VICTORY.minY; gy <= VICTORY.maxY; gy++) {
+    for (let gx = VICTORY.minX; gx <= VICTORY.maxX; gx++) {
+      grid.cells[idx(gx, gy)].terrain = Terrain.GRASSY_DIRT;
+    }
+  }
+
+  // Start/end marble tiles
+  grid.cells[idx(GRID_MIN_X, 0)].terrain = Terrain.WHITE_MARBLE;
+  grid.cells[idx(grid.exit.x, grid.exit.y)].terrain = Terrain.WHITE_MARBLE;
+
+  // Entities
+  grid.cells[idx(GRID_MIN_X, -1)].entity = Entity.CRATE;
+  grid.cells[idx(grid.exit.x, grid.exit.y - 1)].entity = Entity.CRATE;
+  grid.cells[idx(GRID_MIN_X, 0)].entity = Entity.TRACK_WITH_TRAIN;
+  grid.cells[idx(GRID_MIN_X + 1, 0)].entity = Entity.TRACK;
+  grid.cells[idx(GRID_MIN_X + 1, -3)].entity = Entity.AXE;
+  grid.cells[idx(GRID_MIN_X + 2, -3)].entity = Entity.PICKAXE;
+  grid.cells[idx(GRID_MIN_X + 3, -3)].entity = Entity.BUCKET;
+  grid.cells[idx(GRID_MIN_X + 3, -2)].entity = Entity.PLAYER_1;
+  grid.cells[idx(GRID_MIN_X + 4, -2)].entity = Entity.PLAYER_2;
+  grid.cells[idx(GRID_MIN_X + 5, -2)].entity = Entity.PLAYER_3;
+  grid.cells[idx(GRID_MIN_X + 6, -2)].entity = Entity.PLAYER_4;
 }
 
 export function generateTerrain(difficulty: number, exitX = GRID_MAX_X): Grid {
@@ -452,10 +477,9 @@ export function generateTerrain(difficulty: number, exitX = GRID_MAX_X): Grid {
   return grid;
 }
 
-export function generateCheatTerrain(exitX = GRID_MAX_X): Grid {
+export function generateCheatTerrain(exitX = GRID_MAX_X, exitY = 0): Grid {
   const grid = createGrid();
-  generatePath(grid, exitX);
+  generatePath(grid, exitX, exitY);
   placeEntities(grid);
   return grid;
 }
-
