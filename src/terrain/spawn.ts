@@ -13,6 +13,7 @@ import { DEFAULT_TRACK, SKINS } from '../track/constants';
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { placedTracks, setVictoryTile } from '../track/state';
+import { initReady, cleanupReady } from '../ready';
 
 // Per-variation scales to normalize rock models to ~128-unit footprint.
 const ROCK_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
@@ -54,6 +55,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
   );
 
   if (!skipCleanup) {
+    cleanupReady();
     pauseResourceDrops();
     // Remove all destructables, units, and items before respawning
     EnumDestructablesInRect(GetWorldBounds()!, null!, () => RemoveDestructable(GetEnumDestructable()!));
@@ -176,6 +178,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
         case Entity.START_CIRCLE: {
           const cop = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
           SetUnitScale(cop.handle, 1.5, 1.5, 1.5);
+          initReady(world.x, world.y);
           break;
         }
       }

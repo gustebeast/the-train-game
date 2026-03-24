@@ -189,6 +189,12 @@ compiletime(({ objectData, constants }) => {
   bucketFullAttach.targetAttachments = 1;
   bucketFullAttach.targetAttachmentPoint1 = 'left,hand';
 
+  // Ready orb attachment ability (passive, shows orb model on caster's head)
+  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus6)!;
+  readyOrbAttach.target = 'war3mapImported\\ReadyOrb.mdx';
+  readyOrbAttach.targetAttachments = 1;
+  readyOrbAttach.targetAttachmentPoint1 = 'head';
+
   // Axe item
   const axe = objectData.items.get(constants.items.SturdyWarAxe)!;
   axe.name = 'Axe';

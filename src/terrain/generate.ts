@@ -386,7 +386,7 @@ const M = c(Terrain.WHITE_MARBLE);
 const G = c(Terrain.GRASSY_DIRT);
 const P1 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_1);
 const P2 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_2);
-const P3 = c(Terrain.GRASSY_DIRT, Entity.PLAYER_3);
+const P3 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_3);
 const P4 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_4);
 const SC = c(Terrain.GRASSY_DIRT, Entity.START_CIRCLE);
 // prettier-ignore
@@ -395,10 +395,10 @@ const LOBBY_GRID: Cell[][] = [
   [ M, M, M, M, M, M, M, M, M], // y= 4
   [ M, G, G, M, G, M, G, G, M], // y= 3
   [ M, G, M, G, M, G, M, G, M], // y= 2
-  [ M, M, G, G,P4, G, G, M, M], // y= 1
-  [ M, G, M, M,P3, M, M, G, M], // y= 0
-  [ M, M, G, G,P2, G, G, M, M], // y=-1
-  [ M, G, M, G,P1, G, M, G, M], // y=-2
+  [ M, M, G, G, M, G, G, M, M], // y= 1
+  [ M, G, P1,P2,G, P3,P4,G, M], // y= 0
+  [ M, M, G, G, M, G, G, M, M], // y=-1
+  [ M, G, M, G, M, G, M, G, M], // y=-2
   [ M, G, G, M,SC, M, G, G, M], // y=-3
   [ M, M, M, M, M, M, M, M, M], // y=-4
 ].reverse();
