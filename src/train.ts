@@ -21,9 +21,14 @@ let crashDeadline: number = 0;
 let gameOver: boolean = false;
 let burning: boolean = false;
 let burnTimer: Timer | null = null;
+let inGameplay: boolean = false;
 
 export function isBurning(): boolean {
   return burning;
+}
+
+export function stopGameplay(): void {
+  inGameplay = false;
 }
 
 export function extinguish(): void {
@@ -124,6 +129,7 @@ export function setVictoryCallback(cb: () => void): void {
 }
 
 function enterLobby(): void {
+  inGameplay = false;
   if (onVictory != null) onVictory();
 }
 
@@ -146,7 +152,7 @@ function initTrainUnit(unit: Unit): void {
   lowHpTrigger = Trigger.create();
   TriggerRegisterUnitStateEvent(lowHpTrigger.handle, train.handle, UNIT_STATE_LIFE, LESS_THAN, 2.0);
   lowHpTrigger.addAction(() => {
-    if (burning) return;
+    if (burning || !inGameplay) return;
     burning = true;
     SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
     BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
@@ -179,6 +185,7 @@ export function initTrain(unit: Unit) {
   if (arrivalRegion != null) arrivalRegion.destroy();
   if (arrivalRect != null) arrivalRect.destroy();
 
+  inGameplay = true;
   initTrainUnit(unit);
   setMoveOrderCallback(() => reissueMoveOrder());
 

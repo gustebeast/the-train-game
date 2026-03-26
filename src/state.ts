@@ -1,5 +1,8 @@
+import { Players } from 'w3ts/globals';
+
 export interface GameState {
   round: number;
+  gold: number;
   trainCargoMaxStack: number;
   trainTrackMaxStack: number;
   peasantMaxStack: number;
@@ -14,6 +17,7 @@ export interface GameState {
 
 const DEFAULT_STATE: GameState = {
   round: 0,
+  gold: 0,
   trainCargoMaxStack: 3,
   trainTrackMaxStack: 3,
   peasantMaxStack: 3,
@@ -37,4 +41,13 @@ export function resetState(): void {
 /** Overwrite state from a loaded object. */
 export function applyState(loaded: GameState): void {
   Object.assign(gameState, loaded);
+}
+
+/** Set all human players' gold resource to match gameState.gold. */
+export function syncGold(): void {
+  Players.forEach(p => {
+    if (p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER) {
+      p.setState(PLAYER_STATE_RESOURCE_GOLD, gameState.gold);
+    }
+  });
 }

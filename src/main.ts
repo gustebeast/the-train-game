@@ -14,6 +14,8 @@ import { initCheat } from './cheat';
 import { initBridge } from './bridge';
 import { initFill } from './fill';
 import { initWaterTrain } from './water';
+import { initShop } from './shop';
+import { syncGold } from './state';
 
 import { loadTerrain } from './terrain/load';
 
@@ -38,6 +40,7 @@ function tsMain() {
   initFill();
   initWaterTrain();
   initCheat();
+  initShop();
 
   // Lock camera distance at 1200 for all human players
   const cameraPosition = 1200;
@@ -48,8 +51,8 @@ function tsMain() {
     SetCameraFieldForPlayer(handle, CAMERA_FIELD_TARGET_DISTANCE, cameraPosition, 0)
   ));
 
+  syncGold();
   humanPlayers.forEach((player) => {
-    player.setState(PLAYER_STATE_RESOURCE_GOLD, 0);
     player.setState(PLAYER_STATE_RESOURCE_LUMBER, 0);
   });
 }

@@ -381,5 +381,52 @@ compiletime(({ objectData, constants }) => {
   fillBucket.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
   fillBucket.hotkeyNormal = 'D';
 
+  // Shop: Goblin Merchant scaled to 1x1 grid square, no default items
+  const shop = objectData.units.get(constants.units.GoblinMerchant)!;
+  shop.name = 'Shop';
+  shop.scalingValueundefined = 0.5;
+  shop.selectionScale = 1;
+  shop.groundTexture = 'HSMA'; // Same texture as a human farm
+  shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
+  shop.collisionSize = 32;
+  shop.itemsSold = [constants.items.TomeOfStrength, constants.items.TomeOfIntelligence].join(',');
+  shop.itemsMade = '';
+  shop.sightRadiusDay = 400;
+  shop.sightRadiusNight = 400;
+
+  // Flame Retardant upgrade (TomeOfStrength — purchased from shop)
+  const flameRetardant = objectData.items.get(constants.items.TomeOfStrength)!;
+  flameRetardant.name = 'Flame Retardant';
+  flameRetardant.description = 'Increases train health by 10, making it take longer to catch fire.';
+  flameRetardant.tooltipExtended = flameRetardant.description;
+  flameRetardant.goldCost = 1;
+  flameRetardant.stockMaximum = 10;
+  flameRetardant.stockReplenishInterval = 1;
+  flameRetardant.stockStartDelay = 1;
+  flameRetardant.useAutomaticallyWhenAcquired = true;
+  flameRetardant.activelyUsed = false;
+  flameRetardant.canBeDropped = false;
+  flameRetardant.perishable = true;
+  flameRetardant.abilities = '';
+  flameRetardant.classification = 'PowerUp';
+  flameRetardant.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNOrbOfFire.blp';
+
+  // Track Manufacturing upgrade (TomeOfIntelligence — purchased from shop)
+  const trackManufacturing = objectData.items.get(constants.items.TomeOfIntelligence)!;
+  trackManufacturing.name = 'Track Manufacturing';
+  trackManufacturing.description = 'Reduces train mana by 10, allowing it to convert stone and wood to tracks more quickly.';
+  trackManufacturing.tooltipExtended = trackManufacturing.description;
+  trackManufacturing.goldCost = 1;
+  trackManufacturing.stockMaximum = 10;
+  trackManufacturing.stockReplenishInterval = 1;
+  trackManufacturing.stockStartDelay = 1;
+  trackManufacturing.useAutomaticallyWhenAcquired = true;
+  trackManufacturing.activelyUsed = false;
+  trackManufacturing.canBeDropped = false;
+  trackManufacturing.perishable = true;
+  trackManufacturing.abilities = '';
+  trackManufacturing.classification = 'PowerUp';
+  trackManufacturing.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNStaffOfTeleportation.blp';
+
   objectData.save();
 });

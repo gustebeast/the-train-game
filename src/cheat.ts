@@ -4,6 +4,7 @@ import { loadCheatTerrain, loadLobby } from './terrain/load';
 import { TRACK_PIECE_ID } from './items';
 import { GRID_MIN_X, gridToWorld } from './terrain/constants';
 import { loadFromFile } from './save';
+import { stopGameplay } from './train';
 
 export function initCheat(): void {
   const trigger = Trigger.create();
@@ -24,6 +25,7 @@ export function initCheat(): void {
   loadTrigger.addAction(() => {
     if (loadFromFile()) {
       print('Save loaded. Entering lobby...');
+      stopGameplay();
       loadLobby();
     } else {
       print('No save file found.');

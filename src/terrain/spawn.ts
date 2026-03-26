@@ -203,9 +203,14 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
           break;
         }
 
+        case Entity.SHOP: {
+          const shop = Unit.create(getNeutralPassive(), FourCC(Units.GoblinMerchant), world.x, world.y, 270)!;
+          shop.invulnerable = true;
+          break;
+        }
+
         case Entity.START_CIRCLE: {
           const cop = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          SetUnitScale(cop.handle, 1.5, 1.5, 1.5);
           initReady(world.x, world.y);
           break;
         }
