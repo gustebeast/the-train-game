@@ -454,7 +454,7 @@ function placeEntities(grid: Grid): void {
   grid.cells[idx(grid.exit.x, grid.exit.y)].terrain = Terrain.WHITE_MARBLE;
 
   // Entities
-  grid.cells[idx(GRID_MIN_X, -1)].entity = Entity.CRATE;
+  grid.cells[idx(GRID_MIN_X, -1)].entity = Entity.CRATE_START;
   grid.cells[idx(grid.exit.x, grid.exit.y - 1)].entity = Entity.CRATE;
   grid.cells[idx(GRID_MIN_X, 0)].entity = Entity.TRACK_WITH_TRAIN;
   grid.cells[idx(GRID_MIN_X + 1, 0)].entity = Entity.TRACK;

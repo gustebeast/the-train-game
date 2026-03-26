@@ -14,6 +14,8 @@ import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { placedTracks, setVictoryTile } from '../track/state';
 import { initReady, cleanupReady } from '../ready';
+import { setCrate, TRACK_PIECE_ID, WOOD_ID, STONE_ID } from '../items';
+import { gameState } from '../state';
 
 // Per-variation scales to normalize rock models to ~128-unit footprint.
 const ROCK_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
@@ -130,9 +132,35 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
           break;
         }
 
-        case Entity.CRATE:
-          Unit.create(getNeutralExtra(), FourCC(Units.GrainWarehouse), world.x, world.y, 270);
+        case Entity.CRATE: {
+          // Target crate — starts empty, synced to state in real-time
+          const crateUnit = Unit.create(getNeutralExtra(), FourCC(Units.GrainWarehouse), world.x, world.y, 270);
+          if (crateUnit != null) setCrate(crateUnit);
+          gameState.crateTrackCount = 0;
+          gameState.crateWoodCount = 0;
+          gameState.crateStoneCount = 0;
           break;
+        }
+
+        case Entity.CRATE_START: {
+          // Starting crate — populated from saved state
+          const startCrate = Unit.create(getNeutralExtra(), FourCC(Units.GrainWarehouse), world.x, world.y, 270);
+          if (startCrate != null) {
+            if (gameState.crateTrackCount > 0) {
+              const t = Item.create(TRACK_PIECE_ID, startCrate.x, startCrate.y);
+              if (t != null) { t.charges = gameState.crateTrackCount; UnitAddItem(startCrate.handle, t.handle); UnitDropItemSlot(startCrate.handle, t.handle, 0); }
+            }
+            if (gameState.crateWoodCount > 0) {
+              const w = Item.create(WOOD_ID, startCrate.x, startCrate.y);
+              if (w != null) { w.charges = gameState.crateWoodCount; UnitAddItem(startCrate.handle, w.handle); UnitDropItemSlot(startCrate.handle, w.handle, 1); }
+            }
+            if (gameState.crateStoneCount > 0) {
+              const s = Item.create(STONE_ID, startCrate.x, startCrate.y);
+              if (s != null) { s.charges = gameState.crateStoneCount; UnitAddItem(startCrate.handle, s.handle); UnitDropItemSlot(startCrate.handle, s.handle, 2); }
+            }
+          }
+          break;
+        }
 
         case Entity.TRACK: {
           const track = Unit.create(getNeutralPassive(), FourCC(DEFAULT_TRACK), world.x, world.y, 0)!;

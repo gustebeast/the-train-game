@@ -3,8 +3,10 @@ import { GRID_MAX_X } from './constants';
 import { generateTerrain, generateCheatTerrain, generateLobby } from './generate';
 import { spawnTerrain } from './spawn';
 import { initTrain, setVictoryCallback } from '../train';
+import { setStartRoundCallback } from '../ready';
 
 setVictoryCallback(() => loadLobby());
+setStartRoundCallback((difficulty) => loadTerrain(difficulty));
 
 export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRID_MAX_X): Unit | null {
   const trainUnit = spawnTerrain(generateTerrain(difficulty, exitX), skipCleanup);

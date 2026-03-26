@@ -3,6 +3,7 @@ import { Items } from '@objectdata/items';
 import { Units } from '@objectdata/units';
 import { Abilities } from '@objectdata/abilities';
 import { updateCarryingVisual } from './carrying';
+import { gameState } from './state';
 
 let onTrainInventoryChanged: (() => void) | null = null;
 
@@ -21,6 +22,31 @@ export const BUCKET_FULL_ID = FourCC(Items.FullVial);
 
 const TRAIN_ID = FourCC(Units.WarWagon);
 const CRATE_ID = FourCC(Units.GrainWarehouse);
+
+let crate: Unit | null = null;
+
+export function setCrate(u: Unit): void {
+  crate = u;
+}
+
+export function getCrate(): Unit | null {
+  return crate;
+}
+
+/** Sync the target crate's current inventory into gameState. */
+function syncCrateState(): void {
+  if (crate == null) return;
+  const tracks = findItemByType(crate, TRACK_PIECE_ID);
+  const wood = findItemByType(crate, WOOD_ID);
+  const stone = findItemByType(crate, STONE_ID);
+  gameState.crateTrackCount = tracks != null ? tracks.charges : 0;
+  gameState.crateWoodCount = wood != null ? wood.charges : 0;
+  gameState.crateStoneCount = stone != null ? stone.charges : 0;
+}
+
+function isCrate(u: Unit): boolean {
+  return u.handle === crate?.handle;
+}
 const PEASANT_ID = FourCC(Units.Peasant);
 const BUILD_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
 const BRIDGE_ABILITY_ID = FourCC(Abilities.AcidBomb);
@@ -60,10 +86,6 @@ function storageSlot(itemTypeId: number): number {
   return 0;
 }
 
-let crateMaxStack = 10;
-let trainTrackMaxStack = 3;
-let trainCargoMaxStack = 3;
-let peasantMaxStack = 3;
 
 /** Show a rejection message and stop the unit. */
 export function rejectOrder(unitHandle: unit, msg: string): void {
@@ -100,10 +122,10 @@ export function isTrain(u: Unit): boolean {
 /** Get the max stack size for a unit and item type. */
 export function getMaxStack(u: Unit, itemTypeId?: number): number {
   if (isTrain(u)) {
-    return itemTypeId === TRACK_PIECE_ID ? trainTrackMaxStack : trainCargoMaxStack;
+    return itemTypeId === TRACK_PIECE_ID ? gameState.trainTrackMaxStack : gameState.trainCargoMaxStack;
   }
-  if (u.typeId === CRATE_ID) return crateMaxStack;
-  return peasantMaxStack;
+  if (u.typeId === CRATE_ID) return gameState.crateMaxStack;
+  return gameState.peasantMaxStack;
 }
 
 export function isResource(itemTypeId: number): boolean {
@@ -256,6 +278,7 @@ export function giveToStorage(giver: Unit, giverItem: Item, storage: Unit): bool
   if (isTrain(storage)) {
     if (onTrainInventoryChanged != null) onTrainInventoryChanged();
   }
+  if (isCrate(storage)) syncCrateState();
 
   return true;
 }
@@ -298,6 +321,7 @@ export function takeFromStorage(taker: Unit, storage: Unit): boolean {
   if (isTrain(storage)) {
     if (onTrainInventoryChanged != null) onTrainInventoryChanged();
   }
+  if (isCrate(storage)) syncCrateState();
 
   return true;
 }

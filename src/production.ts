@@ -7,6 +7,7 @@ import {
   getMaxStack,
   setTrainInventoryCallback,
 } from './items';
+import { gameState } from './state';
 
 
 let onProductionInventoryChanged: (() => void) | null = null;
@@ -127,7 +128,7 @@ export function initProduction(trainUnit: Unit): void {
   // Destroy previous mana trigger if re-initializing for a new unit
   if (manaTrigger != null) manaTrigger.destroy();
   manaTrigger = Trigger.create();
-  manaTrigger.registerUnitStateEvent(train, UNIT_STATE_MANA, GREATER_THAN_OR_EQUAL, 100);
+  manaTrigger.registerUnitStateEvent(train, UNIT_STATE_MANA, GREATER_THAN_OR_EQUAL, gameState.trainMaxMana);
   manaTrigger.addAction(() => {
     onManaFull();
   });

@@ -2,6 +2,8 @@ import { Unit, Trigger, Timer, Rectangle, Region } from 'w3ts';
 import { placedTracks, isVictoryTriggered } from './track/state';
 import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
+import { gameState } from './state';
+import { deleteSave } from './save';
 
 import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
 
@@ -9,13 +11,12 @@ const OVERSHOOT = 16;
 const REGION_HALF = 2; // 4x4 region → half-size = 2
 const STUCK_TIMEOUT = 35;
 const CENTER_OFFSET = 16;
-let trainHPRegen: number = -1; // HP per second; negative = decay
+const trainHPRegen: number = -1; // HP per second; negative = decay
 let arrivalRect: Rectangle;
 let arrivalRegion: Region;
 let lastMoveTime: number = 0;
 let targetIdx: number = 0;
 let train: Unit;
-let trainSpeed: number = 6;
 let crashDeadline: number = 0;
 let gameOver: boolean = false;
 let burning: boolean = false;
@@ -32,7 +33,7 @@ export function extinguish(): void {
     burnTimer.destroy();
     burnTimer = null;
   }
-  BlzSetUnitMaxHP(train.handle, 100);
+  BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
   SetUnitState(train.handle, UNIT_STATE_LIFE, train.maxLife);
   BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, trainHPRegen);
   resumeProduction();
@@ -132,6 +133,12 @@ function initTrainUnit(unit: Unit): void {
   train = unit;
   train.owner = getTrainPlayer();
   SetUnitPathing(train.handle, false);
+
+  // Apply state values to the newly created unit
+  BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
+  SetUnitState(train.handle, UNIT_STATE_LIFE, gameState.trainMaxHP);
+  BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
+
   initProduction(train);
 
   // Re-register HP trigger for the new unit handle
@@ -147,8 +154,8 @@ function initTrainUnit(unit: Unit): void {
     print('The train is on fire and is losing max HP!');
     burnTimer = Timer.create();
     burnTimer.start(1, true, () => {
-      const currentMax = BlzGetUnitMaxHP(train.handle);
-      BlzSetUnitMaxHP(train.handle, currentMax - 1);
+      gameState.trainMaxHP -= 1;
+      BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
       SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
     });
   });
@@ -201,13 +208,14 @@ export function initTrain(unit: Unit) {
       return;
     }
     print('Train about to crash!');
-    const crashDelay = (REGION_HALF + OVERSHOOT) / trainSpeed;
+    const crashDelay = (REGION_HALF + OVERSHOOT) / gameState.trainSpeed;
     crashDeadline = os.clock() + crashDelay;
     Timer.create().start(crashDelay, false, () => {
       if (crashDeadline !== 0) {
         print('Game over!');
         crashDeadline = 0;
         gameOver = true;
+        deleteSave();
       }
     });
   });
@@ -215,7 +223,7 @@ export function initTrain(unit: Unit) {
   // Start slow, ramp up to full speed after 30 seconds
   train.moveSpeed = 1;
   Timer.create().start(30, false, () => {
-    train.moveSpeed = trainSpeed;
+    train.moveSpeed = gameState.trainSpeed;
   });
 
   moveToNext();

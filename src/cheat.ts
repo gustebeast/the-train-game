@@ -1,8 +1,9 @@
 import { Item, Trigger } from 'w3ts';
 import { Players } from 'w3ts/globals';
-import { loadCheatTerrain } from './terrain/load';
+import { loadCheatTerrain, loadLobby } from './terrain/load';
 import { TRACK_PIECE_ID } from './items';
 import { GRID_MIN_X, gridToWorld } from './terrain/constants';
+import { loadFromFile } from './save';
 
 export function initCheat(): void {
   const trigger = Trigger.create();
@@ -14,5 +15,18 @@ export function initCheat(): void {
     const trackPos = gridToWorld({ x: GRID_MIN_X + 4, y: -3 });
     const tracks = Item.create(TRACK_PIECE_ID, trackPos.x, trackPos.y)!;
     tracks.charges = 99;
+  });
+
+  const loadTrigger = Trigger.create();
+  Players.forEach(p => {
+    TriggerRegisterPlayerChatEvent(loadTrigger.handle, p.handle, '-load', true);
+  });
+  loadTrigger.addAction(() => {
+    if (loadFromFile()) {
+      print('Save loaded. Entering lobby...');
+      loadLobby();
+    } else {
+      print('No save file found.');
+    }
   });
 }

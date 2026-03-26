@@ -40,6 +40,7 @@ export enum Entity {
   PLAYER_3 = 13,
   PLAYER_4 = 14,
   START_CIRCLE = 15,
+  CRATE_START = 17,
 }
 
 export interface Cell {
