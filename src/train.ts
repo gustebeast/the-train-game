@@ -123,9 +123,14 @@ export function getTrain(): Unit {
 }
 
 let onVictory: (() => void) | null = null;
+let onAwardVictory: (() => void) | null = null;
 
 export function setVictoryCallback(cb: () => void): void {
   onVictory = cb;
+}
+
+export function setAwardVictoryCallback(cb: () => void): void {
+  onAwardVictory = cb;
 }
 
 function enterLobby(): void {
@@ -210,6 +215,7 @@ export function initTrain(unit: Unit) {
       const victoryDelay = (REGION_HALF + OVERSHOOT) / train.moveSpeed;
       Timer.create().start(victoryDelay, false, () => {
         print('Victory!');
+        if (onAwardVictory != null) onAwardVictory();
         enterLobby();
       });
       return;

@@ -2,10 +2,12 @@ import { Unit } from 'w3ts';
 import { GRID_MAX_X } from './constants';
 import { generateTerrain, generateCheatTerrain, generateLobby } from './generate';
 import { spawnTerrain } from './spawn';
-import { initTrain, setVictoryCallback } from '../train';
+import { initTrain, setVictoryCallback, setAwardVictoryCallback } from '../train';
 import { setStartRoundCallback } from '../ready';
+import { awardVictory } from '../victory';
 
 setVictoryCallback(() => loadLobby());
+setAwardVictoryCallback(() => awardVictory());
 setStartRoundCallback((difficulty) => loadTerrain(difficulty));
 
 export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRID_MAX_X): Unit | null {
