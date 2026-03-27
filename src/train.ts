@@ -122,6 +122,32 @@ export function getTrain(): Unit {
   return train;
 }
 
+/** Shared train unit setup: owner, pathing, HP/mana from state. */
+function setupTrainUnit(unit: Unit): void {
+  train = unit;
+  train.owner = getTrainPlayer();
+  SetUnitPathing(train.handle, false);
+  BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
+  SetUnitState(train.handle, UNIT_STATE_LIFE, gameState.trainMaxHP);
+  BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
+}
+
+/** Sync the active train's HP/mana to match current gameState. */
+export function syncTrainStats(): void {
+  if (train == null) return;
+  BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
+  SetUnitState(train.handle, UNIT_STATE_LIFE, train.maxLife);
+  BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
+}
+
+export function initLobbyTrain(unit: Unit): void {
+  setupTrainUnit(unit);
+  train.mana = 0;
+  BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
+  BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);
+  train.moveSpeed = 0;
+}
+
 let onVictory: (() => void) | null = null;
 let onAwardVictory: (() => void) | null = null;
 
@@ -141,15 +167,7 @@ function enterLobby(): void {
 let lowHpTrigger: Trigger;
 
 function initTrainUnit(unit: Unit): void {
-  train = unit;
-  train.owner = getTrainPlayer();
-  SetUnitPathing(train.handle, false);
-
-  // Apply state values to the newly created unit
-  BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
-  SetUnitState(train.handle, UNIT_STATE_LIFE, gameState.trainMaxHP);
-  BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
-
+  setupTrainUnit(unit);
   initProduction(train);
 
   // Re-register HP trigger for the new unit handle

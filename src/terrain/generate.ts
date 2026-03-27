@@ -390,6 +390,7 @@ const P3 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_3);
 const P4 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_4);
 const SC = c(Terrain.GRASSY_DIRT, Entity.START_CIRCLE);
 const SH = c(Terrain.WHITE_MARBLE, Entity.SHOP);
+const TN = c(Terrain.WHITE_MARBLE, Entity.TRACK_WITH_TRAIN);
 // prettier-ignore
 // Laid out as it appears in-game (top = north = +y, bottom = south = -y)
 const LOBBY_GRID: Cell[][] = [
@@ -397,7 +398,7 @@ const LOBBY_GRID: Cell[][] = [
   [ M, G, G, M,SH, M, G, G, M], // y= 3
   [ M, G, M, G, M, G, M, G, M], // y= 2
   [ M, M, G, G, M, G, G, M, M], // y= 1
-  [ M, G, P1,P2,G, P3,P4,G, M], // y= 0
+  [ M,TN, P1,P2,G, P3,P4,G, M], // y= 0
   [ M, M, G, G, M, G, G, M, M], // y=-1
   [ M, G, M, G, M, G, M, G, M], // y=-2
   [ M, G, G, M,SC, M, G, G, M], // y=-3

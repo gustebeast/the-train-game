@@ -1,7 +1,7 @@
-import { Trigger, Unit } from 'w3ts';
+import { Trigger } from 'w3ts';
 import { Items } from '@objectdata/items';
 import { gameState, syncGold } from './state';
-import { getTrain } from './train';
+import { syncTrainStats } from './train';
 
 const FLAME_RETARDANT_ID = FourCC(Items.TomeOfStrength);
 const TRACK_MANUFACTURING_ID = FourCC(Items.TomeOfIntelligence);
@@ -31,19 +31,12 @@ export function initShop(): void {
 
     if (itemTypeId === FLAME_RETARDANT_ID) {
       gameState.trainMaxHP += 10;
-      const train = getTrain();
-      if (train != null) {
-        BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
-        SetUnitState(train.handle, UNIT_STATE_LIFE, train.maxLife);
-      }
+      syncTrainStats();
       RemoveItem(item);
     } else if (itemTypeId === TRACK_MANUFACTURING_ID) {
       gameState.trainMaxMana -= 10;
       if (gameState.trainMaxMana < 10) gameState.trainMaxMana = 10;
-      const train = getTrain();
-      if (train != null) {
-        BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
-      }
+      syncTrainStats();
       RemoveItem(item);
     }
   });

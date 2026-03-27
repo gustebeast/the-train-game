@@ -2,7 +2,7 @@ import { Unit } from 'w3ts';
 import { GRID_MAX_X } from './constants';
 import { generateTerrain, generateCheatTerrain, generateLobby } from './generate';
 import { spawnTerrain } from './spawn';
-import { initTrain, setVictoryCallback, setAwardVictoryCallback } from '../train';
+import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback } from '../train';
 import { setStartRoundCallback } from '../ready';
 import { awardVictory } from '../victory';
 
@@ -22,5 +22,6 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
 }
 
 export function loadLobby(): void {
-  spawnTerrain(generateLobby());
+  const trainUnit = spawnTerrain(generateLobby());
+  if (trainUnit != null) initLobbyTrain(trainUnit);
 }
