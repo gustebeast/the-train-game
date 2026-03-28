@@ -13,7 +13,7 @@ import {
   validateTake,
 } from './items';
 import { updateCarryingVisual } from './carrying';
-import { isBurning } from './train';
+import { isBurning, isInGameplay } from './train';
 
 
 const CHANNEL_ORDER_ID = 852600;
@@ -28,6 +28,10 @@ export function initGiveTake(): void {
     if (GetIssuedOrderId() !== CHANNEL_ORDER_ID) return;
     const unit = Unit.fromEvent();
     if (unit == null) return;
+    if (!isInGameplay()) {
+      rejectOrder(unit.handle, 'Can only be used during gameplay!');
+      return;
+    }
 
     const item = getSlot0Item(unit);
     if (item == null) return; // No item = nothing to drop at a point
@@ -50,6 +54,10 @@ export function initGiveTake(): void {
     if (GetIssuedOrderId() !== CHANNEL_ORDER_ID) return;
     const unit = Unit.fromEvent();
     if (unit == null) return;
+    if (!isInGameplay()) {
+      rejectOrder(unit.handle, 'Can only be used during gameplay!');
+      return;
+    }
 
     // Targeting an item on the ground — always pick it up
     const targetItem = GetOrderTargetItem();

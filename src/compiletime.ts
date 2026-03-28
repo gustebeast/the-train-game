@@ -389,7 +389,7 @@ compiletime(({ objectData, constants }) => {
   shop.groundTexture = 'HSMA'; // Same texture as a human farm
   shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   shop.collisionSize = 32;
-  shop.itemsSold = [constants.items.TomeOfStrength, constants.items.TomeOfIntelligence].join(',');
+  shop.itemsSold = [constants.items.TomeOfStrength, constants.items.TomeOfIntelligence, constants.items.TomeOfAgility, constants.items.TomeOfKnowledge].join(',');
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
@@ -429,6 +429,42 @@ compiletime(({ objectData, constants }) => {
   trackManufacturing.abilities = '';
   trackManufacturing.classification = 'PowerUp';
   trackManufacturing.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNStaffOfTeleportation.blp';
+
+  // Train Resource Capacity upgrade (TomeOfAgility — purchased from shop)
+  const resourceCapacity = objectData.items.get(constants.items.TomeOfAgility)!;
+  resourceCapacity.name = 'Train Resource Capacity';
+  resourceCapacity.tooltipBasic = resourceCapacity.name;
+  resourceCapacity.description = 'Increases the amount of stone and wood the train can carry by 1.';
+  resourceCapacity.tooltipExtended = resourceCapacity.description;
+  resourceCapacity.goldCost = 1;
+  resourceCapacity.stockMaximum = 10;
+  resourceCapacity.stockReplenishInterval = 3600;
+  resourceCapacity.stockInitialAfterStartDelay = 10;
+  resourceCapacity.useAutomaticallyWhenAcquired = true;
+  resourceCapacity.activelyUsed = false;
+  resourceCapacity.canBeDropped = false;
+  resourceCapacity.perishable = true;
+  resourceCapacity.abilities = '';
+  resourceCapacity.classification = 'PowerUp';
+  resourceCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNPackBeast.blp';
+
+  // Train Track Capacity upgrade (TomeOfKnowledge — purchased from shop)
+  const trackCapacity = objectData.items.get(constants.items.TomeOfKnowledge)!;
+  trackCapacity.name = 'Train Track Capacity';
+  trackCapacity.tooltipBasic = trackCapacity.name;
+  trackCapacity.description = 'Increases the amount of tracks the train can carry by 1.';
+  trackCapacity.tooltipExtended = trackCapacity.description;
+  trackCapacity.goldCost = 1;
+  trackCapacity.stockMaximum = 10;
+  trackCapacity.stockReplenishInterval = 3600;
+  trackCapacity.stockInitialAfterStartDelay = 10;
+  trackCapacity.useAutomaticallyWhenAcquired = true;
+  trackCapacity.activelyUsed = false;
+  trackCapacity.canBeDropped = false;
+  trackCapacity.perishable = true;
+  trackCapacity.abilities = '';
+  trackCapacity.classification = 'PowerUp';
+  trackCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSpiritLink.blp';
 
   objectData.save();
 });

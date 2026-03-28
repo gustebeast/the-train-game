@@ -36,10 +36,10 @@ export const gameState: GameState = { ...DEFAULT_STATE };
 /** Snapshot of gameState taken on lobby entry, used for revert. */
 let lobbySnapshot: GameState | null = null;
 
-/** Registered callbacks to run after applyState (e.g. syncTrainStats). */
+/** Registered callbacks to run after syncState (e.g. syncTrainStats). */
 const syncCallbacks: Array<() => void> = [];
 
-/** Register a callback that runs whenever state is applied (load/revert). */
+/** Register a callback that runs whenever state is synced. */
 export function registerSyncCallback(cb: () => void): void {
   syncCallbacks.push(cb);
 }
@@ -49,11 +49,16 @@ export function resetState(): void {
   Object.assign(gameState, DEFAULT_STATE);
 }
 
-/** Overwrite state from a loaded object, then sync gold and registered callbacks. */
-export function applyState(loaded: GameState): void {
-  Object.assign(gameState, loaded);
+/** Ensure all in-game representations match gameState. Idempotent. */
+export function syncState(): void {
   syncGold();
   for (const cb of syncCallbacks) cb();
+}
+
+/** Overwrite state from a loaded object, then sync everything. */
+export function applyState(loaded: GameState): void {
+  Object.assign(gameState, loaded);
+  syncState();
 }
 
 /** Set all human players' gold resource to match gameState.gold. */

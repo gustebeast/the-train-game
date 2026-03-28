@@ -1,14 +1,18 @@
 import { Trigger } from 'w3ts';
 import { Items } from '@objectdata/items';
-import { gameState, syncGold } from './state';
-import { getTrain, syncTrainStats } from './train';
+import { gameState, syncState } from './state';
+import { getTrain } from './train';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.TomeOfStrength);
 const TRACK_MANUFACTURING_ID = FourCC(Items.TomeOfIntelligence);
+const RESOURCE_CAPACITY_ID = FourCC(Items.TomeOfAgility);
+const TRACK_CAPACITY_ID = FourCC(Items.TomeOfKnowledge);
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],
   [TRACK_MANUFACTURING_ID, 1],
+  [RESOURCE_CAPACITY_ID, 1],
+  [TRACK_CAPACITY_ID, 1],
 ]);
 
 // Maps item rawcode → 4-char ability ID whose effect art plays on the train.
@@ -39,26 +43,26 @@ export function initShop(): void {
     const itemTypeId = GetItemTypeId(item);
 
     const cost = ITEM_COSTS.get(itemTypeId);
-    if (cost != null) {
-      if (gameState.gold < cost) {
-        RemoveItem(item);
-        return;
-      }
-      gameState.gold -= cost;
-      syncGold();
+    if (cost == null) return;
+    if (gameState.gold < cost) {
+      RemoveItem(item);
+      return;
     }
+    gameState.gold -= cost;
 
     if (itemTypeId === FLAME_RESISTANCE_ID) {
       gameState.trainMaxHP += 10;
-      syncTrainStats();
-      playUpgradeEffect(itemTypeId);
-      RemoveItem(item);
     } else if (itemTypeId === TRACK_MANUFACTURING_ID) {
       gameState.trainMaxMana -= 10;
       if (gameState.trainMaxMana < 10) gameState.trainMaxMana = 10;
-      syncTrainStats();
-      playUpgradeEffect(itemTypeId);
-      RemoveItem(item);
+    } else if (itemTypeId === RESOURCE_CAPACITY_ID) {
+      gameState.trainCargoMaxStack += 1;
+    } else if (itemTypeId === TRACK_CAPACITY_ID) {
+      gameState.trainTrackMaxStack += 1;
     }
+
+    syncState();
+    playUpgradeEffect(itemTypeId);
+    RemoveItem(item);
   });
 }

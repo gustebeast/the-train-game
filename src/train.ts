@@ -1,9 +1,10 @@
-import { Unit, Trigger, Timer, Rectangle, Region } from 'w3ts';
+import { Item, Unit, Trigger, Timer, Rectangle, Region } from 'w3ts';
 import { placedTracks, isVictoryTriggered } from './track/state';
 import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
 import { gameState, registerSyncCallback } from './state';
 import { deleteSave } from './save';
+import { WOOD_ID, STONE_ID, TRACK_PIECE_ID, findItemByType } from './items';
 
 import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
 
@@ -22,6 +23,10 @@ let gameOver: boolean = false;
 let burning: boolean = false;
 let burnTimer: Timer | null = null;
 let inGameplay: boolean = false;
+
+export function isInGameplay(): boolean {
+  return inGameplay;
+}
 
 export function isBurning(): boolean {
   return burning;
@@ -132,22 +137,46 @@ function setupTrainUnit(unit: Unit): void {
   BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
 }
 
-/** Sync the active train's HP/mana to match current gameState. */
+/** Set an item's charges on the train, creating it if needed. */
+function setTrainItem(itemTypeId: number, charges: number, slot: number): void {
+  const existing = findItemByType(train, itemTypeId);
+  if (existing != null) {
+    existing.charges = charges;
+  } else {
+    const newItem = Item.create(itemTypeId, train.x, train.y);
+    if (newItem != null) {
+      newItem.charges = charges;
+      UnitAddItem(train.handle, newItem.handle);
+      UnitDropItemSlot(train.handle, newItem.handle, slot);
+    }
+  }
+}
+
+/** Sync the active train's stats to match current gameState. */
 export function syncTrainStats(): void {
   if (train == null) return;
   BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
   SetUnitState(train.handle, UNIT_STATE_LIFE, train.maxLife);
   BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
+
+  // In lobby, display items at max stack to illustrate capacity
+  if (!inGameplay) {
+    setTrainItem(TRACK_PIECE_ID, gameState.trainTrackMaxStack, 0);
+    setTrainItem(WOOD_ID, gameState.trainCargoMaxStack, 1);
+    setTrainItem(STONE_ID, gameState.trainCargoMaxStack, 2);
+  }
 }
 
 registerSyncCallback(syncTrainStats);
 
 export function initLobbyTrain(unit: Unit): void {
+  inGameplay = false;
   setupTrainUnit(unit);
   train.mana = 0;
   BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
   BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);
   train.moveSpeed = 0;
+  syncTrainStats();
 }
 
 let onVictory: (() => void) | null = null;
