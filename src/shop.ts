@@ -1,37 +1,32 @@
-import { Trigger } from 'w3ts';
+import { Trigger, Unit } from 'w3ts';
 import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
 import { getTrain } from './train';
+import { getCrate } from './items';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.TomeOfStrength);
 const TRACK_MANUFACTURING_ID = FourCC(Items.TomeOfIntelligence);
 const RESOURCE_CAPACITY_ID = FourCC(Items.TomeOfAgility);
 const TRACK_CAPACITY_ID = FourCC(Items.TomeOfKnowledge);
+const CRATE_CAPACITY_ID = FourCC(Items.TomeOfExperience);
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],
   [TRACK_MANUFACTURING_ID, 1],
   [RESOURCE_CAPACITY_ID, 1],
   [TRACK_CAPACITY_ID, 1],
+  [CRATE_CAPACITY_ID, 1],
 ]);
 
-// Maps item rawcode → 4-char ability ID whose effect art plays on the train.
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
-// Use AIem as default if no thematic match.
-const UPGRADE_EFFECTS: Record<number, string> = {
-  [FLAME_RESISTANCE_ID]: 'AIsm',      // strength
-  [TRACK_MANUFACTURING_ID]: 'AIim',   // intelligence
-};
+const EFFECT_ID = 'AIem';
 
-const DEFAULT_EFFECT_ID = 'AIem';
-
-function playUpgradeEffect(itemTypeId: number): void {
-  const train = getTrain();
-  if (train == null) return;
-  const id = UPGRADE_EFFECTS[itemTypeId] ?? DEFAULT_EFFECT_ID;
-  const path = `Abilities\\Spells\\Items\\${id}\\${id}Target.mdl`;
-  const sfx = AddSpecialEffectTarget(path, train.handle, 'origin');
-  if (sfx != null) DestroyEffect(sfx);
+function playUpgradeEffect(targets: Unit[]): void {
+  for (const u of targets) {
+    const path = `Abilities\\Spells\\Items\\${EFFECT_ID}\\${EFFECT_ID}Target.mdl`;
+    const sfx = AddSpecialEffectTarget(path, u.handle, 'origin');
+    if (sfx != null) DestroyEffect(sfx);
+  }
 }
 
 export function initShop(): void {
@@ -50,19 +45,29 @@ export function initShop(): void {
     }
     gameState.gold -= cost;
 
+    let effectTargets: Unit[] = [];
+
     if (itemTypeId === FLAME_RESISTANCE_ID) {
       gameState.trainMaxHP += 10;
+      effectTargets = [getTrain()];
     } else if (itemTypeId === TRACK_MANUFACTURING_ID) {
       gameState.trainMaxMana -= 10;
       if (gameState.trainMaxMana < 10) gameState.trainMaxMana = 10;
+      effectTargets = [getTrain()];
     } else if (itemTypeId === RESOURCE_CAPACITY_ID) {
-      gameState.trainCargoMaxStack += 1;
+      gameState.trainCargoMaxStack += 2;
+      effectTargets = [getTrain()];
     } else if (itemTypeId === TRACK_CAPACITY_ID) {
-      gameState.trainTrackMaxStack += 1;
+      gameState.trainTrackMaxStack += 2;
+      effectTargets = [getTrain()];
+    } else if (itemTypeId === CRATE_CAPACITY_ID) {
+      gameState.crateMaxStack += 4;
+      const crate = getCrate();
+      if (crate != null) effectTargets = [crate];
     }
 
     syncState();
-    playUpgradeEffect(itemTypeId);
+    playUpgradeEffect(effectTargets);
     RemoveItem(item);
   });
 }

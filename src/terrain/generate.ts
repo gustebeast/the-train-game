@@ -150,6 +150,18 @@ function generatePath(grid: Grid, exitX: number, exitY?: number): void {
     }
   }
 
+  // If the path ended too low for the victory area, walk it up one column west of the exit
+  // so the path always connects to the victory tile from the west
+  if (y < GRID_MIN_Y + 4) {
+    const correctionX = exitX - 1;
+    grid.path[idx(correctionX, y)] = true;
+    while (y < GRID_MIN_Y + 4) {
+      y++;
+      grid.path[idx(correctionX, y)] = true;
+    }
+    grid.path[idx(exitX, y)] = true;
+  }
+
   // Store exit point and update VICTORY area Y bounds around it
   grid.exit = { x: exitX, y };
   VICTORY.minY = y - 4;
@@ -390,8 +402,9 @@ const P3 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_3);
 const P4 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_4);
 const SC = c(Terrain.GRASSY_DIRT, Entity.START_CIRCLE);
 const RC = c(Terrain.GRASSY_DIRT, Entity.REVERT_CIRCLE);
-const SH = c(Terrain.WHITE_MARBLE, Entity.SHOP);
-const TN = c(Terrain.WHITE_MARBLE, Entity.TRACK_WITH_TRAIN);
+const SH = c(Terrain.GRASSY_DIRT, Entity.SHOP);
+const TN = c(Terrain.GRASSY_DIRT, Entity.TRACK_WITH_TRAIN);
+const CS = c(Terrain.WHITE_MARBLE, Entity.CRATE_START);
 // prettier-ignore
 // Laid out as it appears in-game (top = north = +y, bottom = south = -y)
 const LOBBY_GRID: Cell[][] = [
@@ -400,7 +413,7 @@ const LOBBY_GRID: Cell[][] = [
   [ M, G, M, G, M, G, M, G, M], // y= 2
   [ M, M, G, G, M, G, G, M, M], // y= 1
   [ M,TN, P1,P2,G, P3,P4,G, M], // y= 0
-  [ M, M, G, G, M, G, G, M, M], // y=-1
+  [ M,CS, G, G, M, G, G, M, M], // y=-1
   [ M, G, M, G, M, G, M, G, M], // y=-2
   [ M,RC, G, M,SC, M, G, G, M], // y=-3
   [ M, M, M, M, M, M, M, M, M], // y=-4

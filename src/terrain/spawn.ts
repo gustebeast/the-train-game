@@ -1,7 +1,8 @@
-import { Destructable, Item, MapPlayer, Unit } from 'w3ts';
+import { Destructable, Item, MapPlayer, TextTag, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { Units } from '@objectdata/units';
 import { Items } from '@objectdata/items';
+
 import {
   Terrain, Entity, Grid,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
@@ -14,7 +15,7 @@ import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { placedTracks, setVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
-import { setCrate, TRACK_PIECE_ID, WOOD_ID, STONE_ID } from '../items';
+import { setCrate } from '../items';
 import { gameState } from '../state';
 
 // Per-variation scales to normalize rock models to ~128-unit footprint.
@@ -144,22 +145,9 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
         }
 
         case Entity.CRATE_START: {
-          // Starting crate — populated from saved state
+          // Starting crate — syncCrateInventory populates from state or shows max in lobby
           const startCrate = Unit.create(getNeutralExtra(), FourCC(Units.GrainWarehouse), world.x, world.y, 270);
-          if (startCrate != null) {
-            if (gameState.crateTrackCount > 0) {
-              const t = Item.create(TRACK_PIECE_ID, startCrate.x, startCrate.y);
-              if (t != null) { t.charges = gameState.crateTrackCount; UnitAddItem(startCrate.handle, t.handle); UnitDropItemSlot(startCrate.handle, t.handle, 0); }
-            }
-            if (gameState.crateWoodCount > 0) {
-              const w = Item.create(WOOD_ID, startCrate.x, startCrate.y);
-              if (w != null) { w.charges = gameState.crateWoodCount; UnitAddItem(startCrate.handle, w.handle); UnitDropItemSlot(startCrate.handle, w.handle, 1); }
-            }
-            if (gameState.crateStoneCount > 0) {
-              const s = Item.create(STONE_ID, startCrate.x, startCrate.y);
-              if (s != null) { s.charges = gameState.crateStoneCount; UnitAddItem(startCrate.handle, s.handle); UnitDropItemSlot(startCrate.handle, s.handle, 2); }
-            }
-          }
+          if (startCrate != null) setCrate(startCrate);
           break;
         }
 
@@ -213,12 +201,26 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
         case Entity.START_CIRCLE: {
           Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0);
           initReadyZone(world.x, world.y, 'start');
+          const startTag = TextTag.create();
+          if (startTag != null) {
+            startTag.setText('NEXT', 0.024);
+            startTag.setPos(world.x - 26, world.y - 12, 0);
+            startTag.setColor(0, 255, 0, 255);
+            startTag.setPermanent(true);
+          }
           break;
         }
 
         case Entity.REVERT_CIRCLE: {
           Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0);
           initReadyZone(world.x, world.y, 'revert');
+          const revertTag = TextTag.create();
+          if (revertTag != null) {
+            revertTag.setText('RESET', 0.024);
+            revertTag.setPos(world.x - 29, world.y - 12, 0);
+            revertTag.setColor(255, 0, 0, 255);
+            revertTag.setPermanent(true);
+          }
           break;
         }
       }
@@ -230,3 +232,4 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
 
   return trainUnit;
 }
+

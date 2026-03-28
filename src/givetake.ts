@@ -13,7 +13,8 @@ import {
   validateTake,
 } from './items';
 import { updateCarryingVisual } from './carrying';
-import { isBurning, isInGameplay } from './train';
+import { isBurning } from './train';
+import { isInGameplay } from './state';
 
 
 const CHANNEL_ORDER_ID = 852600;

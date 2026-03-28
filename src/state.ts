@@ -33,6 +33,17 @@ const DEFAULT_STATE: GameState = {
 /** The single source of truth for persistent game state. */
 export const gameState: GameState = { ...DEFAULT_STATE };
 
+/** Whether the game is currently in gameplay (not lobby). */
+let inGameplay = false;
+
+export function isInGameplay(): boolean {
+  return inGameplay;
+}
+
+export function setInGameplay(value: boolean): void {
+  inGameplay = value;
+}
+
 /** Snapshot of gameState taken on lobby entry, used for revert. */
 let lobbySnapshot: GameState | null = null;
 

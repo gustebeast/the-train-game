@@ -2,7 +2,7 @@ import { Item, Unit, Trigger, Timer, Rectangle, Region } from 'w3ts';
 import { placedTracks, isVictoryTriggered } from './track/state';
 import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
-import { gameState, registerSyncCallback } from './state';
+import { gameState, isInGameplay, setInGameplay, registerSyncCallback, syncState } from './state';
 import { deleteSave } from './save';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID, findItemByType } from './items';
 
@@ -22,18 +22,13 @@ let crashDeadline: number = 0;
 let gameOver: boolean = false;
 let burning: boolean = false;
 let burnTimer: Timer | null = null;
-let inGameplay: boolean = false;
-
-export function isInGameplay(): boolean {
-  return inGameplay;
-}
 
 export function isBurning(): boolean {
   return burning;
 }
 
 export function stopGameplay(): void {
-  inGameplay = false;
+  setInGameplay(false);
 }
 
 export function extinguish(): void {
@@ -137,9 +132,13 @@ function setupTrainUnit(unit: Unit): void {
   BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
 }
 
-/** Set an item's charges on the train, creating it if needed. */
+/** Set an item's charges on the train, creating or removing as needed. */
 function setTrainItem(itemTypeId: number, charges: number, slot: number): void {
   const existing = findItemByType(train, itemTypeId);
+  if (charges <= 0) {
+    if (existing != null) RemoveItem(existing.handle);
+    return;
+  }
   if (existing != null) {
     existing.charges = charges;
   } else {
@@ -160,7 +159,7 @@ export function syncTrainStats(): void {
   BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
 
   // In lobby, display items at max stack to illustrate capacity
-  if (!inGameplay) {
+  if (!isInGameplay()) {
     setTrainItem(TRACK_PIECE_ID, gameState.trainTrackMaxStack, 0);
     setTrainItem(WOOD_ID, gameState.trainCargoMaxStack, 1);
     setTrainItem(STONE_ID, gameState.trainCargoMaxStack, 2);
@@ -170,13 +169,13 @@ export function syncTrainStats(): void {
 registerSyncCallback(syncTrainStats);
 
 export function initLobbyTrain(unit: Unit): void {
-  inGameplay = false;
+  setInGameplay(false);
   setupTrainUnit(unit);
   train.mana = 0;
   BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
   BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);
   train.moveSpeed = 0;
-  syncTrainStats();
+  syncState();
 }
 
 let onVictory: (() => void) | null = null;
@@ -191,7 +190,7 @@ export function setAwardVictoryCallback(cb: () => void): void {
 }
 
 function enterLobby(): void {
-  inGameplay = false;
+  setInGameplay(false);
   if (onVictory != null) onVictory();
 }
 
@@ -206,7 +205,7 @@ function initTrainUnit(unit: Unit): void {
   lowHpTrigger = Trigger.create();
   TriggerRegisterUnitStateEvent(lowHpTrigger.handle, train.handle, UNIT_STATE_LIFE, LESS_THAN, 2.0);
   lowHpTrigger.addAction(() => {
-    if (burning || !inGameplay) return;
+    if (burning || !isInGameplay()) return;
     burning = true;
     SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
     BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
@@ -239,8 +238,9 @@ export function initTrain(unit: Unit) {
   if (arrivalRegion != null) arrivalRegion.destroy();
   if (arrivalRect != null) arrivalRect.destroy();
 
-  inGameplay = true;
+  setInGameplay(true);
   initTrainUnit(unit);
+  syncState();
   setMoveOrderCallback(() => reissueMoveOrder());
 
   // Create the arrival region (initially at origin, will be repositioned by moveToNext)

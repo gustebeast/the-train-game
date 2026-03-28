@@ -29,6 +29,8 @@ compiletime(({ objectData, constants }) => {
   }
 
   const train = objectData.units.get(constants.units.WarWagon)!;
+  train.name = "Train";
+  train.tooltipBasic = "Train";
   train.collisionSize = 16;
   train.modelFile = 'war3mapImported\\WarWagon.mdx';
   train.normal = constants.abilities.InventoryHero;
@@ -386,10 +388,10 @@ compiletime(({ objectData, constants }) => {
   shop.name = 'Shop';
   shop.scalingValueundefined = 0.5;
   shop.selectionScale = 1;
-  shop.groundTexture = 'HSMA'; // Same texture as a human farm
+  shop.groundTexture = ''; // Same texture as a human farm
   shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   shop.collisionSize = 32;
-  shop.itemsSold = [constants.items.TomeOfStrength, constants.items.TomeOfIntelligence, constants.items.TomeOfAgility, constants.items.TomeOfKnowledge].join(',');
+  shop.itemsSold = [constants.items.TomeOfStrength, constants.items.TomeOfIntelligence, constants.items.TomeOfAgility, constants.items.TomeOfKnowledge, constants.items.TomeOfExperience].join(',');
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
@@ -416,7 +418,7 @@ compiletime(({ objectData, constants }) => {
   const trackManufacturing = objectData.items.get(constants.items.TomeOfIntelligence)!;
   trackManufacturing.name = 'Track Manufacturing';
   trackManufacturing.tooltipBasic = trackManufacturing.name;
-  trackManufacturing.description = 'Reduces train mana by 10, allowing it to convert stone and wood to tracks more quickly.';
+  trackManufacturing.description = 'Reduces train mana by 10, allowing it to convert wood and stone to tracks more quickly.';
   trackManufacturing.tooltipExtended = trackManufacturing.description;
   trackManufacturing.goldCost = 1;
   trackManufacturing.stockMaximum = 10;
@@ -434,7 +436,7 @@ compiletime(({ objectData, constants }) => {
   const resourceCapacity = objectData.items.get(constants.items.TomeOfAgility)!;
   resourceCapacity.name = 'Train Resource Capacity';
   resourceCapacity.tooltipBasic = resourceCapacity.name;
-  resourceCapacity.description = 'Increases the amount of stone and wood the train can carry by 1.';
+  resourceCapacity.description = 'Increases the amount of wood and stone the train can carry by 2.';
   resourceCapacity.tooltipExtended = resourceCapacity.description;
   resourceCapacity.goldCost = 1;
   resourceCapacity.stockMaximum = 10;
@@ -452,7 +454,7 @@ compiletime(({ objectData, constants }) => {
   const trackCapacity = objectData.items.get(constants.items.TomeOfKnowledge)!;
   trackCapacity.name = 'Train Track Capacity';
   trackCapacity.tooltipBasic = trackCapacity.name;
-  trackCapacity.description = 'Increases the amount of tracks the train can carry by 1.';
+  trackCapacity.description = 'Increases the amount of tracks the train can carry by 2.';
   trackCapacity.tooltipExtended = trackCapacity.description;
   trackCapacity.goldCost = 1;
   trackCapacity.stockMaximum = 10;
@@ -465,6 +467,24 @@ compiletime(({ objectData, constants }) => {
   trackCapacity.abilities = '';
   trackCapacity.classification = 'PowerUp';
   trackCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSpiritLink.blp';
+
+  // Crate Capacity upgrade (TomeOfExperience — purchased from shop)
+  const crateCapacity = objectData.items.get(constants.items.TomeOfExperience)!;
+  crateCapacity.name = 'Crate Capacity';
+  crateCapacity.tooltipBasic = crateCapacity.name;
+  crateCapacity.description = 'Increases the amount of tracks, wood and stone the crate can carry by 4.';
+  crateCapacity.tooltipExtended = crateCapacity.description;
+  crateCapacity.goldCost = 1;
+  crateCapacity.stockMaximum = 10;
+  crateCapacity.stockReplenishInterval = 3600;
+  crateCapacity.stockInitialAfterStartDelay = 10;
+  crateCapacity.useAutomaticallyWhenAcquired = true;
+  crateCapacity.activelyUsed = false;
+  crateCapacity.canBeDropped = false;
+  crateCapacity.perishable = true;
+  crateCapacity.abilities = '';
+  crateCapacity.classification = 'PowerUp';
+  crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHumanCrates.blp';
 
   objectData.save();
 });
