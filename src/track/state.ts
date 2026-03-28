@@ -14,6 +14,10 @@ export function setVictoryTriggered(): void {
   _victoryTriggered = true;
 }
 
+export function resetVictoryTriggered(): void {
+  _victoryTriggered = false;
+}
+
 export function setVictoryTile(worldX: number, worldY: number): void {
   _victoryTile = { x: worldX, y: worldY };
 }

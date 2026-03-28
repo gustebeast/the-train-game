@@ -394,26 +394,28 @@ compiletime(({ objectData, constants }) => {
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
 
-  // Flame Retardant upgrade (TomeOfStrength — purchased from shop)
-  const flameRetardant = objectData.items.get(constants.items.TomeOfStrength)!;
-  flameRetardant.name = 'Flame Retardant';
-  flameRetardant.description = 'Increases train health by 10, making it take longer to catch fire.';
-  flameRetardant.tooltipExtended = flameRetardant.description;
-  flameRetardant.goldCost = 1;
-  flameRetardant.stockMaximum = 10;
-  flameRetardant.stockReplenishInterval = 3600;
-  flameRetardant.stockInitialAfterStartDelay = 10;
-  flameRetardant.useAutomaticallyWhenAcquired = true;
-  flameRetardant.activelyUsed = false;
-  flameRetardant.canBeDropped = false;
-  flameRetardant.perishable = true;
-  flameRetardant.abilities = '';
-  flameRetardant.classification = 'PowerUp';
-  flameRetardant.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNOrbOfFire.blp';
+  // Flame Resistance upgrade (TomeOfStrength — purchased from shop)
+  const flameResistance = objectData.items.get(constants.items.TomeOfStrength)!;
+  flameResistance.name = 'Flame Resistance';
+  flameResistance.tooltipBasic = flameResistance.name;
+  flameResistance.description = 'Increases train health by 10, making it take longer to catch fire.';
+  flameResistance.tooltipExtended = flameResistance.description;
+  flameResistance.goldCost = 1;
+  flameResistance.stockMaximum = 10;
+  flameResistance.stockReplenishInterval = 3600;
+  flameResistance.stockInitialAfterStartDelay = 10;
+  flameResistance.useAutomaticallyWhenAcquired = true;
+  flameResistance.activelyUsed = false;
+  flameResistance.canBeDropped = false;
+  flameResistance.perishable = true;
+  flameResistance.abilities = '';
+  flameResistance.classification = 'PowerUp';
+  flameResistance.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNOrbOfFire.blp';
 
   // Track Manufacturing upgrade (TomeOfIntelligence — purchased from shop)
   const trackManufacturing = objectData.items.get(constants.items.TomeOfIntelligence)!;
   trackManufacturing.name = 'Track Manufacturing';
+  trackManufacturing.tooltipBasic = trackManufacturing.name;
   trackManufacturing.description = 'Reduces train mana by 10, allowing it to convert stone and wood to tracks more quickly.';
   trackManufacturing.tooltipExtended = trackManufacturing.description;
   trackManufacturing.goldCost = 1;

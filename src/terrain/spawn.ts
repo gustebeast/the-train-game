@@ -12,8 +12,8 @@ import { DEFAULT_TRACK, SKINS } from '../track/constants';
 
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
-import { placedTracks, setVictoryTile } from '../track/state';
-import { initReady, cleanupReady } from '../ready';
+import { placedTracks, setVictoryTile, resetVictoryTriggered } from '../track/state';
+import { initReadyZone, cleanupReady } from '../ready';
 import { setCrate, TRACK_PIECE_ID, WOOD_ID, STONE_ID } from '../items';
 import { gameState } from '../state';
 
@@ -71,6 +71,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
     EnumItemsInRect(GetWorldBounds()!, null!, () => RemoveItem(GetEnumItem()!));
     resumeResourceDrops();
     placedTracks.length = 0;
+    resetVictoryTriggered();
 
     // Reset fog of war to unexplored for all human players
     const world = GetWorldBounds()!;
@@ -210,8 +211,14 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
         }
 
         case Entity.START_CIRCLE: {
-          const cop = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          initReady(world.x, world.y);
+          Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0);
+          initReadyZone(world.x, world.y, 'start');
+          break;
+        }
+
+        case Entity.REVERT_CIRCLE: {
+          Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0);
+          initReadyZone(world.x, world.y, 'revert');
           break;
         }
       }

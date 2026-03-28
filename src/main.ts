@@ -24,6 +24,8 @@ const TS_VERSION = compiletime(() => require('typescript').version);
 const TSTL_VERSION = compiletime(() => require('typescript-to-lua').version);
 
 function tsMain() {
+  print('TheTrainGame script started');
+
   // Init harvest before terrain so death triggers exist for destructable registration
   initHarvest();
 

@@ -42,6 +42,7 @@ export enum Entity {
   START_CIRCLE = 15,
   CRATE_START = 17,
   SHOP = 18,
+  REVERT_CIRCLE = 19,
 }
 
 export interface Cell {

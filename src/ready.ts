@@ -2,29 +2,30 @@ import { MapPlayer, Rectangle, Region, Timer, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { Abilities } from '@objectdata/abilities';
 import { Units } from '@objectdata/units';
-import { gameState } from './state';
 
 const READY_ORB_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus6);
 const PEASANT_ID = FourCC(Units.Peasant);
-const REGION_HALF = 192; // 3x3 grid cells = 384 world units, half = 192
+const REGION_HALF = 128; // 2x2 grid cells = 256 world units, half = 128
 
-let readyRect: Rectangle | null = null;
-let readyRegion: Region | null = null;
-let enterTrigger: Trigger | null = null;
-let leaveTrigger: Trigger | null = null;
-let playerLeaveTrigger: Trigger | null = null;
-let countdownTimer: Timer | null = null;
-let countdownStep = 0;
-
-// Track which players have a peasant in the ready zone
-const readyPlayers = new Set<number>();
-
-let startRoundCallback: ((difficulty: number) => void) | null = null;
-
-/** Set the callback that starts a new round. Called with the difficulty (round number). */
-export function setStartRoundCallback(cb: (difficulty: number) => void): void {
-  startRoundCallback = cb;
+interface ZoneConfig {
+  message: string;
+  callback: () => void;
 }
+
+interface ActiveZone {
+  config: ZoneConfig;
+  rect: Rectangle;
+  region: Region;
+  enterTrigger: Trigger;
+  leaveTrigger: Trigger;
+  countdownTimer: Timer | null;
+  countdownStep: number;
+  readyPlayers: Set<number>;
+}
+
+const zoneConfigs = new Map<string, ZoneConfig>();
+const activeZones = new Map<string, ActiveZone>();
+let playerLeaveTrigger: Trigger | null = null;
 
 /** Get current active human player IDs (playing + user-controlled). */
 function getActivePlayerIds(): number[] {
@@ -33,99 +34,122 @@ function getActivePlayerIds(): number[] {
   ).map((p: MapPlayer) => p.id);
 }
 
-/** Check if all active players are ready and start/cancel countdown accordingly. */
-function checkAllReady(): void {
+function checkAllReady(zone: ActiveZone): void {
   const activeIds = getActivePlayerIds();
   if (activeIds.length === 0) return;
 
-  const allReady = activeIds.every(id => readyPlayers.has(id));
+  const allReady = activeIds.every(id => zone.readyPlayers.has(id));
 
-  if (allReady && countdownTimer == null) {
-    startCountdown();
-  } else if (!allReady && countdownTimer != null) {
-    cancelCountdown();
+  if (allReady && zone.countdownTimer == null) {
+    startCountdown(zone);
+  } else if (!allReady && zone.countdownTimer != null) {
+    cancelCountdown(zone);
   }
 }
 
-function startCountdown(): void {
-  countdownStep = 3;
-  print('Starting next round in ' + I2S(countdownStep) + '...');
-  countdownTimer = Timer.create();
-  countdownTimer.start(1.0, true, () => {
-    countdownStep -= 1;
-    if (countdownStep > 0) {
-      print(I2S(countdownStep) + '...');
+function startCountdown(zone: ActiveZone): void {
+  zone.countdownStep = 3;
+  print(zone.config.message + ' in ' + I2S(zone.countdownStep) + '...');
+  zone.countdownTimer = Timer.create();
+  zone.countdownTimer.start(1.0, true, () => {
+    zone.countdownStep -= 1;
+    if (zone.countdownStep > 0) {
+      print(I2S(zone.countdownStep) + '...');
     } else {
-      cancelCountdown();
-      if (startRoundCallback != null) {
-        startRoundCallback(gameState.round);
-      }
+      const cb = zone.config.callback;
+      cancelCountdown(zone);
+      cb();
     }
   });
 }
 
-function cancelCountdown(): void {
-  if (countdownTimer != null) {
-    countdownTimer.destroy();
-    countdownTimer = null;
+function cancelCountdown(zone: ActiveZone): void {
+  if (zone.countdownTimer != null) {
+    zone.countdownTimer.destroy();
+    zone.countdownTimer = null;
   }
-  countdownStep = 0;
+  zone.countdownStep = 0;
 }
 
-/** Initialize the ready system with a rectangle centered on the circle of power. */
-export function initReady(cx: number, cy: number): void {
-  cleanupReady();
+/** Register a ready zone type with its countdown message and completion callback. */
+export function registerReadyZone(id: string, message: string, callback: () => void): void {
+  zoneConfigs.set(id, { message, callback });
+}
 
-  readyRect = Rectangle.create(
+/** Create a ready zone centered at (cx, cy) for the given registered zone id. */
+export function initReadyZone(cx: number, cy: number, id: string): void {
+  const config = zoneConfigs.get(id);
+  if (config == null) return;
+
+  const rect = Rectangle.create(
     cx - REGION_HALF, cy - REGION_HALF,
     cx + REGION_HALF, cy + REGION_HALF,
   );
-  readyRegion = Region.create();
-  readyRegion.addRect(readyRect);
+  const region = Region.create();
+  region.addRect(rect);
 
-  enterTrigger = Trigger.create();
-  enterTrigger.registerEnterRegion(readyRegion.handle, undefined);
-  enterTrigger.addAction(() => {
+  const zone: ActiveZone = {
+    config,
+    rect,
+    region,
+    enterTrigger: Trigger.create(),
+    leaveTrigger: Trigger.create(),
+    countdownTimer: null,
+    countdownStep: 0,
+    readyPlayers: new Set(),
+  };
+
+  zone.enterTrigger.registerEnterRegion(region.handle, undefined);
+  zone.enterTrigger.addAction(() => {
     const u = Unit.fromEvent();
     if (u == null || u.typeId !== PEASANT_ID) return;
     UnitAddAbility(u.handle, READY_ORB_ABILITY_ID);
-    readyPlayers.add(u.owner.id);
-    checkAllReady();
+    zone.readyPlayers.add(u.owner.id);
+    checkAllReady(zone);
   });
 
-  leaveTrigger = Trigger.create();
-  leaveTrigger.registerLeaveRegion(readyRegion.handle, undefined);
-  leaveTrigger.addAction(() => {
+  zone.leaveTrigger.registerLeaveRegion(region.handle, undefined);
+  zone.leaveTrigger.addAction(() => {
     const u = Unit.fromEvent();
     if (u == null || u.typeId !== PEASANT_ID) return;
     UnitRemoveAbility(u.handle, READY_ORB_ABILITY_ID);
-    readyPlayers.delete(u.owner.id);
-    checkAllReady();
+    zone.readyPlayers.delete(u.owner.id);
+    checkAllReady(zone);
   });
 
-  // Handle players leaving the game mid-lobby
-  playerLeaveTrigger = Trigger.create();
-  for (const p of Players) {
-    if (p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER) {
-      playerLeaveTrigger.registerPlayerEvent(p, EVENT_PLAYER_LEAVE);
+  activeZones.set(id, zone);
+
+  // Set up shared player-leave trigger once
+  if (playerLeaveTrigger == null) {
+    playerLeaveTrigger = Trigger.create();
+    for (const p of Players) {
+      if (p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER) {
+        playerLeaveTrigger.registerPlayerEvent(p, EVENT_PLAYER_LEAVE);
+      }
     }
+    playerLeaveTrigger.addAction(() => {
+      const leavingPlayer = MapPlayer.fromEvent();
+      if (leavingPlayer == null) return;
+      for (const [, z] of activeZones) {
+        z.readyPlayers.delete(leavingPlayer.id);
+        checkAllReady(z);
+      }
+    });
   }
-  playerLeaveTrigger.addAction(() => {
-    const leavingPlayer = MapPlayer.fromEvent();
-    if (leavingPlayer != null) {
-      readyPlayers.delete(leavingPlayer.id);
-      checkAllReady();
-    }
-  });
 }
 
-/** Destroy all ready-system triggers and regions. */
+/** Destroy all ready zones and triggers. */
 export function cleanupReady(): void {
-  cancelCountdown();
-  readyPlayers.clear();
-  if (enterTrigger != null) { enterTrigger.destroy(); enterTrigger = null; }
-  if (leaveTrigger != null) { leaveTrigger.destroy(); leaveTrigger = null; }
-  if (playerLeaveTrigger != null) { playerLeaveTrigger.destroy(); playerLeaveTrigger = null; }
-  if (readyRegion != null) { readyRegion.destroy(); readyRegion = null; }
-  if (readyRect != null) { readyRect.destroy(); readyRect = null; }
+  for (const [, zone] of activeZones) {
+    cancelCountdown(zone);
+    zone.enterTrigger.destroy();
+    zone.leaveTrigger.destroy();
+    zone.region.destroy();
+    zone.rect.destroy();
+  }
+  activeZones.clear();
+  if (playerLeaveTrigger != null) {
+    playerLeaveTrigger.destroy();
+    playerLeaveTrigger = null;
+  }
 }

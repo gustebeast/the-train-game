@@ -3,11 +3,11 @@ import { Items } from '@objectdata/items';
 import { gameState, syncGold } from './state';
 import { getTrain, syncTrainStats } from './train';
 
-const FLAME_RETARDANT_ID = FourCC(Items.TomeOfStrength);
+const FLAME_RESISTANCE_ID = FourCC(Items.TomeOfStrength);
 const TRACK_MANUFACTURING_ID = FourCC(Items.TomeOfIntelligence);
 
 const ITEM_COSTS: Map<number, number> = new Map([
-  [FLAME_RETARDANT_ID, 1],
+  [FLAME_RESISTANCE_ID, 1],
   [TRACK_MANUFACTURING_ID, 1],
 ]);
 
@@ -15,7 +15,7 @@ const ITEM_COSTS: Map<number, number> = new Map([
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
 // Use AIem as default if no thematic match.
 const UPGRADE_EFFECTS: Record<number, string> = {
-  [FLAME_RETARDANT_ID]: 'AIsm',      // strength
+  [FLAME_RESISTANCE_ID]: 'AIsm',      // strength
   [TRACK_MANUFACTURING_ID]: 'AIim',   // intelligence
 };
 
@@ -48,7 +48,7 @@ export function initShop(): void {
       syncGold();
     }
 
-    if (itemTypeId === FLAME_RETARDANT_ID) {
+    if (itemTypeId === FLAME_RESISTANCE_ID) {
       gameState.trainMaxHP += 10;
       syncTrainStats();
       playUpgradeEffect(itemTypeId);

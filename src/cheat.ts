@@ -4,7 +4,6 @@ import { loadCheatTerrain, loadLobby } from './terrain/load';
 import { TRACK_PIECE_ID } from './items';
 import { GRID_MIN_X, gridToWorld } from './terrain/constants';
 import { loadFromFile } from './save';
-import { syncGold } from './state';
 import { stopGameplay } from './train';
 
 export function initCheat(): void {
@@ -25,7 +24,6 @@ export function initCheat(): void {
   });
   loadTrigger.addAction(() => {
     if (loadFromFile()) {
-      syncGold();
       print('Save loaded. Entering lobby...');
       stopGameplay();
       loadLobby();

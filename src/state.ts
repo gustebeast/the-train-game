@@ -33,14 +33,27 @@ const DEFAULT_STATE: GameState = {
 /** The single source of truth for persistent game state. */
 export const gameState: GameState = { ...DEFAULT_STATE };
 
+/** Snapshot of gameState taken on lobby entry, used for revert. */
+let lobbySnapshot: GameState | null = null;
+
+/** Registered callbacks to run after applyState (e.g. syncTrainStats). */
+const syncCallbacks: Array<() => void> = [];
+
+/** Register a callback that runs whenever state is applied (load/revert). */
+export function registerSyncCallback(cb: () => void): void {
+  syncCallbacks.push(cb);
+}
+
 /** Reset state to defaults (for new game). */
 export function resetState(): void {
   Object.assign(gameState, DEFAULT_STATE);
 }
 
-/** Overwrite state from a loaded object. */
+/** Overwrite state from a loaded object, then sync gold and registered callbacks. */
 export function applyState(loaded: GameState): void {
   Object.assign(gameState, loaded);
+  syncGold();
+  for (const cb of syncCallbacks) cb();
 }
 
 /** Set all human players' gold resource to match gameState.gold. */
@@ -50,4 +63,16 @@ export function syncGold(): void {
       p.setState(PLAYER_STATE_RESOURCE_GOLD, gameState.gold);
     }
   });
+}
+
+/** Save a snapshot of the current gameState for lobby revert. */
+export function saveLobbySnapshot(): void {
+  lobbySnapshot = { ...gameState };
+}
+
+/** Restore gameState from the lobby snapshot. Returns false if no snapshot exists. */
+export function revertToLobbySnapshot(): boolean {
+  if (lobbySnapshot == null) return false;
+  applyState(lobbySnapshot);
+  return true;
 }

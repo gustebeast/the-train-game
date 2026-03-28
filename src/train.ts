@@ -2,7 +2,7 @@ import { Unit, Trigger, Timer, Rectangle, Region } from 'w3ts';
 import { placedTracks, isVictoryTriggered } from './track/state';
 import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
-import { gameState } from './state';
+import { gameState, registerSyncCallback } from './state';
 import { deleteSave } from './save';
 
 import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
@@ -139,6 +139,8 @@ export function syncTrainStats(): void {
   SetUnitState(train.handle, UNIT_STATE_LIFE, train.maxLife);
   BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
 }
+
+registerSyncCallback(syncTrainStats);
 
 export function initLobbyTrain(unit: Unit): void {
   setupTrainUnit(unit);

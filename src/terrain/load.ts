@@ -3,12 +3,17 @@ import { GRID_MAX_X } from './constants';
 import { generateTerrain, generateCheatTerrain, generateLobby } from './generate';
 import { spawnTerrain } from './spawn';
 import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback } from '../train';
-import { setStartRoundCallback } from '../ready';
+import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
+import { gameState, revertToLobbySnapshot, saveLobbySnapshot } from '../state';
 
 setVictoryCallback(() => loadLobby());
 setAwardVictoryCallback(() => awardVictory());
-setStartRoundCallback((difficulty) => loadTerrain(difficulty));
+registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round));
+registerReadyZone('revert', 'Resetting purchases', () => {
+  revertToLobbySnapshot();
+  loadLobby();
+});
 
 export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRID_MAX_X): Unit | null {
   const trainUnit = spawnTerrain(generateTerrain(difficulty, exitX), skipCleanup);
@@ -22,6 +27,7 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
 }
 
 export function loadLobby(): void {
+  saveLobbySnapshot();
   const trainUnit = spawnTerrain(generateLobby());
   if (trainUnit != null) initLobbyTrain(trainUnit);
 }
