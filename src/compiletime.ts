@@ -50,7 +50,7 @@ compiletime(({ objectData, constants }) => {
   const peasant = objectData.units.get(constants.units.Peasant)!;
   peasant.modelFile = 'war3mapImported\\WeaponlessPeasant.mdx';
   peasant.structuresBuilt = '';
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel].join(',');
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.Roar].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
@@ -110,6 +110,7 @@ compiletime(({ objectData, constants }) => {
   // Channel fields whose real WC3 default differs from the library's stored default
   // (library thinks 0 is default, so it won't write them — we must inject manually)
   const Modification = require('mdx-m3-viewer-th/dist/cjs/parsers/w3x/w3u/modification').default;
+  const ModifiedObject = require('mdx-m3-viewer-th/dist/cjs/parsers/w3x/w3u/modifiedobject').default;
   // Forced mods: fields whose real WC3 default differs from what the library stores
   const forcedMods: { [rawcode: string]: { id: string; variableType: number; dataPointer: number; value: number }[] } = {
     ANcl: [ // Channel
@@ -131,6 +132,13 @@ compiletime(({ objectData, constants }) => {
       { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
       { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
+    Aroa: [ // Roar (summon heroes spell)
+      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
+      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
+      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
+      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
+      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
+    ],
     AEsh: [ // ShadowStrike (fill bucket spell)
       { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
       { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
@@ -144,9 +152,11 @@ compiletime(({ objectData, constants }) => {
     const result = originalSave();
     if (result.w3a) {
       fixAbilityLevels(result.w3a);
+      const seen = new Set<string>();
       for (const obj of result.w3a.originalTable.objects) {
         const mods = forcedMods[obj.oldId];
         if (mods != null) {
+          seen.add(obj.oldId);
           for (const forced of mods) {
             if (!obj.modifications.some((m: any) => m.id === forced.id)) {
               const mod = new Modification();
@@ -155,6 +165,18 @@ compiletime(({ objectData, constants }) => {
             }
           }
         }
+      }
+      // Create w3a entries for abilities that only ended up in w3aSkin
+      for (const [rawcode, mods] of Object.entries(forcedMods)) {
+        if (seen.has(rawcode)) continue;
+        const obj = new ModifiedObject();
+        obj.oldId = rawcode;
+        for (const forced of mods) {
+          const mod = new Modification();
+          Object.assign(mod, forced, { levelOrVariation: 1, u1: 0 });
+          obj.modifications.push(mod);
+        }
+        result.w3a.originalTable.objects.push(obj);
       }
     }
     if (result.w3aSkin) fixAbilityLevels(result.w3aSkin);
@@ -382,6 +404,17 @@ compiletime(({ objectData, constants }) => {
   fillBucket.tooltipNormalExtended = 'Fills a bucket with water from a water block.';
   fillBucket.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
   fillBucket.hotkeyNormal = 'D';
+
+  // Summon Heroes spell: Roar repurposed as a no-target instant-cast ability
+  const summonHeroes = objectData.abilities.get(constants.abilities.Roar)!;
+  summonHeroes.heroAbility = false;
+  summonHeroes.levels = 1;
+  summonHeroes.tooltipNormal = 'Summon Heroes';
+  summonHeroes.tooltipNormalExtended = 'Summon your heroes to fight alongside you.';
+  summonHeroes.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNSelectHeroOn.blp';
+  summonHeroes.hotkeyNormal = 'R';
+  summonHeroes.buffs = '';
+  summonHeroes.effect = '';
 
   // Shop: Goblin Merchant scaled to 1x1 grid square, no default items
   const shop = objectData.units.get(constants.units.GoblinMerchant)!;
