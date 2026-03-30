@@ -1,0 +1,9 @@
+[Misc]
+GrantNormalXP=0
+GrantNormalXPFormulaA=1.0
+GrantNormalXPFormulaB=0.0
+GrantNormalXPFormulaC=0.0
+NeedHeroXP=100
+NeedHeroXPFormulaB=0.0
+SummonedKillFactor=0.0
+

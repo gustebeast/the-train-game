@@ -12,7 +12,9 @@
     "build:defs": "ts-node scripts/dev"
   },
   "dependencies": {
-    "w3ts": "^3.0.2"
+    "mpq": "^0.0.1",
+    "w3ts": "^3.0.2",
+    "wc3maptranslator": "^5.0.0"
   },
   "devDependencies": {
     "@types/fs-extra": "11.0.4",
@@ -30,9 +32,9 @@
     "typescript-to-lua": "1.31.0",
     "war3-objectdata-th": "^0.2.11",
     "war3-transformer": "^3.0.10",
+    "war3-types-strict": "^0.1.3",
     "war3tstlhelper": "1.0.1",
-    "winston": "^3.17.0",
-    "war3-types-strict": "^0.1.3"
+    "winston": "^3.17.0"
   },
   "watch": {
     "build:defs": {

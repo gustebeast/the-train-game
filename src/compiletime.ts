@@ -519,5 +519,32 @@ compiletime(({ objectData, constants }) => {
   crateCapacity.classification = 'PowerUp';
   crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHumanCrates.blp';
 
+  // Scale down all hero types to match peasant size
+  const heroTypes: string[] = [
+    // Human
+    constants.units.Paladin, constants.units.Archmage, constants.units.MountainKing, constants.units.BloodMage,
+    // Orc
+    constants.units.Blademaster, constants.units.FarSeer, constants.units.TaurenChieftain, constants.units.ShadowHunter,
+    // Undead
+    constants.units.DeathKnight, constants.units.Lich, constants.units.Dreadlord, constants.units.CryptLord,
+    // Night Elf
+    constants.units.DemonHunter, constants.units.KeeperOfTheGrove, constants.units.PriestessOfTheMoon, constants.units.Warden,
+    // Tavern
+    constants.units.Beastmaster, constants.units.DarkRanger, constants.units.PitLord, constants.units.Tinker,
+    constants.units.Firelord, constants.units.Alchemist, constants.units.Brewmaster, constants.units.SeaWitch,
+  ];
+
+  for (const heroType of heroTypes) {
+    const hero = objectData.units.get(heroType)!;
+    hero.scalingValueundefined = 0.6;
+    hero.selectionScale = 1;
+    hero.collisionSize = 16;
+    hero.pathingMap = '';
+    hero.shadowImageHeight = 100;
+    hero.shadowImageWidth = 100;
+    hero.shadowImageCenterX = 40;
+    hero.shadowImageCenterY = 40;
+  }
+
   objectData.save();
 });

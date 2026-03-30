@@ -13,12 +13,6 @@ export interface GameState {
   crateTrackCount: number;
   crateStoneCount: number;
   crateWoodCount: number;
-  hero1Type: number;
-  hero1XP: number;
-  hero1Skills: number;
-  hero2Type: number;
-  hero2XP: number;
-  hero2Skills: number;
 }
 
 const DEFAULT_STATE: GameState = {
@@ -34,12 +28,6 @@ const DEFAULT_STATE: GameState = {
   crateTrackCount: 0,
   crateStoneCount: 0,
   crateWoodCount: 0,
-  hero1Type: 0,
-  hero1XP: 0,
-  hero1Skills: 0,
-  hero2Type: 0,
-  hero2XP: 0,
-  hero2Skills: 0,
 };
 
 /** The single source of truth for persistent game state. */

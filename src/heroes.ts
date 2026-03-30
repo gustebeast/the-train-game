@@ -1,7 +1,8 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { Units } from '@objectdata/units';
-import { gameState, isInGameplay } from './state';
+import { isInGameplay } from './state';
+import { registerSaveSegment } from './save';
 
 const SUMMON_ABILITY_ID = FourCC(Abilities.Roar);
 const PEASANT_ID = FourCC(Units.Peasant);
@@ -21,127 +22,136 @@ const HERO_POOL: string[] = [
   Units.Firelord, Units.Alchemist, Units.Brewmaster, Units.SeaWitch,
 ];
 
-/** Mapping of hero unit type (FourCC) → 4 learnable ability IDs (FourCC).
- *  Order: 3 regular abilities, then ultimate. */
-const HERO_ABILITIES: Record<string, [string, string, string, string]> = {
-  // Human
-  [Units.Paladin]:       [Abilities.HolyLight, Abilities.DivineShield, Abilities.DevotionAura, Abilities.Resurrection],
-  [Units.Archmage]:      [Abilities.Blizzard, Abilities.SummonWaterElemental, Abilities.BrillianceAura, Abilities.MassTeleport],
-  [Units.MountainKing]:  [Abilities.StormBolt, Abilities.ThunderClap, Abilities.Bash, Abilities.Avatar],
-  [Units.BloodMage]:     [Abilities.FlameStrike, Abilities.Banish, Abilities.SiphonMana, Abilities.Phoenix],
-  // Orc
-  [Units.Blademaster]:      [Abilities.WindWalk, Abilities.MirrorImage, Abilities.CriticalStrike, Abilities.Bladestorm],
-  [Units.FarSeer]:           [Abilities.ChainLightning, Abilities.FarSight, Abilities.FeralSpirit, Abilities.Earthquake],
-  [Units.TaurenChieftain]:   [Abilities.Shockwave, Abilities.WarStomp, Abilities.EnduranceAura, Abilities.Reincarnation],
-  [Units.ShadowHunter]:      [Abilities.HealingWave, Abilities.Hex, Abilities.SerpentWard, Abilities.BigBadVoodoo],
-  // Undead
-  [Units.DeathKnight]: [Abilities.DeathCoil, Abilities.DeathPact, Abilities.UnholyAura, Abilities.AnimateDead],
-  [Units.Lich]:        [Abilities.FrostNova, Abilities.FrostArmor, Abilities.DarkRitual, Abilities.DeathAndDecay],
-  [Units.Dreadlord]:   [Abilities.CarrionSwarm, Abilities.Sleep, Abilities.VampiricAura, Abilities.Inferno],
-  [Units.CryptLord]:   [Abilities.Impale, Abilities.SpikedCarapace, Abilities.CarrionBeetles, Abilities.LocustSwarm],
-  // Night Elf
-  [Units.DemonHunter]:         [Abilities.ManaBurn, Abilities.Immolation, Abilities.Evasion, Abilities.Metamorphosis],
-  [Units.KeeperOfTheGrove]:    [Abilities.EntanglingRoots, Abilities.ForceOfNature, Abilities.ThornsAura, Abilities.Tranquility],
-  [Units.PriestessOfTheMoon]:  [Abilities.Scout, Abilities.SearingArrows, Abilities.TrueshotAura, Abilities.Starfall],
-  [Units.Warden]:              [Abilities.FanOfKnives, Abilities.Blink, Abilities.ShadowStrike, Abilities.Vengeance],
-  // Tavern
-  [Units.Beastmaster]:  [Abilities.SummonBear, Abilities.SummonQuilbeast, Abilities.SummonHawk, Abilities.Stampede],
-  [Units.DarkRanger]:   [Abilities.Silence, Abilities.BlackArrow, Abilities.LifeDrain, Abilities.Charm],
-  [Units.PitLord]:      [Abilities.RainOfFire, Abilities.HowlOfTerror, Abilities.CleavingAttack, Abilities.Doom],
-  [Units.Tinker]:       [Abilities.PocketFactory, Abilities.ClusterRockets, Abilities.EngineeringUpgrade, Abilities.RoboGoblin],
-  [Units.Firelord]:     [Abilities.SoulBurn, Abilities.SummonLavaSpawn, Abilities.Incinerate, Abilities.Volcano],
-  [Units.Alchemist]:    [Abilities.HealingSpray, Abilities.ChemicalRage, Abilities.AcidBomb, Abilities.Transmute],
-  [Units.Brewmaster]:   [Abilities.BreathOfFire, Abilities.DrunkenHaze, Abilities.DrunkenBrawler, Abilities.StormEarthAndFire],
-  [Units.SeaWitch]:     [Abilities.ForkedLightning, Abilities.FrostArrows, Abilities.ManaShield, Abilities.Tornado],
-};
-
-/** Pre-computed FourCC lookup: hero typeId (int) → ability IDs (int[]). */
-const heroAbilityIds = new Map<number, number[]>();
-for (const [heroRaw, abilRaws] of Object.entries(HERO_ABILITIES)) {
-  heroAbilityIds.set(FourCC(heroRaw), abilRaws.map(a => FourCC(a)));
+/** Convert a FourCC integer to a 4-character string. */
+function fourCCStr(id: number): string {
+  return string.char(
+    math.floor(id / 0x1000000) % 256,
+    math.floor(id / 0x10000) % 256,
+    math.floor(id / 0x100) % 256,
+    id % 256,
+  );
 }
 
-/** Encode 4 ability levels as a single number: a0*1000 + a1*100 + a2*10 + a3. */
-function encodeSkills(hero: Unit): number {
-  const abilities = heroAbilityIds.get(hero.typeId);
-  if (abilities == null) return 0;
-  let encoded = 0;
-  for (let i = 0; i < 4; i++) {
-    const level = GetUnitAbilityLevel(hero.handle, abilities[i]);
-    encoded += level * math.floor(10 ** (3 - i));
+// ---------------------------------------------------------------------------
+// Persistent hero data (4 heroes, saved across rounds)
+// ---------------------------------------------------------------------------
+
+interface HeroData {
+  typeId: number;
+  xp: number;
+  skills: Record<string, number>;
+}
+
+function emptyHero(): HeroData {
+  return { typeId: 0, xp: 0, skills: {} };
+}
+
+/** The 4 heroes available across rounds. Persisted via save segments. */
+const allHeroes: HeroData[] = [emptyHero(), emptyHero(), emptyHero(), emptyHero()];
+
+/** Encode one hero's data as "t=FourCC;x=XP;abilId=level;...". */
+function encodeHero(hero: HeroData): string {
+  if (hero.typeId === 0) return '';
+  const parts: string[] = [];
+  parts.push('t=' + tostring(hero.typeId));
+  parts.push('x=' + tostring(hero.xp));
+  for (const [k, v] of Object.entries(hero.skills)) {
+    if (v > 0) parts.push(k + '=' + tostring(v));
   }
-  return encoded;
+  return table.concat(parts, ';');
 }
 
-/** Decode a skill number and apply levels to a hero via SelectHeroSkill. */
-function decodeAndApplySkills(hero: Unit, encoded: number): void {
-  const abilities = heroAbilityIds.get(hero.typeId);
-  if (abilities == null || encoded === 0) return;
-  for (let i = 0; i < 4; i++) {
-    const level = math.floor(encoded / 10 ** (3 - i)) % 10;
-    for (let j = 0; j < level; j++) {
-      SelectHeroSkill(hero.handle, abilities[i]);
+/** Decode "t=FourCC;x=XP;abilId=level;..." into a HeroData. */
+function decodeHero(raw: string): HeroData {
+  const hero = emptyHero();
+  for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
+    if (key === 't') {
+      hero.typeId = tonumber(val) ?? 0;
+    } else if (key === 'x') {
+      hero.xp = tonumber(val) ?? 0;
+    } else {
+      hero.skills[key] = tonumber(val) ?? 0;
     }
   }
+  return hero;
 }
 
-/** Spawned hero unit references (populated when ability is used). */
+// Register save segments h1–h4
+for (let i = 0; i < 4; i++) {
+  const idx = i;
+  registerSaveSegment('h' + (idx + 1),
+    () => encodeHero(allHeroes[idx]),
+    (raw) => { allHeroes[idx] = decodeHero(raw); },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-round state
+// ---------------------------------------------------------------------------
+
+/** Indices into allHeroes for the 2 chosen this round. */
+let chosenIndices: [number, number] = [0, 1];
+
+/** Spawned hero units, parallel to chosenIndices. */
 let spawnedHeroes: Unit[] = [];
 
 /** Whether heroes have been summoned this round. */
 let heroesSpawned = false;
 
-/** Select 2 heroes and store them in gameState.
- *  - If heroes were spawned this round, pick the 2 with the lowest XP
- *    (random if all tied), preserving their XP and skills.
- *  - Otherwise pick 2 at random with 0 XP. */
-export function selectHeroes(): void {
-  // Collect surviving hero data from spawned units
-  const heroData: { typeId: number; xp: number; skills: number }[] = [];
-  for (const hero of spawnedHeroes) {
-    if (hero.handle != null && GetUnitTypeId(hero.handle) !== 0) {
-      heroData.push({
-        typeId: hero.typeId,
-        xp: GetHeroXP(hero.handle),
-        skills: encodeSkills(hero),
-      });
-    }
-  }
-
-  let chosen: { typeId: number; xp: number; skills: number }[];
-
-  if (heroData.length < 2) {
-    // No spawned heroes (game start or heroes never summoned) — pick 2 random
-    const available = HERO_POOL.map(id => FourCC(id));
-    const picked: { typeId: number; xp: number; skills: number }[] = [];
-    for (let i = 0; i < 2 && available.length > 0; i++) {
-      const idx = GetRandomInt(0, available.length - 1);
-      picked.push({ typeId: available[idx], xp: 0, skills: 0 });
-      available.splice(idx, 1);
-    }
-    chosen = picked;
-  } else if (heroData.length === 2) {
-    chosen = heroData;
-  } else {
-    // More than 2 heroes: pick the 2 with lowest XP
-    heroData.sort((a, b) => a.xp - b.xp);
-    const allSameXP = heroData.every(h => h.xp === heroData[0].xp);
-    if (allSameXP) {
-      for (let i = heroData.length - 1; i > 0; i--) {
-        const j = GetRandomInt(0, i);
-        [heroData[i], heroData[j]] = [heroData[j], heroData[i]];
-      }
-    }
-    chosen = heroData.slice(0, 2);
-  }
-
-  gameState.hero1Type = chosen[0].typeId;
-  gameState.hero1XP = chosen[0].xp;
-  gameState.hero1Skills = chosen[0].skills;
-  gameState.hero2Type = chosen[1].typeId;
-  gameState.hero2XP = chosen[1].xp;
-  gameState.hero2Skills = chosen[1].skills;
+/** Returns true if the 4 heroes have been initialized. */
+export function hasHeroes(): boolean {
+  return allHeroes[0].typeId !== 0;
 }
+
+// ---------------------------------------------------------------------------
+// Hero selection
+// ---------------------------------------------------------------------------
+
+/** Pick 4 unique random heroes and populate allHeroes. Called once at game start. */
+export function initRandomHeroes(): void {
+  const available = [...HERO_POOL];
+  for (let i = 0; i < 4; i++) {
+    const idx = GetRandomInt(0, available.length - 1);
+    allHeroes[i] = { typeId: FourCC(available[idx]), xp: 0, skills: {} };
+    available.splice(idx, 1);
+  }
+}
+
+/** Choose the 2 heroes with the lowest XP from the 4.
+ *  If all XP is equal, pick 2 at random. Sets chosenIndices. */
+export function chooseHeroes(): void {
+  const indices = [0, 1, 2, 3];
+
+  // Sort by XP ascending
+  indices.sort((a, b) => allHeroes[a].xp - allHeroes[b].xp);
+
+  const allSameXP = allHeroes.every(h => h.xp === allHeroes[0].xp);
+  if (allSameXP) {
+    // Shuffle for random pick
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = GetRandomInt(0, i);
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+  }
+
+  chosenIndices = [indices[0], indices[1]];
+}
+
+const XP_PER_CREEP = 100;
+
+/** Push XP from state → spawned hero units. */
+function syncHeroXP(): void {
+  for (let i = 0; i < spawnedHeroes.length; i++) {
+    const hero = spawnedHeroes[i];
+    if (hero.handle == null || GetUnitTypeId(hero.handle) === 0) continue;
+    const dataIdx = chosenIndices[i];
+    SetHeroXP(hero.handle, allHeroes[dataIdx].xp, true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-round lifecycle
+// ---------------------------------------------------------------------------
 
 /** Reset per-round hero state. Called at the start of each round. */
 export function resetHeroState(): void {
@@ -162,24 +172,40 @@ function removeSummonFromAllPeasants(): void {
   DestroyGroup(g);
 }
 
-/** Spawn the 2 heroes from gameState at the given position. */
-function spawnHeroes(owner: MapPlayer, x: number, y: number): void {
-  const heroes = [
-    { typeId: gameState.hero1Type, xp: gameState.hero1XP, skills: gameState.hero1Skills },
-    { typeId: gameState.hero2Type, xp: gameState.hero2XP, skills: gameState.hero2Skills },
-  ];
-  for (const { typeId, xp, skills } of heroes) {
-    if (typeId === 0) continue;
-    const hero = Unit.create(owner, typeId, x, y, 270);
-    if (hero != null) {
-      spawnedHeroes.push(hero);
-      if (xp > 0) SetHeroXP(hero.handle, xp, true);
-      if (skills > 0) decodeAndApplySkills(hero, skills);
+/** Apply saved spell levels to a hero by calling SelectHeroSkill. */
+function applySpells(hero: Unit, spells: Record<string, number>): void {
+  for (const [abilRaw, level] of Object.entries(spells)) {
+    const abilId = FourCC(abilRaw);
+    for (let i = 0; i < level; i++) {
+      SelectHeroSkill(hero.handle, abilId);
     }
   }
 }
 
+/** Spawn the 2 chosen heroes at the given position. */
+function spawnHeroes(owner: MapPlayer, x: number, y: number): void {
+  for (const idx of chosenIndices) {
+    const data = allHeroes[idx];
+    if (data.typeId === 0) continue;
+    const hero = Unit.create(owner, data.typeId, x, y, 270);
+    if (hero != null) {
+      spawnedHeroes.push(hero);
+      if (data.xp > 0) SetHeroXP(hero.handle, data.xp, true);
+      applySpells(hero, data.skills);
+    }
+  }
+}
+
+/** Find which spawned hero index (0 or 1) a unit belongs to, or -1. */
+function spawnedIndexOf(unitHandle: unit): number {
+  for (let i = 0; i < spawnedHeroes.length; i++) {
+    if (spawnedHeroes[i].handle === unitHandle) return i;
+  }
+  return -1;
+}
+
 export function initHeroes(): void {
+  // Summon Heroes spell trigger
   const spellTrigger = Trigger.create();
   spellTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
   spellTrigger.addAction(() => {
@@ -193,5 +219,32 @@ export function initHeroes(): void {
 
     spawnHeroes(caster.owner, caster.x, caster.y);
     removeSummonFromAllPeasants();
+  });
+
+  // Award XP to both heroes when a creep dies
+  const killTrigger = Trigger.create();
+  killTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DEATH);
+  killTrigger.addAction(() => {
+    if (spawnedHeroes.length === 0) return;
+    const dying = GetTriggerUnit();
+    if (dying == null || GetOwningPlayer(dying) !== Player(PLAYER_NEUTRAL_AGGRESSIVE)) return;
+    for (const idx of chosenIndices) {
+      allHeroes[idx].xp += XP_PER_CREEP;
+    }
+    syncHeroXP();
+  });
+
+  // Track hero skill learns
+  const skillTrigger = Trigger.create();
+  skillTrigger.registerAnyUnitEvent(EVENT_PLAYER_HERO_SKILL);
+  skillTrigger.addAction(() => {
+    const learner = GetTriggerUnit();
+    if (learner == null) return;
+    const spawnIdx = spawnedIndexOf(learner);
+    if (spawnIdx < 0) return;
+    const dataIdx = chosenIndices[spawnIdx];
+    const abilId = GetLearnedSkill();
+    const level = GetLearnedSkillLevel();
+    allHeroes[dataIdx].skills[fourCCStr(abilId)] = level;
   });
 }

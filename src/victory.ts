@@ -3,7 +3,6 @@ import { setVictoryTriggered } from './track/state';
 import { extinguish, getTrain } from './train';
 import { gameState, syncGold } from './state';
 import { saveToFile } from './save';
-import { selectHeroes } from './heroes';
 
 const GOLD_PER_ROUND = 1;
 
@@ -23,6 +22,5 @@ export function awardVictory(): void {
   gameState.round += 1;
   gameState.gold += GOLD_PER_ROUND;
   syncGold();
-  selectHeroes();
   saveToFile();
 }

@@ -3,9 +3,8 @@ import { GameState, gameState, applyState } from './state';
 const SAVE_FILE = 'TheTrainGame/save.txt';
 const CACHE_FILE = 'TheTrainGame/save.w3v';
 const CACHE_CAT = 's';
-const CACHE_KEY = 'data';
 
-/** Short keys for save encoding to stay within WC3's ~259 char Preload limit. */
+/** Short keys for core state encoding. */
 const KEY_TO_SHORT: Record<string, string> = {
   round: 'r',
   gold: 'g',
@@ -19,12 +18,6 @@ const KEY_TO_SHORT: Record<string, string> = {
   crateTrackCount: 'ct',
   crateStoneCount: 'cn',
   crateWoodCount: 'cw',
-  hero1Type: 'h1t',
-  hero1XP: 'h1x',
-  hero1Skills: 'h1s',
-  hero2Type: 'h2t',
-  hero2XP: 'h2x',
-  hero2Skills: 'h2s',
 };
 
 /** Reverse mapping: short key → full property name. */
@@ -33,49 +26,88 @@ for (const [full, short] of Object.entries(KEY_TO_SHORT)) {
   SHORT_TO_KEY[short] = full;
 }
 
-/** Serialize a GameState to a "key=val;key=val;..." string using short keys. */
-function encode(state: GameState): string {
+/** Encode a key=val record to a "k=v;k=v;..." string. */
+function encodeRecord(record: Record<string, number>, keyMap?: Record<string, string>): string {
   const parts: string[] = [];
-  for (const [k, v] of Object.entries(state)) {
-    const short = KEY_TO_SHORT[k] ?? k;
+  for (const [k, v] of Object.entries(record)) {
+    const short = keyMap != null ? (keyMap[k] ?? k) : k;
     parts.push(short + '=' + tostring(v));
   }
   return table.concat(parts, ';');
 }
 
-/** Deserialize a "key=val;key=val;..." string into a GameState.
- *  Accepts both short keys (new format) and full keys (legacy). */
-function decode(raw: string): GameState | null {
+/** Decode a "k=v;k=v;..." string into a Record, optionally expanding short keys. */
+function decodeRecord(raw: string, keyMap?: Record<string, string>): Record<string, number> {
   const result: Record<string, number> = {};
   for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
-    const fullKey = SHORT_TO_KEY[key] ?? key;
+    const fullKey = keyMap != null ? (keyMap[key] ?? key) : key;
     result[fullKey] = tonumber(val) ?? 0;
   }
-  if (result.round == null) return null;
-  return result as unknown as GameState;
+  return result;
 }
 
-/** Write current gameState to save file. */
+/** Write a StoreString Preload line for a given cache key. */
+function preloadStore(cacheKey: string, encoded: string): void {
+  Preload('")\ncall StoreString(InitGameCache("' + CACHE_FILE + '"),"' + CACHE_CAT + '","' + cacheKey + '","' + encoded + '")\n//');
+}
+
+/** Extra data segments to save alongside core state. Populated by other modules. */
+const extraSegments: { key: string; encode: () => string }[] = [];
+const extraLoaders: { key: string; decode: (raw: string) => void }[] = [];
+
+/** Register an extra save/load segment with its own cache key. */
+export function registerSaveSegment(
+  key: string,
+  encode: () => string,
+  decode: (raw: string) => void,
+): void {
+  extraSegments.push({ key, encode });
+  extraLoaders.push({ key, decode });
+}
+
+/** Write current gameState + extra segments to save file. */
 export function saveToFile(): void {
-  const encoded = encode(gameState);
   PreloadGenClear();
   PreloadGenStart();
-  Preload('")\ncall StoreString(InitGameCache("' + CACHE_FILE + '"),"' + CACHE_CAT + '","' + CACHE_KEY + '","' + encoded + '")\n//');
+  preloadStore('core', encodeRecord(gameState as unknown as Record<string, number>, KEY_TO_SHORT));
+  for (const seg of extraSegments) {
+    const encoded = seg.encode();
+    if (encoded !== '') preloadStore(seg.key, encoded);
+  }
   PreloadGenEnd(SAVE_FILE);
   print('Game saved.');
 }
 
-/** Load gameState from save file. Returns true if successful. */
+/** Load gameState + extra segments from save file. Returns true if successful. */
 export function loadFromFile(): boolean {
   Preloader(SAVE_FILE);
   const gc = InitGameCache(CACHE_FILE);
   if (gc == null) return false;
-  const raw = GetStoredString(gc, CACHE_CAT, CACHE_KEY);
+
+  // Load core state
+  const coreRaw = GetStoredString(gc, CACHE_CAT, 'core');
+  // Fall back to legacy 'data' key for old saves
+  const raw = (coreRaw != null && coreRaw !== '') ? coreRaw : GetStoredString(gc, CACHE_CAT, 'data');
+  if (raw == null || raw === '') {
+    FlushGameCache(gc);
+    return false;
+  }
+  const loaded = decodeRecord(raw, SHORT_TO_KEY);
+  if (loaded.round == null) {
+    FlushGameCache(gc);
+    return false;
+  }
+
+  // Load extra segments
+  for (const seg of extraLoaders) {
+    const segRaw = GetStoredString(gc, CACHE_CAT, seg.key);
+    if (segRaw != null && segRaw !== '') {
+      seg.decode(segRaw);
+    }
+  }
+
   FlushGameCache(gc);
-  if (raw == null || raw === '') return false;
-  const loaded = decode(raw);
-  if (loaded == null) return false;
-  applyState(loaded);
+  applyState(loaded as unknown as GameState);
   return true;
 }
 
