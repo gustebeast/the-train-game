@@ -20,6 +20,7 @@ import { syncGold } from './state';
 import { log } from './debug';
 
 import { loadTerrain } from './terrain/load';
+import { rollCreepCamp } from './creeps';
 
 const BUILD_DATE = compiletime(() => new Date().toUTCString());
 const TS_VERSION = compiletime(() => require('typescript').version);
@@ -31,6 +32,9 @@ function tsMain() {
   try {
     // Init harvest before terrain so death triggers exist for destructable registration
     initHarvest();
+
+    // Pick a creep camp for the first round
+    rollCreepCamp();
 
     // Generate and spawn procedural terrain (includes crates, tracks, items, players)
     const trainUnit = loadTerrain(0, true); // difficulty 0 for round 1, skip cleanup on first load

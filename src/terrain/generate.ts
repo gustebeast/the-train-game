@@ -388,6 +388,79 @@ function placeResources(grid: Grid, difficulty: number): void {
 }
 
 // ============================================================
+// Step 5: Place creep camp (one per level)
+// ============================================================
+
+function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
+  // Valid X range: at least 1 tile gap from start and victory areas
+  const minX = SPAWN.maxX + 2;
+  const maxX = VICTORY.minX - 2;
+  // Valid Y range: at least 1 tile from top/bottom edges
+  const minY = GRID_MIN_Y + 1;
+  const maxY = GRID_MAX_Y - 1;
+
+  let cx: number;
+  let cy: number;
+
+  if (fixedX != null && fixedY != null) {
+    // Fixed placement (cheat mode) — skip area gap checks, clamp to grid bounds only
+    cx = Math.max(GRID_MIN_X, Math.min(GRID_MAX_X, fixedX));
+    cy = Math.max(GRID_MIN_Y + 1, Math.min(GRID_MAX_Y - 1, fixedY));
+  } else {
+    if (minX > maxX) return; // no room
+    // Flood-fill from start tile through non-granite to find reachable tiles
+    const reachable: boolean[] = [];
+    for (let i = 0; i < GRID_W * GRID_H; i++) reachable[i] = false;
+    const startIdx = idx(GRID_MIN_X, 0);
+    reachable[startIdx] = true;
+    const queue: number[] = [startIdx];
+    while (queue.length > 0) {
+      const ci = queue.pop()!;
+      const coords = idxToCoords(ci);
+      for (const [dx, dy] of DIRS) {
+        const nx = coords.x + dx;
+        const ny = coords.y + dy;
+        if (!inBounds(nx, ny)) continue;
+        const ni = idx(nx, ny);
+        if (reachable[ni]) continue;
+        if (grid.cells[ni].entity === Entity.GRANITE) continue;
+        reachable[ni] = true;
+        queue.push(ni);
+      }
+    }
+
+    // Pick from reachable, non-reserved tiles in the valid range
+    const candidates: GridPos[] = [];
+    for (let gy = minY; gy <= maxY; gy++) {
+      for (let gx = minX; gx <= maxX; gx++) {
+        if (isReserved(gx, gy)) continue;
+        if (!reachable[idx(gx, gy)]) continue;
+        candidates.push({ x: gx, y: gy });
+      }
+    }
+    if (candidates.length === 0) return;
+    const pick = candidates[GetRandomInt(0, candidates.length - 1)];
+    cx = pick.x;
+    cy = pick.y;
+  }
+
+  // Clear surrounding 8 tiles to NONE
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (inBounds(nx, ny)) {
+        grid.cells[idx(nx, ny)].entity = Entity.NONE;
+      }
+    }
+  }
+
+  // Place the creep camp
+  grid.cells[idx(cx, cy)].entity = Entity.CREEP_CAMP;
+}
+
+// ============================================================
 // Lobby grid (post-victory)
 // ============================================================
 
@@ -490,6 +563,7 @@ export function generateTerrain(difficulty: number, exitX = GRID_MAX_X): Grid {
   placeWater(grid, difficulty);
   placeResources(grid, difficulty);
   placeEntities(grid);
+  placeCreepCamp(grid);
   return grid;
 }
 
@@ -497,5 +571,6 @@ export function generateCheatTerrain(exitX = GRID_MAX_X, exitY = 0): Grid {
   const grid = createGrid();
   generatePath(grid, exitX, exitY);
   placeEntities(grid);
+  placeCreepCamp(grid, GRID_MIN_X + 4, SPAWN.minY - 2);
   return grid;
 }

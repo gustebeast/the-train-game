@@ -1,0 +1,471 @@
+CREEP CAMP DATA - Extracted from WC3 1v1 Ladder Maps
+============================================================
+Source: W3Champions 1v1 ladder map pool
+
+SOURCE MAPS:
+  1075_w3c_251104_0950_Springtime_v1.3.w3x — Lordaeron Winter
+  12_w3c_251104_0950_TurtleRock_v2.0.w3x — Lordaeron Summer
+  1_w3c_251104_0950_ConcealedHill.w3x — Lordaeron Summer
+  1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x — Northrend
+  1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x — Lordaeron Summer
+  1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x — Village
+  3_w3c_251104_0950_LastRefuge_v1.5.w3x — Lordaeron Summer
+  44_w3c_251104_0950_AutumnLeaves_v2.0.w3x — Village Fall
+  4_w3c_251104_0950_NorthernIsles.w3x — Lordaeron Winter
+  5185_w3c_251104_0950_Hammerfall.w3x — Village
+  54_w3c_251104_0950_Tidehunters_v1.2.w3x — Sunken Ruins
+  61_w3c_251104_0950_ShallowGrave_v1.5.w3x — Dalaran Ruins
+
+Total unique camp compositions: 110
+
+Format: [unit_ids] | Unit Names | Item Drop Level | Tileset(s) | Maps (x occurrences)
+
+--- 2-UNIT CAMPS (5 unique) ---
+
+  [nftr, nftt]
+    Forest Troll Trapper + Forest Troll
+    Drop: Lv1 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [nftt, ngnb]
+    Forest Troll + Gnoll Poacher
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 1x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [nhyh, ntrt]
+    Hydra Hatchling + Sea Turtle
+    Drop: Lv3 item | Tileset: Village | 2x across: 5185_w3c_251104_0950_Hammerfall.w3x
+
+  [nmfs, nmrr]
+    Murloc Flesheater + Murloc Nightcrawler
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [ntrs, ntrt]
+    Snapping Turtle + Sea Turtle
+    Drop: Lv3 item | Tileset: Sunken Ruins | 2x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+--- 3-UNIT CAMPS (38 unique) ---
+
+  [ngna, ngna, ngnb]
+    Gnoll + Gnoll + Gnoll Poacher
+    Drop: Lv1 item | Tileset: Lordaeron Summer | 2x across: 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+  [ngnw, nwwf, nwwf]
+    Gnoll Warden + Wendigo + Wendigo
+    Drop: Lv1 item | Tileset: Village Fall | 2x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [nkob, nkog, nkot]
+    Kobold + Kobold Geomancer + Kobold Tunneler
+    Drop: Lv1 item | Tileset: Dalaran Ruins, Lordaeron Summer | 4x across: 1_w3c_251104_0950_ConcealedHill.w3x, 61_w3c_251104_0950_ShallowGrave_v1.5.w3x
+
+  [nmrm, nmrr, nmrr]
+    Murloc Huntsman + Murloc Nightcrawler + Murloc Nightcrawler
+    Drop: Lv1 item | Tileset: Sunken Ruins | 2x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [nsko, nsra, nsrh]
+    Skeletal Orc + Stormreaver Apprentice + Stormreaver Hermit
+    Drop: Lv1 item | Tileset: Sunken Ruins | 1x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [nsts, nwlt, nwlt]
+    Satyr Shadowdancer + Timber Wolf + Timber Wolf
+    Drop: Lv1 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+  [nenf, ngns, ngnv]
+    Enforcer + Gnoll Assassin + Gnoll Overseer
+    Drop: Lv2 item | Tileset: Village Fall | 2x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [nfrs, nwlt, nwlt]
+    Furbolg Shaman + Timber Wolf + Timber Wolf
+    Drop: Lv2 item | Tileset: Lordaeron Winter | 2x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [nfsh, nftr, nftt]
+    Forest Troll Shadow Priest + Forest Troll Trapper + Forest Troll
+    Drop: Lv2 item | Tileset: Lordaeron Summer | 2x across: 3_w3c_251104_0950_LastRefuge_v1.5.w3x
+
+  [nfsh, nftt, nomg]
+    Forest Troll Shadow Priest + Forest Troll + Ogre Mauler
+    Drop: Lv2 item | Tileset: Lordaeron Summer | 2x across: 1_w3c_251104_0950_ConcealedHill.w3x
+
+  [nftb, nftb, nogm]
+    Forest Troll Berserker + Forest Troll Berserker + Ogre Magi
+    Drop: Lv2 item | Tileset: Lordaeron Summer | 1x across: 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+  [nlsn, ntrt, ntrt]
+    Makrura Snapper + Sea Turtle + Sea Turtle
+    Drop: Lv2 item | Tileset: Sunken Ruins | 1x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [nomg, ntkt, ntkw]
+    Ogre Mauler + Tuskarr Trapper + Tuskarr Warrior
+    Drop: Lv2 item | Tileset: Lordaeron Winter | 2x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [ntrg, ntrt, ntrt]
+    Sea Giant + Sea Turtle + Sea Turtle
+    Drop: Lv2 item | Tileset: Lordaeron Summer, Sunken Ruins | 6x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x, 12_w3c_251104_0950_TurtleRock_v2.0.w3x
+
+  [nbrg, nrog, nwzr]
+    Brigand + Rogue + Rogue Wizard
+    Drop: Lv3 item | Tileset: Dalaran Ruins | 2x across: 61_w3c_251104_0950_ShallowGrave_v1.5.w3x
+
+  [nenf, nvdw, nwiz]
+    Enforcer + Voidwalker + Wizard
+    Drop: Lv3 item | Tileset: Village | 2x across: 5185_w3c_251104_0950_Hammerfall.w3x
+
+  [nfpt, ntks, ntks]
+    Fel Stalker + Tuskarr Sorcerer + Tuskarr Sorcerer
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [nfpt, ntks, ntkt]
+    Fel Stalker + Tuskarr Sorcerer + Tuskarr Trapper
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [nftb, nftt, nogr]
+    Forest Troll Berserker + Forest Troll + Ogre Warrior
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 1_w3c_251104_0950_ConcealedHill.w3x
+
+  [nftb, nftt, nsgn]
+    Forest Troll Berserker + Forest Troll + Sea Giant
+    Drop: Lv3 item | Tileset: Sunken Ruins | 2x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [nftb, nftt, nsqt]
+    Forest Troll Berserker + Forest Troll + Sasquatch
+    Drop: Lv3 item | Tileset: Village Fall | 2x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [nftb, nftt, nwwf]
+    Forest Troll Berserker + Forest Troll + Wendigo
+    Drop: Lv3 item | Tileset: Village Fall | 2x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [nftr, ngna, ngnb]
+    Forest Troll Trapper + Gnoll + Gnoll Poacher
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+  [nftr, ngnb, ngnw]
+    Forest Troll Trapper + Gnoll Poacher + Gnoll Warden
+    Drop: Lv3 item | Tileset: Village | 2x across: 5185_w3c_251104_0950_Hammerfall.w3x
+
+  [nftr, nogr, nwzg]
+    Forest Troll Trapper + Ogre Warrior + Wizard
+    Drop: Lv3 item | Tileset: Dalaran Ruins | 2x across: 61_w3c_251104_0950_ShallowGrave_v1.5.w3x
+
+  [nftt, nftt, nogr]
+    Forest Troll + Forest Troll + Ogre Warrior
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 4x across: 3_w3c_251104_0950_LastRefuge_v1.5.w3x, 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+  [nftt, nftt, nomg]
+    Forest Troll + Forest Troll + Ogre Mauler
+    Drop: Lv3 item | Tileset: Lordaeron Summer, Village Fall | 6x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x, 3_w3c_251104_0950_LastRefuge_v1.5.w3x, 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+  [nggr, nwwd, nwwd]
+    War Golem + Dire Wendigo + Dire Wendigo
+    Drop: Lv3 item | Tileset: Village Fall | 2x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [ngna, ngnw, nwlt]
+    Gnoll + Gnoll Warden + Timber Wolf
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [ngns, ngnv, ngnw]
+    Gnoll Assassin + Gnoll Overseer + Gnoll Warden
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 3_w3c_251104_0950_LastRefuge_v1.5.w3x
+
+  [ngnw, nitr, nogr]
+    Gnoll Warden + Ice Troll + Ogre Warrior
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [nmam, ntka, ntkt]
+    Mammoth + Tuskarr + Tuskarr Trapper
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [nmfs, nmrl, nmrr]
+    Murloc Flesheater + Murloc + Murloc Nightcrawler
+    Drop: Lv3 item | Tileset: Sunken Ruins | 2x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [nmrl, nmrm, nmrr]
+    Murloc + Murloc Huntsman + Murloc Nightcrawler
+    Drop: Lv3 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [nmrr, nmtw, nsel]
+    Murloc Nightcrawler + Magnataur Warrior + Sea Elemental
+    Drop: Lv3 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+  [nska, nskg, nslf]
+    Skeletal Archer + Burning Archer + Soulless
+    Drop: Lv3 item | Tileset: Village Fall | 2x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [ntrh, ntrh, ntrt]
+    Hardened Sea Turtle + Hardened Sea Turtle + Sea Turtle
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 4x across: 12_w3c_251104_0950_TurtleRock_v2.0.w3x
+
+  [ntrs, ntrs, ntrt]
+    Snapping Turtle + Snapping Turtle + Sea Turtle
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 1_w3c_251104_0950_ConcealedHill.w3x
+
+--- 4-UNIT CAMPS (40 unique) ---
+
+  [nmrl, nmrr, nmrr, nsc2]
+    Murloc + Murloc Nightcrawler + Murloc Nightcrawler + Spider Crab Shorecrawler
+    Drop: Lv1 item | Tileset: Lordaeron Summer | 2x across: 1_w3c_251104_0950_ConcealedHill.w3x
+
+  [nban, nbrg, nrog, nwzg]
+    Bandit + Brigand + Rogue + Wizard
+    Drop: Lv2 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [nbrg, nbrg, nwiz, nwzr]
+    Brigand + Brigand + Wizard + Rogue Wizard
+    Drop: Lv2 item | Tileset: Village Fall | 2x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [ndtt, nogm, nspb, nspg]
+    Dark Troll Trapper + Ogre Magi + Black Spider + Forest Spider
+    Drop: Lv2 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+  [nfsh, nfsp, nftb, nogm]
+    Forest Troll Shadow Priest + Spider Crab + Forest Troll Berserker + Ogre Magi
+    Drop: Lv2 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [nfsh, nftb, nftk, nsqt]
+    Forest Troll Shadow Priest + Forest Troll Berserker + Forest Troll High Priest + Sasquatch
+    Drop: Lv2 item | Tileset: Village Fall | 1x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [nfsh, nftb, nogm, nomg]
+    Forest Troll Shadow Priest + Forest Troll Berserker + Ogre Magi + Ogre Mauler
+    Drop: Lv2 item | Tileset: Lordaeron Summer | 2x across: 3_w3c_251104_0950_LastRefuge_v1.5.w3x
+
+  [nfsh, nftk, nftt, nftt]
+    Forest Troll Shadow Priest + Forest Troll High Priest + Forest Troll + Forest Troll
+    Drop: Lv2 item | Tileset: Dalaran Ruins | 2x across: 61_w3c_251104_0950_ShallowGrave_v1.5.w3x
+
+  [nfsh, nftt, ngrk, ngst]
+    Forest Troll Shadow Priest + Forest Troll + Mud Golem + Rock Golem
+    Drop: Lv2 item | Tileset: Lordaeron Summer | 2x across: 1_w3c_251104_0950_ConcealedHill.w3x
+
+  [nftb, nftt, nkob, nkol]
+    Forest Troll Berserker + Forest Troll + Kobold + Kobold Leader
+    Drop: Lv2 item | Tileset: Village | 2x across: 5185_w3c_251104_0950_Hammerfall.w3x
+
+  [nftb, nitt, nomg, nplb]
+    Forest Troll Berserker + Ice Troll Trapper + Ogre Mauler + Polar Bear
+    Drop: Lv2 item | Tileset: Lordaeron Winter | 2x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [nftk, nftt, nftt, nogr]
+    Forest Troll High Priest + Forest Troll + Forest Troll + Ogre Warrior
+    Drop: Lv2 item | Tileset: Village | 2x across: 5185_w3c_251104_0950_Hammerfall.w3x
+
+  [nmfs, nmrl, nmrl, nmrr]
+    Murloc Flesheater + Murloc + Murloc + Murloc Nightcrawler
+    Drop: Lv2 item | Tileset: Lordaeron Winter | 2x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [nmrl, nmrr, ntrs, ntrt]
+    Murloc + Murloc Nightcrawler + Snapping Turtle + Sea Turtle
+    Drop: Lv2 item | Tileset: Dalaran Ruins | 2x across: 61_w3c_251104_0950_ShallowGrave_v1.5.w3x
+
+  [ndqn, ndqn, ndqv, nkog]
+    Dune Worm + Dune Worm + Dust Devil + Kobold Geomancer
+    Drop: Lv3 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+  [ndtb, ndtt, nfrb, nfrl]
+    Dark Troll Berserker + Dark Troll Trapper + Furbolg Champion + Furbolg
+    Drop: Lv3 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+  [ndth, ndtr, ndtr, nsqt]
+    Dark Troll Shadow Priest + Dark Troll + Dark Troll + Sasquatch
+    Drop: Lv3 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+  [nfps, nmgr, nogr, nomg]
+    Searing Destroyer + Magnataur Reaver + Ogre Warrior + Ogre Mauler
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [nfrb, nfre, nfrl, nfrs]
+    Furbolg Champion + Furbolg Elder + Furbolg + Furbolg Shaman
+    Drop: Lv3 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+  [nfrb, nfrl, nfsh, nftb]
+    Furbolg Champion + Furbolg + Forest Troll Shadow Priest + Forest Troll Berserker
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [nfsh, nftb, nogr, nomg]
+    Forest Troll Shadow Priest + Forest Troll Berserker + Ogre Warrior + Ogre Mauler
+    Drop: Lv3 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [nfsh, nftt, nftt, nsqt]
+    Forest Troll Shadow Priest + Forest Troll + Forest Troll + Sasquatch
+    Drop: Lv3 item | Tileset: Dalaran Ruins | 2x across: 61_w3c_251104_0950_ShallowGrave_v1.5.w3x
+
+  [nfsh, nitt, nsqt, nwwf]
+    Forest Troll Shadow Priest + Ice Troll Trapper + Sasquatch + Wendigo
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [nfsp, nftb, nftt, nogr]
+    Spider Crab + Forest Troll Berserker + Forest Troll + Ogre Warrior
+    Drop: Lv3 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [nftb, nftb, nogm, nomg]
+    Forest Troll Berserker + Forest Troll Berserker + Ogre Magi + Ogre Mauler
+    Drop: Lv3 item | Tileset: Dalaran Ruins | 2x across: 61_w3c_251104_0950_ShallowGrave_v1.5.w3x
+
+  [nftb, nftr, nkog, nsqt]
+    Forest Troll Berserker + Forest Troll Trapper + Kobold Geomancer + Sasquatch
+    Drop: Lv3 item | Tileset: Village | 2x across: 5185_w3c_251104_0950_Hammerfall.w3x
+
+  [nftb, nftt, ngno, ngst]
+    Forest Troll Berserker + Forest Troll + Gnoll Overseer + Rock Golem
+    Drop: Lv3 item | Tileset: Village | 2x across: 5185_w3c_251104_0950_Hammerfall.w3x
+
+  [nftr, nftr, nogr, nogr]
+    Forest Troll Trapper + Forest Troll Trapper + Ogre Warrior + Ogre Warrior
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 4x across: 12_w3c_251104_0950_TurtleRock_v2.0.w3x
+
+  [nggm, ngrk, nsgh, nsgh]
+    Granite Golem + Mud Golem + Sea Giant Hunter + Sea Giant Hunter
+    Drop: Lv3 item | Tileset: Sunken Ruins | 1x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [ngnb, ngns, ngnv, ngnw]
+    Gnoll Poacher + Gnoll Assassin + Gnoll Overseer + Gnoll Warden
+    Drop: Lv3 item | Tileset: Sunken Ruins | 2x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [ngns, ngnv, ngnw, nowe]
+    Gnoll Assassin + Gnoll Overseer + Gnoll Warden + Enraged Wildkin
+    Drop: Lv3 item | Tileset: Village Fall | 1x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [nith, nits, nmgr, nplg]
+    Ice Troll High Priest + Ice Troll Berserker + Magnataur Reaver + Giant Polar Bear
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [nitp, nitr, nomg, ntkt]
+    Ice Troll Priest + Ice Troll + Ogre Mauler + Tuskarr Trapper
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [nitp, nitt, nitt, nsqt]
+    Ice Troll Priest + Ice Troll Trapper + Ice Troll Trapper + Sasquatch
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 1075_w3c_251104_0950_Springtime_v1.3.w3x
+
+  [nkog, nkog, nkol, nkot]
+    Kobold Geomancer + Kobold Geomancer + Kobold Leader + Kobold Tunneler
+    Drop: Lv3 item | Tileset: Village Fall | 2x across: 44_w3c_251104_0950_AutumnLeaves_v2.0.w3x
+
+  [nlsn, nmrr, nrel, nrel]
+    Makrura Snapper + Murloc Nightcrawler + Reef Elemental + Reef Elemental
+    Drop: Lv3 item | Tileset: Village | 2x across: 5185_w3c_251104_0950_Hammerfall.w3x
+
+  [nmbg, nmsn, nmtw, nmtw]
+    Mur'gul Blood-Gill + Mur'gul Snarecaster + Magnataur Warrior + Magnataur Warrior
+    Drop: Lv3 item | Tileset: Sunken Ruins | 2x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [nmrl, nmrm, nmrr, nmrr]
+    Murloc + Murloc Huntsman + Murloc Nightcrawler + Murloc Nightcrawler
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 4x across: 3_w3c_251104_0950_LastRefuge_v1.5.w3x, 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+  [nsc3, nscb, ntrt, ntrt]
+    Spider Crab Limbripper + Spider Crab + Sea Turtle + Sea Turtle
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 12_w3c_251104_0950_TurtleRock_v2.0.w3x
+
+  [nska, nsty, nsty, nwlt]
+    Skeletal Archer + Satyr Trickster + Satyr Trickster + Timber Wolf
+    Drop: Lv3 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+--- 5-UNIT CAMPS (24 unique) ---
+
+  [nban, nban, nbrg, nbrg, nrog]
+    Bandit + Bandit + Brigand + Brigand + Rogue
+    Drop: Lv1 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [nass, ngst, nogr, nogr, nwzr]
+    Assassin + Rock Golem + Ogre Warrior + Ogre Warrior + Rogue Wizard
+    Drop: Lv2 item | Tileset: Dalaran Ruins | 2x across: 61_w3c_251104_0950_ShallowGrave_v1.5.w3x
+
+  [ndtb, ndtb, ngrk, ngst, nkot]
+    Dark Troll Berserker + Dark Troll Berserker + Mud Golem + Rock Golem + Kobold Tunneler
+    Drop: Lv2 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+  [nele, nele, nltc, ntrg, ntrt]
+    Enraged Elemental + Enraged Elemental + Lightning Lizard + Sea Giant + Sea Turtle
+    Drop: Lv2 item | Tileset: Village | 2x across: 5185_w3c_251104_0950_Hammerfall.w3x
+
+  [nele, nele, nomg, nrel, nrel]
+    Enraged Elemental + Enraged Elemental + Ogre Mauler + Reef Elemental + Reef Elemental
+    Drop: Lv2 item | Tileset: Sunken Ruins | 1x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [nftt, nftt, nogr, nogr, nomg]
+    Forest Troll + Forest Troll + Ogre Warrior + Ogre Warrior + Ogre Mauler
+    Drop: Lv2 item | Tileset: Lordaeron Summer | 5x across: 3_w3c_251104_0950_LastRefuge_v1.5.w3x, 12_w3c_251104_0950_TurtleRock_v2.0.w3x, 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+  [ngnw, nogm, nomg, nspg, nspr]
+    Gnoll Warden + Ogre Magi + Ogre Mauler + Forest Spider + Spider
+    Drop: Lv2 item | Tileset: Northrend | 2x across: 1v1_BoulderVale_v1.7_w3c_260125_1357_5492.w3x
+
+  [nith, nitr, nitr, nits, nitw]
+    Ice Troll High Priest + Ice Troll + Ice Troll + Ice Troll Berserker + Ice Troll Warlord
+    Drop: Lv2 item | Tileset: Lordaeron Winter | 1x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [nmrm, nmrm, nmrv, nmsn, nmsn]
+    Murloc Huntsman + Murloc Huntsman + Murloc Tiderunner + Mur'gul Snarecaster + Mur'gul Snarecaster
+    Drop: Lv2 item | Tileset: Sunken Ruins | 1x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [nanb, nanc, nano, nanw, nnwl]
+    Nerubian Webspinner + Nerubian Seer + Nerubian Spider Lord + Nerubian Warrior + Nerubian Queen
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 2x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [nele, nenf, nwiz, nwzd, nwzr]
+    Enraged Elemental + Enforcer + Wizard + Dark Wizard + Rogue Wizard
+    Drop: Lv3 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [nfsh, nftb, nftb, nogl, nomg]
+    Forest Troll Shadow Priest + Forest Troll Berserker + Forest Troll Berserker + Ogre Lord + Ogre Mauler
+    Drop: Lv3 item | Tileset: Dalaran Ruins, Lordaeron Summer | 4x across: 3_w3c_251104_0950_LastRefuge_v1.5.w3x, 61_w3c_251104_0950_ShallowGrave_v1.5.w3x
+
+  [nfsh, nftr, nftr, ngrk, ngst]
+    Forest Troll Shadow Priest + Forest Troll Trapper + Forest Troll Trapper + Mud Golem + Rock Golem
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 1x across: 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+  [nfsh, nftr, nftt, ngrk, ngst]
+    Forest Troll Shadow Priest + Forest Troll Trapper + Forest Troll + Mud Golem + Rock Golem
+    Drop: Lv3 item | Tileset: Sunken Ruins | 2x across: 54_w3c_251104_0950_Tidehunters_v1.2.w3x
+
+  [nfsh, nftt, nftt, ngrk, ngst]
+    Forest Troll Shadow Priest + Forest Troll + Forest Troll + Mud Golem + Rock Golem
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 3_w3c_251104_0950_LastRefuge_v1.5.w3x
+
+  [nfsh, nftt, nftt, nogl, nomg]
+    Forest Troll Shadow Priest + Forest Troll + Forest Troll + Ogre Lord + Ogre Mauler
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 1x across: 1_w3c_251104_0950_ConcealedHill.w3x
+
+  [nftk, nftt, nftt, nogr, nogr]
+    Forest Troll High Priest + Forest Troll + Forest Troll + Ogre Warrior + Ogre Warrior
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 4x across: 12_w3c_251104_0950_TurtleRock_v2.0.w3x
+
+  [ngna, ngnb, ngnb, ngnv, ngnw]
+    Gnoll + Gnoll Poacher + Gnoll Poacher + Gnoll Overseer + Gnoll Warden
+    Drop: Lv3 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [ngnb, ngnb, ngns, ngnv, ngnw]
+    Gnoll Poacher + Gnoll Poacher + Gnoll Assassin + Gnoll Overseer + Gnoll Warden
+    Drop: Lv3 item | Tileset: Lordaeron Winter | 1x across: 4_w3c_251104_0950_NorthernIsles.w3x
+
+  [ngno, ngns, ngns, ngnv, ngnw]
+    Gnoll Overseer + Gnoll Assassin + Gnoll Assassin + Gnoll Overseer + Gnoll Warden
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 1_w3c_251104_0950_ConcealedHill.w3x
+
+  [nmfs, nmrm, nmrm, nmrr, nmrr]
+    Murloc Flesheater + Murloc Huntsman + Murloc Huntsman + Murloc Nightcrawler + Murloc Nightcrawler
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+  [nmrm, nmrm, nmrr, nmrr, ntrg]
+    Murloc Huntsman + Murloc Huntsman + Murloc Nightcrawler + Murloc Nightcrawler + Sea Giant
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 3_w3c_251104_0950_LastRefuge_v1.5.w3x
+
+  [nmrm, nmrm, ntrh, ntrh, ntrt]
+    Murloc Huntsman + Murloc Huntsman + Hardened Sea Turtle + Hardened Sea Turtle + Sea Turtle
+    Drop: Lv3 item | Tileset: Village | 2x across: 1v1_Scrimmage_v1.1_w3c_260125_1357_5607.w3x
+
+  [nmrr, nmrr, ntrg, ntrt, ntrt]
+    Murloc Nightcrawler + Murloc Nightcrawler + Sea Giant + Sea Turtle + Sea Turtle
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x
+
+--- 6-UNIT CAMPS (3 unique) ---
+
+  [nfsh, nftb, nftb, nogr, nomg, nrdr]
+    Forest Troll Shadow Priest + Forest Troll Berserker + Forest Troll Berserker + Ogre Warrior + Ogre Mauler + Red Dragon Whelp
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 1_w3c_251104_0950_ConcealedHill.w3x
+
+  [nftb, nftb, nogl, nogr, nogr, nomg]
+    Forest Troll Berserker + Forest Troll Berserker + Ogre Lord + Ogre Warrior + Ogre Warrior + Ogre Mauler
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 12_w3c_251104_0950_TurtleRock_v2.0.w3x
+
+  [nkob, nkob, nkog, nkot, nkot, nwzg]
+    Kobold + Kobold + Kobold Geomancer + Kobold Tunneler + Kobold Tunneler + Wizard
+    Drop: Lv3 item | Tileset: Lordaeron Summer | 2x across: 1v1_EchoIsles_v2.2_w3c_260125_1357_1051.w3x

@@ -9,29 +9,46 @@ const fs = require('fs');
 const path = require('path');
 
 const MAP_DIRS = [
+    'C:\\Users\\gus\\Documents\\Warcraft III\\Maps\\W3Champions',
     'C:\\Users\\gus\\Documents\\Warcraft III\\Maps\\Download\\Season8',
     'C:\\Users\\gus\\Documents\\Warcraft III\\Maps\\Download\\Season1',
 ];
 const MPQ_READER = path.join(__dirname, 'mpq_reader.py');
 
-// Maps from warcraft-gym.com/learn-warcraft-3/warcraft-3-creep-routes/
+// W3Champions 1v1 ladder map pool
 const WANTED_MAPS = [
-    'AutumnLeaves', 'ConcealedHill', 'EchoIsles', 'LastRefuge',
-    'NorthernIsles', 'TerenasStand', 'Tidehunters', 'TurtleRock',
-    'ShatteredExile', 'Amazonia', 'ShallowGraves',
+    'AutumnLeaves', 'ConcealedHill', 'LastRefuge', 'NorthernIsles',
+    'ShallowGrave', 'Tidehunters', 'TurtleRock', 'EchoIsles',
+    'Springtime', 'Hammerfall', 'BoulderVale', 'Scrimmage',
 ];
 
-// Collect matching maps from all directories, preferring S2 versions
-const TARGET_MAPS = [];
+// Collect matching maps from all directories, preferring Season8 over Season1
+// and S2 versions over non-S2 versions
+const candidateMaps = [];
 for (const dir of MAP_DIRS) {
     if (!fs.existsSync(dir)) continue;
     for (const f of fs.readdirSync(dir)) {
         if (!f.endsWith('.w3x')) continue;
         if (!WANTED_MAPS.some(name => f.toLowerCase().includes(name.toLowerCase()))) continue;
-        // Skip non-S2 version if S2 exists (e.g. skip (2)Amazonia.w3x if (2)Amazonia_S2.w3x exists)
-        if (!f.includes('_S') && TARGET_MAPS.some(m => m.file.includes('_S') &&
-            m.file.toLowerCase().includes(f.replace(/\(\d\)/, '').replace('.w3x', '').toLowerCase()))) continue;
-        TARGET_MAPS.push({ file: f, dir });
+        candidateMaps.push({ file: f, dir });
+    }
+}
+
+// For each WANTED_MAP, pick the best candidate: prefer W3Champions > Season8 > Season1
+const TARGET_MAPS = [];
+for (const name of WANTED_MAPS) {
+    const matches = candidateMaps.filter(m => m.file.toLowerCase().includes(name.toLowerCase()));
+    if (matches.length === 0) continue;
+    // Prefer W3Champions, then Season8, then Season1
+    const w3c = matches.filter(m => m.dir.includes('W3Champions'));
+    const s8 = matches.filter(m => m.dir.includes('Season8'));
+    const pool = w3c.length > 0 ? w3c : s8.length > 0 ? s8 : matches;
+    // Prefer _S2/_S3 versioned over plain
+    const versioned = pool.filter(m => /_S\d/.test(m.file));
+    const best = versioned.length > 0 ? versioned[versioned.length - 1] : pool[pool.length - 1];
+    // Avoid adding duplicates
+    if (!TARGET_MAPS.some(m => m.file === best.file && m.dir === best.dir)) {
+        TARGET_MAPS.push(best);
     }
 }
 
@@ -77,6 +94,28 @@ const UNIT_NAMES = {
     nlkl: 'Makrura Tidal Lord',
     nsc2: 'Spider Crab Shorecrawler', nsc3: 'Spider Crab Limbripper',
     ncrb: 'Crab',
+    nanb: 'Nerubian Webspinner', nanc: 'Nerubian Seer', nano: 'Nerubian Spider Lord',
+    nanw: 'Nerubian Warrior', narg: 'Battle Golem', nele: 'Enraged Elemental',
+    nfov: 'Overlord', nfps: 'Searing Destroyer', nfpt: 'Fel Stalker',
+    nggm: 'Granite Golem', nggr: 'War Golem', ngno: 'Gnoll Overseer',
+    ngns: 'Gnoll Assassin', nhdc: 'Deceiver', nhhr: 'Heretic',
+    nith: 'Ice Troll High Priest', nitp: 'Ice Troll Priest', nitr: 'Ice Troll',
+    nits: 'Ice Troll Berserker', nitw: 'Ice Troll Warlord',
+    nkol: 'Kobold Leader', nmbg: "Mur'gul Blood-Gill", nmrv: 'Murloc Tiderunner',
+    nmsn: "Mur'gul Snarecaster", nmtw: 'Magnataur Warrior', nnwl: 'Nerubian Queen',
+    nogl: 'Ogre Lord', nrdr: 'Red Dragon Whelp', nrel: 'Reef Elemental',
+    nrvi: 'Revenant', nsel: 'Sea Elemental', nsgh: 'Sea Giant Hunter',
+    nsgn: 'Sea Giant', nska: 'Skeletal Archer', nskg: 'Burning Archer',
+    nsko: 'Skeletal Orc', nsra: 'Stormreaver Apprentice', nsrh: 'Stormreaver Hermit',
+    nsrv: 'Stormreaver', ntks: 'Tuskarr Sorcerer', ntkt: 'Tuskarr Trapper',
+    ntkw: 'Tuskarr Warrior', ntrh: 'Hardened Sea Turtle', ntrs: 'Snapping Turtle',
+    nvdg: 'Greater Voidwalker', nvdw: 'Voidwalker', nwiz: 'Wizard',
+    nwwd: 'Dire Wendigo', nwwf: 'Wendigo',
+    nfrb: 'Furbolg Champion', ngz3: 'Grizzly Bear', nitt: 'Ice Troll Trapper',
+    nmam: 'Mammoth', nrdk: 'Red Dragon Whelp', ntka: 'Tuskarr',
+    ndqn: 'Dune Worm', ndqv: 'Dust Devil', ndtt: 'Dark Troll Trapper',
+    nhyh: 'Hydra Hatchling', nltc: 'Lightning Lizard', nspr: 'Spider',
+    nsty: 'Satyr Trickster', nscb: 'Spider Crab',
 };
 
 function parseItemDrop(code) {
@@ -116,12 +155,20 @@ function clusterUnits(units) {
     return camps;
 }
 
-function extractUnitsFromMPQ(mapPath) {
+const TILESETS = {
+    A: 'Ashenvale', B: 'Barrens', C: 'Felwood', D: 'Dungeon',
+    F: 'Lordaeron Fall', G: 'Underground', I: 'Icecrown',
+    J: 'Dalaran Ruins', K: 'Black Citadel', L: 'Lordaeron Summer',
+    N: 'Northrend', O: 'Outland', Q: 'Village Fall',
+    V: 'Village', W: 'Lordaeron Winter', X: 'Dalaran',
+    Y: 'Cityscape', Z: 'Sunken Ruins',
+};
+
+function extractFromMPQ(mapPath, filename) {
     try {
-        const data = execFileSync('python3', [MPQ_READER, mapPath, 'war3mapUnits.doo'], {
+        return execFileSync('python3', [MPQ_READER, mapPath, filename], {
             maxBuffer: 10 * 1024 * 1024,
         });
-        return UnitsTranslator.warToJson(data).json;
     } catch (e) {
         return null;
     }
@@ -129,16 +176,26 @@ function extractUnitsFromMPQ(mapPath) {
 
 // Process all maps
 const allCamps = [];
+const mapTilesets = {};
 
 for (const { file: mapFile, dir: mapDir } of TARGET_MAPS) {
     const mapPath = path.join(mapDir, mapFile);
     console.error(`Processing ${mapFile}...`);
 
-    const units = extractUnitsFromMPQ(mapPath);
-    if (!units) {
+    // Extract tileset from war3map.w3e
+    const w3eData = extractFromMPQ(mapPath, 'war3map.w3e');
+    if (w3eData && w3eData.length > 9) {
+        const tilesetChar = String.fromCharCode(w3eData[8]);
+        mapTilesets[mapFile] = TILESETS[tilesetChar] || `Unknown (${tilesetChar})`;
+        console.error(`  Tileset: ${mapTilesets[mapFile]}`);
+    }
+
+    const unitsData = extractFromMPQ(mapPath, 'war3mapUnits.doo');
+    if (!unitsData) {
         console.error(`  FAILED to extract units`);
         continue;
     }
+    const units = UnitsTranslator.warToJson(unitsData).json;
 
     const creeps = units.filter(u => u.player === 24);
     console.error(`  Found ${creeps.length} creep units`);
@@ -168,6 +225,7 @@ for (const { file: mapFile, dir: mapDir } of TARGET_MAPS) {
 
         allCamps.push({
             map: mapFile,
+            tileset: mapTilesets[mapFile] || 'Unknown',
             units: unitTypes,
             names: unitTypes.map(t => UNIT_NAMES[t] || t),
             dropLevel: maxDropLevel,
@@ -181,12 +239,15 @@ const uniqueCamps = new Map();
 for (const camp of allCamps) {
     const key = camp.units.join(',');
     if (!uniqueCamps.has(key)) {
-        uniqueCamps.set(key, { ...camp, occurrences: 1, maps: [camp.map] });
+        uniqueCamps.set(key, { ...camp, occurrences: 1, maps: [camp.map], tilesets: [camp.tileset] });
     } else {
         const existing = uniqueCamps.get(key);
         existing.occurrences++;
         if (!existing.maps.includes(camp.map)) {
             existing.maps.push(camp.map);
+        }
+        if (!existing.tilesets.includes(camp.tileset)) {
+            existing.tilesets.push(camp.tileset);
         }
     }
 }

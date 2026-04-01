@@ -50,7 +50,7 @@ compiletime(({ objectData, constants }) => {
   const peasant = objectData.units.get(constants.units.Peasant)!;
   peasant.modelFile = 'war3mapImported\\WeaponlessPeasant.mdx';
   peasant.structuresBuilt = '';
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.Roar].join(',');
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.Roar, constants.abilities.InvulnerableNeutral].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
@@ -320,6 +320,12 @@ compiletime(({ objectData, constants }) => {
   rock.selectableInGame = false;
   rock.occlusionHeight = 0;
 
+  // Creep camp destructable (Cage / LOcg)
+  const creepCamp = objectData.destructables.get(constants.destructables.Cage)!;
+  creepCamp.hitPoints = 5;
+  creepCamp.selectableInGame = false;
+  creepCamp.occlusionHeight = 0;
+
   // Granite rocks: dark tint, unselectable, indestructible
   const granite = objectData.destructables.get(constants.destructables.RockChunks1)!;
   granite.hitPoints = 999999;
@@ -544,6 +550,7 @@ compiletime(({ objectData, constants }) => {
     hero.shadowImageWidth = 100;
     hero.shadowImageCenterX = 40;
     hero.shadowImageCenterY = 40;
+    hero.speedBase = 200;
   }
 
   objectData.save();

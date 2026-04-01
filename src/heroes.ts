@@ -1,4 +1,4 @@
-import { MapPlayer, Trigger, Unit } from 'w3ts';
+import { MapPlayer, Timer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { Units } from '@objectdata/units';
 import { isInGameplay } from './state';
@@ -98,6 +98,14 @@ let spawnedHeroes: Unit[] = [];
 /** Whether heroes have been summoned this round. */
 let heroesSpawned = false;
 
+/** Callback invoked after heroes are summoned (with a 1-frame delay). */
+let onHeroesSpawnedCallback: ((heroes: Unit[]) => void) | null = null;
+
+/** Register a callback to run after heroes are summoned. */
+export function onHeroesSpawned(cb: (heroes: Unit[]) => void): void {
+  onHeroesSpawnedCallback = cb;
+}
+
 /** Returns true if the 4 heroes have been initialized. */
 export function hasHeroes(): boolean {
   return allHeroes[0].typeId !== 0;
@@ -137,7 +145,13 @@ export function chooseHeroes(): void {
   chosenIndices = [indices[0], indices[1]];
 }
 
-const XP_PER_CREEP = 100;
+/** Award XP to both chosen heroes and sync to units. */
+export function awardHeroXP(xp: number): void {
+  for (const idx of chosenIndices) {
+    allHeroes[idx].xp += xp;
+  }
+  syncHeroXP();
+}
 
 /** Push XP from state → spawned hero units. */
 function syncHeroXP(): void {
@@ -219,20 +233,17 @@ export function initHeroes(): void {
 
     spawnHeroes(caster.owner, caster.x, caster.y);
     removeSummonFromAllPeasants();
+
+    // Wait one frame for hero stats (XP/skills) to finalize
+    const t = Timer.create();
+    t.start(0, false, () => {
+      t.destroy();
+      if (onHeroesSpawnedCallback != null) onHeroesSpawnedCallback(spawnedHeroes);
+    });
   });
 
-  // Award XP to both heroes when a creep dies
-  const killTrigger = Trigger.create();
-  killTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DEATH);
-  killTrigger.addAction(() => {
-    if (spawnedHeroes.length === 0) return;
-    const dying = GetTriggerUnit();
-    if (dying == null || GetOwningPlayer(dying) !== Player(PLAYER_NEUTRAL_AGGRESSIVE)) return;
-    for (const idx of chosenIndices) {
-      allHeroes[idx].xp += XP_PER_CREEP;
-    }
-    syncHeroXP();
-  });
+  // XP is granted by the creep camp system via scaleCreepStats / creep death triggers.
+  // Native WC3 auto-XP is suspended on heroes when they spawn (see spawnHeroes).
 
   // Track hero skill learns
   const skillTrigger = Trigger.create();

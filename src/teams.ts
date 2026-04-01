@@ -60,6 +60,17 @@ export function initTeams() {
     }
   }
 
+  // Make creeps ignore tracks (neutralPassive) and the train (trainPlayer)
+  // by allying enemy → those players. They remain vulnerable to hero attacks.
+  if (enemy) {
+    if (neutralPassive) {
+      SetPlayerAllianceStateBJ(enemy.handle, neutralPassive.handle, bj_ALLIANCE_ALLIED);
+    }
+    if (trainPlayer) {
+      SetPlayerAllianceStateBJ(enemy.handle, trainPlayer.handle, bj_ALLIANCE_ALLIED);
+    }
+  }
+
   humanPlayers.forEach((p: MapPlayer) => {
     SetCameraFieldForPlayer(p.handle, CAMERA_FIELD_TARGET_DISTANCE, 2500, 0);
     p.setState(PLAYER_STATE_RESOURCE_GOLD, 500);
