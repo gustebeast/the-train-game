@@ -7,6 +7,7 @@ import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
 import { gameState, revertToLobbySnapshot, saveLobbySnapshot } from '../state';
 import { resetHeroState, hasHeroes, initRandomHeroes, chooseHeroes } from '../heroes';
+import { startDPSTest } from '../creeps';
 
 setVictoryCallback(() => loadLobby());
 setAwardVictoryCallback(() => awardVictory());
@@ -36,6 +37,8 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
 
 export function loadLobby(): void {
   saveLobbySnapshot();
+  SetTimeOfDay(12);
   const trainUnit = spawnTerrain(generateLobby());
   if (trainUnit != null) initLobbyTrain(trainUnit);
+  startDPSTest();
 }

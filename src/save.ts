@@ -52,8 +52,9 @@ function preloadStore(cacheKey: string, encoded: string): void {
 }
 
 /** Extra data segments to save alongside core state. Populated by other modules. */
-const extraSegments: { key: string; encode: () => string }[] = [];
-const extraLoaders: { key: string; decode: (raw: string) => void }[] = [];
+const extraKeys: string[] = [];
+const extraEncoders: Array<() => string> = [];
+const extraDecoders: Array<(raw: string) => void> = [];
 
 /** Register an extra save/load segment with its own cache key. */
 export function registerSaveSegment(
@@ -61,8 +62,9 @@ export function registerSaveSegment(
   encode: () => string,
   decode: (raw: string) => void,
 ): void {
-  extraSegments.push({ key, encode });
-  extraLoaders.push({ key, decode });
+  extraKeys.push(key);
+  extraEncoders.push(encode);
+  extraDecoders.push(decode);
 }
 
 /** Write current gameState + extra segments to save file. */
@@ -70,9 +72,9 @@ export function saveToFile(): void {
   PreloadGenClear();
   PreloadGenStart();
   preloadStore('core', encodeRecord(gameState as unknown as Record<string, number>, KEY_TO_SHORT));
-  for (const seg of extraSegments) {
-    const encoded = seg.encode();
-    if (encoded !== '') preloadStore(seg.key, encoded);
+  for (let i = 0; i < extraKeys.length; i++) {
+    const encoded = extraEncoders[i]();
+    if (encoded !== '') preloadStore(extraKeys[i], encoded);
   }
   PreloadGenEnd(SAVE_FILE);
   print('Game saved.');
@@ -99,10 +101,10 @@ export function loadFromFile(): boolean {
   }
 
   // Load extra segments
-  for (const seg of extraLoaders) {
-    const segRaw = GetStoredString(gc, CACHE_CAT, seg.key);
+  for (let i = 0; i < extraKeys.length; i++) {
+    const segRaw = GetStoredString(gc, CACHE_CAT, extraKeys[i]);
     if (segRaw != null && segRaw !== '') {
-      seg.decode(segRaw);
+      extraDecoders[i](segRaw);
     }
   }
 

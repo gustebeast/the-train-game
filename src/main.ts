@@ -65,6 +65,7 @@ function tsMain() {
     humanPlayers.forEach((player) => {
       player.setState(PLAYER_STATE_RESOURCE_LUMBER, 0);
     });
+
   } catch (e) {
     log('tsMain error: ' + tostring(e));
   }

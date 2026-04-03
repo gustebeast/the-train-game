@@ -49,6 +49,21 @@ export function initTeams() {
     SetPlayerTeam(enemy.handle, 1);
   }
 
+  // Player 22: DPS check — computer-controlled, allied with vision to humans for testing
+  const dpsCheckPlayer = MapPlayer.fromIndex(22);
+  if (dpsCheckPlayer) {
+    SetPlayerTeam(dpsCheckPlayer.handle, 0);
+    SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
+    for (const p of humanPlayers) {
+      SetPlayerAllianceStateBJ(dpsCheckPlayer.handle, p.handle, bj_ALLIANCE_ALLIED_VISION);
+      SetPlayerAllianceStateBJ(p.handle, dpsCheckPlayer.handle, bj_ALLIANCE_ALLIED_VISION);
+    }
+    // DPS check heroes must be enemies with neutral aggressive
+    SetPlayerAlliance(dpsCheckPlayer.handle, enemy!.handle, ALLIANCE_PASSIVE, false);
+    SetPlayerAlliance(enemy!.handle, dpsCheckPlayer.handle, ALLIANCE_PASSIVE, false);
+    StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\common.ai');
+  }
+
   // Player 23: train owner — no AI, allied with vision to humans and neutral passive
   const trainPlayer = MapPlayer.fromIndex(23);
   if (trainPlayer) {
@@ -92,4 +107,8 @@ export function getNeutralAggressive(): MapPlayer {
 
 export function getTrainPlayer(): MapPlayer {
   return MapPlayer.fromIndex(23)!;
+}
+
+export function getDPSCheckPlayer(): MapPlayer {
+  return MapPlayer.fromIndex(22)!;
 }

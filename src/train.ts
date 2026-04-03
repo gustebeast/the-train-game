@@ -285,7 +285,9 @@ export function initTrain(unit: Unit) {
   // Start slow, ramp up to full speed after 30 seconds
   train.moveSpeed = 1;
   Timer.create().start(30, false, () => {
-    train.moveSpeed = gameState.trainSpeed;
+    if (train.moveSpeed === 1) {
+      train.moveSpeed = gameState.trainSpeed;
+    }
   });
 
   moveToNext();

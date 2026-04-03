@@ -89,8 +89,21 @@ for (let i = 0; i < 4; i++) {
 // Per-round state
 // ---------------------------------------------------------------------------
 
-/** Indices into allHeroes for the 2 chosen this round. */
+/** Indices into allHeroes for the 2 chosen this round. Persisted via save segment. */
 let chosenIndices: [number, number] = [0, 1];
+let chosenFromSave = false;
+
+// Persist chosenIndices as "ci" segment: "0,1" format
+registerSaveSegment('ci',
+  () => tostring(chosenIndices[0]) + ',' + tostring(chosenIndices[1]),
+  (raw) => {
+    const [a, b] = string.match(raw, '(%d+),(%d+)');
+    if (a != null && b != null) {
+      chosenIndices = [tonumber(a) ?? 0, tonumber(b) ?? 1];
+      chosenFromSave = true;
+    }
+  },
+);
 
 /** Spawned hero units, parallel to chosenIndices. */
 let spawnedHeroes: Unit[] = [];
@@ -111,6 +124,7 @@ export function hasHeroes(): boolean {
   return allHeroes[0].typeId !== 0;
 }
 
+
 // ---------------------------------------------------------------------------
 // Hero selection
 // ---------------------------------------------------------------------------
@@ -128,6 +142,10 @@ export function initRandomHeroes(): void {
 /** Choose the 2 heroes with the lowest XP from the 4.
  *  If all XP is equal, pick 2 at random. Sets chosenIndices. */
 export function chooseHeroes(): void {
+  if (chosenFromSave) {
+    chosenFromSave = false;
+    return;
+  }
   const indices = [0, 1, 2, 3];
 
   // Sort by XP ascending
@@ -196,8 +214,9 @@ function applySpells(hero: Unit, spells: Record<string, number>): void {
   }
 }
 
-/** Spawn the 2 chosen heroes at the given position. */
-function spawnHeroes(owner: MapPlayer, x: number, y: number): void {
+/** Spawn the 2 chosen heroes at the given position. Populates spawnedHeroes.
+ *  Fires onHeroesSpawnedCallback after one frame. */
+export function spawnHeroes(owner: MapPlayer, x: number, y: number): void {
   for (const idx of chosenIndices) {
     const data = allHeroes[idx];
     if (data.typeId === 0) continue;
@@ -208,6 +227,17 @@ function spawnHeroes(owner: MapPlayer, x: number, y: number): void {
       applySpells(hero, data.skills);
     }
   }
+  // Wait one frame for hero stats (XP/skills) to finalize, then notify
+  const t = Timer.create();
+  t.start(0, false, () => {
+    t.destroy();
+    if (onHeroesSpawnedCallback != null) onHeroesSpawnedCallback(spawnedHeroes);
+  });
+}
+
+/** Get the spawned hero units. */
+export function getSpawnedHeroes(): Unit[] {
+  return spawnedHeroes;
 }
 
 /** Find which spawned hero index (0 or 1) a unit belongs to, or -1. */
@@ -233,13 +263,6 @@ export function initHeroes(): void {
 
     spawnHeroes(caster.owner, caster.x, caster.y);
     removeSummonFromAllPeasants();
-
-    // Wait one frame for hero stats (XP/skills) to finalize
-    const t = Timer.create();
-    t.start(0, false, () => {
-      t.destroy();
-      if (onHeroesSpawnedCallback != null) onHeroesSpawnedCallback(spawnedHeroes);
-    });
   });
 
   // XP is granted by the creep camp system via scaleCreepStats / creep death triggers.
