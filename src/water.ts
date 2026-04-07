@@ -2,11 +2,12 @@ import { Item, Timer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { Items } from '@objectdata/items';
 import { getTrain, extinguish } from './train';
-import { BUCKET_FULL_ID, isTrain, findItemByType, rejectOrder, updateBuildAbility } from './items';
+import { isTrain, findItemByType, rejectOrder, updateBuildAbility } from './items';
+import { BUCKET_FULL_ID, PEASANT_ID } from './constants';
 import { updateCarryingVisual } from './carrying';
 
 const WATER_TRAIN_ORDER_ID = 852585; // drunkenhaze
-const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHaze);
+const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
 
 export function initWaterTrain(): void {
   // Intercept target orders — reject non-train targets
@@ -15,7 +16,7 @@ export function initWaterTrain(): void {
   orderTrigger.addAction(() => {
     if (GetIssuedOrderId() !== WATER_TRAIN_ORDER_ID) return;
     const unit = Unit.fromEvent();
-    if (unit == null) return;
+    if (unit == null || unit.typeId !== PEASANT_ID) return;
 
     const targetUnit = GetOrderTargetUnit();
     if (targetUnit == null) return;

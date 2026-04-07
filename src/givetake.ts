@@ -1,7 +1,6 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import {
-  TRACK_PIECE_ID,
   getSlot0Item,
   giveToStorage,
   isStorage,
@@ -12,6 +11,7 @@ import {
   validateGive,
   validateTake,
 } from './items';
+import { TRACK_PIECE_ID } from './constants';
 import { updateCarryingVisual } from './carrying';
 import { isBurning } from './train';
 import { isInGameplay } from './state';

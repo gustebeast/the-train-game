@@ -1,10 +1,9 @@
 import { MapPlayer, Rectangle, Region, Timer, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { Abilities } from '@objectdata/abilities';
-import { Units } from '@objectdata/units';
+import { PEASANT_ID } from './constants';
 
 const READY_ORB_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus6);
-const PEASANT_ID = FourCC(Units.Peasant);
 const REGION_HALF = 128; // 2x2 grid cells = 256 world units, half = 128
 
 interface ZoneConfig {

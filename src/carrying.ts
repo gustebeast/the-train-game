@@ -1,16 +1,6 @@
 import { Unit } from 'w3ts';
-import { Units } from '@objectdata/units';
-import { Items } from '@objectdata/items';
 import { Abilities } from '@objectdata/abilities';
-
-const PEASANT_ID = FourCC(Units.Peasant);
-const AXE_ID = FourCC(Items.SturdyWarAxe);
-const PICKAXE_ID = FourCC(Items.RustyMiningPick);
-const WOOD_ID = FourCC(Items.IronwoodBranch);
-const STONE_ID = FourCC(Items.GemFragment);
-const TRACK_ID = FourCC(Items.MechanicalCritter);
-const BUCKET_ID = FourCC(Items.EmptyVial);
-const BUCKET_FULL_ID = FourCC(Items.FullVial);
+import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID, PEASANT_ID } from './constants';
 
 const AXE_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus1);
 const PICK_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus2);
@@ -44,7 +34,7 @@ export function updateCarryingVisual(u: Unit): void {
     UnitAddAbility(h, AXE_ABILITY_ID);
   } else if (typeId === PICKAXE_ID) {
     UnitAddAbility(h, PICK_ABILITY_ID);
-  } else if (typeId === TRACK_ID) {
+  } else if (typeId === TRACK_PIECE_ID) {
     UnitAddAbility(h, TRACK_ABILITY_ID);
   } else if (typeId === BUCKET_ID) {
     UnitAddAbility(h, BUCKET_ABILITY_ID);

@@ -1,9 +1,9 @@
 import { Item, Timer, Trigger, Unit } from 'w3ts';
-import { Items } from '@objectdata/items';
 import { Units } from '@objectdata/units';
 import { Abilities } from '@objectdata/abilities';
 import { updateCarryingVisual } from './carrying';
 import { gameState, isInGameplay, registerSyncCallback } from './state';
+import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID, PEASANT_ID } from './constants';
 
 let onTrainInventoryChanged: (() => void) | null = null;
 
@@ -11,14 +11,6 @@ let onTrainInventoryChanged: (() => void) | null = null;
 export function setTrainInventoryCallback(cb: () => void): void {
   onTrainInventoryChanged = cb;
 }
-
-export const AXE_ID = FourCC(Items.SturdyWarAxe);
-export const PICKAXE_ID = FourCC(Items.RustyMiningPick);
-export const WOOD_ID = FourCC(Items.IronwoodBranch);
-export const STONE_ID = FourCC(Items.GemFragment);
-export const TRACK_PIECE_ID = FourCC(Items.MechanicalCritter);
-export const BUCKET_ID = FourCC(Items.EmptyVial);
-export const BUCKET_FULL_ID = FourCC(Items.FullVial);
 
 const TRAIN_ID = FourCC(Units.WarWagon);
 const CRATE_ID = FourCC(Units.GrainWarehouse);
@@ -85,11 +77,10 @@ registerSyncCallback(syncCrateInventory);
 function isCrate(u: Unit): boolean {
   return u.handle === crate?.handle;
 }
-const PEASANT_ID = FourCC(Units.Peasant);
 const BUILD_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
-const BRIDGE_ABILITY_ID = FourCC(Abilities.AcidBomb);
-const FILL_ABILITY_ID = FourCC(Abilities.ShadowStrike);
-const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHaze);
+const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
+const FILL_ABILITY_ID = FourCC(Abilities.UndefinedNeutralHostile);
+const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
 
 /** Grant or revoke item-gated abilities (build track, build bridge). */
 export function updateBuildAbility(u: Unit): void {
@@ -168,6 +159,13 @@ export function getMaxStack(u: Unit, itemTypeId?: number): number {
 
 export function isResource(itemTypeId: number): boolean {
   return itemTypeId === WOOD_ID || itemTypeId === STONE_ID || itemTypeId === TRACK_PIECE_ID;
+}
+
+/** Items reserved for the train game systems (peasants, train, crate). */
+function isTrainItem(itemTypeId: number): boolean {
+  return isResource(itemTypeId)
+    || itemTypeId === AXE_ID || itemTypeId === PICKAXE_ID
+    || itemTypeId === BUCKET_ID || itemTypeId === BUCKET_FULL_ID;
 }
 
 /** Check whether a unit is carrying an item of the given type. */
@@ -404,6 +402,24 @@ export function initItems(): void {
     const dropper = pendingGivers.get(picked.handle) ?? null;
     pendingGivers.delete(picked.handle);
 
+    // Peasants can only pick up train items (tools, resources, buckets)
+    if (unit.typeId === PEASANT_ID && !isTrainItem(pickedType)) {
+      unit.removeItem(picked);
+      if (dropper != null && dropper !== unit.handle) {
+        UnitAddItem(dropper, picked.handle);
+      }
+      return;
+    }
+
+    // Heroes can't pick up train items
+    if (IsUnitType(unit.handle, UNIT_TYPE_HERO) && isTrainItem(pickedType)) {
+      unit.removeItem(picked);
+      if (dropper != null && dropper !== unit.handle) {
+        UnitAddItem(dropper, picked.handle);
+      }
+      return;
+    }
+
     // Storage units only accept resources
     if (isStorage(unit) && !pickedIsResource) {
       if (dropper != null && dropper !== unit.handle) {
@@ -470,7 +486,7 @@ export function initItems(): void {
       } else {
         RemoveItem(picked.handle);
       }
-    } else if (otherItem != null && !isStorage(unit)) {
+    } else if (otherItem != null && unit.typeId === PEASANT_ID) {
       // Peasant picking up a different item type — swap
       if (dropper != null && dropper !== unit.handle) {
         // Given by another unit — reject, return to giver

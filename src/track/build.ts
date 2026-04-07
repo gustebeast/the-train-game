@@ -6,7 +6,8 @@ import {
 } from './constants';
 import { reskinTrack, replaceTrack } from './helpers';
 import { placedTracks, isVictoryTriggered, getVictoryTile } from './state';
-import { TRACK_PIECE_ID, findItemByType, updateBuildAbility } from '../items';
+import { findItemByType, updateBuildAbility } from '../items';
+import { TRACK_PIECE_ID } from '../constants';
 import { onTrackPlaced } from '../train';
 import { triggerVictory } from '../victory';
 

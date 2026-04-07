@@ -17,7 +17,9 @@ import { placedTracks, setVictoryTile, resetVictoryTriggered } from '../track/st
 import { initReadyZone, cleanupReady } from '../ready';
 import { setCrate } from '../items';
 import { gameState } from '../state';
-import { setCage, registerCageTrigger, cleanupCage } from '../creeps';
+import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../creeps';
+import { resetHeroState } from '../heroes';
+import { destroyAllTimers } from '../timers';
 
 // Per-variation scales to normalize rock models to ~128-unit footprint.
 const ROCK_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
@@ -59,6 +61,9 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
   );
 
   if (!skipCleanup) {
+    destroyAllTimers();
+    cancelDPSTest();
+    resetHeroState();
     cleanupReady();
     cleanupCage();
     pauseResourceDrops();

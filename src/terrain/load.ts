@@ -6,7 +6,7 @@ import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback 
 import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
 import { gameState, revertToLobbySnapshot, saveLobbySnapshot } from '../state';
-import { resetHeroState, hasHeroes, initRandomHeroes, chooseHeroes } from '../heroes';
+import { hasHeroes, initRandomHeroes } from '../heroes';
 import { startDPSTest } from '../creeps';
 
 setVictoryCallback(() => loadLobby());
@@ -19,9 +19,7 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
 function loadGameplay(grid: Grid, skipCleanup = false): Unit | null {
-  resetHeroState();
   if (!hasHeroes()) initRandomHeroes();
-  chooseHeroes();
   const trainUnit = spawnTerrain(grid, skipCleanup);
   if (trainUnit != null && !skipCleanup) initTrain(trainUnit);
   return trainUnit;

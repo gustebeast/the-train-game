@@ -1,14 +1,17 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
-import { CREEP_CAMPS } from './creep_camps';
+import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import { registerSaveSegment } from './save';
 import { log } from './debug';
-import { awardHeroXP, onHeroesSpawned, spawnHeroes } from './heroes';
+import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, spawnHeroes } from './heroes';
+import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { TRACK_SIZE } from './track/constants';
 
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
 const DPS_TEST_DURATION = 30;
+/** Creep DPS multiplier to compensate for hero spells not being factored into heroDPS. */
+const CREEP_DPS_ADVANTAGE = 1.2;
 
 /** Whether we're in DPS test mode (lobby sparring). */
 let dpsTestMode = false;
@@ -16,13 +19,18 @@ let dpsTestMode = false;
 /** Measured hero DPS from the lobby DPS test. Used for gameplay scaling. */
 let measuredHeroDPS = 0;
 
+/** Active DPS test timer (so it can be cancelled early). */
+let dpsTestTimer: Timer | null = null;
+
+/** HP each creep started the DPS test with. */
+let dpsTestCreepStartHP = 0;
+
 // ---------------------------------------------------------------------------
-// Creep camp state — persisted as tileset + itemLevel + campIndex
+// Creep camp state — persisted as tileset + campIndex
 // ---------------------------------------------------------------------------
 
 interface CreepCampState {
   tileset: string;
-  itemLevel: number;
   campIndex: number;
 }
 
@@ -38,24 +46,22 @@ let cageTrigger: Trigger | null = null;
 // Save/load
 // ---------------------------------------------------------------------------
 
-/** Encode as "t=tileset;l=level;i=index". */
+/** Encode as "t=tileset;i=index". */
 function encodeCamp(): string {
   if (campState == null) return '';
-  return 't=' + campState.tileset + ';l=' + tostring(campState.itemLevel) + ';i=' + tostring(campState.campIndex);
+  return 't=' + campState.tileset + ';i=' + tostring(campState.campIndex);
 }
 
-/** Decode "t=tileset;l=level;i=index". */
+/** Decode "t=tileset;i=index". */
 function decodeCamp(raw: string): void {
   let tileset = '';
-  let itemLevel = 0;
   let campIndex = 0;
   for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
     if (key === 't') tileset = val;
-    else if (key === 'l') itemLevel = tonumber(val) ?? 0;
     else if (key === 'i') campIndex = tonumber(val) ?? 0;
   }
-  if (tileset !== '' && itemLevel > 0) {
-    campState = { tileset, itemLevel, campIndex };
+  if (tileset !== '') {
+    campState = { tileset, campIndex };
   }
 }
 
@@ -66,22 +72,28 @@ onHeroesSpawned((heroes) => scaleCreepStats(heroes));
 // Camp selection
 // ---------------------------------------------------------------------------
 
-/** Pick a random creep camp and store in state. Hardcoded to Lordaeron Summer + Lv1 for now. */
+/** Pick a random creep camp and store in state. Hardcoded to Lordaeron Summer for now. */
 export function rollCreepCamp(): void {
   const tileset = 'Lordaeron Summer';
-  const itemLevel = 1;
-  const camps = CREEP_CAMPS[tileset]?.[itemLevel];
+  const camps = CREEP_CAMPS[tileset];
   if (camps == null || camps.length === 0) return;
   const index = GetRandomInt(0, camps.length - 1);
-  campState = { tileset, itemLevel, campIndex: index };
+  campState = { tileset, campIndex: index };
+}
+
+/** Get the selected camp, or null if none selected. */
+export function getCampData(): CreepCamp | null {
+  if (campState == null) return null;
+  const camps = CREEP_CAMPS[campState.tileset];
+  if (camps == null || campState.campIndex >= camps.length) return null;
+  return camps[campState.campIndex];
 }
 
 /** Get the unit rawcodes for the current camp, or null if none selected. */
 export function getCampCreeps(): string[] | null {
-  if (campState == null) return null;
-  const camps = CREEP_CAMPS[campState.tileset]?.[campState.itemLevel];
-  if (camps == null || campState.campIndex >= camps.length) return null;
-  return camps[campState.campIndex];
+  const camp = getCampData();
+  if (camp == null) return null;
+  return camp.map(u => u.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -119,25 +131,25 @@ const GRID_OFFSETS: ReadonlyArray<readonly [number, number]> = [
   [TRACK_SIZE, -TRACK_SIZE],   // 9: bot-right
 ];
 
-/** Spawned creeps for the current round. */
-let spawnedCreeps: Unit[] = [];
+/** Spawned creeps for the current round, paired with their camp data. */
+let spawnedCreeps: Array<{ unit: Unit; campUnit: CreepUnit }> = [];
 
 /** XP reward per creep, computed during scaleCreepStats. Parallel to spawnedCreeps. */
 let creepXPRewards: number[] = [];
 
 /** Spawn creeps around the given world position in a 3x3 grid. Invulnerable until heroes arrive. */
-export function spawnCreepsAt(cx: number, cy: number, creepIds: string[]): void {
+export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
   const owner = getNeutralAggressive();
   spawnedCreeps = [];
-  for (let i = 0; i < creepIds.length && i < 9; i++) {
+  for (let i = 0; i < camp.length && i < 9; i++) {
     const [dx, dy] = GRID_OFFSETS[i];
-    const u = Unit.create(owner, FourCC(creepIds[i]), cx + dx, cy + dy, 270);
+    const u = Unit.create(owner, FourCC(camp[i].id), cx + dx, cy + dy, 270);
     if (u == null) continue;
     u.invulnerable = true;
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_NUMBER_OF_DICE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);
-    spawnedCreeps.push(u);
+    spawnedCreeps.push({ unit: u, campUnit: camp[i] });
   }
 }
 
@@ -171,137 +183,127 @@ function getEffectiveHP(u: unit): number {
   return BlzGetUnitMaxHP(u) * (1 + 0.06 * armor);
 }
 
-/** Log a unit's combat stats. */
-export function logUnitStats(label: string, u: unit): void {
-  const dmg = BlzGetUnitBaseDamage(u, 0);
-  const dice = BlzGetUnitDiceNumber(u, 0);
-  const sides = BlzGetUnitDiceSides(u, 0);
-  const cd = getCooldown(u);
-  const armor = BlzGetUnitArmor(u);
-  const hp = BlzGetUnitMaxHP(u);
-  const ehp = getEffectiveHP(u);
-  const dps = getDPS(u);
-  log(label + ': dmg=' + dmg + '+' + dice + 'd' + sides + ' (avg=' + string.format('%.1f', getAvgDamage(u)) + ') cd=' + string.format('%.2f', cd) + ' dps=' + string.format('%.1f', dps) + ' armor=' + string.format('%.1f', armor) + ' hp=' + hp + ' ehp=' + string.format('%.0f', ehp));
-}
 
-/** Scale creep stats to match the two heroes' combined stats, then remove invulnerability.
- *  In DPS test mode: sets creep dmg=1, hp=9999, starts 30s measurement timer.
- *  In gameplay mode: uses measuredHeroDPS for damage scaling, EHP for health scaling. */
-export function scaleCreepStats(heroes: Unit[]): void {
-  if (spawnedCreeps.length === 0 || heroes.length === 0) return;
+/** Compute DPS and EHP scale factors for creep stat scaling. */
+function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: number } {
+  let creepDPS = 0;
+  let creepEHP = 0;
+  for (const c of spawnedCreeps) {
+    creepDPS += getDPS(c.unit.handle);
+    creepEHP += getEffectiveHP(c.unit.handle);
+  }
 
   if (dpsTestMode) {
-    log('--- DPS test: preparing creeps ---');
-    // Set creeps to punching bags: dmg=1, hp=9999
-    const creepStartHP = 9999;
-    for (const c of spawnedCreeps) {
-      BlzSetUnitBaseDamage(c.handle, 1, 0);
-      BlzSetUnitDiceNumber(c.handle, 1, 0);
-      BlzSetUnitDiceSides(c.handle, 1, 0);
-      BlzSetUnitMaxHP(c.handle, creepStartHP);
-      SetUnitState(c.handle, UNIT_STATE_LIFE, creepStartHP);
-      BlzSetUnitWeaponIntegerField(c.handle, UNIT_WEAPON_IF_ATTACK_ATTACK_TYPE, 0, 5);
-      c.invulnerable = false;
-    }
-
-    // After 30 seconds, measure total damage dealt by checking HP loss
-    const t = Timer.create();
-    t.start(DPS_TEST_DURATION, false, () => {
-      t.destroy();
-      let totalDamage = 0;
-      for (const c of spawnedCreeps) {
-        const currentHP = GetUnitState(c.handle, UNIT_STATE_LIFE);
-        totalDamage += creepStartHP - currentHP;
+    const DPS_TEST_HP = 99999;
+    dpsTestCreepStartHP = DPS_TEST_HP;
+    dpsTestTimer = Timer.create();
+    dpsTestTimer.start(DPS_TEST_DURATION, false, () => {
+      cancelDPSTest();
+      for (const h of getSpawnedHeroes()) {
+        h.destroy();
       }
-      measuredHeroDPS = totalDamage / DPS_TEST_DURATION;
-      log('DPS test complete: totalDamage=' + string.format('%.0f', totalDamage)
-        + ' duration=' + DPS_TEST_DURATION + 's'
-        + ' measuredHeroDPS=' + string.format('%.1f', measuredHeroDPS));
-      dpsTestMode = false;
     });
-    return;
+    return {
+      dpsScale: creepDPS > 0 ? 1 / creepDPS : 1,
+      ehpScale: creepEHP > 0 ? DPS_TEST_HP / creepEHP : 1,
+    };
   }
 
-  // --- Gameplay scaling ---
-  log('--- Creep stat scaling ---');
-  for (const h of heroes) {
-    logUnitStats('Hero ' + GetUnitName(h.handle), h.handle);
-  }
-  for (const c of spawnedCreeps) {
-    logUnitStats('Creep (before) ' + GetUnitName(c.handle), c.handle);
-  }
-
-  // Hero EHP (armor + HP are accurate with items)
   let heroEHP = 0;
   for (const h of heroes) {
     heroEHP += getEffectiveHP(h.handle);
   }
-
-  // Creep stats (no items, so API values are accurate)
-  let creepDPS = 0;
-  let creepEHP = 0;
-  for (const c of spawnedCreeps) {
-    creepDPS += getDPS(c.handle);
-    creepEHP += getEffectiveHP(c.handle);
-  }
-
-  // Use measured hero DPS from lobby test, fall back to API-based if not available
   const heroDPS = measuredHeroDPS > 0 ? measuredHeroDPS : (() => {
     let sum = 0;
     for (const h of heroes) sum += getDPS(h.handle);
     return sum;
   })();
+  return {
+    dpsScale: creepDPS > 0 ? (heroDPS * CREEP_DPS_ADVANTAGE) / creepDPS : 1,
+    ehpScale: creepEHP > 0 ? heroEHP / creepEHP : 1,
+  };
+}
 
-  const dpsScale = creepDPS > 0 ? heroDPS / creepDPS : 1;
-  const ehpScale = creepEHP > 0 ? heroEHP / creepEHP : 1;
-  log('heroDPS=' + string.format('%.1f', heroDPS) + ' (measured=' + (measuredHeroDPS > 0 ? 'yes' : 'no') + ')');
-  log('Scaling factors: dps=' + string.format('%.2f', dpsScale) + ' ehp=' + string.format('%.2f', ehpScale));
+/** Scale creep stats, remove invulnerability, register death triggers. */
+export function scaleCreepStats(heroes: Unit[]): void {
+  if (spawnedCreeps.length === 0 || heroes.length === 0) return;
+
+  const { dpsScale, ehpScale } = computeScaleFactors(heroes);
 
   // Compute XP rewards: use creep level as weight, scale to target total
   const isFirstCamp = heroes.every(h => GetHeroXP(h.handle) === 0);
   const targetXP = isFirstCamp ? FIRST_CAMP_XP : TARGET_XP;
   let levelSum = 0;
   for (const c of spawnedCreeps) {
-    levelSum += math.max(1, GetUnitLevel(c.handle));
+    levelSum += math.max(1, GetUnitLevel(c.unit.handle));
   }
   creepXPRewards = [];
   for (const c of spawnedCreeps) {
-    const level = math.max(1, GetUnitLevel(c.handle));
+    const level = math.max(1, GetUnitLevel(c.unit.handle));
     creepXPRewards.push(math.max(1, math.floor(level / levelSum * targetXP)));
   }
 
   // Apply scaled stats and remove invulnerability
   for (let i = 0; i < spawnedCreeps.length; i++) {
     const c = spawnedCreeps[i];
+    const h = c.unit.handle;
 
-    // DPS-based damage scaling: keep cooldown, scale base damage to match target DPS
-    const cd = getCooldown(c.handle);
-    const originalDPS = getDPS(c.handle);
-    const targetDPS = originalDPS * dpsScale;
-    const targetAvgDmg = targetDPS * cd;
-    const diceAvg = BlzGetUnitDiceNumber(c.handle, 0) * (BlzGetUnitDiceSides(c.handle, 0) + 1) / 2;
-    const scaledDamage = math.max(1, math.floor(targetAvgDmg - diceAvg));
+    if (dpsTestMode) {
+      // Punching bags: fixed 1 damage, no dice variance, no armor, exact HP target
+      BlzSetUnitBaseDamage(h, 0, 0);
+      BlzSetUnitDiceNumber(h, 1, 0);
+      BlzSetUnitDiceSides(h, 1, 0);
+      BlzSetUnitArmor(h, 0);
+      const scaledHP = math.max(1, math.floor(dpsTestCreepStartHP / spawnedCreeps.length));
+      BlzSetUnitMaxHP(h, scaledHP);
+      SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
+    } else {
+      // DPS-based damage scaling: keep cooldown, scale base damage to match target DPS
+      const cd = getCooldown(h);
+      const originalDPS = getDPS(h);
+      const targetDPS = originalDPS * dpsScale;
+      const targetAvgDmg = targetDPS * cd;
+      const diceAvg = BlzGetUnitDiceNumber(h, 0) * (BlzGetUnitDiceSides(h, 0) + 1) / 2;
+      const scaledDamage = math.max(1, math.floor(targetAvgDmg - diceAvg));
 
-    // EHP-based HP scaling: keep armor, scale raw HP to match target EHP
-    const armor = math.max(0, BlzGetUnitArmor(c.handle));
-    const armorMultiplier = 1 + 0.06 * armor;
-    const scaledHP = math.max(1, math.floor(getEffectiveHP(c.handle) * ehpScale / armorMultiplier));
+      // EHP-based HP scaling: keep armor, scale raw HP to match target EHP
+      const armor = math.max(0, BlzGetUnitArmor(h));
+      const armorMultiplier = 1 + 0.06 * armor;
+      const scaledHP = math.max(1, math.floor(getEffectiveHP(h) * ehpScale / armorMultiplier));
 
-    BlzSetUnitBaseDamage(c.handle, scaledDamage, 0);
-    BlzSetUnitMaxHP(c.handle, scaledHP);
-    SetUnitState(c.handle, UNIT_STATE_LIFE, scaledHP);
-    BlzSetUnitWeaponIntegerField(c.handle, UNIT_WEAPON_IF_ATTACK_ATTACK_TYPE, 0, 5);
-    c.invulnerable = false;
-    logUnitStats('Creep (after) ' + GetUnitName(c.handle), c.handle);
+      BlzSetUnitBaseDamage(h, scaledDamage, 0);
+      BlzSetUnitMaxHP(h, scaledHP);
+      SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
+    }
+    BlzSetUnitWeaponIntegerField(h, UNIT_WEAPON_IF_ATTACK_ATTACK_TYPE, 0, 5);
+    c.unit.invulnerable = false;
 
-    // Register per-creep death trigger for XP award
-    const xpReward = creepXPRewards[i];
-    const deathTrig = Trigger.create();
-    TriggerRegisterUnitEvent(deathTrig.handle, c.handle, EVENT_UNIT_DEATH);
-    deathTrig.addAction(() => {
-      awardHeroXP(xpReward);
-      DestroyTrigger(deathTrig.handle);
-    });
+    // Register per-creep death trigger for XP award + item drops (gameplay only)
+    if (!dpsTestMode) {
+      const xpReward = creepXPRewards[i];
+      const drops = c.campUnit.itemDrops;
+      log('Creep ' + i + ' (' + GetUnitName(h) + '): xpReward=' + xpReward + ' dpsTestMode=' + tostring(dpsTestMode));
+      const deathTrig = Trigger.create();
+      TriggerRegisterUnitEvent(deathTrig.handle, h, EVENT_UNIT_DEATH);
+      deathTrig.addAction(() => {
+        const sh = getSpawnedHeroes();
+        const xpBefore = sh.map(h => GetHeroXP(h.handle));
+        log('Creep died: awarding ' + xpReward + ' XP. Before: ' + xpBefore.join(','));
+        awardHeroXP(xpReward);
+        const xpAfter = sh.map(h => GetHeroXP(h.handle));
+        log('After: ' + xpAfter.join(','));
+        if (drops != null) {
+          for (const drop of drops) {
+            const itemId = ChooseRandomItemEx(drop.type, drop.level);
+            if (itemId !== 0) {
+              const dying = GetTriggerUnit()!;
+              CreateItem(itemId, GetUnitX(dying), GetUnitY(dying));
+            }
+          }
+        }
+        DestroyTrigger(deathTrig.handle);
+      });
+    }
   }
 }
 
@@ -309,10 +311,37 @@ export function scaleCreepStats(heroes: Unit[]): void {
 // DPS test — lobby sparring to measure real DPS
 // ---------------------------------------------------------------------------
 
+/** End the DPS test: measure damage, compute DPS, clean up all state.
+ *  Safe to call at any point — handles the case where the timer hasn't started yet. */
+export function cancelDPSTest(): void {
+  if (dpsTestTimer != null) {
+    const elapsed = dpsTestTimer.elapsed;
+    dpsTestTimer.destroy();
+    dpsTestTimer = null;
+    if (elapsed > 0) {
+      let totalDamage = 0;
+      for (const c of spawnedCreeps) {
+        const maxHP = BlzGetUnitMaxHP(c.unit.handle);
+        const currentHP = GetUnitState(c.unit.handle, UNIT_STATE_LIFE);
+        totalDamage += maxHP - currentHP;
+      }
+      measuredHeroDPS = totalDamage / elapsed;
+    }
+  }
+  // Clean up DPS test creeps so they don't linger into the next round
+  if (dpsTestMode) {
+    for (const c of spawnedCreeps) {
+      c.unit.destroy();
+    }
+    spawnedCreeps = [];
+  }
+  dpsTestMode = false;
+}
+
 /** Start DPS test: destroy cage to spawn creeps, spawn heroes, let them fight.
  *  Called after lobby terrain is spawned. */
 export function startDPSTest(): void {
-  if (cageDestructable == null) { log('DPS test: no cage found'); return; }
+  if (cageDestructable == null) return;
 
   dpsTestMode = true;
   const cageX = cageDestructable.x;
@@ -325,7 +354,6 @@ export function startDPSTest(): void {
   // spawnHeroes fires onHeroesSpawnedCallback after 1 frame → scaleCreepStats
   const heroX = cageX - 4 * TRACK_SIZE;
   spawnHeroes(getDPSCheckPlayer(), heroX, cageY);
-  log('DPS test started');
 }
 
 // ---------------------------------------------------------------------------
@@ -342,9 +370,32 @@ export function registerCageTrigger(): void {
     // Guard: if cleanupCage() already cleared us, do nothing (cage was
     // destroyed as part of map cleanup, not by the player).
     if (cageTrigger !== trig || cageDestructable == null) return;
-    const creepIds = getCampCreeps();
-    if (creepIds == null) return;
-    spawnCreepsAt(cageDestructable.x, cageDestructable.y, creepIds);
+    const camp = getCampData();
+    if (camp == null) return;
+    spawnCreepsAt(cageDestructable.x, cageDestructable.y, camp);
+    // Grant Summon Heroes ability to the nearest peasant
+    // (GetKillingUnit() doesn't work for destructable death events)
+    const cx = cageDestructable!.x;
+    const cy = cageDestructable!.y;
+    let nearest: unit | null = null;
+    let bestDist = math.huge;
+    const g = CreateGroup()!;
+    GroupEnumUnitsInRange(g, cx, cy, 300, null!);
+    ForGroup(g, () => {
+      const u = GetEnumUnit()!;
+      if (GetUnitTypeId(u) !== PEASANT_ID) return;
+      const dx = GetUnitX(u) - cx;
+      const dy = GetUnitY(u) - cy;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        nearest = u;
+      }
+    });
+    DestroyGroup(g);
+    if (nearest != null) {
+      UnitAddAbility(nearest, SUMMON_ABILITY_ID);
+    }
     cageDestructable = null;
     cageTrigger = null;
     DestroyTrigger(trig.handle);

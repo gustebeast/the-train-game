@@ -2,7 +2,7 @@ import { Item, Unit, Trigger } from 'w3ts';
 import { TRACK_UNIT_TYPES } from './constants';
 import { placedTracks, removeTrack } from './state';
 import { getTrainTarget } from '../train';
-import { TRACK_PIECE_ID } from '../items';
+import { TRACK_PIECE_ID } from '../constants';
 
 function onTrackDestroyed() {
   const dying = Unit.fromHandle(GetTriggerUnit())!;

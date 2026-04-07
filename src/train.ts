@@ -1,10 +1,12 @@
-import { Item, Unit, Trigger, Timer, Rectangle, Region } from 'w3ts';
+import { Item, Unit, Timer, Trigger, Rectangle, Region } from 'w3ts';
+import { createTimer, startOneShot } from './timers';
 import { placedTracks, isVictoryTriggered } from './track/state';
 import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
 import { gameState, isInGameplay, setInGameplay, registerSyncCallback, syncState } from './state';
-import { deleteSave } from './save';
-import { WOOD_ID, STONE_ID, TRACK_PIECE_ID, findItemByType } from './items';
+// import { deleteSave } from './save';
+import { findItemByType } from './items';
+import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 
 import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
 
@@ -211,7 +213,7 @@ function initTrainUnit(unit: Unit): void {
     BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
     pauseProduction();
     print('The train is on fire and is losing max HP!');
-    burnTimer = Timer.create();
+    burnTimer = createTimer();
     burnTimer.start(1, true, () => {
       gameState.trainMaxHP -= 1;
       BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
@@ -262,7 +264,7 @@ export function initTrain(unit: Unit) {
     }
     if (isVictoryTriggered()) {
       const victoryDelay = (REGION_HALF + OVERSHOOT) / train.moveSpeed;
-      Timer.create().start(victoryDelay, false, () => {
+      startOneShot(victoryDelay, () => {
         print('Victory!');
         if (onAwardVictory != null) onAwardVictory();
         enterLobby();
@@ -272,19 +274,19 @@ export function initTrain(unit: Unit) {
     print('Train about to crash!');
     const crashDelay = (REGION_HALF + OVERSHOOT) / gameState.trainSpeed;
     crashDeadline = os.clock() + crashDelay;
-    Timer.create().start(crashDelay, false, () => {
+    startOneShot(crashDelay, () => {
       if (crashDeadline !== 0) {
         print('Game over!');
         crashDeadline = 0;
         gameOver = true;
-        deleteSave();
+        // deleteSave(); // Disabled for testing
       }
     });
   });
 
   // Start slow, ramp up to full speed after 30 seconds
   train.moveSpeed = 1;
-  Timer.create().start(30, false, () => {
+  startOneShot(30, () => {
     if (train.moveSpeed === 1) {
       train.moveSpeed = gameState.trainSpeed;
     }

@@ -2,11 +2,12 @@ import { Item, Timer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { Items } from '@objectdata/items';
 import { Units } from '@objectdata/units';
-import { BUCKET_ID, findItemByType, rejectOrder, updateBuildAbility } from './items';
+import { findItemByType, rejectOrder, updateBuildAbility } from './items';
+import { BUCKET_ID, PEASANT_ID } from './constants';
 import { updateCarryingVisual } from './carrying';
 
 const FILL_ORDER_ID = 852527; // shadowstrike
-const FILL_ABILITY_ID = FourCC(Abilities.ShadowStrike);
+const FILL_ABILITY_ID = FourCC(Abilities.UndefinedNeutralHostile);
 const WATER_ID = FourCC(Units.Burrow);
 
 export function initFill(): void {
@@ -16,7 +17,7 @@ export function initFill(): void {
   orderTrigger.addAction(() => {
     if (GetIssuedOrderId() !== FILL_ORDER_ID) return;
     const unit = Unit.fromEvent();
-    if (unit == null) return;
+    if (unit == null || unit.typeId !== PEASANT_ID) return;
 
     const targetUnit = GetOrderTargetUnit();
     if (targetUnit == null) return;

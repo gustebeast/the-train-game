@@ -50,7 +50,7 @@ compiletime(({ objectData, constants }) => {
   const peasant = objectData.units.get(constants.units.Peasant)!;
   peasant.modelFile = 'war3mapImported\\WeaponlessPeasant.mdx';
   peasant.structuresBuilt = '';
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.Roar, constants.abilities.InvulnerableNeutral].join(',');
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
@@ -118,14 +118,14 @@ compiletime(({ objectData, constants }) => {
       { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
       { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
     ],
-    ANab: [ // AcidBomb (bridge spell)
+    Afod: [ // FingerOfDeath neutral hostile (bridge spell)
       { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
       { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
       { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
       { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
       { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
-    ANdh: [ // DrunkenHaze (water train spell)
+    Acdh: [ // DrunkenHaze Chen (water train spell)
       { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
       { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
       { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
@@ -139,7 +139,7 @@ compiletime(({ objectData, constants }) => {
       { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
       { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
-    AEsh: [ // ShadowStrike (fill bucket spell)
+    ACss: [ // ShadowStrike neutral hostile (fill bucket spell)
       { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
       { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
       { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
@@ -378,8 +378,8 @@ compiletime(({ objectData, constants }) => {
   trackPiece.modelUsed = 'war3mapImported\\OmniTrack.mdx';
   trackPiece.scalingValue = 0.5;
 
-  // Bridge spell: AcidBomb repurposed as a no-mana, unit+building-targeting spell
-  const bridge = objectData.abilities.get(constants.abilities.AcidBomb)!;
+  // Bridge spell: FingerOfDeath (neutral hostile) repurposed as a no-mana, unit+building-targeting spell
+  const bridge = objectData.abilities.get(constants.abilities.FingerOfDeathNeutralHostile)!;
   bridge.heroAbility = false;
   bridge.levels = 1;
   bridge.castRange = 80;
@@ -389,8 +389,8 @@ compiletime(({ objectData, constants }) => {
   bridge.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
   bridge.hotkeyNormal = 'D';
 
-  // Water train spell: DrunkenHaze repurposed as a no-mana, train-targeting spell
-  const waterTrain = objectData.abilities.get(constants.abilities.DrunkenHaze)!;
+  // Water train spell: DrunkenHaze (Chen) repurposed as a no-mana, train-targeting spell
+  const waterTrain = objectData.abilities.get(constants.abilities.DrunkenHazeChen)!;
   waterTrain.heroAbility = false;
   waterTrain.levels = 1;
   waterTrain.castRange = 80;
@@ -400,8 +400,8 @@ compiletime(({ objectData, constants }) => {
   waterTrain.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
   waterTrain.hotkeyNormal = 'D';
 
-  // Fill bucket spell: ShadowStrike repurposed as a no-mana, water-targeting spell
-  const fillBucket = objectData.abilities.get(constants.abilities.ShadowStrike)!;
+  // Fill bucket spell: ShadowStrike (neutral hostile) repurposed as a no-mana, water-targeting spell
+  const fillBucket = objectData.abilities.get(constants.abilities.UndefinedNeutralHostile)!;
   fillBucket.heroAbility = false;
   fillBucket.levels = 1;
   fillBucket.castRange = 80;
@@ -430,13 +430,13 @@ compiletime(({ objectData, constants }) => {
   shop.groundTexture = ''; // Same texture as a human farm
   shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   shop.collisionSize = 32;
-  shop.itemsSold = [constants.items.TomeOfStrength, constants.items.TomeOfIntelligence, constants.items.TomeOfAgility, constants.items.TomeOfKnowledge, constants.items.TomeOfExperience].join(',');
+  shop.itemsSold = [constants.items.AncientFigurine, constants.items.BracerOfAgility, constants.items.DruidPouch, constants.items.JadeRing, constants.items.LionsRing].join(',');
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
 
-  // Flame Resistance upgrade (TomeOfStrength — purchased from shop)
-  const flameResistance = objectData.items.get(constants.items.TomeOfStrength)!;
+  // Flame Resistance upgrade (AncientFigurine — purchased from shop)
+  const flameResistance = objectData.items.get(constants.items.AncientFigurine)!;
   flameResistance.name = 'Flame Resistance';
   flameResistance.tooltipBasic = flameResistance.name;
   flameResistance.description = 'Increases train health by 10, making it take longer to catch fire.';
@@ -453,8 +453,8 @@ compiletime(({ objectData, constants }) => {
   flameResistance.classification = 'PowerUp';
   flameResistance.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNOrbOfFire.blp';
 
-  // Track Manufacturing upgrade (TomeOfIntelligence — purchased from shop)
-  const trackManufacturing = objectData.items.get(constants.items.TomeOfIntelligence)!;
+  // Track Manufacturing upgrade (BracerOfAgility — purchased from shop)
+  const trackManufacturing = objectData.items.get(constants.items.BracerOfAgility)!;
   trackManufacturing.name = 'Track Manufacturing';
   trackManufacturing.tooltipBasic = trackManufacturing.name;
   trackManufacturing.description = 'Reduces train mana by 10, allowing it to convert wood and stone to tracks more quickly.';
@@ -471,8 +471,8 @@ compiletime(({ objectData, constants }) => {
   trackManufacturing.classification = 'PowerUp';
   trackManufacturing.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNStaffOfTeleportation.blp';
 
-  // Train Resource Capacity upgrade (TomeOfAgility — purchased from shop)
-  const resourceCapacity = objectData.items.get(constants.items.TomeOfAgility)!;
+  // Train Resource Capacity upgrade (DruidPouch — purchased from shop)
+  const resourceCapacity = objectData.items.get(constants.items.DruidPouch)!;
   resourceCapacity.name = 'Train Resource Capacity';
   resourceCapacity.tooltipBasic = resourceCapacity.name;
   resourceCapacity.description = 'Increases the amount of wood and stone the train can carry by 2.';
@@ -489,8 +489,8 @@ compiletime(({ objectData, constants }) => {
   resourceCapacity.classification = 'PowerUp';
   resourceCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNPackBeast.blp';
 
-  // Train Track Capacity upgrade (TomeOfKnowledge — purchased from shop)
-  const trackCapacity = objectData.items.get(constants.items.TomeOfKnowledge)!;
+  // Train Track Capacity upgrade (JadeRing — purchased from shop)
+  const trackCapacity = objectData.items.get(constants.items.JadeRing)!;
   trackCapacity.name = 'Train Track Capacity';
   trackCapacity.tooltipBasic = trackCapacity.name;
   trackCapacity.description = 'Increases the amount of tracks the train can carry by 2.';
@@ -507,8 +507,8 @@ compiletime(({ objectData, constants }) => {
   trackCapacity.classification = 'PowerUp';
   trackCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSpiritLink.blp';
 
-  // Crate Capacity upgrade (TomeOfExperience — purchased from shop)
-  const crateCapacity = objectData.items.get(constants.items.TomeOfExperience)!;
+  // Crate Capacity upgrade (LionsRing — purchased from shop)
+  const crateCapacity = objectData.items.get(constants.items.LionsRing)!;
   crateCapacity.name = 'Crate Capacity';
   crateCapacity.tooltipBasic = crateCapacity.name;
   crateCapacity.description = 'Increases the amount of tracks, wood and stone the crate can carry by 4.';

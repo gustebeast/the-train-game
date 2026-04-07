@@ -3,7 +3,7 @@ GrantNormalXP=0
 GrantNormalXPFormulaA=1.0
 GrantNormalXPFormulaB=0.0
 GrantNormalXPFormulaC=0.0
-NeedHeroXP=100
+NeedHeroXP=100,200,300,400,500,600,700,800,900
 NeedHeroXPFormulaB=0.0
 SummonedKillFactor=0.0
 

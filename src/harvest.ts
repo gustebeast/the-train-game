@@ -1,6 +1,7 @@
 import { Destructable, Item, Trigger, Unit } from 'w3ts';
 import { TREE_RAW, ROCK_RAW, GRANITE_RAW } from './terrain/constants';
-import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, unitHasItemType, rejectOrder } from './items';
+import { unitHasItemType, rejectOrder } from './items';
+import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID } from './constants';
 
 
 const TREE_DEST_ID = FourCC(TREE_RAW);

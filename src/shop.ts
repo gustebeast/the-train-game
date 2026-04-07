@@ -4,11 +4,11 @@ import { gameState, syncState } from './state';
 import { getTrain } from './train';
 import { getCrate } from './items';
 
-const FLAME_RESISTANCE_ID = FourCC(Items.TomeOfStrength);
-const TRACK_MANUFACTURING_ID = FourCC(Items.TomeOfIntelligence);
-const RESOURCE_CAPACITY_ID = FourCC(Items.TomeOfAgility);
-const TRACK_CAPACITY_ID = FourCC(Items.TomeOfKnowledge);
-const CRATE_CAPACITY_ID = FourCC(Items.TomeOfExperience);
+const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
+const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
+const RESOURCE_CAPACITY_ID = FourCC(Items.DruidPouch);
+const TRACK_CAPACITY_ID = FourCC(Items.JadeRing);
+const CRATE_CAPACITY_ID = FourCC(Items.LionsRing);
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],

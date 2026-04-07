@@ -1,10 +1,11 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { Units } from '@objectdata/units';
-import { WOOD_ID, findItemByType, rejectOrder, updateBuildAbility } from './items';
+import { findItemByType, rejectOrder, updateBuildAbility } from './items';
+import { WOOD_ID, PEASANT_ID } from './constants';
 
-const BRIDGE_ORDER_ID = 852662; // acidbomb
-const BRIDGE_ABILITY_ID = FourCC(Abilities.AcidBomb);
+const BRIDGE_ORDER_ID = 852230; // fingerofdeath
+const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
 const WATER_ID = FourCC(Units.Burrow);
 const TERRAIN_BRICKS = 'Zbkl'; // Dalaran Large Bricks
 
@@ -15,7 +16,7 @@ export function initBridge(): void {
   orderTrigger.addAction(() => {
     if (GetIssuedOrderId() !== BRIDGE_ORDER_ID) return;
     const unit = Unit.fromEvent();
-    if (unit == null) return;
+    if (unit == null || unit.typeId !== PEASANT_ID) return;
 
     const targetUnit = GetOrderTargetUnit();
     if (targetUnit == null) return;

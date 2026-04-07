@@ -1,12 +1,10 @@
 import { Item, Trigger, Unit } from 'w3ts';
 import {
-  WOOD_ID,
-  STONE_ID,
-  TRACK_PIECE_ID,
   findItemByType,
   getMaxStack,
   setTrainInventoryCallback,
 } from './items';
+import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 import { gameState } from './state';
 
 

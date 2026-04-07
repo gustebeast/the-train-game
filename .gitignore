@@ -1,6 +1,7 @@
 target
 dist
 .vscode
+TheTrainGame.code-workspace
 
 # Logs
 logs

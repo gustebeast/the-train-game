@@ -1,18 +1,13 @@
 /**
  * Extract creep camp data from WC3 ladder maps.
- * Uses mpq_reader.py to extract war3mapUnits.doo from .w3x archives,
- * then wc3maptranslator to parse the unit placement data.
+ * Parses war3map.lua for unit positions and item drop triggers,
+ * which contain the real item types (permanent/charged/powerup).
  */
-const { UnitsTranslator } = require('wc3maptranslator');
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const MAP_DIRS = [
-    'C:\\Users\\gus\\Documents\\Warcraft III\\Maps\\W3Champions',
-    'C:\\Users\\gus\\Documents\\Warcraft III\\Maps\\Download\\Season8',
-    'C:\\Users\\gus\\Documents\\Warcraft III\\Maps\\Download\\Season1',
-];
+const MAP_DIR = 'C:\\Users\\guste\\Documents\\Warcraft III\\Maps\\W3Champions';
 const MPQ_READER = path.join(__dirname, 'mpq_reader.py');
 
 // W3Champions 1v1 ladder map pool
@@ -21,36 +16,6 @@ const WANTED_MAPS = [
     'ShallowGrave', 'Tidehunters', 'TurtleRock', 'EchoIsles',
     'Springtime', 'Hammerfall', 'BoulderVale', 'Scrimmage',
 ];
-
-// Collect matching maps from all directories, preferring Season8 over Season1
-// and S2 versions over non-S2 versions
-const candidateMaps = [];
-for (const dir of MAP_DIRS) {
-    if (!fs.existsSync(dir)) continue;
-    for (const f of fs.readdirSync(dir)) {
-        if (!f.endsWith('.w3x')) continue;
-        if (!WANTED_MAPS.some(name => f.toLowerCase().includes(name.toLowerCase()))) continue;
-        candidateMaps.push({ file: f, dir });
-    }
-}
-
-// For each WANTED_MAP, pick the best candidate: prefer W3Champions > Season8 > Season1
-const TARGET_MAPS = [];
-for (const name of WANTED_MAPS) {
-    const matches = candidateMaps.filter(m => m.file.toLowerCase().includes(name.toLowerCase()));
-    if (matches.length === 0) continue;
-    // Prefer W3Champions, then Season8, then Season1
-    const w3c = matches.filter(m => m.dir.includes('W3Champions'));
-    const s8 = matches.filter(m => m.dir.includes('Season8'));
-    const pool = w3c.length > 0 ? w3c : s8.length > 0 ? s8 : matches;
-    // Prefer _S2/_S3 versioned over plain
-    const versioned = pool.filter(m => /_S\d/.test(m.file));
-    const best = versioned.length > 0 ? versioned[versioned.length - 1] : pool[pool.length - 1];
-    // Avoid adding duplicates
-    if (!TARGET_MAPS.some(m => m.file === best.file && m.dir === best.dir)) {
-        TARGET_MAPS.push(best);
-    }
-}
 
 // WC3 unit names
 const UNIT_NAMES = {
@@ -118,43 +83,6 @@ const UNIT_NAMES = {
     nsty: 'Satyr Trickster', nscb: 'Spider Crab',
 };
 
-function parseItemDrop(code) {
-    if (!code || code.length < 4 || code[0] !== 'Y') return code;
-    const levelMap = { k: 1, j: 2, i: 3, h: 4, g: 5, f: 6 };
-    const typeMap = { I: 'permanent', P: 'powerup', C: 'charged', A: 'artifact' };
-    return `Lv${levelMap[code[1]] || '?'} ${typeMap[code[2]] || code[2]}`;
-}
-
-function clusterUnits(units) {
-    const CAMP_RADIUS = 700;
-    const camps = [];
-    const assigned = new Set();
-    for (let i = 0; i < units.length; i++) {
-        if (assigned.has(i)) continue;
-        const camp = [i];
-        assigned.add(i);
-        let changed = true;
-        while (changed) {
-            changed = false;
-            for (let j = 0; j < units.length; j++) {
-                if (assigned.has(j)) continue;
-                for (const ci of camp) {
-                    const dx = units[ci].position[0] - units[j].position[0];
-                    const dy = units[ci].position[1] - units[j].position[1];
-                    if (Math.sqrt(dx * dx + dy * dy) < CAMP_RADIUS) {
-                        camp.push(j);
-                        assigned.add(j);
-                        changed = true;
-                        break;
-                    }
-                }
-            }
-        }
-        camps.push(camp.map(idx => units[idx]));
-    }
-    return camps;
-}
-
 const TILESETS = {
     A: 'Ashenvale', B: 'Barrens', C: 'Felwood', D: 'Dungeon',
     F: 'Lordaeron Fall', G: 'Underground', I: 'Icecrown',
@@ -174,12 +102,142 @@ function extractFromMPQ(mapPath, filename) {
     }
 }
 
+/**
+ * Parse war3map.lua to extract creep units and their drop info.
+ * Returns an array of { unitId, x, y, drops: [{type, level}] }.
+ *
+ * The lua structure:
+ *   function UnitXXX_DropItems() ... ChooseRandomItemEx(ITEM_TYPE_XXX, N) ... end
+ *   function CreateNeutralHostile()
+ *     u = BlzCreateUnitWithSkin(p, FourCC("xxxx"), x, y, ...)
+ *     -- optionally:
+ *     t = CreateTrigger()
+ *     TriggerRegisterUnitEvent(t, u, ...)
+ *     TriggerAddAction(t, UnitXXX_DropItems)
+ */
+function parseLua(luaText) {
+    const lines = luaText.split('\n');
+
+    // Step 1: Parse all drop functions -> { funcName: [{type, level}] }
+    const dropFuncs = {};
+    let currentFunc = null;
+    for (const line of lines) {
+        const funcMatch = line.match(/^function (\w+_DropItems)\(\)/);
+        if (funcMatch) {
+            currentFunc = funcMatch[1];
+            dropFuncs[currentFunc] = [];
+        } else if (currentFunc && line.match(/^function /)) {
+            // Next function starts — previous drop function ended
+            currentFunc = null;
+        }
+        if (currentFunc) {
+            const dropMatch = line.match(/ChooseRandomItemEx\((ITEM_TYPE_\w+),\s*(\d+)\)/);
+            if (dropMatch) {
+                dropFuncs[currentFunc].push({
+                    type: dropMatch[1].replace('ITEM_TYPE_', '').toLowerCase(),
+                    level: parseInt(dropMatch[2]),
+                });
+            }
+        }
+    }
+
+    // Step 2: Walk CreateNeutralHostile, tracking units and triggers.
+    // CreateTrigger() freezes the current `u` as the trigger target.
+    const allUnits = [];
+    let lastUnitId = null, lastX = 0, lastY = 0;
+    let trigUnitId = null, trigX = 0, trigY = 0;
+    let inNH = false;
+
+    for (const line of lines) {
+        if (line.includes('function CreateNeutralHostile')) { inNH = true; continue; }
+        if (!inNH) continue;
+        // Stop at the next top-level function
+        if (line.match(/^function /) && !line.includes('CreateNeutralHostile')) break;
+
+        const unitMatch = line.match(/BlzCreateUnitWithSkin\(p,\s*FourCC\("(\w+)"\),\s*([-\d.]+),\s*([-\d.]+)/);
+        if (unitMatch) {
+            // Flush previous unit as non-dropper if not consumed by a trigger
+            if (lastUnitId != null && trigUnitId == null) {
+                allUnits.push({ unitId: lastUnitId, x: lastX, y: lastY, drops: [] });
+            }
+            lastUnitId = unitMatch[1];
+            lastX = parseFloat(unitMatch[2]);
+            lastY = parseFloat(unitMatch[3]);
+        }
+
+        if (line.includes('CreateTrigger()') && lastUnitId != null) {
+            trigUnitId = lastUnitId;
+            trigX = lastX;
+            trigY = lastY;
+            lastUnitId = null;
+        }
+
+        const trigMatch = line.match(/TriggerAddAction\(t,\s*(\w+_DropItems)\)/);
+        if (trigMatch && trigUnitId != null) {
+            allUnits.push({
+                unitId: trigUnitId,
+                x: trigX,
+                y: trigY,
+                drops: dropFuncs[trigMatch[1]] || [],
+            });
+            trigUnitId = null;
+        }
+    }
+    if (lastUnitId != null) {
+        allUnits.push({ unitId: lastUnitId, x: lastX, y: lastY, drops: [] });
+    }
+
+    return allUnits;
+}
+
+function clusterUnits(units) {
+    const CAMP_RADIUS = 700;
+    const camps = [];
+    const assigned = new Set();
+    for (let i = 0; i < units.length; i++) {
+        if (assigned.has(i)) continue;
+        const camp = [i];
+        assigned.add(i);
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let j = 0; j < units.length; j++) {
+                if (assigned.has(j)) continue;
+                for (const ci of camp) {
+                    const dx = units[ci].x - units[j].x;
+                    const dy = units[ci].y - units[j].y;
+                    if (Math.sqrt(dx * dx + dy * dy) < CAMP_RADIUS) {
+                        camp.push(j);
+                        assigned.add(j);
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+        camps.push(camp.map(idx => units[idx]));
+    }
+    return camps;
+}
+
+// Collect matching maps
+const candidateMaps = [];
+if (fs.existsSync(MAP_DIR)) {
+    for (const f of fs.readdirSync(MAP_DIR)) {
+        if (f.endsWith('.w3x')) {
+            if (WANTED_MAPS.some(name => f.toLowerCase().includes(name.toLowerCase()))) {
+                candidateMaps.push(f);
+            }
+        }
+    }
+}
+
 // Process all maps
 const allCamps = [];
 const mapTilesets = {};
 
-for (const { file: mapFile, dir: mapDir } of TARGET_MAPS) {
-    const mapPath = path.join(mapDir, mapFile);
+for (const mapFile of candidateMaps) {
+    const mapPath = path.join(MAP_DIR, mapFile);
     console.error(`Processing ${mapFile}...`);
 
     // Extract tileset from war3map.w3e
@@ -190,54 +248,56 @@ for (const { file: mapFile, dir: mapDir } of TARGET_MAPS) {
         console.error(`  Tileset: ${mapTilesets[mapFile]}`);
     }
 
-    const unitsData = extractFromMPQ(mapPath, 'war3mapUnits.doo');
-    if (!unitsData) {
-        console.error(`  FAILED to extract units`);
+    // Extract and parse lua script
+    const luaData = extractFromMPQ(mapPath, 'war3map.lua');
+    if (!luaData) {
+        console.error(`  FAILED to extract war3map.lua`);
         continue;
     }
-    const units = UnitsTranslator.warToJson(unitsData).json;
 
-    const creeps = units.filter(u => u.player === 24);
-    console.error(`  Found ${creeps.length} creep units`);
+    const units = parseLua(luaData.toString('utf-8'));
+    console.error(`  Found ${units.length} creep units`);
 
-    if (creeps.length === 0) continue;
+    if (units.length === 0) continue;
 
-    const camps = clusterUnits(creeps);
+    const camps = clusterUnits(units);
     console.error(`  Clustered into ${camps.length} camps`);
 
     for (const camp of camps) {
-        const unitTypes = camp.map(u => u.type).sort();
+        const unitTypes = camp.map(u => u.unitId).sort();
 
-        // Find max item drop level
-        let maxDropLevel = 0;
-        camp.forEach(u => {
-            if (u.customItemSets) {
-                for (const set of u.customItemSets) {
-                    for (const code of Object.keys(set)) {
-                        if (code[0] === 'Y') {
-                            const lvlMap = { k: 1, j: 2, i: 3, h: 4, g: 5, f: 6 };
-                            maxDropLevel = Math.max(maxDropLevel, lvlMap[code[1]] || 0);
-                        }
-                    }
-                }
+        // Collect all drops in this camp
+        const drops = [];
+        for (const u of camp) {
+            for (const drop of u.drops) {
+                drops.push({
+                    unitId: u.unitId,
+                    unitName: UNIT_NAMES[u.unitId] || u.unitId,
+                    type: drop.type,
+                    level: drop.level,
+                });
             }
-        });
+        }
 
         allCamps.push({
             map: mapFile,
             tileset: mapTilesets[mapFile] || 'Unknown',
             units: unitTypes,
             names: unitTypes.map(t => UNIT_NAMES[t] || t),
-            dropLevel: maxDropLevel,
+            drops,
             count: camp.length,
         });
     }
 }
 
-// Deduplicate camps (same unit composition)
+// Deduplicate camps (same unit composition + same drop pattern)
 const uniqueCamps = new Map();
 for (const camp of allCamps) {
-    const key = camp.units.join(',');
+    const dropKey = camp.drops
+        .map(d => `${d.unitId}:${d.type}${d.level}`)
+        .sort()
+        .join('|');
+    const key = camp.units.join(',') + '||' + dropKey;
     if (!uniqueCamps.has(key)) {
         uniqueCamps.set(key, { ...camp, occurrences: 1, maps: [camp.map], tilesets: [camp.tileset] });
     } else {
