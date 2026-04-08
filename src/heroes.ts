@@ -1,9 +1,9 @@
 import { MapPlayer, Timer, Trigger, Unit } from 'w3ts';
+import { Players } from 'w3ts/globals';
 import { Units } from '@objectdata/units';
 import { isInGameplay } from './state';
 import { registerSaveSegment } from './save';
-import { log } from './debug';
-import { SUMMON_ABILITY_ID } from './constants';
+import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants';
 
 /** All standard WC3 heroes available for random selection. */
 const HERO_POOL: string[] = [
@@ -130,6 +130,89 @@ registerSaveSegment('ci',
   },
 );
 
+// ---------------------------------------------------------------------------
+// Hero player control — which players control heroes vs peasants
+// ---------------------------------------------------------------------------
+
+/** Number of times each player (by index) has controlled a summoned hero. */
+const heroControlCount: number[] = [0, 0, 0, 0];
+
+/** Player indices chosen to control heroes this round. */
+let chosenHeroPlayers: number[] = [];
+let heroPlayersFromSave = false;
+
+/** Original peasant owners before hero transfer, for restoration. */
+const peasantOwnerMap: Map<unit, MapPlayer> = new Map();
+
+function getHumanPlayers(): MapPlayer[] {
+  return Players.filter(
+    (p: MapPlayer) => p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER
+  );
+}
+
+// Persist heroControlCount as "hc" segment: "0,1,2,0" format
+registerSaveSegment('hc',
+  () => heroControlCount.join(','),
+  (raw) => {
+    let i = 0;
+    for (const [val] of string.gmatch(raw, '([^,]+)')) {
+      if (i < 4) heroControlCount[i] = tonumber(val) ?? 0;
+      i++;
+    }
+  },
+);
+
+// Persist chosenHeroPlayers as "hp" segment: "0,3" format
+registerSaveSegment('hp',
+  () => chosenHeroPlayers.join(','),
+  (raw) => {
+    const loaded: number[] = [];
+    for (const [val] of string.gmatch(raw, '([^,]+)')) {
+      loaded.push(tonumber(val) ?? 0);
+    }
+    if (loaded.length > 0) {
+      chosenHeroPlayers = loaded;
+      heroPlayersFromSave = true;
+    }
+  },
+);
+
+/** Choose which players control heroes this round.
+ *  Players with the lowest heroControlCount are selected. */
+export function chooseHeroPlayers(): void {
+  if (heroPlayersFromSave) {
+    heroPlayersFromSave = false;
+    return;
+  }
+  const humans = getHumanPlayers();
+  const numPlayers = humans.length;
+  if (numPlayers === 0) return;
+
+  const numHeroControllers = numPlayers > 3 ? 2 : 1;
+
+  // Build indices of human players (by player slot index)
+  const playerIndices = humans.map(p => p.id);
+
+  // Sort by control count ascending
+  playerIndices.sort((a, b) => heroControlCount[a] - heroControlCount[b]);
+
+  // Check for ties at the minimum count
+  const minCount = heroControlCount[playerIndices[0]];
+  const tied = playerIndices.filter(i => heroControlCount[i] === minCount);
+
+  if (tied.length <= numHeroControllers) {
+    // Not enough ties — take all tied + next lowest
+    chosenHeroPlayers = playerIndices.slice(0, numHeroControllers);
+  } else {
+    // More ties than slots — shuffle tied and pick
+    for (let i = tied.length - 1; i > 0; i--) {
+      const j = GetRandomInt(0, i);
+      [tied[i], tied[j]] = [tied[j], tied[i]];
+    }
+    chosenHeroPlayers = tied.slice(0, numHeroControllers);
+  }
+}
+
 /** Spawned hero units, parallel to chosenIndices. */
 let spawnedHeroes: Unit[] = [];
 
@@ -163,6 +246,7 @@ export function initRandomHeroes(): void {
     available.splice(idx, 1);
   }
   chooseHeroes();
+  chooseHeroPlayers();
 }
 
 /** Choose the 2 heroes with the lowest XP from the 4.
@@ -218,10 +302,15 @@ function syncHeroXP(): void {
 // Per-round lifecycle
 // ---------------------------------------------------------------------------
 
-/** Reset per-round hero state. Called at the start of each round. */
+/** Reset per-round hero state. Called at the start of each round.
+ *  Snapshots hero items if heroes are still alive (e.g. victory without unsummoning). */
 export function resetHeroState(): void {
+  if (heroesSpawned && spawnedHeroes.length > 0) {
+    snapshotHeroItems();
+  }
   heroesSpawned = false;
   spawnedHeroes = [];
+  peasantOwnerMap.clear();
 }
 
 
@@ -235,18 +324,53 @@ function applySpells(hero: Unit, spells: Record<string, number>): void {
   }
 }
 
-/** Spawn the 2 chosen heroes at the given position. Populates spawnedHeroes.
+/** Transfer peasants from hero players to peasant players, and spawn heroes. */
+function transferPeasantsAndSpawnHeroes(casterX: number, casterY: number): void {
+  const humans = getHumanPlayers();
+  const heroPlayers = chosenHeroPlayers.map(i => MapPlayer.fromIndex(i)!);
+  const peasantPlayers = humans.filter(p => !chosenHeroPlayers.includes(p.id));
+
+  // Find all peasants on the map and transfer hero players' peasants to peasant players
+  const g = CreateGroup()!;
+  GroupEnumUnitsInRect(g, GetWorldBounds()!, null!);
+  ForGroup(g, () => {
+    const u = GetEnumUnit();
+    if (u == null || GetUnitTypeId(u) !== PEASANT_ID) return;
+    const owner = MapPlayer.fromHandle(GetOwningPlayer(u));
+    if (owner == null) return;
+    // Only transfer peasants owned by hero players
+    if (!chosenHeroPlayers.includes(owner.id)) return;
+    peasantOwnerMap.set(u, owner);
+    // Round-robin assign to peasant players
+    if (peasantPlayers.length > 0) {
+      const target = peasantPlayers[peasantOwnerMap.size % peasantPlayers.length];
+      SetUnitOwner(u, target.handle, true);
+    }
+  });
+  DestroyGroup(g);
+
+  // Spawn heroes — distribute across hero players
+  spawnHeroes(heroPlayers, casterX, casterY);
+
+  // Increment control count
+  for (const pi of chosenHeroPlayers) {
+    heroControlCount[pi]++;
+  }
+}
+
+/** Spawn the 2 chosen heroes. Each owner in the array gets one hero.
+ *  If only 1 owner, both heroes go to that player.
  *  Fires onHeroesSpawnedCallback after one frame. */
-export function spawnHeroes(owner: MapPlayer, x: number, y: number): void {
-  for (const idx of chosenIndices) {
-    const data = allHeroes[idx];
+export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
+  for (let i = 0; i < chosenIndices.length; i++) {
+    const data = allHeroes[chosenIndices[i]];
     if (data.typeId === 0) continue;
+    const owner = owners[math.min(i, owners.length - 1)];
     const hero = Unit.create(owner, data.typeId, x, y, 270);
     if (hero != null) {
       spawnedHeroes.push(hero);
       if (data.xp > 0) SetHeroXP(hero.handle, data.xp, true);
       applySpells(hero, data.skills);
-      // Give saved items
       for (const itemId of data.items) {
         UnitAddItem(hero.handle, CreateItem(itemId, hero.x, hero.y)!);
       }
@@ -256,7 +380,6 @@ export function spawnHeroes(owner: MapPlayer, x: number, y: number): void {
   const t = Timer.create();
   t.start(0, false, () => {
     t.destroy();
-    // Apply tome bonuses after level-up stat gains have resolved
     for (let i = 0; i < spawnedHeroes.length; i++) {
       const data = allHeroes[chosenIndices[i]];
       const h = spawnedHeroes[i].handle;
@@ -268,8 +391,71 @@ export function spawnHeroes(owner: MapPlayer, x: number, y: number): void {
         SetUnitState(h, UNIT_STATE_LIFE, BlzGetUnitMaxHP(h));
       }
     }
+    // Register hero death triggers
+    for (const hero of spawnedHeroes) {
+      const deathTrig = Trigger.create();
+      TriggerRegisterUnitEvent(deathTrig.handle, hero.handle, EVENT_UNIT_DEATH);
+      deathTrig.addAction(() => {
+        // Check if all heroes are dead
+        if (spawnedHeroes.every(h => GetUnitState(h.handle, UNIT_STATE_LIFE) <= 0)) {
+          endHeroState();
+        }
+      });
+    }
     if (onHeroesSpawnedCallback != null) onHeroesSpawnedCallback(spawnedHeroes);
   });
+}
+
+// ---------------------------------------------------------------------------
+// End hero state — restore peasant control, remove heroes
+// ---------------------------------------------------------------------------
+
+/** End hero summoning: snapshot items, remove heroes, restore peasant ownership,
+ *  remove unsummon ability from all peasants. */
+export function endHeroState(): void {
+  if (!heroesSpawned) return;
+
+  // Snapshot items before removing heroes
+  snapshotHeroItems();
+
+  // Remove heroes (not kill — avoids dead hero portraits in the UI)
+  for (const hero of spawnedHeroes) {
+    RemoveUnit(hero.handle);
+  }
+  spawnedHeroes = [];
+  heroesSpawned = false;
+
+  // Restore peasant ownership
+  for (const [peasantHandle, originalOwner] of peasantOwnerMap) {
+    if (GetUnitTypeId(peasantHandle) !== 0) { // unit still exists
+      SetUnitOwner(peasantHandle, originalOwner.handle, true);
+    }
+  }
+  peasantOwnerMap.clear();
+
+  // Remove unsummon ability from all peasants
+  const g = CreateGroup()!;
+  GroupEnumUnitsInRect(g, GetWorldBounds()!, null!);
+  ForGroup(g, () => {
+    const u = GetEnumUnit();
+    if (u != null && GetUnitTypeId(u) === PEASANT_ID) {
+      UnitRemoveAbility(u, UNSUMMON_ABILITY_ID);
+    }
+  });
+  DestroyGroup(g);
+}
+
+/** Grant the Unsummon Heroes ability to all peasants. Called when all creeps are dead. */
+export function grantUnsummonToAllPeasants(): void {
+  const g = CreateGroup()!;
+  GroupEnumUnitsInRect(g, GetWorldBounds()!, null!);
+  ForGroup(g, () => {
+    const u = GetEnumUnit();
+    if (u != null && GetUnitTypeId(u) === PEASANT_ID) {
+      UnitAddAbility(u, UNSUMMON_ABILITY_ID);
+    }
+  });
+  DestroyGroup(g);
 }
 
 // ---------------------------------------------------------------------------
@@ -353,8 +539,17 @@ export function initHeroes(): void {
     const caster = Unit.fromEvent();
     if (caster == null) return;
 
-    spawnHeroes(caster.owner, caster.x, caster.y);
     UnitRemoveAbility(caster.handle, SUMMON_ABILITY_ID);
+    transferPeasantsAndSpawnHeroes(caster.x, caster.y);
+  });
+
+  // Unsummon Heroes spell trigger
+  const unsummonTrigger = Trigger.create();
+  unsummonTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
+  unsummonTrigger.addAction(() => {
+    if (GetSpellAbilityId() !== UNSUMMON_ABILITY_ID) return;
+    if (!isInGameplay()) return;
+    endHeroState();
   });
 
   // XP is granted by the creep camp system via scaleCreepStats / creep death triggers.
@@ -404,7 +599,6 @@ export function initHeroes(): void {
         allHeroes[dataIdx].tomeAgi += bonus.agi ?? 0;
         allHeroes[dataIdx].tomeInt += bonus.int ?? 0;
         allHeroes[dataIdx].tomeHP += bonus.hp ?? 0;
-        log('Tome consumed: ' + GetItemName(picked) + ' str+' + (bonus.str ?? 0) + ' agi+' + (bonus.agi ?? 0) + ' int+' + (bonus.int ?? 0) + ' hp+' + (bonus.hp ?? 0));
         return; // consumed, not in inventory
       }
     }

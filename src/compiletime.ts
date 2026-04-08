@@ -139,6 +139,13 @@ compiletime(({ objectData, constants }) => {
       { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
       { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
+    ACro: [ // RoarNeutralHostile (unsummon heroes spell)
+      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
+      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
+      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
+      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
+      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
+    ],
     ACss: [ // ShadowStrike neutral hostile (fill bucket spell)
       { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
       { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
@@ -422,6 +429,17 @@ compiletime(({ objectData, constants }) => {
   summonHeroes.buffs = '';
   summonHeroes.effect = '';
 
+  // Unsummon Heroes spell: RoarNeutralHostile repurposed as a no-target instant-cast ability
+  const unsummonHeroes = objectData.abilities.get(constants.abilities.RoarNeutralHostile)!;
+  unsummonHeroes.heroAbility = false;
+  unsummonHeroes.levels = 1;
+  unsummonHeroes.tooltipNormal = 'Unsummon Heroes';
+  unsummonHeroes.tooltipNormalExtended = 'Dismiss your heroes and return peasant control to normal.';
+  unsummonHeroes.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNSelectHeroOff.blp';
+  unsummonHeroes.hotkeyNormal = 'R';
+  unsummonHeroes.buffs = '';
+  unsummonHeroes.effect = '';
+
   // Shop: Goblin Merchant scaled to 1x1 grid square, no default items
   const shop = objectData.units.get(constants.units.GoblinMerchant)!;
   shop.name = 'Shop';
@@ -523,7 +541,7 @@ compiletime(({ objectData, constants }) => {
   crateCapacity.perishable = true;
   crateCapacity.abilities = '';
   crateCapacity.classification = 'PowerUp';
-  crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHumanCrates.blp';
+  crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMonsterLure.blp';
 
   // Scale down all hero types to match peasant size
   const heroTypes: string[] = [

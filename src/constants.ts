@@ -7,6 +7,7 @@ export const PEASANT_ID = FourCC(Units.Peasant);
 
 // Abilities
 export const SUMMON_ABILITY_ID = FourCC(Abilities.Roar);
+export const UNSUMMON_ABILITY_ID = FourCC(Abilities.RoarNeutralHostile);
 
 // Items
 export const AXE_ID = FourCC(Items.SturdyWarAxe);

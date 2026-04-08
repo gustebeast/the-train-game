@@ -4,7 +4,7 @@ import { extinguish, getTrain } from './train';
 import { gameState, syncGold } from './state';
 import { saveToFile } from './save';
 import { rollCreepCamp } from './creeps';
-import { chooseHeroes } from './heroes';
+import { chooseHeroes, chooseHeroPlayers } from './heroes';
 
 const GOLD_PER_ROUND = 1;
 
@@ -26,5 +26,6 @@ export function awardVictory(): void {
   syncGold();
   rollCreepCamp();
   chooseHeroes();
+  chooseHeroPlayers();
   saveToFile();
 }

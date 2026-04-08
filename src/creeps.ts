@@ -1,8 +1,7 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import { registerSaveSegment } from './save';
-import { log } from './debug';
-import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, spawnHeroes } from './heroes';
+import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
 import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { TRACK_SIZE } from './track/constants';
@@ -282,16 +281,10 @@ export function scaleCreepStats(heroes: Unit[]): void {
     if (!dpsTestMode) {
       const xpReward = creepXPRewards[i];
       const drops = c.campUnit.itemDrops;
-      log('Creep ' + i + ' (' + GetUnitName(h) + '): xpReward=' + xpReward + ' dpsTestMode=' + tostring(dpsTestMode));
       const deathTrig = Trigger.create();
       TriggerRegisterUnitEvent(deathTrig.handle, h, EVENT_UNIT_DEATH);
       deathTrig.addAction(() => {
-        const sh = getSpawnedHeroes();
-        const xpBefore = sh.map(h => GetHeroXP(h.handle));
-        log('Creep died: awarding ' + xpReward + ' XP. Before: ' + xpBefore.join(','));
         awardHeroXP(xpReward);
-        const xpAfter = sh.map(h => GetHeroXP(h.handle));
-        log('After: ' + xpAfter.join(','));
         if (drops != null) {
           for (const drop of drops) {
             const itemId = ChooseRandomItemEx(drop.type, drop.level);
@@ -302,6 +295,10 @@ export function scaleCreepStats(heroes: Unit[]): void {
           }
         }
         DestroyTrigger(deathTrig.handle);
+        // Check if all creeps are dead — grant Unsummon Heroes to peasants
+        if (spawnedCreeps.every(c => GetUnitState(c.unit.handle, UNIT_STATE_LIFE) <= 0)) {
+          grantUnsummonToAllPeasants();
+        }
       });
     }
   }
@@ -353,7 +350,7 @@ export function startDPSTest(): void {
   // Spawn heroes owned by DPS check player to the left of the 6x3 area
   // spawnHeroes fires onHeroesSpawnedCallback after 1 frame → scaleCreepStats
   const heroX = cageX - 4 * TRACK_SIZE;
-  spawnHeroes(getDPSCheckPlayer(), heroX, cageY);
+  spawnHeroes([getDPSCheckPlayer()], heroX, cageY);
 }
 
 // ---------------------------------------------------------------------------
