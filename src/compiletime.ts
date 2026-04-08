@@ -198,7 +198,7 @@ compiletime(({ objectData, constants }) => {
 
   // Pickaxe attachment ability (passive, shows pickaxe model on caster's left hand)
   const pickAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus2)!;
-  pickAttach.target = 'war3mapImported\\Pickaxe.mdx';
+  pickAttach.target = 'war3mapImported\\Axe.mdx';
   pickAttach.targetAttachments = 1;
   pickAttach.targetAttachmentPoint1 = 'left,hand';
 

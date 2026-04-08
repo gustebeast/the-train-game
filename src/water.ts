@@ -48,6 +48,9 @@ export function initWaterTrain(): void {
     extinguish();
     const train = getTrain();
     SetUnitState(train.handle, UNIT_STATE_LIFE, train.maxLife);
+    // Remove the Drunken Haze buff/ability from the train so it doesn't slow it
+    UnitRemoveAbility(train.handle, WATER_TRAIN_ABILITY_ID);
+    UnitRemoveBuffs(train.handle, false, true); // remove negative buffs
 
     const uHandle = u.handle;
     const t = Timer.create();

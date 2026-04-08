@@ -1,0 +1,9 @@
+storage crate doesn't persist (maybe because of upgrade?)
+reset/start text persists after lobby
+Move cameras on summon hero ability
+Axe, pickaxe and bucket should show up on minimap
+If heroes die, creeps should be removed
+Two cars, one for tracks one for resources/crafting
+Item grants aren't working for heroes
+Peasant pathing should be slightly larger to not pass in 1x1 tile
+Despawn peasant on player leave
