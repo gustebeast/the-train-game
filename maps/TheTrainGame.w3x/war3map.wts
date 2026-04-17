@@ -43,3 +43,8 @@ STRING 10
 Players
 }
 
+STRING 11
+{
+Player 23
+}
+

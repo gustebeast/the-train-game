@@ -63,7 +63,7 @@ export function initTeams() {
     // DPS check heroes must be enemies with neutral aggressive
     SetPlayerAlliance(dpsCheckPlayer.handle, enemy!.handle, ALLIANCE_PASSIVE, false);
     SetPlayerAlliance(enemy!.handle, dpsCheckPlayer.handle, ALLIANCE_PASSIVE, false);
-    StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\elf.ai');
+    StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\common.ai');
   }
 
   // Player 23: train owner — no AI, allied with vision to humans and neutral passive
