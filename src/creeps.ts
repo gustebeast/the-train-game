@@ -9,14 +9,17 @@ import { TRACK_SIZE } from './track/constants';
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
 const DPS_TEST_DURATION = 30;
-/** Creep DPS multiplier to compensate for hero spells not being factored into heroDPS. */
-const CREEP_DPS_ADVANTAGE = 1.2;
+/** Creep DPS multiplier — scales creep output above measured hero DPS as a balance constant. */
+const CREEP_DPS_ADVANTAGE = 1.1;
 
 /** Whether we're in DPS test mode (lobby sparring). */
 let dpsTestMode = false;
 
 /** Measured hero DPS from the lobby DPS test. Used for gameplay scaling. */
 let measuredHeroDPS = 0;
+
+/** Measured creep DPS from the lobby DPS test (accounts for hero stuns/spells). */
+let measuredCreepDPS = 0;
 
 /** Active DPS test timer (so it can be cancelled early). */
 let dpsTestTimer: Timer | null = null;
@@ -195,6 +198,10 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
   if (dpsTestMode) {
     const DPS_TEST_HP = 99999;
     dpsTestCreepStartHP = DPS_TEST_HP;
+    for (const h of heroes) {
+      BlzSetUnitMaxHP(h.handle, DPS_TEST_HP);
+      SetUnitState(h.handle, UNIT_STATE_LIFE, DPS_TEST_HP);
+    }
     dpsTestTimer = Timer.create();
     dpsTestTimer.start(DPS_TEST_DURATION, false, () => {
       cancelDPSTest();
@@ -203,7 +210,7 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
       }
     });
     return {
-      dpsScale: creepDPS > 0 ? 1 / creepDPS : 1,
+      dpsScale: 1,
       ehpScale: creepEHP > 0 ? DPS_TEST_HP / creepEHP : 1,
     };
   }
@@ -217,8 +224,9 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
     for (const h of heroes) sum += getDPS(h.handle);
     return sum;
   })();
+  const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
   return {
-    dpsScale: creepDPS > 0 ? (heroDPS * CREEP_DPS_ADVANTAGE) / creepDPS : 1,
+    dpsScale: effectiveCreepDPS > 0 ? (heroDPS * CREEP_DPS_ADVANTAGE) / effectiveCreepDPS : 1,
     ehpScale: creepEHP > 0 ? heroEHP / creepEHP : 1,
   };
 }
@@ -248,11 +256,7 @@ export function scaleCreepStats(heroes: Unit[]): void {
     const h = c.unit.handle;
 
     if (dpsTestMode) {
-      // Punching bags: fixed 1 damage, no dice variance, no armor, exact HP target
-      BlzSetUnitBaseDamage(h, 0, 0);
-      BlzSetUnitDiceNumber(h, 1, 0);
-      BlzSetUnitDiceSides(h, 1, 0);
-      BlzSetUnitArmor(h, 0);
+      // High HP so heroes can't kill them; damage left at defaults to measure actual creep DPS
       const scaledHP = math.max(1, math.floor(dpsTestCreepStartHP / spawnedCreeps.length));
       BlzSetUnitMaxHP(h, scaledHP);
       SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
@@ -316,13 +320,22 @@ export function cancelDPSTest(): void {
     dpsTestTimer.destroy();
     dpsTestTimer = null;
     if (elapsed > 0) {
-      let totalDamage = 0;
+      let totalDamageToCreeps = 0;
       for (const c of spawnedCreeps) {
         const maxHP = BlzGetUnitMaxHP(c.unit.handle);
         const currentHP = GetUnitState(c.unit.handle, UNIT_STATE_LIFE);
-        totalDamage += maxHP - currentHP;
+        totalDamageToCreeps += maxHP - currentHP;
       }
-      measuredHeroDPS = totalDamage / elapsed;
+      measuredHeroDPS = totalDamageToCreeps / elapsed;
+
+      let totalDamageToHeroes = 0;
+      for (const h of getSpawnedHeroes()) {
+        const maxHP = BlzGetUnitMaxHP(h.handle);
+        const currentHP = GetUnitState(h.handle, UNIT_STATE_LIFE);
+        totalDamageToHeroes += maxHP - currentHP;
+      }
+      measuredCreepDPS = totalDamageToHeroes / elapsed;
+
     }
   }
   // Clean up DPS test creeps so they don't linger into the next round
