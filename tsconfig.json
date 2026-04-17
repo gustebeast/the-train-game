@@ -18,9 +18,9 @@
     "plugins": [
       {
         "transform": "war3-transformer",
-        "mapDir": "C:/Users/guste/Sync/Documents/Games/Warcraft3/TheTrainGame/maps/TheTrainGame.w3x",
-        "entryFile": "C:/Users/guste/Sync/Documents/Games/Warcraft3/TheTrainGame/src/main.ts",
-        "outputDir": "C:/Users/guste/Sync/Documents/Games/Warcraft3/TheTrainGame/dist/TheTrainGame.w3x"
+        "mapDir": "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame/maps/TheTrainGame.w3x",
+        "entryFile": "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame/src/main.ts",
+        "outputDir": "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame/dist/TheTrainGame.w3x"
       }
     ],
     "types": [

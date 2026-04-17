@@ -1,4 +1,4 @@
-import { Destructable, Item, MapPlayer, TextTag, Unit } from 'w3ts';
+import { Destructable, Item, MapPlayer, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { Units } from '@objectdata/units';
 import { Items } from '@objectdata/items';
@@ -15,7 +15,7 @@ import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { placedTracks, setVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
-import { setCrate } from '../items';
+import { setCrate, setCrateStart } from '../items';
 import { gameState } from '../state';
 import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../creeps';
 import { resetHeroState } from '../heroes';
@@ -142,19 +142,16 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
         }
 
         case Entity.CRATE: {
-          // Target crate — starts empty, synced to state in real-time
+          // Target crate (right side) — starts empty, synced to state in real-time
           const crateUnit = Unit.create(getNeutralExtra(), FourCC(Units.GrainWarehouse), world.x, world.y, 270);
           if (crateUnit != null) setCrate(crateUnit);
-          gameState.crateTrackCount = 0;
-          gameState.crateWoodCount = 0;
-          gameState.crateStoneCount = 0;
           break;
         }
 
         case Entity.CRATE_START: {
-          // Starting crate — syncCrateInventory populates from state or shows max in lobby
+          // Starting crate (left side) — syncCrateInventory populates from state or shows max in lobby
           const startCrate = Unit.create(getNeutralExtra(), FourCC(Units.GrainWarehouse), world.x, world.y, 270);
-          if (startCrate != null) setCrate(startCrate);
+          if (startCrate != null) setCrateStart(startCrate);
           break;
         }
 
@@ -206,28 +203,17 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
         }
 
         case Entity.START_CIRCLE: {
-          Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0);
+          const startCircle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(startCircle.handle, 'Next Round');
           initReadyZone(world.x, world.y, 'start');
-          const startTag = TextTag.create();
-          if (startTag != null) {
-            startTag.setText('NEXT', 0.024);
-            startTag.setPos(world.x - 26, world.y - 12, 0);
-            startTag.setColor(0, 255, 0, 255);
-            startTag.setPermanent(true);
-          }
           break;
         }
 
         case Entity.REVERT_CIRCLE: {
-          Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0);
+          const revertCircle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(revertCircle.handle, 'Reset Purchases');
+          SetUnitVertexColor(revertCircle.handle, 255, 180, 180, 255);
           initReadyZone(world.x, world.y, 'revert');
-          const revertTag = TextTag.create();
-          if (revertTag != null) {
-            revertTag.setText('RESET', 0.024);
-            revertTag.setPos(world.x - 29, world.y - 12, 0);
-            revertTag.setColor(255, 0, 0, 255);
-            revertTag.setPermanent(true);
-          }
           break;
         }
 

@@ -55,13 +55,15 @@ export function initTeams() {
     SetPlayerTeam(dpsCheckPlayer.handle, 0);
     SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
     for (const p of humanPlayers) {
-      SetPlayerAllianceStateBJ(dpsCheckPlayer.handle, p.handle, bj_ALLIANCE_ALLIED);
-      SetPlayerAllianceStateBJ(p.handle, dpsCheckPlayer.handle, bj_ALLIANCE_ALLIED);
+      const vision = p === humanPlayers[0];
+      const state = vision ? bj_ALLIANCE_ALLIED_VISION : bj_ALLIANCE_ALLIED;
+      SetPlayerAllianceStateBJ(dpsCheckPlayer.handle, p.handle, state);
+      SetPlayerAllianceStateBJ(p.handle, dpsCheckPlayer.handle, state);
     }
     // DPS check heroes must be enemies with neutral aggressive
     SetPlayerAlliance(dpsCheckPlayer.handle, enemy!.handle, ALLIANCE_PASSIVE, false);
     SetPlayerAlliance(enemy!.handle, dpsCheckPlayer.handle, ALLIANCE_PASSIVE, false);
-    StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\common.ai');
+    StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\elf.ai');
   }
 
   // Player 23: train owner — no AI, allied with vision to humans and neutral passive

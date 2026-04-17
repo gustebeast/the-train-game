@@ -191,37 +191,37 @@ compiletime(({ objectData, constants }) => {
   };
 
   // Axe attachment ability (passive, shows axe model on caster's left hand)
-  const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus1)!;
+  const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus7)!;
   axeAttach.target = 'war3mapImported\\Axe.mdx';
   axeAttach.targetAttachments = 1;
   axeAttach.targetAttachmentPoint1 = 'left,hand';
 
   // Pickaxe attachment ability (passive, shows pickaxe model on caster's left hand)
-  const pickAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus2)!;
+  const pickAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus8)!;
   pickAttach.target = 'war3mapImported\\Axe.mdx';
   pickAttach.targetAttachments = 1;
   pickAttach.targetAttachmentPoint1 = 'left,hand';
 
   // Track piece attachment ability (passive, shows track model in left hand)
-  const trackAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus3)!;
+  const trackAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus10)!;
   trackAttach.target = 'war3mapImported\\OmniTrackSmall.mdx';
   trackAttach.targetAttachments = 1;
   trackAttach.targetAttachmentPoint1 = 'left,hand';
 
   // Empty bucket attachment ability
-  const bucketAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus4)!;
+  const bucketAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus20)!;
   bucketAttach.target = 'war3mapImported\\Bucket.mdx';
   bucketAttach.targetAttachments = 1;
   bucketAttach.targetAttachmentPoint1 = 'left,hand';
 
   // Full bucket attachment ability
-  const bucketFullAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus5)!;
+  const bucketFullAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus7)!;
   bucketFullAttach.target = 'war3mapImported\\BucketFull.mdx';
   bucketFullAttach.targetAttachments = 1;
   bucketFullAttach.targetAttachmentPoint1 = 'left,hand';
 
   // Ready orb attachment ability (passive, shows orb model on caster's head)
-  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus6)!;
+  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus8)!;
   readyOrbAttach.target = 'war3mapImported\\ReadyOrb.mdx';
   readyOrbAttach.targetAttachments = 1;
   readyOrbAttach.targetAttachmentPoint1 = 'head';

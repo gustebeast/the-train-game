@@ -2,7 +2,7 @@ import { Item, Timer, Trigger, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { Abilities } from '@objectdata/abilities';
 import { updateCarryingVisual } from './carrying';
-import { gameState, isInGameplay, registerSyncCallback } from './state';
+import { gameState } from './state';
 import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID, PEASANT_ID } from './constants';
 
 let onTrainInventoryChanged: (() => void) | null = null;
@@ -16,9 +16,14 @@ const TRAIN_ID = FourCC(Units.WarWagon);
 const CRATE_ID = FourCC(Units.GrainWarehouse);
 
 let crate: Unit | null = null;
+let crateStart: Unit | null = null;
 
 export function setCrate(u: Unit): void {
   crate = u;
+}
+
+export function setCrateStart(u: Unit): void {
+  crateStart = u;
 }
 
 export function getCrate(): Unit | null {
@@ -36,10 +41,9 @@ function syncCrateState(): void {
   gameState.crateStoneCount = stone != null ? stone.charges : 0;
 }
 
-/** Set an item's charges on the crate, creating it if needed. */
-function setCrateItem(itemTypeId: number, charges: number, slot: number): void {
-  if (crate == null) return;
-  const existing = findItemByType(crate, itemTypeId);
+/** Set an item's charges on a target unit, creating it if needed. */
+function setCrateItemOn(target: Unit, itemTypeId: number, charges: number, slot: number): void {
+  const existing = findItemByType(target, itemTypeId);
   if (charges <= 0) {
     if (existing != null) RemoveItem(existing.handle);
     return;
@@ -47,32 +51,33 @@ function setCrateItem(itemTypeId: number, charges: number, slot: number): void {
   if (existing != null) {
     existing.charges = charges;
   } else {
-    const newItem = Item.create(itemTypeId, crate.x, crate.y);
+    const newItem = Item.create(itemTypeId, target.x, target.y);
     if (newItem != null) {
       newItem.charges = charges;
-      UnitAddItem(crate.handle, newItem.handle);
-      UnitDropItemSlot(crate.handle, newItem.handle, slot);
+      UnitAddItem(target.handle, newItem.handle);
+      UnitDropItemSlot(target.handle, newItem.handle, slot);
     }
   }
 }
 
-/** Sync the crate's items to match current gameState. */
-function syncCrateInventory(): void {
-  if (crate == null) return;
-  if (isInGameplay()) {
-    // Gameplay: populate from previous round's saved counts
-    setCrateItem(TRACK_PIECE_ID, gameState.crateTrackCount, 0);
-    setCrateItem(WOOD_ID, gameState.crateWoodCount, 1);
-    setCrateItem(STONE_ID, gameState.crateStoneCount, 2);
-  } else {
-    // Lobby: display max stack to illustrate capacity
-    setCrateItem(TRACK_PIECE_ID, gameState.crateMaxStack, 0);
-    setCrateItem(WOOD_ID, gameState.crateMaxStack, 1);
-    setCrateItem(STONE_ID, gameState.crateMaxStack, 2);
-  }
+/** Populate the start crate from saved counts and reset them. Called at round start. */
+export function loadCrateForRound(): void {
+  if (crateStart == null) return;
+  setCrateItemOn(crateStart, TRACK_PIECE_ID, gameState.crateTrackCount, 0);
+  setCrateItemOn(crateStart, WOOD_ID, gameState.crateWoodCount, 1);
+  setCrateItemOn(crateStart, STONE_ID, gameState.crateStoneCount, 2);
+  gameState.crateTrackCount = 0;
+  gameState.crateWoodCount = 0;
+  gameState.crateStoneCount = 0;
 }
 
-registerSyncCallback(syncCrateInventory);
+/** Populate the start crate with max stack to show capacity. Called in lobby. */
+export function loadCrateForLobby(): void {
+  if (crateStart == null) return;
+  setCrateItemOn(crateStart, TRACK_PIECE_ID, gameState.crateMaxStack, 0);
+  setCrateItemOn(crateStart, WOOD_ID, gameState.crateMaxStack, 1);
+  setCrateItemOn(crateStart, STONE_ID, gameState.crateMaxStack, 2);
+}
 
 function isCrate(u: Unit): boolean {
   return u.handle === crate?.handle;

@@ -1,5 +1,3 @@
-storage crate doesn't persist (maybe because of upgrade?)
-reset/start text persists after lobby
 Move cameras on summon hero ability
 Axe, pickaxe and bucket should show up on minimap
 If heroes die, creeps should be removed

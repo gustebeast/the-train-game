@@ -8,6 +8,7 @@ import { awardVictory } from '../victory';
 import { gameState, revertToLobbySnapshot, saveLobbySnapshot } from '../state';
 import { hasHeroes, initRandomHeroes } from '../heroes';
 import { startDPSTest } from '../creeps';
+import { loadCrateForRound, loadCrateForLobby } from '../items';
 
 setVictoryCallback(() => loadLobby());
 setAwardVictoryCallback(() => awardVictory());
@@ -21,7 +22,10 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 function loadGameplay(grid: Grid, skipCleanup = false): Unit | null {
   if (!hasHeroes()) initRandomHeroes();
   const trainUnit = spawnTerrain(grid, skipCleanup);
-  if (trainUnit != null && !skipCleanup) initTrain(trainUnit);
+  if (trainUnit != null && !skipCleanup) {
+    initTrain(trainUnit);
+    loadCrateForRound();
+  }
   return trainUnit;
 }
 
@@ -38,5 +42,6 @@ export function loadLobby(): void {
   SetTimeOfDay(12);
   const trainUnit = spawnTerrain(generateLobby());
   if (trainUnit != null) initLobbyTrain(trainUnit);
+  loadCrateForLobby();
   startDPSTest();
 }
