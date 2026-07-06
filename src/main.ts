@@ -1,5 +1,4 @@
 import { Timer } from 'w3ts';
-import { Players } from 'w3ts/globals';
 import { W3TS_HOOK, addScriptHook } from 'w3ts/hooks';
 
 import './compiletime';
@@ -17,14 +16,11 @@ import { initWaterTrain } from './water';
 import { initShop } from './shop';
 import { initHeroes } from './heroes';
 import { syncGold } from './state';
+import { getHumanPlayers } from './util';
 import { log } from './debug';
 
 import { loadTerrain } from './terrain/load';
 import { rollCreepCamp } from './creeps';
-
-const BUILD_DATE = compiletime(() => new Date().toUTCString());
-const TS_VERSION = compiletime(() => require('typescript').version);
-const TSTL_VERSION = compiletime(() => require('typescript-to-lua').version);
 
 function tsMain() {
   print('TheTrainGame script started');
@@ -54,12 +50,14 @@ function tsMain() {
 
     // Lock camera distance at 1200 for all human players
     const cameraPosition = 1200;
-    const humanPlayers = Players.filter(
-      p => p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER
-    );
-    Timer.create().start(0.5, false, () => humanPlayers.forEach(({handle}) =>
-      SetCameraFieldForPlayer(handle, CAMERA_FIELD_TARGET_DISTANCE, cameraPosition, 0)
-    ));
+    const humanPlayers = getHumanPlayers();
+    const cameraTimer = Timer.create();
+    cameraTimer.start(0.5, false, () => {
+      cameraTimer.destroy();
+      humanPlayers.forEach(({ handle }) =>
+        SetCameraFieldForPlayer(handle, CAMERA_FIELD_TARGET_DISTANCE, cameraPosition, 0)
+      );
+    });
 
     syncGold();
     humanPlayers.forEach((player) => {

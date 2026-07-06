@@ -1,7 +1,8 @@
-import { Item, Trigger, Unit } from 'w3ts';
+import { Trigger, Unit } from 'w3ts';
 import {
   findItemByType,
   getMaxStack,
+  setStorageItem,
   setTrainInventoryCallback,
 } from './items';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
@@ -16,7 +17,7 @@ export function setMoveOrderCallback(cb: () => void): void {
 }
 
 let train: Unit;
-let productionRate = 12; // mana regen per second when producing
+const PRODUCTION_RATE = 12; // mana regen per second when producing
 let producing = false;
 let paused = false;
 
@@ -60,16 +61,7 @@ function onManaFull(): void {
 
   // Create or add to track stack in slot 0
   const tracks = findItemByType(train, TRACK_PIECE_ID);
-  if (tracks != null) {
-    tracks.charges += 1;
-  } else {
-    const newTrack = Item.create(TRACK_PIECE_ID, train.x, train.y);
-    if (newTrack != null) {
-      newTrack.charges = 1;
-      UnitAddItem(train.handle, newTrack.handle);
-      UnitDropItemSlot(train.handle, newTrack.handle, 0);
-    }
-  }
+  setStorageItem(train, TRACK_PIECE_ID, (tracks?.charges ?? 0) + 1, 0);
 
   // Reset mana
   train.mana = 0;
@@ -89,7 +81,7 @@ function onManaFull(): void {
 function startProduction(): void {
   producing = true;
   train.mana = 0;
-  BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, productionRate);
+  BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, PRODUCTION_RATE);
 }
 
 /** Stop production — reset mana and regen to 0. */

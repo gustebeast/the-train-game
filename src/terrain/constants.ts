@@ -91,3 +91,4 @@ export function gridToWorld(pos: GridPos): GridPos {
 export const TREE_RAW = 'LTlt';  // SummerTreeWall (Lordaeron Summer)
 export const ROCK_RAW = 'LTrt';  // RockChunks2 (Lordaeron Summer — 6 variations)
 export const GRANITE_RAW = 'LTrc';  // RockChunks1 (Lordaeron Summer — indestructible)
+export const CAGE_RAW = 'LOcg';  // Cage (creep camp spawner)

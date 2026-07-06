@@ -18,8 +18,24 @@ registerReadyZone('revert', 'Resetting purchases', () => {
   loadLobby();
 });
 
+const LOBBY_MUSIC = 'war3mapImported\\InGameLobby.mp3';
+
+/** Start the looping lobby track. The music channel loops it natively — no re-trigger needed. */
+function playLobbyMusic(): void {
+  StopMusic(false);
+  ClearMapMusic();
+  PlayMusic(LOBBY_MUSIC);
+}
+
+/** Stop the lobby track when leaving the lobby (e.g. a round starts). */
+function stopLobbyMusic(): void {
+  StopMusic(false);
+  ClearMapMusic();
+}
+
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
 function loadGameplay(grid: Grid, skipCleanup = false): Unit | null {
+  stopLobbyMusic();
   if (!hasHeroes()) initRandomHeroes();
   const trainUnit = spawnTerrain(grid, skipCleanup);
   if (trainUnit != null && !skipCleanup) {
@@ -39,6 +55,7 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
 
 export function loadLobby(): void {
   saveLobbySnapshot();
+  playLobbyMusic();
   SetTimeOfDay(12);
   const trainUnit = spawnTerrain(generateLobby());
   if (trainUnit != null) initLobbyTrain(trainUnit);

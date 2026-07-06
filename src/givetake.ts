@@ -1,5 +1,6 @@
-import { Timer, Trigger, Unit } from 'w3ts';
+import { Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
+import { nextFrame } from './util';
 import {
   getSlot0Item,
   giveToStorage,
@@ -41,11 +42,7 @@ export function initGiveTake(): void {
     const y = GetOrderPointY();
     const unitHandle = unit.handle;
     const itemHandle = item.handle;
-    const t = Timer.create();
-    t.start(0, false, () => {
-      UnitDropItemPoint(unitHandle, itemHandle, x, y);
-      t.destroy();
-    });
+    nextFrame(() => UnitDropItemPoint(unitHandle, itemHandle, x, y));
   });
 
   // --- Intercept Channel spell target orders ---
@@ -64,11 +61,7 @@ export function initGiveTake(): void {
     const targetItem = GetOrderTargetItem();
     if (targetItem != null) {
       const unitHandle = unit.handle;
-      const t = Timer.create();
-      t.start(0, false, () => {
-        IssueTargetOrderById(unitHandle, SMART_ORDER_ID, targetItem);
-        t.destroy();
-      });
+      nextFrame(() => IssueTargetOrderById(unitHandle, SMART_ORDER_ID, targetItem));
       return;
     }
 
@@ -124,23 +117,17 @@ export function initGiveTake(): void {
 
     if (item != null && item.typeId === TRACK_PIECE_ID && isTrain(target)) {
       // Take tracks from train — re-validate in case order-time rejection lost the race
-      if (validateTake(unit, target) == null) {
-        takeFromStorage(unit, target);
-        updateBuildAbility(unit);
-        updateCarryingVisual(unit);
-      }
+      if (validateTake(unit, target) != null) return;
+      takeFromStorage(unit, target);
     } else if (item == null) {
       // Take from storage (empty hand)
       takeFromStorage(unit, target);
-      updateBuildAbility(unit);
-      updateCarryingVisual(unit);
-    } else if (item != null && isStorage(target)) {
+    } else {
       // Give item to storage — re-validate in case order-time rejection lost the race
-      if (validateGive(item.typeId, target) == null) {
-        giveToStorage(unit, item, target);
-        updateBuildAbility(unit);
-        updateCarryingVisual(unit);
-      }
+      if (validateGive(item.typeId, target) != null) return;
+      giveToStorage(unit, item, target);
     }
+    updateBuildAbility(unit);
+    updateCarryingVisual(unit);
   });
 }

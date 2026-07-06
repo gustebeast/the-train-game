@@ -1,4 +1,4 @@
-import { Players } from 'w3ts/globals';
+import { getHumanPlayers } from './util';
 
 export interface GameState {
   round: number;
@@ -55,11 +55,6 @@ export function registerSyncCallback(cb: () => void): void {
   syncCallbacks.push(cb);
 }
 
-/** Reset state to defaults (for new game). */
-export function resetState(): void {
-  Object.assign(gameState, DEFAULT_STATE);
-}
-
 /** Ensure all in-game representations match gameState. Idempotent. */
 export function syncState(): void {
   syncGold();
@@ -74,11 +69,7 @@ export function applyState(loaded: GameState): void {
 
 /** Set all human players' gold resource to match gameState.gold. */
 export function syncGold(): void {
-  Players.forEach(p => {
-    if (p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER) {
-      p.setState(PLAYER_STATE_RESOURCE_GOLD, gameState.gold);
-    }
-  });
+  getHumanPlayers().forEach(p => p.setState(PLAYER_STATE_RESOURCE_GOLD, gameState.gold));
 }
 
 /** Save a snapshot of the current gameState for lobby revert. */

@@ -6,23 +6,24 @@ import { GRID_MIN_X, gridToWorld } from './terrain/constants';
 import { loadFromFile } from './save';
 import { stopGameplay } from './train';
 
-export function initCheat(): void {
+/** Register a chat command (exact match, any player) with its action. */
+function onChatCommand(command: string, action: () => void): void {
   const trigger = Trigger.create();
   Players.forEach(p => {
-    TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, '-cheatmode', true);
+    TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, command, true);
   });
-  trigger.addAction(() => {
+  trigger.addAction(action);
+}
+
+export function initCheat(): void {
+  onChatCommand('-cheatmode', () => {
     loadCheatTerrain(GRID_MIN_X + 11);
     const trackPos = gridToWorld({ x: GRID_MIN_X + 4, y: -3 });
     const tracks = Item.create(TRACK_PIECE_ID, trackPos.x, trackPos.y)!;
     tracks.charges = 99;
   });
 
-  const loadTrigger = Trigger.create();
-  Players.forEach(p => {
-    TriggerRegisterPlayerChatEvent(loadTrigger.handle, p.handle, '-load', true);
-  });
-  loadTrigger.addAction(() => {
+  onChatCommand('-load', () => {
     if (loadFromFile()) {
       print('Save loaded. Entering lobby...');
       stopGameplay();

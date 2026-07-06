@@ -125,8 +125,7 @@ export function initHarvest(): void {
 
     const dest = findResourceDestAt(x, y);
     if (dest == null) return;
-  
+
     handleResourceOrder(unit, dest);
   });
-
 }

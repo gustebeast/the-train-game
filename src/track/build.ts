@@ -1,5 +1,5 @@
-import { Unit, Trigger, Timer } from 'w3ts';
-import { Abilities } from '@objectdata/abilities';
+import { Unit, Trigger } from 'w3ts';
+import { nextFrame } from '../util';
 import {
   SKINS, OPPOSITE, TRACK_UNIT_TYPES, DIRECTIONS, TRACK_SIZE,
   Direction, toOrientationKey,
@@ -7,12 +7,9 @@ import {
 import { reskinTrack, replaceTrack } from './helpers';
 import { placedTracks, isVictoryTriggered, getVictoryTile } from './state';
 import { findItemByType, updateBuildAbility } from '../items';
-import { TRACK_PIECE_ID } from '../constants';
+import { TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID } from '../constants';
 import { onTrackPlaced } from '../train';
 import { triggerVictory } from '../victory';
-
-const BUILD_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
-
 
 function getDirection(from: Unit, to: Unit): Direction {
   const dx = to.x - from.x;
@@ -53,10 +50,7 @@ function onTrackBuilt() {
   const track2 = placedTracks[track1Idx - 1];
 
   // Delay replacement so the solid-pathing Farm has time to push the builder away
-  const t = Timer.create();
-  t.start(0, false, () => {
-    t.destroy();
-
+  nextFrame(() => {
     const dirToTrack1 = getDirection(track0, track1);
     const dirFromTrack1ToTrack0 = OPPOSITE[dirToTrack1];
     const dirToTrack2 = getDirection(track1, track2);
@@ -92,7 +86,7 @@ export function initTrackBuildTrigger() {
   const spellTrigger = Trigger.create();
   spellTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
   spellTrigger.addAction(() => {
-    if (GetSpellAbilityId() !== BUILD_ABILITY_ID) return;
+    if (GetSpellAbilityId() !== BUILD_TRACK_ABILITY_ID) return;
     const u = Unit.fromHandle(GetTriggerUnit());
     if (u == null) return;
 

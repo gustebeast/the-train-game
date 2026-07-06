@@ -1,9 +1,12 @@
-import { Item, Timer, Trigger, Unit } from 'w3ts';
-import { Units } from '@objectdata/units';
-import { Abilities } from '@objectdata/abilities';
+import { Item, Trigger, Unit } from 'w3ts';
 import { updateCarryingVisual } from './carrying';
 import { gameState } from './state';
-import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID, PEASANT_ID } from './constants';
+import { nextFrame } from './util';
+import {
+  AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
+  PEASANT_ID, TRAIN_ID, CRATE_ID,
+  BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID, FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID,
+} from './constants';
 
 let onTrainInventoryChanged: (() => void) | null = null;
 
@@ -11,9 +14,6 @@ let onTrainInventoryChanged: (() => void) | null = null;
 export function setTrainInventoryCallback(cb: () => void): void {
   onTrainInventoryChanged = cb;
 }
-
-const TRAIN_ID = FourCC(Units.WarWagon);
-const CRATE_ID = FourCC(Units.GrainWarehouse);
 
 let crate: Unit | null = null;
 let crateStart: Unit | null = null;
@@ -41,8 +41,8 @@ function syncCrateState(): void {
   gameState.crateStoneCount = stone != null ? stone.charges : 0;
 }
 
-/** Set an item's charges on a target unit, creating it if needed. */
-function setCrateItemOn(target: Unit, itemTypeId: number, charges: number, slot: number): void {
+/** Set an item's charges on a storage unit, creating or removing the item as needed. */
+export function setStorageItem(target: Unit, itemTypeId: number, charges: number, slot: number): void {
   const existing = findItemByType(target, itemTypeId);
   if (charges <= 0) {
     if (existing != null) RemoveItem(existing.handle);
@@ -63,9 +63,9 @@ function setCrateItemOn(target: Unit, itemTypeId: number, charges: number, slot:
 /** Populate the start crate from saved counts and reset them. Called at round start. */
 export function loadCrateForRound(): void {
   if (crateStart == null) return;
-  setCrateItemOn(crateStart, TRACK_PIECE_ID, gameState.crateTrackCount, 0);
-  setCrateItemOn(crateStart, WOOD_ID, gameState.crateWoodCount, 1);
-  setCrateItemOn(crateStart, STONE_ID, gameState.crateStoneCount, 2);
+  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateTrackCount, 0);
+  setStorageItem(crateStart, WOOD_ID, gameState.crateWoodCount, 1);
+  setStorageItem(crateStart, STONE_ID, gameState.crateStoneCount, 2);
   gameState.crateTrackCount = 0;
   gameState.crateWoodCount = 0;
   gameState.crateStoneCount = 0;
@@ -74,41 +74,32 @@ export function loadCrateForRound(): void {
 /** Populate the start crate with max stack to show capacity. Called in lobby. */
 export function loadCrateForLobby(): void {
   if (crateStart == null) return;
-  setCrateItemOn(crateStart, TRACK_PIECE_ID, gameState.crateMaxStack, 0);
-  setCrateItemOn(crateStart, WOOD_ID, gameState.crateMaxStack, 1);
-  setCrateItemOn(crateStart, STONE_ID, gameState.crateMaxStack, 2);
+  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateMaxStack, 0);
+  setStorageItem(crateStart, WOOD_ID, gameState.crateMaxStack, 1);
+  setStorageItem(crateStart, STONE_ID, gameState.crateMaxStack, 2);
 }
 
 function isCrate(u: Unit): boolean {
   return u.handle === crate?.handle;
 }
-const BUILD_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
-const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
-const FILL_ABILITY_ID = FourCC(Abilities.UndefinedNeutralHostile);
-const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
 
-/** Grant or revoke item-gated abilities (build track, build bridge). */
+/** Abilities granted while carrying the matching item type. */
+const ITEM_GATED_ABILITIES: ReadonlyArray<readonly [number, number]> = [
+  [TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID],
+  [WOOD_ID, BRIDGE_ABILITY_ID],
+  [BUCKET_ID, FILL_ABILITY_ID],
+  [BUCKET_FULL_ID, WATER_TRAIN_ABILITY_ID],
+];
+
+/** Grant or revoke item-gated abilities (build track, bridge, fill, water train). */
 export function updateBuildAbility(u: Unit): void {
   if (u.typeId !== PEASANT_ID) return;
-  if (findItemByType(u, TRACK_PIECE_ID) != null) {
-    UnitAddAbility(u.handle, BUILD_ABILITY_ID);
-  } else {
-    UnitRemoveAbility(u.handle, BUILD_ABILITY_ID);
-  }
-  if (findItemByType(u, WOOD_ID) != null) {
-    UnitAddAbility(u.handle, BRIDGE_ABILITY_ID);
-  } else {
-    UnitRemoveAbility(u.handle, BRIDGE_ABILITY_ID);
-  }
-  if (findItemByType(u, BUCKET_ID) != null) {
-    UnitAddAbility(u.handle, FILL_ABILITY_ID);
-  } else {
-    UnitRemoveAbility(u.handle, FILL_ABILITY_ID);
-  }
-  if (findItemByType(u, BUCKET_FULL_ID) != null) {
-    UnitAddAbility(u.handle, WATER_TRAIN_ABILITY_ID);
-  } else {
-    UnitRemoveAbility(u.handle, WATER_TRAIN_ABILITY_ID);
+  for (const [itemId, abilityId] of ITEM_GATED_ABILITIES) {
+    if (findItemByType(u, itemId) != null) {
+      UnitAddAbility(u.handle, abilityId);
+    } else {
+      UnitRemoveAbility(u.handle, abilityId);
+    }
   }
 }
 
@@ -124,10 +115,31 @@ function storageSlot(itemTypeId: number): number {
 /** Show a rejection message and stop the unit. */
 export function rejectOrder(unitHandle: unit, msg: string): void {
   showFloatingText(unitHandle, msg);
-  const t = Timer.create();
-  t.start(0, false, () => {
-    IssueImmediateOrder(unitHandle, 'stop');
-    t.destroy();
+  nextFrame(() => IssueImmediateOrder(unitHandle, 'stop'));
+}
+
+/** Intercept a peasant's target order and reject it (with a message) unless
+ *  the target passes the given check. */
+export function registerPeasantTargetCheck(
+  orderId: number,
+  isValidTarget: (target: Unit) => boolean,
+  rejectMsg: string,
+): void {
+  const trigger = Trigger.create();
+  trigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
+  trigger.addAction(() => {
+    if (GetIssuedOrderId() !== orderId) return;
+    const unit = Unit.fromEvent();
+    if (unit == null || unit.typeId !== PEASANT_ID) return;
+
+    const targetUnit = GetOrderTargetUnit();
+    if (targetUnit == null) return;
+    const target = Unit.fromHandle(targetUnit);
+    if (target == null) return;
+
+    if (!isValidTarget(target)) {
+      rejectOrder(unit.handle, rejectMsg);
+    }
   });
 }
 
@@ -184,8 +196,7 @@ export function unitHasItemType(u: Unit, itemTypeId: number): boolean {
 
 /** Get the item in slot 0 (first inventory slot) for a unit. */
 export function getSlot0Item(u: Unit): Item | null {
-  const it = u.getItemInSlot(0);
-  return it != null ? it : null;
+  return u.getItemInSlot(0) ?? null;
 }
 
 /** Find an item of the given type in a unit's inventory. */
@@ -316,12 +327,15 @@ export function giveToStorage(giver: Unit, giverItem: Item, storage: Unit): bool
     RemoveItem(giverItem.handle);
   }
 
-  if (isTrain(storage)) {
-    if (onTrainInventoryChanged != null) onTrainInventoryChanged();
-  }
-  if (isCrate(storage)) syncCrateState();
+  notifyStorageChanged(storage);
 
   return true;
+}
+
+/** Fire inventory-change side effects after a storage unit's contents change. */
+function notifyStorageChanged(storage: Unit): void {
+  if (isTrain(storage) && onTrainInventoryChanged != null) onTrainInventoryChanged();
+  if (isCrate(storage)) syncCrateState();
 }
 
 /**
@@ -358,11 +372,7 @@ export function takeFromStorage(taker: Unit, storage: Unit): boolean {
     RemoveItem(source.handle);
   }
 
-  // Update train production when its inventory changes
-  if (isTrain(storage)) {
-    if (onTrainInventoryChanged != null) onTrainInventoryChanged();
-  }
-  if (isCrate(storage)) syncCrateState();
+  notifyStorageChanged(storage);
 
   return true;
 }
@@ -382,10 +392,8 @@ export function initItems(): void {
     if (dropperHandle != null && droppedItem != null) {
       pendingGivers.set(droppedItem, dropperHandle);
       // Clean up if no PICKUP_ITEM follows (e.g. dropped on ground, not to a unit)
-      const t = Timer.create();
-      t.start(0, false, () => {
+      nextFrame(() => {
         pendingGivers.delete(droppedItem);
-        t.destroy();
         const dropper = Unit.fromHandle(dropperHandle);
         if (dropper != null) {
           updateBuildAbility(dropper);
@@ -406,42 +414,39 @@ export function initItems(): void {
     const pickedIsResource = isResource(pickedType);
     const dropper = pendingGivers.get(picked.handle) ?? null;
     pendingGivers.delete(picked.handle);
+    // The unit that gave us this item, if it came from another unit
+    const giver = dropper != null && dropper !== unit.handle ? dropper : null;
+
+    // Remove the picked item; return it to the giver (with an optional message) if one exists.
+    const rejectPickup = (msg?: string): void => {
+      unit.removeItem(picked);
+      if (giver != null) {
+        UnitAddItem(giver, picked.handle);
+        if (msg != null) showFloatingText(giver, msg);
+      }
+    };
 
     // Peasants can only pick up train items (tools, resources, buckets)
     if (unit.typeId === PEASANT_ID && !isTrainItem(pickedType)) {
-      unit.removeItem(picked);
-      if (dropper != null && dropper !== unit.handle) {
-        UnitAddItem(dropper, picked.handle);
-      }
+      rejectPickup();
       return;
     }
 
     // Heroes can't pick up train items
     if (IsUnitType(unit.handle, UNIT_TYPE_HERO) && isTrainItem(pickedType)) {
-      unit.removeItem(picked);
-      if (dropper != null && dropper !== unit.handle) {
-        UnitAddItem(dropper, picked.handle);
-      }
+      rejectPickup();
       return;
     }
 
     // Storage units only accept resources
     if (isStorage(unit) && !pickedIsResource) {
-      if (dropper != null && dropper !== unit.handle) {
-        unit.removeItem(picked);
-        UnitAddItem(dropper, picked.handle);
-        showFloatingText(dropper, "Can't store that!");
-      } else {
-        unit.removeItem(picked);
-      }
+      rejectPickup("Can't store that!");
       return;
     }
 
     // Can't give tracks to the train (but allow internally produced tracks)
-    if (isTrain(unit) && pickedType === TRACK_PIECE_ID && dropper != null && dropper !== unit.handle) {
-      unit.removeItem(picked);
-      UnitAddItem(dropper, picked.handle);
-      showFloatingText(dropper, "Can't load tracks!");
+    if (isTrain(unit) && pickedType === TRACK_PIECE_ID && giver != null) {
+      rejectPickup("Can't load tracks!");
       return;
     }
 
@@ -462,14 +467,7 @@ export function initItems(): void {
       // Same resource type — merge charges up to max stack
       const maxStack = getMaxStack(unit, pickedType);
       if (matchingResource.charges >= maxStack) {
-        // Already full — reject entirely
-        if (dropper != null && dropper !== unit.handle) {
-          unit.removeItem(picked);
-          UnitAddItem(dropper, picked.handle);
-          showFloatingText(dropper, 'Inventory full!');
-        } else {
-          unit.removeItem(picked);
-        }
+        rejectPickup('Inventory full!');
         return;
       }
       const total = matchingResource.charges + picked.charges;
@@ -478,26 +476,16 @@ export function initItems(): void {
 
       matchingResource.charges = kept;
       if (remainder > 0) {
-        if (dropper != null && dropper !== unit.handle) {
-          // Return excess to the giver
-          picked.charges = remainder;
-          unit.removeItem(picked);
-          UnitAddItem(dropper, picked.handle);
-        } else {
-          // Drop leftover at the unit's feet
-          picked.charges = remainder;
-          unit.removeItem(picked);
-        }
+        // Return excess to the giver, or drop it at the unit's feet
+        picked.charges = remainder;
+        rejectPickup();
       } else {
         RemoveItem(picked.handle);
       }
     } else if (otherItem != null && unit.typeId === PEASANT_ID) {
       // Peasant picking up a different item type — swap
-      if (dropper != null && dropper !== unit.handle) {
-        // Given by another unit — reject, return to giver
-        unit.removeItem(picked);
-        UnitAddItem(dropper, picked.handle);
-        showFloatingText(dropper, "Can't mix items!");
+      if (giver != null) {
+        rejectPickup("Can't mix items!");
       } else {
         // Self-pickup — drop the old one, move picked to slot 0
         unit.removeItem(otherItem);
@@ -509,8 +497,8 @@ export function initItems(): void {
     }
 
     // Update train production when its inventory changes
-    if (isTrain(unit)) {
-      if (onTrainInventoryChanged != null) onTrainInventoryChanged();
+    if (isTrain(unit) && onTrainInventoryChanged != null) {
+      onTrainInventoryChanged();
     }
 
     updateBuildAbility(unit);

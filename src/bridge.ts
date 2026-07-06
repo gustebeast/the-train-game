@@ -1,32 +1,14 @@
-import { Timer, Trigger, Unit } from 'w3ts';
-import { Abilities } from '@objectdata/abilities';
-import { Units } from '@objectdata/units';
-import { findItemByType, rejectOrder, updateBuildAbility } from './items';
-import { WOOD_ID, PEASANT_ID } from './constants';
+import { Trigger, Unit } from 'w3ts';
+import { findItemByType, registerPeasantTargetCheck, updateBuildAbility } from './items';
+import { WOOD_ID, WATER_ID, BRIDGE_ABILITY_ID } from './constants';
+import { nextFrame } from './util';
 
 const BRIDGE_ORDER_ID = 852230; // fingerofdeath
-const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
-const WATER_ID = FourCC(Units.Burrow);
 const TERRAIN_BRICKS = 'Zbkl'; // Dalaran Large Bricks
 
 export function initBridge(): void {
   // Intercept target orders for bridge spell — reject non-water targets
-  const orderTrigger = Trigger.create();
-  orderTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
-  orderTrigger.addAction(() => {
-    if (GetIssuedOrderId() !== BRIDGE_ORDER_ID) return;
-    const unit = Unit.fromEvent();
-    if (unit == null || unit.typeId !== PEASANT_ID) return;
-
-    const targetUnit = GetOrderTargetUnit();
-    if (targetUnit == null) return;
-    const target = Unit.fromHandle(targetUnit);
-    if (target == null) return;
-
-    if (target.typeId !== WATER_ID) {
-      rejectOrder(unit.handle, 'Must target a water block');
-    }
-  });
+  registerPeasantTargetCheck(BRIDGE_ORDER_ID, t => t.typeId === WATER_ID, 'Must target a water block');
 
   // Consume one wood, destroy water unit, paint bridge tile
   const spellTrigger = Trigger.create();
@@ -44,11 +26,9 @@ export function initBridge(): void {
         RemoveItem(wood.handle);
       }
       const uHandle = u.handle;
-      const t = Timer.create();
-      t.start(0, false, () => {
+      nextFrame(() => {
         const deferred = Unit.fromHandle(uHandle);
         if (deferred != null) updateBuildAbility(deferred);
-        t.destroy();
       });
     }
 

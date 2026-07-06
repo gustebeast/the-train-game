@@ -91,13 +91,6 @@ export function getCampData(): CreepCamp | null {
   return camps[campState.campIndex];
 }
 
-/** Get the unit rawcodes for the current camp, or null if none selected. */
-export function getCampCreeps(): string[] | null {
-  const camp = getCampData();
-  if (camp == null) return null;
-  return camp.map(u => u.id);
-}
-
 // ---------------------------------------------------------------------------
 // Cage tracking
 // ---------------------------------------------------------------------------
@@ -135,9 +128,6 @@ const GRID_OFFSETS: ReadonlyArray<readonly [number, number]> = [
 
 /** Spawned creeps for the current round, paired with their camp data. */
 let spawnedCreeps: Array<{ unit: Unit; campUnit: CreepUnit }> = [];
-
-/** XP reward per creep, computed during scaleCreepStats. Parallel to spawnedCreeps. */
-let creepXPRewards: number[] = [];
 
 /** Spawn creeps around the given world position in a 3x3 grid. Invulnerable until heroes arrive. */
 export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
@@ -219,11 +209,10 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
   for (const h of heroes) {
     heroEHP += getEffectiveHP(h.handle);
   }
-  const heroDPS = measuredHeroDPS > 0 ? measuredHeroDPS : (() => {
-    let sum = 0;
-    for (const h of heroes) sum += getDPS(h.handle);
-    return sum;
-  })();
+  let heroDPS = measuredHeroDPS;
+  if (heroDPS <= 0) {
+    for (const h of heroes) heroDPS += getDPS(h.handle);
+  }
   const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
   return {
     dpsScale: effectiveCreepDPS > 0 ? (heroDPS * CREEP_DPS_ADVANTAGE) / effectiveCreepDPS : 1,
@@ -244,7 +233,7 @@ export function scaleCreepStats(heroes: Unit[]): void {
   for (const c of spawnedCreeps) {
     levelSum += math.max(1, GetUnitLevel(c.unit.handle));
   }
-  creepXPRewards = [];
+  const creepXPRewards: number[] = [];
   for (const c of spawnedCreeps) {
     const level = math.max(1, GetUnitLevel(c.unit.handle));
     creepXPRewards.push(math.max(1, math.floor(level / levelSum * targetXP)));
@@ -382,11 +371,11 @@ export function registerCageTrigger(): void {
     if (cageTrigger !== trig || cageDestructable == null) return;
     const camp = getCampData();
     if (camp == null) return;
-    spawnCreepsAt(cageDestructable.x, cageDestructable.y, camp);
+    const cx = cageDestructable.x;
+    const cy = cageDestructable.y;
+    spawnCreepsAt(cx, cy, camp);
     // Grant Summon Heroes ability to the nearest peasant
     // (GetKillingUnit() doesn't work for destructable death events)
-    const cx = cageDestructable!.x;
-    const cy = cageDestructable!.y;
     let nearest: unit | null = null;
     let bestDist = math.huge;
     const g = CreateGroup()!;

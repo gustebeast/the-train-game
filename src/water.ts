@@ -1,32 +1,15 @@
-import { Item, Timer, Trigger, Unit } from 'w3ts';
-import { Abilities } from '@objectdata/abilities';
-import { Items } from '@objectdata/items';
+import { Item, Trigger, Unit } from 'w3ts';
 import { getTrain, extinguish } from './train';
-import { isTrain, findItemByType, rejectOrder, updateBuildAbility } from './items';
-import { BUCKET_FULL_ID, PEASANT_ID } from './constants';
+import { isTrain, findItemByType, registerPeasantTargetCheck, updateBuildAbility } from './items';
+import { BUCKET_ID, BUCKET_FULL_ID, WATER_TRAIN_ABILITY_ID } from './constants';
 import { updateCarryingVisual } from './carrying';
+import { nextFrame } from './util';
 
 const WATER_TRAIN_ORDER_ID = 852585; // drunkenhaze
-const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
 
 export function initWaterTrain(): void {
   // Intercept target orders — reject non-train targets
-  const orderTrigger = Trigger.create();
-  orderTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
-  orderTrigger.addAction(() => {
-    if (GetIssuedOrderId() !== WATER_TRAIN_ORDER_ID) return;
-    const unit = Unit.fromEvent();
-    if (unit == null || unit.typeId !== PEASANT_ID) return;
-
-    const targetUnit = GetOrderTargetUnit();
-    if (targetUnit == null) return;
-    const target = Unit.fromHandle(targetUnit);
-    if (target == null) return;
-
-    if (!isTrain(target)) {
-      rejectOrder(unit.handle, 'Must target the train');
-    }
-  });
+  registerPeasantTargetCheck(WATER_TRAIN_ORDER_ID, t => isTrain(t), 'Must target the train');
 
   // Swap full bucket for empty bucket, restore train HP to full
   const spellTrigger = Trigger.create();
@@ -40,7 +23,7 @@ export function initWaterTrain(): void {
     if (bucketFull == null) return;
     RemoveItem(bucketFull.handle);
 
-    const emptyBucket = Item.create(FourCC(Items.EmptyVial), u.x, u.y);
+    const emptyBucket = Item.create(BUCKET_ID, u.x, u.y);
     if (emptyBucket != null) {
       UnitAddItem(u.handle, emptyBucket.handle);
     }
@@ -53,14 +36,12 @@ export function initWaterTrain(): void {
     UnitRemoveBuffs(train.handle, false, true); // remove negative buffs
 
     const uHandle = u.handle;
-    const t = Timer.create();
-    t.start(0, false, () => {
+    nextFrame(() => {
       const deferred = Unit.fromHandle(uHandle);
       if (deferred != null) {
         updateBuildAbility(deferred);
         updateCarryingVisual(deferred);
       }
-      t.destroy();
     });
   });
 }

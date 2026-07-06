@@ -26,22 +26,20 @@ for (const [full, short] of Object.entries(KEY_TO_SHORT)) {
   SHORT_TO_KEY[short] = full;
 }
 
-/** Encode a key=val record to a "k=v;k=v;..." string. */
-function encodeRecord(record: Record<string, number>, keyMap?: Record<string, string>): string {
+/** Encode a key=val record to a "k=v;k=v;..." string, shortening keys via keyMap. */
+function encodeRecord(record: Record<string, number>, keyMap: Record<string, string>): string {
   const parts: string[] = [];
   for (const [k, v] of Object.entries(record)) {
-    const short = keyMap != null ? (keyMap[k] ?? k) : k;
-    parts.push(short + '=' + tostring(v));
+    parts.push((keyMap[k] ?? k) + '=' + tostring(v));
   }
   return table.concat(parts, ';');
 }
 
-/** Decode a "k=v;k=v;..." string into a Record, optionally expanding short keys. */
-function decodeRecord(raw: string, keyMap?: Record<string, string>): Record<string, number> {
+/** Decode a "k=v;k=v;..." string into a Record, expanding short keys via keyMap. */
+function decodeRecord(raw: string, keyMap: Record<string, string>): Record<string, number> {
   const result: Record<string, number> = {};
   for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
-    const fullKey = keyMap != null ? (keyMap[key] ?? key) : key;
-    result[fullKey] = tonumber(val) ?? 0;
+    result[keyMap[key] ?? key] = tonumber(val) ?? 0;
   }
   return result;
 }

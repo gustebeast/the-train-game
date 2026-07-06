@@ -1,12 +1,10 @@
-import { Destructable, Item, MapPlayer, Unit } from 'w3ts';
-import { Players } from 'w3ts/globals';
+import { Destructable, Item, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
-import { Items } from '@objectdata/items';
 
 import {
   Terrain, Entity, Grid,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
-  TREE_RAW, ROCK_RAW,
+  TREE_RAW, ROCK_RAW, GRANITE_RAW, CAGE_RAW,
   idx, gridToWorld,
 } from './constants';
 import { DEFAULT_TRACK, SKINS } from '../track/constants';
@@ -16,21 +14,16 @@ import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '.
 import { placedTracks, setVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
 import { setCrate, setCrateStart } from '../items';
-import { gameState } from '../state';
 import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../creeps';
 import { resetHeroState } from '../heroes';
 import { destroyAllTimers } from '../timers';
+import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, CRATE_ID, WATER_ID } from '../constants';
+import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
 
-// Per-variation scales to normalize rock models to ~128-unit footprint.
-const ROCK_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
-
-// --- Destructable rawcodes (Lordaeron Summer) ---
-const GRANITE_RAW = 'LTrc';  // Rock Chunks 1 (tinted dark + unselectable in compiletime)
-
-// Per-variation scales to normalize destructable models to a consistent 128-unit footprint.
-// Both LTrt and LTrc use the same base model with 6 variations.
+// Per-variation scales to normalize rock/granite models to a consistent 128-unit footprint.
+// Both LTrt (rock) and LTrc (granite) use the same base model with 6 variations.
 // Footprints at scale 1.0: [210, 230, 204, 206, 210, 171]
-const GRANITE_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
+const ROCK_MODEL_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
 
 // --- Terrain tile FourCCs ---
 const TERRAIN_FOURCC: Record<Terrain, string> = {
@@ -51,14 +44,20 @@ function paintTile(worldX: number, worldY: number, terrain: Terrain): void {
   SetTerrainType(worldX, worldY, FourCC(TERRAIN_FOURCC[terrain]), -1, 1, 0);
 }
 
+/** Spawn an initial E-W track piece and register it in placedTracks. */
+function spawnStartingTrack(worldX: number, worldY: number): void {
+  const track = Unit.create(getNeutralPassive(), FourCC(DEFAULT_TRACK), worldX, worldY, 0)!;
+  track.skin = FourCC(SKINS.EW);
+  track.invulnerable = true;
+  placedTracks.push(track);
+}
+
 /** Create all WC3 objects and paint terrain from the generated grid. Returns the train unit if one was spawned. */
 export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
   let trainUnit: Unit | null = null;
 
   // Resolve human players once for PLAYER_1..4 spawning
-  const humanPlayers = Players.filter(
-    (p: MapPlayer) => p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER
-  );
+  const humanPlayers = getHumanPlayers();
 
   if (!skipCleanup) {
     destroyAllTimers();
@@ -68,23 +67,16 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
     cleanupCage();
     pauseResourceDrops();
     // Remove all destructables, units, and items before respawning
-    EnumDestructablesInRect(GetWorldBounds()!, null!, () => RemoveDestructable(GetEnumDestructable()!));
-    const g = CreateGroup()!;
-    GroupEnumUnitsInRect(g, GetWorldBounds()!, null!);
-    ForGroup(g, () => {
-      const u = GetEnumUnit();
-      if (u != null) RemoveUnit(u);
-    });
-    DestroyGroup(g);
-    EnumItemsInRect(GetWorldBounds()!, null!, () => RemoveItem(GetEnumItem()!));
+    EnumDestructablesInRect(getWorldBounds(), null!, () => RemoveDestructable(GetEnumDestructable()!));
+    forEachUnitInWorld(u => RemoveUnit(u));
+    EnumItemsInRect(getWorldBounds(), null!, () => RemoveItem(GetEnumItem()!));
     resumeResourceDrops();
     placedTracks.length = 0;
     resetVictoryTriggered();
 
     // Reset fog of war to unexplored for all human players
-    const world = GetWorldBounds()!;
     for (const p of humanPlayers) {
-      const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_MASKED, world, true, false)!;
+      const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_MASKED, getWorldBounds(), true, false)!;
       FogModifierStart(fog);
       DestroyFogModifier(fog);
     }
@@ -114,7 +106,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
           const variation = GetRandomInt(0, 5);
           const rock = Destructable.create(
             FourCC(ROCK_RAW), world.x, world.y,
-            GetRandomReal(0, 360), ROCK_SCALES[variation], variation,
+            GetRandomReal(0, 360), ROCK_MODEL_SCALES[variation], variation,
           );
           if (rock != null) registerResourceDest(rock);
           break;
@@ -124,64 +116,56 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
           const variation = GetRandomInt(0, 5);
           Destructable.create(
             FourCC(GRANITE_RAW), world.x, world.y,
-            GetRandomReal(0, 360), GRANITE_SCALES[variation], variation,
+            GetRandomReal(0, 360), ROCK_MODEL_SCALES[variation], variation,
           );
           break;
         }
 
         case Entity.WATER: {
-          const w = Unit.create(getNeutralExtra(), FourCC(Units.Burrow), world.x, world.y, 0)!;
+          const w = Unit.create(getNeutralExtra(), WATER_ID, world.x, world.y, 0)!;
           w.invulnerable = true;
           break;
         }
 
         case Entity.WATER_VISIBLE: {
-          const wv = Unit.create(getTrainPlayer(), FourCC(Units.Burrow), world.x, world.y, 0)!;
+          const wv = Unit.create(getTrainPlayer(), WATER_ID, world.x, world.y, 0)!;
           wv.invulnerable = true;
           break;
         }
 
         case Entity.CRATE: {
           // Target crate (right side) — starts empty, synced to state in real-time
-          const crateUnit = Unit.create(getNeutralExtra(), FourCC(Units.GrainWarehouse), world.x, world.y, 270);
+          const crateUnit = Unit.create(getNeutralExtra(), CRATE_ID, world.x, world.y, 270);
           if (crateUnit != null) setCrate(crateUnit);
           break;
         }
 
         case Entity.CRATE_START: {
           // Starting crate (left side) — syncCrateInventory populates from state or shows max in lobby
-          const startCrate = Unit.create(getNeutralExtra(), FourCC(Units.GrainWarehouse), world.x, world.y, 270);
+          const startCrate = Unit.create(getNeutralExtra(), CRATE_ID, world.x, world.y, 270);
           if (startCrate != null) setCrateStart(startCrate);
           break;
         }
 
-        case Entity.TRACK: {
-          const track = Unit.create(getNeutralPassive(), FourCC(DEFAULT_TRACK), world.x, world.y, 0)!;
-          track.skin = FourCC(SKINS.EW);
-          track.invulnerable = true;
-          placedTracks.push(track);
+        case Entity.TRACK:
+          spawnStartingTrack(world.x, world.y);
           break;
-        }
 
-        case Entity.TRACK_WITH_TRAIN: {
-          const track = Unit.create(getNeutralPassive(), FourCC(DEFAULT_TRACK), world.x, world.y, 0)!;
-          track.skin = FourCC(SKINS.EW);
-          track.invulnerable = true;
-          placedTracks.push(track);
-          trainUnit = Unit.create(getNeutralPassive(), FourCC(Units.WarWagon), world.x + CENTER_OFFSET, world.y + CENTER_OFFSET, 0)!;
+        case Entity.TRACK_WITH_TRAIN:
+          spawnStartingTrack(world.x, world.y);
+          trainUnit = Unit.create(getNeutralPassive(), TRAIN_ID, world.x + CENTER_OFFSET, world.y + CENTER_OFFSET, 0)!;
           break;
-        }
 
         case Entity.AXE:
-          Item.create(FourCC(Items.SturdyWarAxe), world.x, world.y);
+          Item.create(AXE_ID, world.x, world.y);
           break;
 
         case Entity.PICKAXE:
-          Item.create(FourCC(Items.RustyMiningPick), world.x, world.y);
+          Item.create(PICKAXE_ID, world.x, world.y);
           break;
 
         case Entity.BUCKET:
-          Item.create(FourCC(Items.EmptyVial), world.x, world.y);
+          Item.create(BUCKET_ID, world.x, world.y);
           break;
 
         case Entity.PLAYER_1:
@@ -190,7 +174,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
         case Entity.PLAYER_4: {
           const playerIdx = PLAYER_ENTITIES.indexOf(cell.entity);
           if (playerIdx < humanPlayers.length) {
-            Unit.create(humanPlayers[playerIdx], FourCC(Units.Peasant), world.x, world.y, 0);
+            Unit.create(humanPlayers[playerIdx], PEASANT_ID, world.x, world.y, 0);
             PanCameraToTimedForPlayer(humanPlayers[playerIdx].handle, world.x, world.y, 0);
           }
           break;
@@ -218,7 +202,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
         }
 
         case Entity.CREEP_CAMP: {
-          const cage = Destructable.create(FourCC('LOcg'), world.x, world.y, 0, 1, 0);
+          const cage = Destructable.create(FourCC(CAGE_RAW), world.x, world.y, 0, 1, 0);
           if (cage != null) {
             setCage(cage);
             registerCageTrigger();

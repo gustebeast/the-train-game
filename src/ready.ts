@@ -1,7 +1,7 @@
 import { MapPlayer, Rectangle, Region, Timer, Trigger, Unit } from 'w3ts';
-import { Players } from 'w3ts/globals';
 import { Abilities } from '@objectdata/abilities';
 import { PEASANT_ID } from './constants';
+import { getHumanPlayers } from './util';
 
 const READY_ORB_ABILITY_ID = FourCC(Abilities.ItemArmorBonusPlus8);
 const REGION_HALF = 128; // 2x2 grid cells = 256 world units, half = 128
@@ -26,15 +26,8 @@ const zoneConfigs = new Map<string, ZoneConfig>();
 const activeZones = new Map<string, ActiveZone>();
 let playerLeaveTrigger: Trigger | null = null;
 
-/** Get current active human player IDs (playing + user-controlled). */
-function getActivePlayerIds(): number[] {
-  return Players.filter(
-    (p: MapPlayer) => p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER
-  ).map((p: MapPlayer) => p.id);
-}
-
 function checkAllReady(zone: ActiveZone): void {
-  const activeIds = getActivePlayerIds();
+  const activeIds = getHumanPlayers().map(p => p.id);
   if (activeIds.length === 0) return;
 
   const allReady = activeIds.every(id => zone.readyPlayers.has(id));
@@ -121,10 +114,8 @@ export function initReadyZone(cx: number, cy: number, id: string): void {
   // Set up shared player-leave trigger once
   if (playerLeaveTrigger == null) {
     playerLeaveTrigger = Trigger.create();
-    for (const p of Players) {
-      if (p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER) {
-        playerLeaveTrigger.registerPlayerEvent(p, EVENT_PLAYER_LEAVE);
-      }
+    for (const p of getHumanPlayers()) {
+      playerLeaveTrigger.registerPlayerEvent(p, EVENT_PLAYER_LEAVE);
     }
     playerLeaveTrigger.addAction(() => {
       const leavingPlayer = MapPlayer.fromEvent();

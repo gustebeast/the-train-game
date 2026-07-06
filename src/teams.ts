@@ -1,10 +1,19 @@
 import { MapPlayer } from 'w3ts';
-import { Players } from 'w3ts/globals';
+import { getHumanPlayers } from './util';
+
+/** Player 22: computer-controlled hero owner for the lobby DPS check. */
+const DPS_CHECK_PLAYER_INDEX = 22;
+/** Player 23: owns the train (and lobby vision water). */
+const TRAIN_PLAYER_INDEX = 23;
+
+/** Set the same alliance state in both directions between two players. */
+function setAllianceBoth(a: MapPlayer, b: MapPlayer, state: number): void {
+  SetPlayerAllianceStateBJ(a.handle, b.handle, state);
+  SetPlayerAllianceStateBJ(b.handle, a.handle, state);
+}
 
 export function initTeams() {
-  const humanPlayers = Players.filter((p: MapPlayer) =>
-    p.slotState === PLAYER_SLOT_STATE_PLAYING && p.controller === MAP_CONTROL_USER
-  );
+  const humanPlayers = getHumanPlayers();
 
   const neutralPassive = MapPlayer.fromIndex(PLAYER_NEUTRAL_PASSIVE);
   const neutralExtra = MapPlayer.fromIndex(bj_PLAYER_NEUTRAL_EXTRA);
@@ -36,12 +45,10 @@ export function initTeams() {
   if (neutralExtra) {
     SetPlayerTeam(neutralExtra.handle, 0);
     for (const p of humanPlayers) {
-      SetPlayerAllianceStateBJ(p.handle, neutralExtra.handle, bj_ALLIANCE_ALLIED);
-      SetPlayerAllianceStateBJ(neutralExtra.handle, p.handle, bj_ALLIANCE_ALLIED);
+      setAllianceBoth(p, neutralExtra, bj_ALLIANCE_ALLIED);
     }
     if (neutralPassive) {
-      SetPlayerAllianceStateBJ(neutralPassive.handle, neutralExtra.handle, bj_ALLIANCE_ALLIED);
-      SetPlayerAllianceStateBJ(neutralExtra.handle, neutralPassive.handle, bj_ALLIANCE_ALLIED);
+      setAllianceBoth(neutralPassive, neutralExtra, bj_ALLIANCE_ALLIED);
     }
   }
 
@@ -49,16 +56,14 @@ export function initTeams() {
     SetPlayerTeam(enemy.handle, 1);
   }
 
-  // Player 22: DPS check — computer-controlled, allied (no vision) with humans
-  const dpsCheckPlayer = MapPlayer.fromIndex(22);
+  // DPS check player — computer-controlled, allied (no vision) with humans
+  const dpsCheckPlayer = MapPlayer.fromIndex(DPS_CHECK_PLAYER_INDEX);
   if (dpsCheckPlayer) {
     SetPlayerTeam(dpsCheckPlayer.handle, 0);
     SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
     for (const p of humanPlayers) {
       const vision = p === humanPlayers[0];
-      const state = vision ? bj_ALLIANCE_ALLIED_VISION : bj_ALLIANCE_ALLIED;
-      SetPlayerAllianceStateBJ(dpsCheckPlayer.handle, p.handle, state);
-      SetPlayerAllianceStateBJ(p.handle, dpsCheckPlayer.handle, state);
+      setAllianceBoth(dpsCheckPlayer, p, vision ? bj_ALLIANCE_ALLIED_VISION : bj_ALLIANCE_ALLIED);
     }
     // DPS check heroes must be enemies with neutral aggressive
     SetPlayerAlliance(dpsCheckPlayer.handle, enemy!.handle, ALLIANCE_PASSIVE, false);
@@ -66,14 +71,13 @@ export function initTeams() {
     StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\common.ai');
   }
 
-  // Player 23: train owner — no AI, allied with vision to humans and neutral passive
-  const trainPlayer = MapPlayer.fromIndex(23);
+  // Train owner — no AI, allied with vision to humans and neutral passive
+  const trainPlayer = MapPlayer.fromIndex(TRAIN_PLAYER_INDEX);
   if (trainPlayer) {
     SetPlayerTeam(trainPlayer.handle, 0);
     SetPlayerController(trainPlayer.handle, MAP_CONTROL_NONE);
-    for (const p of [...humanPlayers, neutralPassive, neutralExtra].filter(p => p != null) as MapPlayer[]) {
-      SetPlayerAllianceStateBJ(trainPlayer.handle, p.handle, bj_ALLIANCE_ALLIED_VISION);
-      SetPlayerAllianceStateBJ(p.handle, trainPlayer.handle, bj_ALLIANCE_ALLIED_VISION);
+    for (const p of [...humanPlayers, neutralPassive, neutralExtra].filter((p): p is MapPlayer => p != null)) {
+      setAllianceBoth(trainPlayer, p, bj_ALLIANCE_ALLIED_VISION);
     }
   }
 
@@ -108,9 +112,9 @@ export function getNeutralAggressive(): MapPlayer {
 }
 
 export function getTrainPlayer(): MapPlayer {
-  return MapPlayer.fromIndex(23)!;
+  return MapPlayer.fromIndex(TRAIN_PLAYER_INDEX)!;
 }
 
 export function getDPSCheckPlayer(): MapPlayer {
-  return MapPlayer.fromIndex(22)!;
+  return MapPlayer.fromIndex(DPS_CHECK_PLAYER_INDEX)!;
 }
