@@ -3,8 +3,9 @@ import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
 import { getTrain, getTrackWagon } from './train';
 import { getCrate } from './items';
-import { SUMMON_UPGRADE_ITEM_ID } from './constants';
+import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade } from './summonUpgrade';
+import { forEachUnitInWorld } from './util';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
 const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
@@ -76,8 +77,15 @@ export function initShop(): void {
       if (crate != null) effectTargets = [crate];
     } else if (itemTypeId === SUMMON_UPGRADE_ITEM_ID) {
       purchaseSummonUpgrade();
-      const buyer = Unit.fromHandle(GetTriggerUnit());
-      if (buyer != null) effectTargets = [buyer];
+      // The unlock applies to everyone — play the effect on every peasant
+      const targets: Unit[] = [];
+      forEachUnitInWorld(u => {
+        if (GetUnitTypeId(u) === PEASANT_ID) {
+          const peasant = Unit.fromHandle(u);
+          if (peasant != null) targets.push(peasant);
+        }
+      });
+      effectTargets = targets;
       print('Summon Heroes unlocked!');
     }
 

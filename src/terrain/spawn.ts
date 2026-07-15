@@ -16,6 +16,7 @@ import { initReadyZone, cleanupReady } from '../ready';
 import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../creeps';
 import { resetHeroState } from '../heroes';
+import { registerSummonShop } from '../summonUpgrade';
 import { destroyAllTimers } from '../timers';
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID } from '../constants';
 import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
@@ -195,6 +196,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         case Entity.SHOP: {
           const shop = Unit.create(getNeutralPassive(), FourCC(Units.GoblinMerchant), world.x, world.y, 270)!;
           shop.invulnerable = true;
+          registerSummonShop(shop);
           break;
         }
 
