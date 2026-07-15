@@ -491,8 +491,13 @@ compiletime(({ objectData, constants }) => {
   shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   shop.collisionSize = 32;
   // Stock is added at runtime via AddItemToStock (see stockShop in shop.ts)
-  // so what's for sale can depend on game state (e.g. one-time upgrades)
+  // so what's for sale can depend on game state (e.g. one-time upgrades).
+  // The 'marketplace' classification is what lets AddItemToStock introduce
+  // item types the shop never listed — it's the classification Blizzard's
+  // own dynamic-stock flow (marketplace rotation) requires. The rotation
+  // itself is disabled in initShop, so no random items appear.
   shop.itemsSold = '';
+  shop.unitClassification = 'marketplace';
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
@@ -513,6 +518,7 @@ compiletime(({ objectData, constants }) => {
   flameResistance.perishable = true;
   flameResistance.abilities = '';
   flameResistance.classification = 'PowerUp';
+  flameResistance.canBeSoldByMerchants = true; // required for dynamic stock (isel)
   flameResistance.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNOrbOfFire.blp';
 
   // Track Manufacturing upgrade (BracerOfAgility — purchased from shop)
@@ -531,6 +537,7 @@ compiletime(({ objectData, constants }) => {
   trackManufacturing.perishable = true;
   trackManufacturing.abilities = '';
   trackManufacturing.classification = 'PowerUp';
+  trackManufacturing.canBeSoldByMerchants = true;
   trackManufacturing.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNStaffOfTeleportation.blp';
 
   // Train Resource Capacity upgrade (DruidPouch — purchased from shop)
@@ -549,6 +556,7 @@ compiletime(({ objectData, constants }) => {
   resourceCapacity.perishable = true;
   resourceCapacity.abilities = '';
   resourceCapacity.classification = 'PowerUp';
+  resourceCapacity.canBeSoldByMerchants = true;
   resourceCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNPackBeast.blp';
 
   // Train Track Capacity upgrade (JadeRing — purchased from shop)
@@ -567,6 +575,7 @@ compiletime(({ objectData, constants }) => {
   trackCapacity.perishable = true;
   trackCapacity.abilities = '';
   trackCapacity.classification = 'PowerUp';
+  trackCapacity.canBeSoldByMerchants = true;
   trackCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSpiritLink.blp';
 
   // Crate Capacity upgrade (LionsRing — purchased from shop)
@@ -585,6 +594,7 @@ compiletime(({ objectData, constants }) => {
   crateCapacity.perishable = true;
   crateCapacity.abilities = '';
   crateCapacity.classification = 'PowerUp';
+  crateCapacity.canBeSoldByMerchants = true;
   crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMonsterLure.blp';
 
   // Summon Heroes upgrade (PendantOfEnergy — purchased from shop, one-time)
@@ -603,6 +613,7 @@ compiletime(({ objectData, constants }) => {
   summonUpgrade.perishable = true;
   summonUpgrade.abilities = '';
   summonUpgrade.classification = 'PowerUp';
+  summonUpgrade.canBeSoldByMerchants = true;
   summonUpgrade.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSelectHeroOn.blp';
 
   // Scale down all hero types to match peasant size
