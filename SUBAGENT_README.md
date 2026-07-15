@@ -52,6 +52,28 @@ Sync at the start of every prompt even if no hook notice appeared yet:
 git -C .worktrees/<name> merge main
 ```
 
+### Arm your main-watcher (once per session)
+
+So you pick up finalized work immediately instead of at your next prompt,
+keep a watcher on `main` running in the background (use your background
+execution so its exit re-invokes you as a task notification — don't run it
+in the foreground, it blocks):
+
+```bash
+cd "C:\Users\gus\Sync\Documents\Games\Warcraft3\TheTrainGame" && base=$(git rev-parse main); while [ "$(git rev-parse main)" = "$base" ]; do sleep 20; done; echo "main moved: $base -> $(git rev-parse main)"
+```
+
+Arm it at the start of your first prompt, and re-arm it each time it fires.
+When the task notification arrives (the integrator finalized new work):
+
+1. Merge: `git -C .worktrees/<name> merge main` — resolve any conflicts
+   YOURSELF, using your knowledge of your own changes and what they mean.
+   You own this merge; the integrator will not do it for you.
+2. Typecheck (`npx tsc -p tsconfig.json --noEmit` from your worktree) and
+   fix any fallout the new code causes in your work.
+3. Commit the merge if it isn't already committed, re-arm the watcher, and
+   report briefly what came in and whether it affected your work.
+
 Resolve any conflicts yourself (keep both sides' intent; when in doubt about
 the `main` side, prefer `main` and re-apply your change on top). If your
 worktree has uncommitted changes from a previous prompt, commit them first.

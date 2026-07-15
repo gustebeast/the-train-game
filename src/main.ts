@@ -16,6 +16,7 @@ import { initWaterTrain } from './water';
 import { initShop } from './shop';
 import { initHeroes } from './heroes';
 import { initMinimapIcons } from './minimapIcons';
+import { initPlayerLeave } from './playerLeave';
 import { syncGold } from './state';
 import { getHumanPlayers } from './util';
 import { log } from './debug';
@@ -49,6 +50,7 @@ function tsMain() {
     initShop();
     initHeroes();
     initMinimapIcons();
+    initPlayerLeave();
 
     // Lock camera distance at 1200 for all human players
     const cameraPosition = 1200;

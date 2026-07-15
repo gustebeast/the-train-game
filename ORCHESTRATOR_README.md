@@ -8,10 +8,26 @@ by sub-agent sessions on `agent/*` branches (see `SUBAGENT_README.md`).
 
 ## How you learn about incoming work
 
-A `UserPromptSubmit` hook (in `.claude/settings.json`) runs at every user
-prompt and reports any `agent/*` branch with commits ahead of `main`. The
-user may also relay a sub-agent's "Ready to merge" summary by hand. Either
-way, a branch ahead of `main` is a pending merge request.
+Two channels:
+
+1. **Prompt-time hook** — a `UserPromptSubmit` hook (in
+   `.claude/settings.json`) runs at every user prompt and reports any
+   `agent/*` branch with commits ahead of `main`.
+2. **Intake watcher (task notification)** — arm this in the background at
+   session start, and re-arm it every time it fires:
+   ```bash
+   cd "C:\Users\gus\Sync\Documents\Games\Warcraft3\TheTrainGame" && base=$(git for-each-ref --format='%(refname:short) %(objectname)' refs/heads/agent/ | sort); while cur=$(git for-each-ref --format='%(refname:short) %(objectname)' refs/heads/agent/ | sort) && [ "$cur" = "$base" ]; do sleep 20; done; echo "AGENT REFS CHANGED"; echo "was: $base"; echo "now: $cur"
+   ```
+   Run it with background execution so its exit re-invokes you as a task
+   notification the moment any `agent/*` ref moves. On wake: work out which
+   branch moved and whether it's genuinely new work (an agent merging
+   `main` into their branch also moves their ref — ignore those), then
+   review it, and if the `testing` branch is free, test-merge + verify and
+   present the build; if a build is already awaiting the user's verdict,
+   announce the new request as queued instead. Then re-arm the watcher.
+
+Either way, a branch ahead of `main` is a pending merge request. Present a
+new build to the user only when they aren't already testing one.
 
 ## Protocol for each merge request
 
@@ -22,26 +38,32 @@ present them as ONE build — summarize all the commits together and combine
 their verification steps. Never split one agent's commits into separate
 builds. For the current request:
 
-1. **Review** — `git diff main...agent/<name>` and read the changes enough
-   to explain them and spot anything risky. You are not a full code
-   reviewer, but don't merge blind.
-2. **Test-merge on the `testing` branch — NEVER directly on `main`.**
-   `main` must not move until the user has tested the build, so sub-agents
-   aren't told to sync onto unapproved work (the notification hook measures
-   against `main`):
+1. **Build FIRST — the artifact is the critical path.** The user can't
+   start testing until the build exists, so before reading any diffs,
+   immediately test-merge and build. Always on the `testing` branch —
+   NEVER directly on `main` (`main` must not move until the user has
+   tested, so sub-agents don't sync onto unapproved work):
    ```powershell
    git checkout -B testing main
    git merge --no-ff agent/<name> -m "Merge agent/<name>: <summary>"
+   npx tsc -p tsconfig.json --noEmit
+   npm run build
    ```
-   If `tsconfig.json` conflicts, keep `main`'s version. If source conflicts
-   are non-trivial, don't guess — tell the user to have the sub-agent merge
-   `main` into their branch and resubmit.
-3. **Verify** — `npx tsc -p tsconfig.json --noEmit`, then `npm run build`.
-   Both must pass. If they fail: report exactly what broke; trivial
-   integration fixes (an import, a rename collision) you may fix and commit
-   on `testing`; anything substantive goes back to the sub-agent via the
-   user (checkout `main` and delete `testing` first).
-4. **Present the build** — tell the user, in this shape:
+   Tell the user the build is ready to launch the moment this succeeds —
+   a one-liner is fine; the full summary comes in the next step. If
+   `tsconfig.json` conflicts, keep `main`'s version. If source conflicts
+   are non-trivial, don't guess — checkout `main`, delete `testing`, and
+   have the sub-agent merge `main` into their branch and resubmit. If the
+   typecheck/build fails: trivial integration fixes (an import, a rename
+   collision) you may fix and commit on `testing`; anything substantive
+   goes back to the sub-agent via the user.
+2. **Then the follow-ups** (while the user launches): re-arm the intake
+   watcher if it fired, then **review** — `git diff main...testing` and
+   read the changes enough to explain them and spot anything risky. You
+   are not a full code reviewer, but NEVER let a build reach finalize
+   unreviewed; if review turns up something alarming, warn the user
+   before they sink time into testing.
+3. **Present the build** — tell the user, in this shape:
 
    > **Got a new build for you.**
    > **Changed:** <2-4 sentences: what the sub-agent did, which files/systems>
@@ -49,11 +71,11 @@ builds. For the current request:
    > **Run `BuildAndLaunch.bat` when ready.**
 
    (`BuildAndLaunch.bat` in the repo root builds and launches WC3 with the
-   map. The build you already ran in step 3 produced the same artifacts, so
+   map. The build you already ran in step 1 produced the same artifacts, so
    their launch is instant confirmation of what you verified.)
 
-5. **Wait for test feedback** before touching the next request.
-6. **Finalize or discard** based on the user's verdict:
+4. **Wait for test feedback** before touching the next request.
+5. **Finalize or discard** based on the user's verdict:
    - **Pass** — promote the tested merge to `main` (fast-forward only, so
      `main` gets exactly the commit that was tested) and clean up:
      ```powershell
@@ -63,6 +85,14 @@ builds. For the current request:
      ```
      Only now does the hook start telling sub-agents they're behind `main`
      and need to sync — they never rebase onto untested work.
+
+     The sub-agents then sync **themselves**: each agent session keeps a
+     background watcher on `main` (see SUBAGENT_README) and gets a task
+     notification when you finalize. They merge `main` into their own
+     branch, resolving any conflicts with full context of their own work.
+     Do NOT merge into their worktrees yourself — the merge is theirs.
+     (Agents without an armed watcher still catch up via the prompt-time
+     hook notice.)
    - **Fail** — discard without touching `main`:
      ```powershell
      git checkout main

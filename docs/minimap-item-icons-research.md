@@ -45,9 +45,14 @@ Key facts:
   but ground items never move, so create/destroy is sufficient.
 - w3ts has **no wrapper class** for `minimapicon` — call the natives directly,
   as the codebase already does for `RemoveItem`, `UnitAddItem`, etc.
-- Optional upgrade: import three tiny billboard `.mdx` models that use each
-  item's icon texture for fully custom minimap markers. Works because
-  `pingPath` accepts any model, but requires new imports; stock + tint needs none.
+- Custom icons: `pingPath` **requires a MODEL** — an image path (.tga/.blp)
+  silently renders nothing (tested; also
+  hiveworkshop.com/threads/minimap-icon-wont-show.349318). ⚠️ The icon
+  renderer draws the model in a screen-like coordinate space, NOT world
+  units: a 12x12-unit quad covers the entire screen. The scale appears to be
+  WC3 UI space (screen ≈ 0.8 x 0.6), putting a stock ~15px icon around
+  0.008 units wide. See scripts/generate-minimap-icons.js for the
+  glyph-model generator and size calibration notes.
 
 ### Option B — dummy units as minimap dots (rejected)
 
