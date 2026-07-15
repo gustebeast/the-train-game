@@ -4,7 +4,7 @@ import { gameState, syncState } from './state';
 import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForLobby } from './items';
 import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID } from './constants';
-import { isSummonUpgradePurchased, purchaseSummonUpgrade } from './summonUpgrade';
+import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
 import { forEachUnitInWorld } from './util';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
@@ -21,6 +21,28 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [CRATE_CAPACITY_ID, 1],
   [SUMMON_UPGRADE_ITEM_ID, 1],
 ]);
+
+/** Repeatable upgrades every shop sells. */
+const REPEATABLE_STOCK = [
+  FLAME_RESISTANCE_ID,
+  TRACK_MANUFACTURING_ID,
+  RESOURCE_CAPACITY_ID,
+  TRACK_CAPACITY_ID,
+  CRATE_CAPACITY_ID,
+];
+
+/** Stock a freshly spawned shop. The shop's object data sells nothing by
+ *  default — everything for sale is added here, so availability can depend
+ *  on game state (the summon upgrade is one-time and disappears once owned). */
+export function stockShop(shop: Unit): void {
+  registerSummonShop(shop);
+  for (const itemId of REPEATABLE_STOCK) {
+    AddItemToStock(shop.handle, itemId, 10, 10);
+  }
+  if (!isSummonUpgradePurchased()) {
+    AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
+  }
+}
 
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
 const EFFECT_ID = 'AIem';

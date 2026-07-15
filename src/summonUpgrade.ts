@@ -27,11 +27,11 @@ function removeFromShopStock(): void {
   }
 }
 
-/** Register the lobby shop after it spawns. If the upgrade is already
- *  owned, it is removed from the shop's stock immediately. */
+/** Register the lobby shop after it spawns, so a later purchase (or a save
+ *  load marking the upgrade owned) can pull the item from its stock.
+ *  Initial stocking is additive — see stockShop in shop.ts. */
 export function registerSummonShop(shop: Unit): void {
   shopUnit = shop;
-  if (purchased) removeFromShopStock();
 }
 
 /** Mark the upgrade as bought: unlock the summon ability and stop selling it. */

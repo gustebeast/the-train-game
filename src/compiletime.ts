@@ -490,7 +490,9 @@ compiletime(({ objectData, constants }) => {
   shop.groundTexture = ''; // Same texture as a human farm
   shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   shop.collisionSize = 32;
-  shop.itemsSold = [constants.items.AncientFigurine, constants.items.BracerOfAgility, constants.items.DruidPouch, constants.items.JadeRing, constants.items.LionsRing, constants.items.PendantOfEnergy].join(',');
+  // Stock is added at runtime via AddItemToStock (see stockShop in shop.ts)
+  // so what's for sale can depend on game state (e.g. one-time upgrades)
+  shop.itemsSold = '';
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
