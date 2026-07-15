@@ -30,7 +30,7 @@ Key facts:
   - `"MinimapQuestObjectiveBonus"` — bonus quest marker
   - `"MinimapQuestTurnIn"` — "?" turn-in marker
   - `"MinimapQuestBoss"` — boss skull
-  - `"MinimapControlPoint"` — plain circle, best for tinting
+  - `"MinimapQuestControlPoint"` — plain circle, best for tinting
 - **RGB tint** — the model is tinted by the r/g/b args (255,255,255 = untinted).
   This is how Blizzard differentiates ally/neutral/enemy control points, and how
   we can differentiate axe vs pickaxe vs bucket with a single stock model.
@@ -99,9 +99,9 @@ Suggested styling (single stock model, tinted):
 
 | Item        | pingPath key            | Tint            |
 |-------------|-------------------------|-----------------|
-| Axe         | MinimapControlPoint     | red (255,60,60) |
-| Pickaxe     | MinimapControlPoint     | gray/white      |
-| Bucket      | MinimapControlPoint     | light blue      |
-| Full bucket | MinimapControlPoint     | deep blue       |
+| Axe         | MinimapQuestControlPoint     | red (255,60,60) |
+| Pickaxe     | MinimapQuestControlPoint     | gray/white      |
+| Bucket      | MinimapQuestControlPoint     | light blue      |
+| Full bucket | MinimapQuestControlPoint     | deep blue       |
 
 (Or `MinimapQuestObjectiveBonus` for a starrier "collectible" look.)

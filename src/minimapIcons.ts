@@ -1,0 +1,95 @@
+import { Timer } from 'w3ts';
+import { AXE_ID, PICKAXE_ID, BUCKET_ID, BUCKET_FULL_ID } from './constants';
+import { getWorldBounds } from './util';
+
+/** How often (seconds) to rescan the map for ground tools. */
+const SCAN_INTERVAL = 0.5;
+
+interface IconStyle {
+  red: number;
+  green: number;
+  blue: number;
+}
+
+/** Tint per tool type — all use the same circular control-point model. */
+const ICON_STYLES = new Map<number, IconStyle>([
+  [AXE_ID, { red: 255, green: 80, blue: 40 }], // reddish orange
+  [PICKAXE_ID, { red: 220, green: 220, blue: 220 }], // light gray
+  [BUCKET_ID, { red: 80, green: 180, blue: 255 }], // light blue
+  [BUCKET_FULL_ID, { red: 30, green: 100, blue: 255 }], // deep blue
+]);
+
+interface TrackedIcon {
+  icon: minimapicon;
+  typeId: number;
+  x: number;
+  y: number;
+}
+
+/** Ground items currently marked on the minimap, keyed by item handle. */
+const tracked = new Map<item, TrackedIcon>();
+
+let iconPath = 'UI\\Minimap\\MiniMap-ControlPoint.mdl';
+
+function createIcon(it: item, typeId: number): void {
+  const style = ICON_STYLES.get(typeId);
+  if (style == null) return;
+  const x = GetItemX(it);
+  const y = GetItemY(it);
+  const icon = CreateMinimapIcon(x, y, style.red, style.green, style.blue, iconPath, FOG_OF_WAR_MASKED);
+  if (icon != null) {
+    tracked.set(it, { icon, typeId, x, y });
+  }
+}
+
+/**
+ * Diff the tools currently on the ground against the tracked icons.
+ *
+ * A periodic scan (rather than pickup/drop event hooks) covers every way a
+ * tool can enter or leave the ground with one code path: terrain spawn,
+ * drop/pickup, carrier death, and the round-reset item wipe. Carried items
+ * are not on the map, so EnumItemsInRect excludes them automatically.
+ */
+function scan(): void {
+  const found = new Set<item>();
+
+  EnumItemsInRect(getWorldBounds(), null!, () => {
+    const it = GetEnumItem();
+    if (it == null) return;
+    const typeId = GetItemTypeId(it);
+    if (!ICON_STYLES.has(typeId)) return;
+    found.add(it);
+
+    const existing = tracked.get(it);
+    if (existing == null) {
+      createIcon(it, typeId);
+    } else if (existing.x !== GetItemX(it) || existing.y !== GetItemY(it) || existing.typeId !== typeId) {
+      // Same handle but moved or recycled (e.g. picked up and re-dropped
+      // within one scan interval) — recreate at the current position
+      DestroyMinimapIcon(existing.icon);
+      tracked.delete(it);
+      createIcon(it, typeId);
+    }
+  });
+
+  // Collect stale entries first — don't mutate the map mid-iteration
+  const stale: item[] = [];
+  for (const [it] of tracked) {
+    if (!found.has(it)) stale.push(it);
+  }
+  for (const it of stale) {
+    const entry = tracked.get(it);
+    if (entry != null) DestroyMinimapIcon(entry.icon);
+    tracked.delete(it);
+  }
+}
+
+/** Start the periodic scanner that marks ground tools on the minimap. */
+export function initMinimapIcons(): void {
+  const skinPath = SkinManagerGetLocalPath('MinimapQuestControlPoint');
+  if (skinPath != null) iconPath = skinPath;
+
+  // Raw Timer (not timers.ts createTimer) so the round-reset
+  // destroyAllTimers() doesn't kill the scanner
+  Timer.create().start(SCAN_INTERVAL, true, scan);
+}

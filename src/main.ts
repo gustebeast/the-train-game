@@ -15,6 +15,7 @@ import { initFill } from './fill';
 import { initWaterTrain } from './water';
 import { initShop } from './shop';
 import { initHeroes } from './heroes';
+import { initMinimapIcons } from './minimapIcons';
 import { syncGold } from './state';
 import { getHumanPlayers } from './util';
 import { log } from './debug';
@@ -47,6 +48,7 @@ function tsMain() {
     initCheat();
     initShop();
     initHeroes();
+    initMinimapIcons();
 
     // Lock camera distance at 1200 for all human players
     const cameraPosition = 1200;
