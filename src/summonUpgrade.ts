@@ -1,4 +1,4 @@
-import { Unit } from 'w3ts';
+import { Timer, Unit } from 'w3ts';
 import { registerSaveSegment } from './save';
 import { getHumanPlayers } from './util';
 import { SUMMON_TECH_ID, SUMMON_UPGRADE_ITEM_ID } from './constants';
@@ -28,10 +28,19 @@ function removeFromShopStock(): void {
 }
 
 /** Register the lobby shop after it spawns, so a later purchase (or a save
- *  load marking the upgrade owned) can pull the item from its stock.
- *  Initial stocking is additive — see stockShop in shop.ts. */
+ *  load marking the upgrade owned) can pull the item from its stock. If the
+ *  upgrade is already owned, remove it now AND after the engine fills the
+ *  pre-listed stock (stockInitialAfterStartDelay = 10s), whichever fill
+ *  semantics this engine version uses. */
 export function registerSummonShop(shop: Unit): void {
   shopUnit = shop;
+  if (!purchased) return;
+  removeFromShopStock();
+  const t = Timer.create();
+  t.start(10.5, false, () => {
+    t.destroy();
+    removeFromShopStock();
+  });
 }
 
 /** Mark the upgrade as bought: unlock the summon ability and stop selling it. */
