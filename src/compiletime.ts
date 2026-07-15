@@ -49,6 +49,10 @@ compiletime(({ objectData, constants }) => {
 
   const peasant = objectData.units.get(constants.units.Peasant)!;
   peasant.modelFile = 'war3mapImported\\WeaponlessPeasant.mdx';
+  // 32 so a unit standing in a 1-tile (128 = 4 pathing cells) corridor blocks
+  // it: movers with collision 32-47 need 3 free cells. 48+ would need all 4
+  // and couldn't path empty tile corridors at all.
+  peasant.collisionSize = 32;
   peasant.structuresBuilt = '';
   peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
@@ -562,7 +566,7 @@ compiletime(({ objectData, constants }) => {
     const hero = objectData.units.get(heroType)!;
     hero.scalingValueundefined = 0.6;
     hero.selectionScale = 1;
-    hero.collisionSize = 16;
+    hero.collisionSize = 32; // match peasants: one unit blocks a 1-tile corridor
     hero.pathingMap = '';
     hero.shadowImageHeight = 100;
     hero.shadowImageWidth = 100;
