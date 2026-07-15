@@ -234,6 +234,14 @@ export function onHeroesSpawned(cb: (heroes: Unit[]) => void): void {
   onHeroesSpawnedCallback = cb;
 }
 
+/** Callback invoked when every spawned hero has died. */
+let onAllHeroesDeadCallback: (() => void) | null = null;
+
+/** Register a callback to run when all spawned heroes have died. */
+export function onAllHeroesDead(cb: () => void): void {
+  onAllHeroesDeadCallback = cb;
+}
+
 /** Returns true if the 4 heroes have been initialized. */
 export function hasHeroes(): boolean {
   return allHeroes[0].typeId !== 0;
@@ -403,6 +411,7 @@ export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
         // Check if all heroes are dead
         if (spawnedHeroes.every(s => GetUnitState(s.unit.handle, UNIT_STATE_LIFE) <= 0)) {
           endHeroState();
+          if (onAllHeroesDeadCallback != null) onAllHeroesDeadCallback();
         }
       });
     }

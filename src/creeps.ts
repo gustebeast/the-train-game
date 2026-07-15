@@ -1,7 +1,7 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import { registerSaveSegment } from './save';
-import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
+import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
 import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { TRACK_SIZE } from './track/constants';
@@ -69,6 +69,7 @@ function decodeCamp(raw: string): void {
 
 registerSaveSegment('cc', encodeCamp, decodeCamp);
 onHeroesSpawned((heroes) => scaleCreepStats(heroes));
+onAllHeroesDead(() => removeSpawnedCreeps());
 
 // ---------------------------------------------------------------------------
 // Camp selection
@@ -143,6 +144,19 @@ export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);
     spawnedCreeps.push({ unit: u, campUnit: camp[i] });
   }
+}
+
+/** Remove all spawned creeps (and their corpses). Called when all heroes die,
+ *  so the failed camp doesn't leave creeps roaming the map. Not used in DPS
+ *  test mode — cancelDPSTest owns creep cleanup there. */
+export function removeSpawnedCreeps(): void {
+  if (dpsTestMode) return;
+  for (const c of spawnedCreeps) {
+    if (GetUnitTypeId(c.unit.handle) !== 0) {
+      RemoveUnit(c.unit.handle);
+    }
+  }
+  spawnedCreeps = [];
 }
 
 // ---------------------------------------------------------------------------
