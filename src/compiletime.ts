@@ -48,15 +48,16 @@ compiletime(({ objectData, constants }) => {
   train.manaRegeneration = 0;
 
   // Track wagon: blood elf wagon unit trailing the engine, holds produced tracks.
-  // The default BloodElfWagon model has a baked-in levitation glow underneath,
-  // so use the glow-free Mine Cart doodad model instead.
+  // TrackWagon.mdx is the stock SD BloodElfWagon model copied into the map so
+  // its baked-in levitation glow can be edited out (the glow geosets use
+  // ShockwaveWater1/Yellow_Glow3/Star8c textures).
   const trackWagon = objectData.units.get(constants.units.Wagon)!;
   trackWagon.name = 'Track Wagon';
   trackWagon.tooltipBasic = 'Track Wagon';
   trackWagon.collisionSize = 16;
-  trackWagon.modelFile = 'Doodads\\Dungeon\\Props\\MineCart\\MineCart';
+  trackWagon.modelFile = 'war3mapImported\\TrackWagon.mdx';
   trackWagon.normal = constants.abilities.InventoryHero;
-  trackWagon.scalingValueundefined = 1;
+  trackWagon.scalingValueundefined = 0.6;
   trackWagon.selectionScale = 1;
   trackWagon.shadowImageHeight = 100;
   trackWagon.shadowImageWidth = 100;
