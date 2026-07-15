@@ -449,6 +449,15 @@ compiletime(({ objectData, constants }) => {
   fillBucket.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
   fillBucket.hotkeyNormal = 'D';
 
+  // Summon Heroes tech: MagicSentry upgrade repurposed as the requirement
+  // gating the summon ability. Granted via SetPlayerTechResearched when the
+  // upgrade is bought from the lobby shop (see summonUpgrade.ts).
+  const summonTech = objectData.upgrades.get(constants.upgrades.MagicSentry)!;
+  summonTech.name = 'Summon Heroes Upgrade';
+  summonTech.levels = 1;
+  summonTech.tooltip = 'Summon Heroes Upgrade';
+  summonTech.tooltipExtended = 'Unlocks the Summon Heroes ability.';
+
   // Summon Heroes spell: Roar repurposed as a no-target instant-cast ability
   const summonHeroes = objectData.abilities.get(constants.abilities.Roar)!;
   summonHeroes.heroAbility = false;
@@ -459,6 +468,8 @@ compiletime(({ objectData, constants }) => {
   summonHeroes.hotkeyNormal = 'R';
   summonHeroes.buffs = '';
   summonHeroes.effect = '';
+  // Grayed out until the Summon Heroes upgrade is bought from the lobby shop
+  summonHeroes.requirements = constants.upgrades.MagicSentry;
 
   // Unsummon Heroes spell: RoarNeutralHostile repurposed as a no-target instant-cast ability
   const unsummonHeroes = objectData.abilities.get(constants.abilities.RoarNeutralHostile)!;
@@ -479,7 +490,7 @@ compiletime(({ objectData, constants }) => {
   shop.groundTexture = ''; // Same texture as a human farm
   shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   shop.collisionSize = 32;
-  shop.itemsSold = [constants.items.AncientFigurine, constants.items.BracerOfAgility, constants.items.DruidPouch, constants.items.JadeRing, constants.items.LionsRing].join(',');
+  shop.itemsSold = [constants.items.AncientFigurine, constants.items.BracerOfAgility, constants.items.DruidPouch, constants.items.JadeRing, constants.items.LionsRing, constants.items.PendantOfEnergy].join(',');
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
@@ -573,6 +584,24 @@ compiletime(({ objectData, constants }) => {
   crateCapacity.abilities = '';
   crateCapacity.classification = 'PowerUp';
   crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMonsterLure.blp';
+
+  // Summon Heroes upgrade (PendantOfEnergy — purchased from shop, one-time)
+  const summonUpgrade = objectData.items.get(constants.items.PendantOfEnergy)!;
+  summonUpgrade.name = 'Summon Heroes Upgrade';
+  summonUpgrade.tooltipBasic = summonUpgrade.name;
+  summonUpgrade.description = 'Unlocks the Summon Heroes ability, allowing heroes to be summoned at creep camps. One-time purchase, kept across rounds.';
+  summonUpgrade.tooltipExtended = summonUpgrade.description;
+  summonUpgrade.goldCost = 1;
+  summonUpgrade.stockMaximum = 1;
+  summonUpgrade.stockReplenishInterval = 3600;
+  summonUpgrade.stockInitialAfterStartDelay = 10;
+  summonUpgrade.useAutomaticallyWhenAcquired = true;
+  summonUpgrade.activelyUsed = false;
+  summonUpgrade.canBeDropped = false;
+  summonUpgrade.perishable = true;
+  summonUpgrade.abilities = '';
+  summonUpgrade.classification = 'PowerUp';
+  summonUpgrade.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSelectHeroOn.blp';
 
   // Scale down all hero types to match peasant size
   const heroTypes: string[] = [

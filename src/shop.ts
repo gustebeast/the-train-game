@@ -3,6 +3,8 @@ import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
 import { getTrain, getTrackWagon } from './train';
 import { getCrate } from './items';
+import { SUMMON_UPGRADE_ITEM_ID } from './constants';
+import { isSummonUpgradePurchased, purchaseSummonUpgrade } from './summonUpgrade';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
 const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
@@ -16,6 +18,7 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [RESOURCE_CAPACITY_ID, 1],
   [TRACK_CAPACITY_ID, 1],
   [CRATE_CAPACITY_ID, 1],
+  [SUMMON_UPGRADE_ITEM_ID, 1],
 ]);
 
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
@@ -39,6 +42,13 @@ export function initShop(): void {
 
     const cost = ITEM_COSTS.get(itemTypeId);
     if (cost == null) return;
+
+    // One-time upgrade already owned — swallow the item without charging
+    if (itemTypeId === SUMMON_UPGRADE_ITEM_ID && isSummonUpgradePurchased()) {
+      RemoveItem(item);
+      return;
+    }
+
     if (gameState.gold < cost) {
       RemoveItem(item);
       return;
@@ -64,6 +74,11 @@ export function initShop(): void {
       gameState.crateMaxStack += 4;
       const crate = getCrate();
       if (crate != null) effectTargets = [crate];
+    } else if (itemTypeId === SUMMON_UPGRADE_ITEM_ID) {
+      purchaseSummonUpgrade();
+      const buyer = Unit.fromHandle(GetTriggerUnit());
+      if (buyer != null) effectTargets = [buyer];
+      print('Summon Heroes unlocked!');
     }
 
     syncState();
