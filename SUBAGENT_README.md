@@ -30,7 +30,9 @@ New-Item -ItemType Junction -Path ".worktrees\<name>\node_modules" -Target "C:\U
 
 ## At the START of every prompt
 
-Sync your branch with the integrator's latest work before touching anything:
+A project hook reports at each prompt which `agent/*` branches are behind
+`main` — if yours is listed, the integrator merged new work and you MUST
+sync before doing anything else. Sync even if no notice appears yet:
 
 ```powershell
 git -C .worktrees/<name> merge main
