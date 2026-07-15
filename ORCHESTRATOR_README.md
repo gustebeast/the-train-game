@@ -25,14 +25,22 @@ builds. For the current request:
 1. **Review** — `git diff main...agent/<name>` and read the changes enough
    to explain them and spot anything risky. You are not a full code
    reviewer, but don't merge blind.
-2. **Merge** — `git merge --no-ff agent/<name> -m "Merge agent/<name>: <summary>"`.
+2. **Test-merge on the `testing` branch — NEVER directly on `main`.**
+   `main` must not move until the user has tested the build, so sub-agents
+   aren't told to sync onto unapproved work (the notification hook measures
+   against `main`):
+   ```powershell
+   git checkout -B testing main
+   git merge --no-ff agent/<name> -m "Merge agent/<name>: <summary>"
+   ```
    If `tsconfig.json` conflicts, keep `main`'s version. If source conflicts
    are non-trivial, don't guess — tell the user to have the sub-agent merge
    `main` into their branch and resubmit.
 3. **Verify** — `npx tsc -p tsconfig.json --noEmit`, then `npm run build`.
    Both must pass. If they fail: report exactly what broke; trivial
-   integration fixes (an import, a rename collision) you may fix and commit;
-   anything substantive goes back to the sub-agent via the user.
+   integration fixes (an import, a rename collision) you may fix and commit
+   on `testing`; anything substantive goes back to the sub-agent via the
+   user (checkout `main` and delete `testing` first).
 4. **Present the build** — tell the user, in this shape:
 
    > **Got a new build for you.**
@@ -44,9 +52,24 @@ builds. For the current request:
    map. The build you already ran in step 3 produced the same artifacts, so
    their launch is instant confirmation of what you verified.)
 
-5. **Wait for test feedback** before touching the next request. Pass/fail
-   feedback on the current build may create fix work for the sub-agent —
-   that fix comes back as a new merge request.
+5. **Wait for test feedback** before touching the next request.
+6. **Finalize or discard** based on the user's verdict:
+   - **Pass** — promote the tested merge to `main` (fast-forward only, so
+     `main` gets exactly the commit that was tested) and clean up:
+     ```powershell
+     git checkout main
+     git merge --ff-only testing
+     git branch -d testing
+     ```
+     Only now does the hook start telling sub-agents they're behind `main`
+     and need to sync — they never rebase onto untested work.
+   - **Fail** — discard without touching `main`:
+     ```powershell
+     git checkout main
+     git branch -D testing
+     ```
+     The sub-agent's branch is untouched; the fix comes back as a new
+     merge request.
 
 ## Queueing multiple requests
 
