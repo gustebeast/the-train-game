@@ -52,6 +52,12 @@ Sync at the start of every prompt even if no hook notice appeared yet:
 git -C .worktrees/<name> merge main
 ```
 
+**If all your work has been merged into main** (i.e. `git -C .worktrees/<name> log main..HEAD --no-merges` prints nothing), sync by resetting instead of merging, so your branch doesn't accumulate empty sync-merge commits that make the integrator's "pending submissions" notice list you as having work when you don't:
+
+```powershell
+git -C .worktrees/<name> reset --hard main
+```
+
 ### Arm your main-watcher (once per session)
 
 So you pick up finalized work immediately instead of at your next prompt,
