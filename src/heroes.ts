@@ -234,6 +234,14 @@ export function onHeroesSpawned(cb: (heroes: Unit[]) => void): void {
   onHeroesSpawnedCallback = cb;
 }
 
+/** Callback invoked when every spawned hero has died. */
+let onAllHeroesDeadCallback: (() => void) | null = null;
+
+/** Register a callback to run when all spawned heroes have died. */
+export function onAllHeroesDead(cb: () => void): void {
+  onAllHeroesDeadCallback = cb;
+}
+
 /** Returns true if the 4 heroes have been initialized. */
 export function hasHeroes(): boolean {
   return allHeroes[0].typeId !== 0;
@@ -403,6 +411,7 @@ export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
         // Check if all heroes are dead
         if (spawnedHeroes.every(s => GetUnitState(s.unit.handle, UNIT_STATE_LIFE) <= 0)) {
           endHeroState();
+          if (onAllHeroesDeadCallback != null) onAllHeroesDeadCallback();
         }
       });
     }
@@ -437,8 +446,14 @@ export function endHeroState(): void {
   // Restore peasant ownership and pan cameras back for players regaining peasant control
   for (const [peasantHandle, originalOwner] of peasantOwnerMap) {
     if (GetUnitTypeId(peasantHandle) !== 0) { // unit still exists
-      SetUnitOwner(peasantHandle, originalOwner.handle, true);
-      PanCameraToTimedForPlayer(originalOwner.handle, GetUnitX(peasantHandle), GetUnitY(peasantHandle), 0.5);
+      if (originalOwner.slotState === PLAYER_SLOT_STATE_PLAYING) {
+        SetUnitOwner(peasantHandle, originalOwner.handle, true);
+        PanCameraToTimedForPlayer(originalOwner.handle, GetUnitX(peasantHandle), GetUnitY(peasantHandle), 0.5);
+      } else {
+        // Original owner left the game — their peasant dies instead of
+        // being restored to an empty slot
+        KillUnit(peasantHandle);
+      }
     }
   }
   peasantOwnerMap.clear();
