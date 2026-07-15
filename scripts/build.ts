@@ -17,6 +17,7 @@ function main() {
 
   if (!result) {
     logger.error(`Failed to compile map.`);
+    process.exitCode = 1;
     return;
   }
 

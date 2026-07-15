@@ -213,10 +213,9 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
         h.destroy();
       }
     });
-    return {
-      dpsScale: 1,
-      ehpScale: creepEHP > 0 ? DPS_TEST_HP / creepEHP : 1,
-    };
+    // Factors are unused in test mode — scaleCreepStats splits
+    // dpsTestCreepStartHP evenly and leaves creep damage at defaults.
+    return { dpsScale: 1, ehpScale: 1 };
   }
 
   let heroEHP = 0;
