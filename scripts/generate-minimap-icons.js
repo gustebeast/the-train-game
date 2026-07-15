@@ -32,18 +32,18 @@ const QUAD_HALF = {
 };
 
 const GLYPHS = {
-  // One-sided (single-bit) axe: cutting edge on the left, beard curving
-  // down under the blade, vertical haft
+  // One-sided axe: blade narrow at the socket, flaring wider both up and
+  // down toward a tall cutting edge on the left; haft only below the head
   Axe: [
     '................',
-    '....#######.....',
-    '..#########.....',
+    '..##............',
+    '.#####..........',
+    '.########.......',
     '.##########.....',
     '.##########.....',
-    '.####..####.....',
-    '.###....###.....',
-    '..#.....###.....',
-    '........###.....',
+    '.######.###.....',
+    '.####...###.....',
+    '..##....###.....',
     '........###.....',
     '........###.....',
     '........###.....',

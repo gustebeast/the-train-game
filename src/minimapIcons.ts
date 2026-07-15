@@ -17,7 +17,7 @@ interface IconStyle {
  *  scripts/generate-minimap-icons.js — edit the ASCII art or sizes there
  *  and re-run it to change the icons. */
 const ICON_STYLES = new Map<number, IconStyle>([
-  [AXE_ID, { red: 50, green: 255, blue: 50, path: 'war3mapImported\\MinimapAxe.mdx' }], // bright green
+  [AXE_ID, { red: 80, green: 200, blue: 90, path: 'war3mapImported\\MinimapAxe.mdx' }], // green
   [PICKAXE_ID, { red: 220, green: 220, blue: 220, path: 'war3mapImported\\MinimapPickaxe.mdx' }], // light gray
   [BUCKET_ID, { red: 80, green: 180, blue: 255, path: 'war3mapImported\\MinimapBucket.mdx' }], // light blue
   [BUCKET_FULL_ID, { red: 30, green: 100, blue: 255, path: 'war3mapImported\\MinimapBucketFull.mdx' }], // deep blue
