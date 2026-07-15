@@ -2,7 +2,7 @@ import { Trigger, Unit } from 'w3ts';
 import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
 import { getTrain, getTrackWagon } from './train';
-import { getCrate } from './items';
+import { getCrateStart, loadCrateForLobby } from './items';
 import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade } from './summonUpgrade';
 import { forEachUnitInWorld } from './util';
@@ -73,8 +73,12 @@ export function initShop(): void {
       effectTargets = [getTrackWagon()];
     } else if (itemTypeId === CRATE_CAPACITY_ID) {
       gameState.crateMaxStack += 4;
-      const crate = getCrate();
-      if (crate != null) effectTargets = [crate];
+      // The shop is in the lobby, where the START crate displays capacity as
+      // item charges — refresh it and play the effect there (the target
+      // crate from getCrate() only exists during gameplay rounds)
+      loadCrateForLobby();
+      const crateStart = getCrateStart();
+      if (crateStart != null) effectTargets = [crateStart];
     } else if (itemTypeId === SUMMON_UPGRADE_ITEM_ID) {
       purchaseSummonUpgrade();
       // The unlock applies to everyone — play the effect on every peasant
