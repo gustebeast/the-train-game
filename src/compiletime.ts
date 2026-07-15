@@ -67,6 +67,9 @@ compiletime(({ objectData, constants }) => {
   trackWagon.sightRadiusNight = 400;
   trackWagon.speedMaximum = 522;
   trackWagon.speedMinimum = 1;
+  // Match the engine's turn rate (its hbew default is 0.6) so both cars lose
+  // the same speed rounding corners and the coupling gap stays constant
+  trackWagon.turnRate = 0.4;
 
   const peasant = objectData.units.get(constants.units.Peasant)!;
   peasant.modelFile = 'war3mapImported\\WeaponlessPeasant.mdx';
