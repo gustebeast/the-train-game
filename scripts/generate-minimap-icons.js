@@ -7,13 +7,11 @@
 // shows nothing — hiveworkshop.com/threads/minimap-icon-wont-show.349318).
 // Each model is a flat unshaded quad textured with a 16x16 glyph TGA.
 //
-// !! SIZE CALIBRATION !! The icon renderer draws the model in a screen-like
-// coordinate space, NOT world units (a 12x12 quad covered the entire
-// screen). Best estimate: WC3 UI space (screen = 0.8 x 0.6), where a stock
-// ~15px icon is ~0.008 units wide, so 50% of stock is ~0.004 (QUAD_HALF
-// 0.002). Until confirmed in-game, each icon gets a different QUAD_HALF
-// from the ladder below — check which tool renders at the desired size,
-// then set all four to that value and re-run.
+// SIZE: The icon renderer draws the model in a screen-like coordinate
+// space, NOT world units (a 12x12 quad covered the entire screen; a
+// 0.005-half-extent quad renders roughly stock-icon sized). QUAD_HALF was
+// calibrated in-game by the user: on a ladder where 0.002 was "1" and
+// 0.005 was "10", they picked 8 → 0.00433.
 //
 // Glyph art: ASCII grids below, '#' = opaque white (tinted per-item at
 // runtime by CreateMinimapIcon's RGB args), '.' = transparent.
@@ -25,13 +23,12 @@ const Model = require('mdx-m3-viewer-th/dist/cjs/parsers/mdlx/model').default;
 const TEX_SIZE = 16;
 const OUT_DIR = path.join(__dirname, '..', 'maps', 'TheTrainGame.w3x', 'war3mapImported');
 
-// Calibration ladder — see header comment. Once the right size is known,
-// set all four to the same value.
+// User-calibrated icon size (see header). Same for all tools.
 const QUAD_HALF = {
-  Axe: 0.002,
-  Pickaxe: 0.005,
-  Bucket: 0.0125,
-  BucketFull: 0.03,
+  Axe: 0.00433,
+  Pickaxe: 0.00433,
+  Bucket: 0.00433,
+  BucketFull: 0.00433,
 };
 
 const GLYPHS = {
