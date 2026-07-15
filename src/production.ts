@@ -17,6 +17,7 @@ export function setMoveOrderCallback(cb: () => void): void {
 }
 
 let train: Unit;
+let trackWagon: Unit;
 const PRODUCTION_RATE = 12; // mana regen per second when producing
 let producing = false;
 let paused = false;
@@ -31,14 +32,14 @@ export function resumeProduction(): void {
   updateProduction();
 }
 
-/** Check if the train has resources to produce and isn't at max tracks. */
+/** Check if the train has resources to produce and the wagon isn't at max tracks. */
 function canProduce(): boolean {
   const wood = findItemByType(train, WOOD_ID);
   const stone = findItemByType(train, STONE_ID);
   if (wood == null || wood.charges <= 0) return false;
   if (stone == null || stone.charges <= 0) return false;
-  const tracks = findItemByType(train, TRACK_PIECE_ID);
-  const maxStack = getMaxStack(train, TRACK_PIECE_ID);
+  const tracks = findItemByType(trackWagon, TRACK_PIECE_ID);
+  const maxStack = getMaxStack(trackWagon, TRACK_PIECE_ID);
   if (tracks != null && tracks.charges >= maxStack) return false;
   return true;
 }
@@ -59,9 +60,9 @@ function onManaFull(): void {
   stone.charges -= 1;
   if (stone.charges <= 0) RemoveItem(stone.handle);
 
-  // Create or add to track stack in slot 0
-  const tracks = findItemByType(train, TRACK_PIECE_ID);
-  setStorageItem(train, TRACK_PIECE_ID, (tracks?.charges ?? 0) + 1, 0);
+  // Create or add to the track wagon's track stack in slot 0
+  const tracks = findItemByType(trackWagon, TRACK_PIECE_ID);
+  setStorageItem(trackWagon, TRACK_PIECE_ID, (tracks?.charges ?? 0) + 1, 0);
 
   // Reset mana
   train.mana = 0;
@@ -109,8 +110,9 @@ export function updateProduction(): void {
 /** Initialize the production system. Must be called after the train is created. */
 let manaTrigger: Trigger | null = null;
 
-export function initProduction(trainUnit: Unit): void {
+export function initProduction(trainUnit: Unit, trackWagonUnit: Unit): void {
   train = trainUnit;
+  trackWagon = trackWagonUnit;
   // Train starts with 0 mana, 0 regen — production begins when resources arrive
   train.mana = 0;
   BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);

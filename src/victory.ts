@@ -1,6 +1,6 @@
 import { Unit } from 'w3ts';
 import { setVictoryTriggered } from './track/state';
-import { extinguish, getTrain } from './train';
+import { extinguish, getTrain, getTrackWagon } from './train';
 import { gameState, syncGold } from './state';
 import { saveToFile } from './save';
 import { rollCreepCamp } from './creeps';
@@ -17,6 +17,8 @@ export function triggerVictory(lastTrack: Unit): void {
   const train = getTrain();
   BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
   train.moveSpeed = 200;
+  const wagon = getTrackWagon();
+  if (wagon != null) wagon.moveSpeed = 200;
 }
 
 /** Called when the train actually reaches the end. Awards rewards and saves. */

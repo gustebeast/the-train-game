@@ -15,11 +15,17 @@ const REGION_HALF = 2; // 4x4 region → half-size = 2
 const STUCK_TIMEOUT = 35;
 const CENTER_OFFSET = 16;
 const TRAIN_HP_REGEN = -1; // HP per second; negative = decay
+// Grace before the crash countdown starts at round start, matching the old
+// travel time from the first track to the second (engine now spawns on the
+// second track, so it has no initial journey to make).
+const START_GRACE = 45;
 let arrivalRect: Rectangle;
 let arrivalRegion: Region;
 let lastMoveTime: number = 0;
 let targetIdx: number = 0;
 let train: Unit;
+let trackWagon: Unit;
+let waitingForTrack: boolean = false;
 let crashDeadline: number = 0;
 let gameOver: boolean = false;
 let burning: boolean = false;
@@ -59,12 +65,29 @@ function overshootOffset(cur: GridPos, nxt: GridPos): { ox: number; oy: number }
   return { ox, oy };
 }
 
+/** Order the track wagon to the track one behind the engine's target,
+ *  so it trails the engine by exactly one track piece. */
+function orderWagonMove(): void {
+  if (trackWagon == null) return;
+  const target = placedTracks[targetIdx - 1];
+  if (target == null) return;
+  const tgt = trackCenter(target);
+  const engineTrack = placedTracks[targetIdx];
+  if (engineTrack != null) {
+    const { ox, oy } = overshootOffset(tgt, trackCenter(engineTrack));
+    trackWagon.issueOrderAt('move', tgt.x + ox, tgt.y + oy);
+  } else {
+    trackWagon.issueOrderAt('move', tgt.x, tgt.y);
+  }
+}
+
 /** Move the arrival region to the next track and issue a move order. */
 function moveToNext() {
   const current = placedTracks[targetIdx];
   const next = placedTracks[targetIdx + 1];
   if (next == null || current == null) return;
   targetIdx++;
+  waitingForTrack = false;
   const cur = trackCenter(current);
   const nxt = trackCenter(next);
   const { ox, oy } = overshootOffset(cur, nxt);
@@ -77,6 +100,7 @@ function moveToNext() {
   lastMoveTime = os.clock();
   next.invulnerable = true;
   train.issueOrderAt('move', nxt.x + ox, nxt.y + oy);
+  orderWagonMove();
 }
 
 export function getTrainTarget(): Unit | undefined {
@@ -85,16 +109,23 @@ export function getTrainTarget(): Unit | undefined {
 
 /** Called by build.ts when a new track piece is placed. */
 export function onTrackPlaced(): void {
-  if (crashDeadline == 0) {
+  if (crashDeadline != 0) {
+    print('Saved with ' + I2S(R2I((crashDeadline - os.clock()) * 1000)) + 'ms left!');
+    crashDeadline = 0;
+    moveToNext();
     return;
   }
-  print('Saved with ' + I2S(R2I((crashDeadline - os.clock()) * 1000)) + 'ms left!');
-  crashDeadline = 0;
-  moveToNext();
+  // Engine is parked at the end of the line (round start) — resume
+  if (waitingForTrack && !gameOver && placedTracks[targetIdx + 1] != null) {
+    moveToNext();
+  }
 }
 
 /** Re-issue the train's current move order (call after programmatic inventory changes). */
 export function reissueMoveOrder(): void {
+  // Parked waiting for the next track — nothing to re-issue
+  if (waitingForTrack) return;
+
   // Failsafe: if it's been too long since the last moveToNext, the train
   // likely missed the arrival region — force advance instead of re-issuing.
   const elapsed = os.clock() - lastMoveTime;
@@ -118,10 +149,16 @@ export function reissueMoveOrder(): void {
   const cur = trackCenter(current);
   const { ox, oy } = overshootOffset(cur, center);
   train.issueOrderAt('move', center.x + ox, center.y + oy);
+  // Item adds cancel the wagon's move order too — re-issue it as well
+  orderWagonMove();
 }
 
 export function getTrain(): Unit {
   return train;
+}
+
+export function getTrackWagon(): Unit {
+  return trackWagon;
 }
 
 /** Shared train unit setup: owner, pathing, HP/mana from state. */
@@ -134,6 +171,15 @@ function setupTrainUnit(unit: Unit): void {
   BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
 }
 
+/** Shared track wagon setup: owner, pathing off (so it clips through the
+ *  engine instead of colliding with it), invulnerable. */
+function setupWagonUnit(unit: Unit): void {
+  trackWagon = unit;
+  trackWagon.owner = getTrainPlayer();
+  SetUnitPathing(trackWagon.handle, false);
+  trackWagon.invulnerable = true;
+}
+
 /** Sync the active train's stats to match current gameState. */
 export function syncTrainStats(): void {
   if (train == null) return;
@@ -143,21 +189,25 @@ export function syncTrainStats(): void {
 
   // In lobby, display items at max stack to illustrate capacity
   if (!isInGameplay()) {
-    setStorageItem(train, TRACK_PIECE_ID, gameState.trainTrackMaxStack, 0);
     setStorageItem(train, WOOD_ID, gameState.trainCargoMaxStack, 1);
     setStorageItem(train, STONE_ID, gameState.trainCargoMaxStack, 2);
+    if (trackWagon != null) {
+      setStorageItem(trackWagon, TRACK_PIECE_ID, gameState.trainTrackMaxStack, 0);
+    }
   }
 }
 
 registerSyncCallback(syncTrainStats);
 
-export function initLobbyTrain(unit: Unit): void {
+export function initLobbyTrain(unit: Unit, wagon: Unit): void {
   setInGameplay(false);
   setupTrainUnit(unit);
+  setupWagonUnit(wagon);
   train.mana = 0;
   BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
   BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);
   train.moveSpeed = 0;
+  trackWagon.moveSpeed = 0;
   syncState();
 }
 
@@ -181,7 +231,7 @@ let lowHpTrigger: Trigger;
 
 function initTrainUnit(unit: Unit): void {
   setupTrainUnit(unit);
-  initProduction(train);
+  initProduction(train, trackWagon);
 
   // Re-register HP trigger for the new unit handle
   if (lowHpTrigger != null) lowHpTrigger.destroy();
@@ -205,9 +255,13 @@ function initTrainUnit(unit: Unit): void {
 
 let arrivalTrigger: Trigger;
 
-export function initTrain(unit: Unit) {
-  // Reset state from previous train
-  targetIdx = 0;
+export function initTrain(unit: Unit, wagon: Unit) {
+  // Reset state from previous train. The engine spawns on the second track
+  // (index 1) with the wagon behind it on the first (index 0), parked until
+  // the players lay the third track.
+  targetIdx = 1;
+  waitingForTrack = true;
+  lastMoveTime = os.clock();
   crashDeadline = 0;
   gameOver = false;
   burning = false;
@@ -222,6 +276,7 @@ export function initTrain(unit: Unit) {
   if (arrivalRect != null) arrivalRect.destroy();
 
   setInGameplay(true);
+  setupWagonUnit(wagon);
   initTrainUnit(unit);
   syncState();
   setMoveOrderCallback(() => reissueMoveOrder());
@@ -252,26 +307,40 @@ export function initTrain(unit: Unit) {
       });
       return;
     }
-    print('Train about to crash!');
-    const crashDelay = (REGION_HALF + OVERSHOOT) / gameState.trainSpeed;
-    crashDeadline = os.clock() + crashDelay;
-    startOneShot(crashDelay, () => {
-      if (crashDeadline !== 0) {
-        print('Game over!');
-        crashDeadline = 0;
-        gameOver = true;
-        // deleteSave(); // Disabled for testing
-      }
-    });
+    startCrashCountdown();
   });
 
   // Start slow, ramp up to full speed after 30 seconds
   train.moveSpeed = 1;
+  trackWagon.moveSpeed = 1;
   startOneShot(30, () => {
     if (train.moveSpeed === 1) {
       train.moveSpeed = gameState.trainSpeed;
+      trackWagon.moveSpeed = gameState.trainSpeed;
     }
   });
 
-  moveToNext();
+  // The engine starts parked on the last track — give the players a grace
+  // period to lay the next one before the crash countdown begins.
+  startOneShot(START_GRACE, () => {
+    if (waitingForTrack && !gameOver && isInGameplay() && placedTracks[targetIdx + 1] == null) {
+      waitingForTrack = false;
+      startCrashCountdown();
+    }
+  });
+}
+
+/** Begin the short countdown that ends the game unless a track is placed. */
+function startCrashCountdown(): void {
+  print('Train about to crash!');
+  const crashDelay = (REGION_HALF + OVERSHOOT) / gameState.trainSpeed;
+  crashDeadline = os.clock() + crashDelay;
+  startOneShot(crashDelay, () => {
+    if (crashDeadline !== 0) {
+      print('Game over!');
+      crashDeadline = 0;
+      gameOver = true;
+      // deleteSave(); // Disabled for testing
+    }
+  });
 }

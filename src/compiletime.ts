@@ -47,6 +47,19 @@ compiletime(({ objectData, constants }) => {
   train.manaInitialAmount = 0;
   train.manaRegeneration = 0;
 
+  // Track wagon: blood elf wagon trailing the engine, holds produced tracks
+  const trackWagon = objectData.units.get(constants.units.Wagon)!;
+  trackWagon.name = 'Track Wagon';
+  trackWagon.tooltipBasic = 'Track Wagon';
+  trackWagon.collisionSize = 16;
+  trackWagon.normal = constants.abilities.InventoryHero;
+  trackWagon.scalingValueundefined = 0.6;
+  trackWagon.selectionScale = 1;
+  trackWagon.sightRadiusDay = 400;
+  trackWagon.sightRadiusNight = 400;
+  trackWagon.speedMaximum = 522;
+  trackWagon.speedMinimum = 1;
+
   const peasant = objectData.units.get(constants.units.Peasant)!;
   peasant.modelFile = 'war3mapImported\\WeaponlessPeasant.mdx';
   peasant.structuresBuilt = '';

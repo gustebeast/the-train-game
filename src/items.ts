@@ -4,7 +4,7 @@ import { gameState } from './state';
 import { nextFrame } from './util';
 import {
   AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
-  PEASANT_ID, TRAIN_ID, CRATE_ID,
+  PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
   BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID, FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID,
 } from './constants';
 
@@ -158,11 +158,15 @@ export function showFloatingText(unitHandle: unit, msg: string): void {
 }
 
 export function isStorage(u: Unit): boolean {
-  return u.typeId === TRAIN_ID || u.typeId === CRATE_ID;
+  return u.typeId === TRAIN_ID || u.typeId === TRACK_WAGON_ID || u.typeId === CRATE_ID;
 }
 
 export function isTrain(u: Unit): boolean {
   return u.typeId === TRAIN_ID;
+}
+
+export function isTrackWagon(u: Unit): boolean {
+  return u.typeId === TRACK_WAGON_ID;
 }
 
 /** Get the max stack size for a unit and item type. */
@@ -170,6 +174,7 @@ export function getMaxStack(u: Unit, itemTypeId?: number): number {
   if (isTrain(u)) {
     return itemTypeId === TRACK_PIECE_ID ? gameState.trainTrackMaxStack : gameState.trainCargoMaxStack;
   }
+  if (isTrackWagon(u)) return gameState.trainTrackMaxStack;
   if (u.typeId === CRATE_ID) return gameState.crateMaxStack;
   return gameState.peasantMaxStack;
 }
@@ -222,6 +227,11 @@ export function findAnyItem(u: Unit): Item | null {
  * Returns an error message string if rejected, or null if accepted.
  */
 export function validateGive(itemTypeId: number, target: Unit): string | null {
+  // The track wagon is filled by the engine's production — only take
+  if (isTrackWagon(target)) {
+    return "Can't load the wagon!";
+  }
+
   // Storage units only accept resources (track, wood, stone)
   if (isStorage(target) && !isResource(itemTypeId)) {
     return "Can't store that!";
@@ -275,11 +285,11 @@ export function validateTake(taker: Unit, storage: Unit): string | null {
     return "Can't take from that!";
   }
 
-  // Special case: holding tracks and targeting train → take more tracks
+  // Special case: holding tracks and targeting the track wagon → take more tracks
   const heldItem = getSlot0Item(taker);
-  if (heldItem != null && heldItem.typeId === TRACK_PIECE_ID && isTrain(storage)) {
-    const trainTracks = findItemByType(storage, TRACK_PIECE_ID);
-    if (trainTracks == null || trainTracks.charges <= 0) {
+  if (heldItem != null && heldItem.typeId === TRACK_PIECE_ID && isTrackWagon(storage)) {
+    const wagonTracks = findItemByType(storage, TRACK_PIECE_ID);
+    if (wagonTracks == null || wagonTracks.charges <= 0) {
       return 'No tracks!';
     }
     if (heldItem.charges >= getMaxStack(taker, TRACK_PIECE_ID)) {
@@ -334,7 +344,9 @@ export function giveToStorage(giver: Unit, giverItem: Item, storage: Unit): bool
 
 /** Fire inventory-change side effects after a storage unit's contents change. */
 function notifyStorageChanged(storage: Unit): void {
-  if (isTrain(storage) && onTrainInventoryChanged != null) onTrainInventoryChanged();
+  if ((isTrain(storage) || isTrackWagon(storage)) && onTrainInventoryChanged != null) {
+    onTrainInventoryChanged();
+  }
   if (isCrate(storage)) syncCrateState();
 }
 
@@ -450,6 +462,12 @@ export function initItems(): void {
       return;
     }
 
+    // The track wagon only receives tracks from production, never from players
+    if (isTrackWagon(unit) && giver != null) {
+      rejectPickup("Can't load the wagon!");
+      return;
+    }
+
     // Scan inventory for existing items (excluding the one just picked up)
     let otherItem: Item | undefined;
     let matchingResource: Item | undefined;
@@ -496,8 +514,8 @@ export function initItems(): void {
       UnitDropItemSlot(unit.handle, picked.handle, storageSlot(pickedType));
     }
 
-    // Update train production when its inventory changes
-    if (isTrain(unit) && onTrainInventoryChanged != null) {
+    // Update train production when the engine's or track wagon's inventory changes
+    if ((isTrain(unit) || isTrackWagon(unit)) && onTrainInventoryChanged != null) {
       onTrainInventoryChanged();
     }
 

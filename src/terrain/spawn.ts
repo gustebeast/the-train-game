@@ -17,7 +17,7 @@ import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../creeps';
 import { resetHeroState } from '../heroes';
 import { destroyAllTimers } from '../timers';
-import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, CRATE_ID, WATER_ID } from '../constants';
+import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID } from '../constants';
 import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
 
 // Per-variation scales to normalize rock/granite models to a consistent 128-unit footprint.
@@ -52,9 +52,16 @@ function spawnStartingTrack(worldX: number, worldY: number): void {
   placedTracks.push(track);
 }
 
-/** Create all WC3 objects and paint terrain from the generated grid. Returns the train unit if one was spawned. */
-export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
-  let trainUnit: Unit | null = null;
+/** The train units created by spawnTerrain (engine car and track wagon). */
+export interface SpawnedTrain {
+  engine: Unit | null;
+  wagon: Unit | null;
+}
+
+/** Create all WC3 objects and paint terrain from the generated grid. Returns the train units if any were spawned. */
+export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
+  let engineUnit: Unit | null = null;
+  let wagonUnit: Unit | null = null;
 
   // Resolve human players once for PLAYER_1..4 spawning
   const humanPlayers = getHumanPlayers();
@@ -151,9 +158,14 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
           spawnStartingTrack(world.x, world.y);
           break;
 
-        case Entity.TRACK_WITH_TRAIN:
+        case Entity.TRACK_WITH_ENGINE:
           spawnStartingTrack(world.x, world.y);
-          trainUnit = Unit.create(getNeutralPassive(), TRAIN_ID, world.x + CENTER_OFFSET, world.y + CENTER_OFFSET, 0)!;
+          engineUnit = Unit.create(getNeutralPassive(), TRAIN_ID, world.x + CENTER_OFFSET, world.y + CENTER_OFFSET, 0)!;
+          break;
+
+        case Entity.TRACK_WITH_WAGON:
+          spawnStartingTrack(world.x, world.y);
+          wagonUnit = Unit.create(getNeutralPassive(), TRACK_WAGON_ID, world.x + CENTER_OFFSET, world.y + CENTER_OFFSET, 0)!;
           break;
 
         case Entity.AXE:
@@ -216,6 +228,6 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): Unit | null {
   const exitWorld = gridToWorld(grid.exit);
   setVictoryTile(exitWorld.x, exitWorld.y);
 
-  return trainUnit;
+  return { engine: engineUnit, wagon: wagonUnit };
 }
 

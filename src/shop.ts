@@ -1,7 +1,7 @@
 import { Trigger, Unit } from 'w3ts';
 import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
-import { getTrain } from './train';
+import { getTrain, getTrackWagon } from './train';
 import { getCrate } from './items';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
@@ -59,7 +59,7 @@ export function initShop(): void {
       effectTargets = [getTrain()];
     } else if (itemTypeId === TRACK_CAPACITY_ID) {
       gameState.trainTrackMaxStack += 2;
-      effectTargets = [getTrain()];
+      effectTargets = [getTrackWagon()];
     } else if (itemTypeId === CRATE_CAPACITY_ID) {
       gameState.crateMaxStack += 4;
       const crate = getCrate();

@@ -31,7 +31,7 @@ export enum Entity {
   WATER_VISIBLE = 16,
   CRATE = 5,
   TRACK = 6,
-  TRACK_WITH_TRAIN = 7,
+  TRACK_WITH_ENGINE = 7,
   AXE = 8,
   PICKAXE = 9,
   BUCKET = 10,
@@ -44,6 +44,7 @@ export enum Entity {
   SHOP = 18,
   REVERT_CIRCLE = 19,
   CREEP_CAMP = 20,
+  TRACK_WITH_WAGON = 21,
 }
 
 export interface Cell {
