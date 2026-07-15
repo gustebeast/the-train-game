@@ -30,9 +30,23 @@ New-Item -ItemType Junction -Path ".worktrees\<name>\node_modules" -Target "C:\U
 
 ## At the START of every prompt
 
-A project hook reports at each prompt which `agent/*` branches are behind
-`main` — if yours is listed, the integrator merged new work and you MUST
-sync before doing anything else. Sync even if no notice appears yet:
+### Reading the automatic hook notices
+
+A project hook injects branch status at every prompt, in every session. It
+has two sections — as a sub-agent, here is how to handle them:
+
+- **"Agent branches behind main"** — if YOUR branch is listed, the
+  integrator merged new work and you MUST sync (command below) before doing
+  anything else. Other agents' branches in this list are not your problem.
+- **"Pending sub-agent submissions"** — IGNORE this section entirely. It is
+  the integrator's merge queue. Your own branch appearing there just means
+  your submission hasn't been merged yet — that's normal. The
+  `git merge --no-ff` instruction in it is for the integrator only; never
+  run it yourself.
+
+### Sync your branch
+
+Sync at the start of every prompt even if no hook notice appeared yet:
 
 ```powershell
 git -C .worktrees/<name> merge main
