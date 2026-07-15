@@ -414,18 +414,23 @@ export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
 // End hero state — restore peasant control, remove heroes
 // ---------------------------------------------------------------------------
 
-/** End hero summoning: snapshot items, remove heroes, restore peasant ownership,
- *  remove unsummon ability from all peasants. */
+/** End hero summoning: snapshot items, remove heroes and their summons,
+ *  restore peasant ownership, remove unsummon ability from all peasants. */
 export function endHeroState(): void {
   if (!heroesSpawned) return;
 
   // Snapshot items before removing heroes
   snapshotHeroItems();
 
-  // Remove heroes (not kill — avoids dead hero portraits in the UI)
-  for (const { unit } of spawnedHeroes) {
-    RemoveUnit(unit.handle);
-  }
+  // Remove heroes and anything they summoned (not kill — avoids dead hero
+  // portraits in the UI). Human players only ever own peasants outside hero
+  // mode, so any non-peasant unit they own is hero-related and safe to remove.
+  const humanIds = getHumanPlayers().map(p => p.id);
+  forEachUnitInWorld(u => {
+    if (GetUnitTypeId(u) === PEASANT_ID) return;
+    if (!humanIds.includes(GetPlayerId(GetOwningPlayer(u)))) return;
+    RemoveUnit(u);
+  });
   spawnedHeroes = [];
   heroesSpawned = false;
 
