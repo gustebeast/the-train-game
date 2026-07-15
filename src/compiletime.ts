@@ -198,7 +198,10 @@ compiletime(({ objectData, constants }) => {
 
   // Pickaxe attachment ability (passive, shows pickaxe model on caster's left hand)
   const pickAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus8)!;
-  pickAttach.target = 'war3mapImported\\Axe.mdx';
+  // PickaxeFixed.mdx = Pickaxe.mdx with its singleplayer glue-screen texture
+  // (UI\Glues\...\AnyHandleRedWrapped.blp) swapped to AshenTree.blp — that
+  // texture is the prime suspect for the multiplayer framerate bug (unconfirmed)
+  pickAttach.target = 'war3mapImported\\PickaxeFixed.mdx';
   pickAttach.targetAttachments = 1;
   pickAttach.targetAttachmentPoint1 = 'left,hand';
 
