@@ -47,14 +47,21 @@ compiletime(({ objectData, constants }) => {
   train.manaInitialAmount = 0;
   train.manaRegeneration = 0;
 
-  // Track wagon: blood elf wagon trailing the engine, holds produced tracks
+  // Track wagon: blood elf wagon unit trailing the engine, holds produced tracks.
+  // The default BloodElfWagon model has a baked-in levitation glow underneath,
+  // so use the glow-free Mine Cart doodad model instead.
   const trackWagon = objectData.units.get(constants.units.Wagon)!;
   trackWagon.name = 'Track Wagon';
   trackWagon.tooltipBasic = 'Track Wagon';
   trackWagon.collisionSize = 16;
+  trackWagon.modelFile = 'Doodads\\Dungeon\\Props\\MineCart\\MineCart';
   trackWagon.normal = constants.abilities.InventoryHero;
-  trackWagon.scalingValueundefined = 0.6;
+  trackWagon.scalingValueundefined = 1;
   trackWagon.selectionScale = 1;
+  trackWagon.shadowImageHeight = 100;
+  trackWagon.shadowImageWidth = 100;
+  trackWagon.shadowImageCenterX = 50;
+  trackWagon.shadowImageCenterY = 50;
   trackWagon.sightRadiusDay = 400;
   trackWagon.sightRadiusNight = 400;
   trackWagon.speedMaximum = 522;

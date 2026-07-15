@@ -465,12 +465,17 @@ function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
 // ============================================================
 
 /** Place the train start: track wagon on the anchor tile, engine one tile
- *  east, start crate below the wagon. The wagon's track is spawned first
- *  (west→east scan order) so placedTracks[0] is the wagon's tile and
- *  placedTracks[1] is the engine's. */
-function placeTrainStart(grid: Grid, gx: number, gy: number): void {
+ *  east, start crate below the wagon. With runway (gameplay), one empty
+ *  track is added ahead of the engine so players have time to gather
+ *  materials before the train reaches the end of the line. West→east scan
+ *  order means placedTracks[0] is the wagon's tile, [1] the engine's, and
+ *  [2] the runway. The lobby train doesn't move, so it skips the runway. */
+function placeTrainStart(grid: Grid, gx: number, gy: number, runway: boolean): void {
   grid.cells[idx(gx, gy)].entity = Entity.TRACK_WITH_WAGON;
   grid.cells[idx(gx + 1, gy)].entity = Entity.TRACK_WITH_ENGINE;
+  if (runway) {
+    grid.cells[idx(gx + 2, gy)].entity = Entity.TRACK;
+  }
   grid.cells[idx(gx, gy - 1)].entity = Entity.CRATE_START;
 }
 
@@ -532,8 +537,9 @@ export function generateLobby(): Grid {
     }
   }
 
-  // Train start (wagon, engine, start crate) — same layout as a round
-  placeTrainStart(grid, -4, 0);
+  // Train start (wagon, engine, start crate) — same layout as a round,
+  // minus the runway (the lobby train never moves)
+  placeTrainStart(grid, -4, 0, false);
 
   // DPS test area: 6x3 at far bottom-right of grid
   // [N, N, N, N, N, N]
@@ -583,7 +589,7 @@ function placeEntities(grid: Grid): void {
 
   // Entities
   grid.cells[idx(grid.exit.x, grid.exit.y - 1)].entity = Entity.CRATE;
-  placeTrainStart(grid, GRID_MIN_X, 0);
+  placeTrainStart(grid, GRID_MIN_X, 0, true);
   grid.cells[idx(GRID_MIN_X + 1, -3)].entity = Entity.AXE;
   grid.cells[idx(GRID_MIN_X + 2, -3)].entity = Entity.PICKAXE;
   grid.cells[idx(GRID_MIN_X + 3, -3)].entity = Entity.BUCKET;
