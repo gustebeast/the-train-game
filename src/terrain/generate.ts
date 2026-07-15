@@ -461,6 +461,25 @@ function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
 }
 
 // ============================================================
+// Train start layout (shared by lobby and round generation)
+// ============================================================
+
+/** Place the train start: track wagon on the anchor tile, engine one tile
+ *  east, start crate below the wagon. With runway (gameplay), one empty
+ *  track is added ahead of the engine so players have time to gather
+ *  materials before the train reaches the end of the line. West→east scan
+ *  order means placedTracks[0] is the wagon's tile, [1] the engine's, and
+ *  [2] the runway. The lobby train doesn't move, so it skips the runway. */
+function placeTrainStart(grid: Grid, gx: number, gy: number, runway: boolean): void {
+  grid.cells[idx(gx, gy)].entity = Entity.TRACK_WITH_WAGON;
+  grid.cells[idx(gx + 1, gy)].entity = Entity.TRACK_WITH_ENGINE;
+  if (runway) {
+    grid.cells[idx(gx + 2, gy)].entity = Entity.TRACK;
+  }
+  grid.cells[idx(gx, gy - 1)].entity = Entity.CRATE_START;
+}
+
+// ============================================================
 // Lobby grid (post-victory)
 // ============================================================
 
@@ -476,17 +495,17 @@ const P4 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_4);
 const SC = c(Terrain.GRASSY_DIRT, Entity.START_CIRCLE);
 const RC = c(Terrain.GRASSY_DIRT, Entity.REVERT_CIRCLE);
 const SH = c(Terrain.GRASSY_DIRT, Entity.SHOP);
-const TN = c(Terrain.GRASSY_DIRT, Entity.TRACK_WITH_TRAIN);
-const CS = c(Terrain.WHITE_MARBLE, Entity.CRATE_START);
 // prettier-ignore
-// Laid out as it appears in-game (top = north = +y, bottom = south = -y)
+// Laid out as it appears in-game (top = north = +y, bottom = south = -y).
+// The train start (wagon, engine, start crate) is placed by placeTrainStart
+// anchored at (-4, 0) — the west edge of the y=0 and y=-1 rows.
 const LOBBY_GRID: Cell[][] = [
   [ M, M, M, M, M, M, M, M, M], // y= 4
   [ M, G, G, M,SH, M, G, G, M], // y= 3
   [ M, G, M, G, M, G, M, G, M], // y= 2
   [ M, M, G, G, M, G, G, M, M], // y= 1
-  [ M,TN, P1,P2,G, P3,P4,G, M], // y= 0
-  [ M,CS, G, G, M, G, G, M, M], // y=-1
+  [ M, G, P1,P2,G, P3,P4,G, M], // y= 0
+  [ M, G, G, G, M, G, G, M, M], // y=-1
   [ M, G, M, G, M, G, M, G, M], // y=-2
   [ M,RC, G, M,SC, M, G, G, M], // y=-3
   [ M, M, M, M, M, M, M, M, M], // y=-4
@@ -517,6 +536,10 @@ export function generateLobby(): Grid {
       cell.entity = lobbyCell.entity;
     }
   }
+
+  // Train start (wagon, engine, start crate) — same layout as a round,
+  // minus the runway (the lobby train never moves)
+  placeTrainStart(grid, -4, 0, false);
 
   // DPS test area: 6x3 at far bottom-right of grid
   // [N, N, N, N, N, N]
@@ -565,10 +588,8 @@ function placeEntities(grid: Grid): void {
   grid.cells[idx(grid.exit.x, grid.exit.y)].terrain = Terrain.WHITE_MARBLE;
 
   // Entities
-  grid.cells[idx(GRID_MIN_X, -1)].entity = Entity.CRATE_START;
   grid.cells[idx(grid.exit.x, grid.exit.y - 1)].entity = Entity.CRATE;
-  grid.cells[idx(GRID_MIN_X, 0)].entity = Entity.TRACK_WITH_TRAIN;
-  grid.cells[idx(GRID_MIN_X + 1, 0)].entity = Entity.TRACK;
+  placeTrainStart(grid, GRID_MIN_X, 0, true);
   grid.cells[idx(GRID_MIN_X + 1, -3)].entity = Entity.AXE;
   grid.cells[idx(GRID_MIN_X + 2, -3)].entity = Entity.PICKAXE;
   grid.cells[idx(GRID_MIN_X + 3, -3)].entity = Entity.BUCKET;

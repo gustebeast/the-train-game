@@ -5,6 +5,7 @@ import { Units } from '@objectdata/units';
 // Units
 export const PEASANT_ID = FourCC(Units.Peasant);
 export const TRAIN_ID = FourCC(Units.WarWagon);
+export const TRACK_WAGON_ID = FourCC(Units.Wagon);
 export const CRATE_ID = FourCC(Units.GrainWarehouse);
 export const WATER_ID = FourCC(Units.Burrow);
 

@@ -5,6 +5,7 @@ import {
   getSlot0Item,
   giveToStorage,
   isStorage,
+  isTrackWagon,
   isTrain,
   rejectOrder,
   takeFromStorage,
@@ -71,10 +72,10 @@ export function initGiveTake(): void {
     if (target == null) return;
     const item = getSlot0Item(unit);
 
-    // Take flow: empty hand + storage, or holding tracks + train
-    if ((item != null && item.typeId === TRACK_PIECE_ID && isTrain(target))
+    // Take flow: empty hand + storage, or holding tracks + track wagon
+    if ((item != null && item.typeId === TRACK_PIECE_ID && isTrackWagon(target))
         || (item == null && isStorage(target))) {
-      if (isTrain(target) && isBurning()) {
+      if ((isTrain(target) || isTrackWagon(target)) && isBurning()) {
         rejectOrder(unit.handle, 'The train is on fire!');
         return;
       }
@@ -115,8 +116,8 @@ export function initGiveTake(): void {
 
     const item = getSlot0Item(unit);
 
-    if (item != null && item.typeId === TRACK_PIECE_ID && isTrain(target)) {
-      // Take tracks from train — re-validate in case order-time rejection lost the race
+    if (item != null && item.typeId === TRACK_PIECE_ID && isTrackWagon(target)) {
+      // Take tracks from the wagon — re-validate in case order-time rejection lost the race
       if (validateTake(unit, target) != null) return;
       takeFromStorage(unit, target);
     } else if (item == null) {

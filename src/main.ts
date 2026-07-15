@@ -35,12 +35,12 @@ function tsMain() {
     rollCreepCamp();
 
     // Generate and spawn procedural terrain (includes crates, tracks, items, players)
-    const trainUnit = loadTerrain(0, true); // difficulty 0 for round 1, skip cleanup on first load
+    const spawned = loadTerrain(0, true); // difficulty 0 for round 1, skip cleanup on first load
 
     initTeams();
     initTrackBuildTrigger();
     initTrackDestroyTrigger();
-    initTrain(trainUnit!);
+    initTrain(spawned.engine!, spawned.wagon!);
     initItems();
     initGiveTake();
     initBridge();

@@ -47,6 +47,27 @@ compiletime(({ objectData, constants }) => {
   train.manaInitialAmount = 0;
   train.manaRegeneration = 0;
 
+  // Track wagon: blood elf wagon unit trailing the engine, holds produced tracks.
+  // TrackWagon.mdx is the stock SD BloodElfWagon model copied into the map so
+  // its baked-in levitation glow can be edited out (the glow geosets use
+  // ShockwaveWater1/Yellow_Glow3/Star8c textures).
+  const trackWagon = objectData.units.get(constants.units.Wagon)!;
+  trackWagon.name = 'Track Wagon';
+  trackWagon.tooltipBasic = 'Track Wagon';
+  trackWagon.collisionSize = 16;
+  trackWagon.modelFile = 'war3mapImported\\TrackWagon.mdx';
+  trackWagon.normal = constants.abilities.InventoryHero;
+  trackWagon.scalingValueundefined = 0.6;
+  trackWagon.selectionScale = 1;
+  trackWagon.shadowImageHeight = 100;
+  trackWagon.shadowImageWidth = 100;
+  trackWagon.shadowImageCenterX = 50;
+  trackWagon.shadowImageCenterY = 50;
+  trackWagon.sightRadiusDay = 400;
+  trackWagon.sightRadiusNight = 400;
+  trackWagon.speedMaximum = 522;
+  trackWagon.speedMinimum = 1;
+
   const peasant = objectData.units.get(constants.units.Peasant)!;
   peasant.modelFile = 'war3mapImported\\WeaponlessPeasant.mdx';
   peasant.structuresBuilt = '';

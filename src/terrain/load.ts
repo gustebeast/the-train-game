@@ -1,7 +1,6 @@
-import { Unit } from 'w3ts';
 import { Grid, GRID_MAX_X } from './constants';
 import { generateTerrain, generateCheatTerrain, generateLobby } from './generate';
-import { spawnTerrain } from './spawn';
+import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
@@ -34,18 +33,18 @@ function stopLobbyMusic(): void {
 }
 
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
-function loadGameplay(grid: Grid, skipCleanup = false): Unit | null {
+function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   stopLobbyMusic();
   if (!hasHeroes()) initRandomHeroes();
-  const trainUnit = spawnTerrain(grid, skipCleanup);
-  if (trainUnit != null && !skipCleanup) {
-    initTrain(trainUnit);
+  const spawned = spawnTerrain(grid, skipCleanup);
+  if (spawned.engine != null && spawned.wagon != null && !skipCleanup) {
+    initTrain(spawned.engine, spawned.wagon);
     loadCrateForRound();
   }
-  return trainUnit;
+  return spawned;
 }
 
-export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRID_MAX_X): Unit | null {
+export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRID_MAX_X): SpawnedTrain {
   return loadGameplay(generateTerrain(difficulty, exitX), skipCleanup);
 }
 
@@ -57,8 +56,8 @@ export function loadLobby(): void {
   saveLobbySnapshot();
   playLobbyMusic();
   SetTimeOfDay(12);
-  const trainUnit = spawnTerrain(generateLobby());
-  if (trainUnit != null) initLobbyTrain(trainUnit);
+  const spawned = spawnTerrain(generateLobby());
+  if (spawned.engine != null && spawned.wagon != null) initLobbyTrain(spawned.engine, spawned.wagon);
   loadCrateForLobby();
   startDPSTest();
 }

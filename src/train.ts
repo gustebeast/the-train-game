@@ -20,6 +20,7 @@ let arrivalRegion: Region;
 let lastMoveTime: number = 0;
 let targetIdx: number = 0;
 let train: Unit;
+let trackWagon: Unit;
 let crashDeadline: number = 0;
 let gameOver: boolean = false;
 let burning: boolean = false;
@@ -59,6 +60,20 @@ function overshootOffset(cur: GridPos, nxt: GridPos): { ox: number; oy: number }
   return { ox, oy };
 }
 
+// The engine's current move-order point and the previous one. The wagon is
+// always ordered to the engine's previous point, so it retraces the engine's
+// exact path (including overshoots) one order behind.
+let enginePoint: GridPos | null = null;
+let wagonPoint: GridPos | null = null;
+
+/** Re-issue both cars' current move orders from the stored points. */
+function issueCarOrders(): void {
+  if (enginePoint != null) train.issueOrderAt('move', enginePoint.x, enginePoint.y);
+  if (wagonPoint != null && trackWagon != null) {
+    trackWagon.issueOrderAt('move', wagonPoint.x, wagonPoint.y);
+  }
+}
+
 /** Move the arrival region to the next track and issue a move order. */
 function moveToNext() {
   const current = placedTracks[targetIdx];
@@ -76,7 +91,9 @@ function moveToNext() {
 
   lastMoveTime = os.clock();
   next.invulnerable = true;
-  train.issueOrderAt('move', nxt.x + ox, nxt.y + oy);
+  wagonPoint = enginePoint;
+  enginePoint = { x: nxt.x + ox, y: nxt.y + oy };
+  issueCarOrders();
 }
 
 export function getTrainTarget(): Unit | undefined {
@@ -107,21 +124,16 @@ export function reissueMoveOrder(): void {
     return;
   }
 
-  const target = placedTracks[targetIdx];
-  if (target == null) return;
-  const center = trackCenter(target);
-  const current = placedTracks[targetIdx - 1];
-  if (current == null) {
-    train.issueOrderAt('move', center.x, center.y);
-    return;
-  }
-  const cur = trackCenter(current);
-  const { ox, oy } = overshootOffset(cur, center);
-  train.issueOrderAt('move', center.x + ox, center.y + oy);
+  // Item adds cancel both cars' move orders — re-issue the stored points
+  issueCarOrders();
 }
 
 export function getTrain(): Unit {
   return train;
+}
+
+export function getTrackWagon(): Unit {
+  return trackWagon;
 }
 
 /** Shared train unit setup: owner, pathing, HP/mana from state. */
@@ -134,6 +146,15 @@ function setupTrainUnit(unit: Unit): void {
   BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
 }
 
+/** Shared track wagon setup: owner, pathing off (so it clips through the
+ *  engine instead of colliding with it), invulnerable. */
+function setupWagonUnit(unit: Unit): void {
+  trackWagon = unit;
+  trackWagon.owner = getTrainPlayer();
+  SetUnitPathing(trackWagon.handle, false);
+  trackWagon.invulnerable = true;
+}
+
 /** Sync the active train's stats to match current gameState. */
 export function syncTrainStats(): void {
   if (train == null) return;
@@ -143,21 +164,25 @@ export function syncTrainStats(): void {
 
   // In lobby, display items at max stack to illustrate capacity
   if (!isInGameplay()) {
-    setStorageItem(train, TRACK_PIECE_ID, gameState.trainTrackMaxStack, 0);
     setStorageItem(train, WOOD_ID, gameState.trainCargoMaxStack, 1);
     setStorageItem(train, STONE_ID, gameState.trainCargoMaxStack, 2);
+    if (trackWagon != null) {
+      setStorageItem(trackWagon, TRACK_PIECE_ID, gameState.trainTrackMaxStack, 0);
+    }
   }
 }
 
 registerSyncCallback(syncTrainStats);
 
-export function initLobbyTrain(unit: Unit): void {
+export function initLobbyTrain(unit: Unit, wagon: Unit): void {
   setInGameplay(false);
   setupTrainUnit(unit);
+  setupWagonUnit(wagon);
   train.mana = 0;
   BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
   BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);
   train.moveSpeed = 0;
+  trackWagon.moveSpeed = 0;
   syncState();
 }
 
@@ -181,7 +206,7 @@ let lowHpTrigger: Trigger;
 
 function initTrainUnit(unit: Unit): void {
   setupTrainUnit(unit);
-  initProduction(train);
+  initProduction(train, trackWagon);
 
   // Re-register HP trigger for the new unit handle
   if (lowHpTrigger != null) lowHpTrigger.destroy();
@@ -205,9 +230,11 @@ function initTrainUnit(unit: Unit): void {
 
 let arrivalTrigger: Trigger;
 
-export function initTrain(unit: Unit) {
-  // Reset state from previous train
-  targetIdx = 0;
+export function initTrain(unit: Unit, wagon: Unit) {
+  // Reset state from previous train. The engine spawns on the second track
+  // (index 1) with the wagon behind it on the first (index 0); the runway
+  // track (index 2) gives it an initial move target.
+  targetIdx = 1;
   crashDeadline = 0;
   gameOver = false;
   burning = false;
@@ -222,7 +249,12 @@ export function initTrain(unit: Unit) {
   if (arrivalRect != null) arrivalRect.destroy();
 
   setInGameplay(true);
+  setupWagonUnit(wagon);
   initTrainUnit(unit);
+  // Seed the order history: the engine's spawn point acts as its "previous
+  // order", so the wagon's first order sends it to the engine's start tile.
+  enginePoint = { x: unit.x, y: unit.y };
+  wagonPoint = null;
   syncState();
   setMoveOrderCallback(() => reissueMoveOrder());
 
@@ -267,9 +299,11 @@ export function initTrain(unit: Unit) {
 
   // Start slow, ramp up to full speed after 30 seconds
   train.moveSpeed = 1;
+  trackWagon.moveSpeed = 1;
   startOneShot(30, () => {
     if (train.moveSpeed === 1) {
       train.moveSpeed = gameState.trainSpeed;
+      trackWagon.moveSpeed = gameState.trainSpeed;
     }
   });
 
