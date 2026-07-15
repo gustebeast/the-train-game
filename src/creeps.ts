@@ -1,5 +1,6 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
-import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
+import { CREEP_CAMPS, CreepCamp, CreepUnit, campLevel } from './creep_camps';
+import { isMercUpgradeBought } from './mercenary';
 import { registerSaveSegment } from './save';
 import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
 import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
@@ -75,13 +76,20 @@ onAllHeroesDead(() => removeSpawnedCreeps());
 // Camp selection
 // ---------------------------------------------------------------------------
 
-/** Pick a random creep camp and store in state. Hardcoded to Lordaeron Summer for now. */
+/** Pick a random creep camp and store in state. Hardcoded to Lordaeron Summer for now.
+ *  Only level 1 camps roll until the Mercenary Contract unlocks level 2.
+ *  (campIndex always indexes the full camp list so saves stay stable.) */
 export function rollCreepCamp(): void {
   const tileset = 'Lordaeron Summer';
   const camps = CREEP_CAMPS[tileset];
   if (camps == null || camps.length === 0) return;
-  const index = GetRandomInt(0, camps.length - 1);
-  campState = { tileset, campIndex: index };
+  const maxLevel = isMercUpgradeBought() ? 2 : 1;
+  const allowed: number[] = [];
+  for (let i = 0; i < camps.length; i++) {
+    if (campLevel(camps[i]) <= maxLevel) allowed.push(i);
+  }
+  if (allowed.length === 0) return;
+  campState = { tileset, campIndex: allowed[GetRandomInt(0, allowed.length - 1)] };
 }
 
 /** Get the selected camp, or null if none selected. */

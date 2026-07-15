@@ -181,6 +181,13 @@ compiletime(({ objectData, constants }) => {
       { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
       { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
+    Aihn: [ // UnitInventoryHuman (mercenary inventory): hero-like item use, no drop on death
+      { id: 'inv1', variableType: 0, dataPointer: 1, value: 6 }, // itemCapacity
+      { id: 'inv2', variableType: 0, dataPointer: 2, value: 0 }, // dropItemsOnDeath = false
+      { id: 'inv3', variableType: 0, dataPointer: 3, value: 1 }, // canUseItems
+      { id: 'inv4', variableType: 0, dataPointer: 4, value: 1 }, // canGetItems
+      { id: 'inv5', variableType: 0, dataPointer: 5, value: 1 }, // canDropItems
+    ],
   };
   const originalSave = objectData.save.bind(objectData);
   objectData.save = () => {
@@ -479,7 +486,7 @@ compiletime(({ objectData, constants }) => {
   shop.groundTexture = ''; // Same texture as a human farm
   shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   shop.collisionSize = 32;
-  shop.itemsSold = [constants.items.AncientFigurine, constants.items.BracerOfAgility, constants.items.DruidPouch, constants.items.JadeRing, constants.items.LionsRing].join(',');
+  shop.itemsSold = [constants.items.AncientFigurine, constants.items.BracerOfAgility, constants.items.DruidPouch, constants.items.JadeRing, constants.items.LionsRing, constants.items.MedallionOfCourage, constants.items.HoodOfCunning].join(',');
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
@@ -573,6 +580,42 @@ compiletime(({ objectData, constants }) => {
   crateCapacity.abilities = '';
   crateCapacity.classification = 'PowerUp';
   crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMonsterLure.blp';
+
+  // Mercenary Contract (MedallionOfCourage — purchased from shop, one per game)
+  const mercContract = objectData.items.get(constants.items.MedallionOfCourage)!;
+  mercContract.name = 'Mercenary Contract';
+  mercContract.tooltipBasic = mercContract.name;
+  mercContract.description = 'Unlocks level 2 creep camps and recruits a random mercenary creep that joins your heroes whenever they are summoned. If the mercenary dies it is gone for good (reroll to replace it). One purchase per game.';
+  mercContract.tooltipExtended = mercContract.description;
+  mercContract.goldCost = 1;
+  mercContract.stockMaximum = 1;
+  mercContract.stockReplenishInterval = 3600;
+  mercContract.stockInitialAfterStartDelay = 10;
+  mercContract.useAutomaticallyWhenAcquired = true;
+  mercContract.activelyUsed = false;
+  mercContract.canBeDropped = false;
+  mercContract.perishable = true;
+  mercContract.abilities = '';
+  mercContract.classification = 'PowerUp';
+  mercContract.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMedalionOfCourage.blp';
+
+  // Reroll Mercenary (HoodOfCunning — purchased from shop, repeatable)
+  const mercReroll = objectData.items.get(constants.items.HoodOfCunning)!;
+  mercReroll.name = 'Reroll Mercenary';
+  mercReroll.tooltipBasic = mercReroll.name;
+  mercReroll.description = 'Replaces your mercenary (dead or alive) with a new random creep. Carried items transfer to the new mercenary. Requires the Mercenary Contract.';
+  mercReroll.tooltipExtended = mercReroll.description;
+  mercReroll.goldCost = 1;
+  mercReroll.stockMaximum = 10;
+  mercReroll.stockReplenishInterval = 3600;
+  mercReroll.stockInitialAfterStartDelay = 10;
+  mercReroll.useAutomaticallyWhenAcquired = true;
+  mercReroll.activelyUsed = false;
+  mercReroll.canBeDropped = false;
+  mercReroll.perishable = true;
+  mercReroll.abilities = '';
+  mercReroll.classification = 'PowerUp';
+  mercReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHoodOfCunning.blp';
 
   // Scale down all hero types to match peasant size
   const heroTypes: string[] = [

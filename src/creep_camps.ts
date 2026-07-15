@@ -13,6 +13,13 @@ export interface CreepUnit {
 /** A single creep camp composition. */
 export type CreepCamp = CreepUnit[];
 
+/** Camp difficulty level: 3-creep camps are level 1, larger camps level 2.
+ *  Level 2 camps only enter the random selection once the Mercenary Contract
+ *  shop upgrade is purchased. */
+export function campLevel(camp: CreepCamp): number {
+  return camp.length <= 3 ? 1 : 2;
+}
+
 /** Creep camp data extracted from WC3 1v1 Ladder Maps. */
 export const CREEP_CAMPS: Record<string, CreepCamp[]> = {
   'Dalaran Ruins': [

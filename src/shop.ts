@@ -3,12 +3,16 @@ import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
 import { getTrain, getTrackWagon } from './train';
 import { getCrate } from './items';
+import { buyMercContract, rerollMerc } from './mercenary';
+import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
 const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
 const RESOURCE_CAPACITY_ID = FourCC(Items.DruidPouch);
 const TRACK_CAPACITY_ID = FourCC(Items.JadeRing);
 const CRATE_CAPACITY_ID = FourCC(Items.LionsRing);
+const MERC_CONTRACT_ID = FourCC(Items.MedallionOfCourage);
+const MERC_REROLL_ID = FourCC(Items.HoodOfCunning);
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],
@@ -16,6 +20,8 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [RESOURCE_CAPACITY_ID, 1],
   [TRACK_CAPACITY_ID, 1],
   [CRATE_CAPACITY_ID, 1],
+  [MERC_CONTRACT_ID, 1],
+  [MERC_REROLL_ID, 1],
 ]);
 
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
@@ -64,6 +70,35 @@ export function initShop(): void {
       gameState.crateMaxStack += 4;
       const crate = getCrate();
       if (crate != null) effectTargets = [crate];
+    } else if (itemTypeId === MERC_CONTRACT_ID) {
+      if (buyMercContract()) {
+        print('Mercenary Contract purchased: level 2 creep camps unlocked; a mercenary will join your next hero summon.');
+        const buyer = Unit.fromHandle(GetTriggerUnit());
+        if (buyer != null) effectTargets = [buyer];
+      } else {
+        gameState.gold += cost; // already owned — refund
+        print('Mercenary Contract is already owned.');
+      }
+    } else if (itemTypeId === MERC_REROLL_ID) {
+      // If a dead merc is replaced mid-fight, spawn the new one at a living
+      // hero (the fight is at the camp, not the shop); fall back to the buyer
+      const buyer = Unit.fromHandle(GetTriggerUnit());
+      let bx = buyer != null ? buyer.x : 0;
+      let by = buyer != null ? buyer.y : 0;
+      for (const h of getSpawnedHeroes()) {
+        if (GetUnitState(h.handle, UNIT_STATE_LIFE) > 0) {
+          bx = h.x;
+          by = h.y;
+          break;
+        }
+      }
+      if (rerollMerc(bx, by, areHeroesSpawned())) {
+        print('Mercenary rerolled — items carry over to the new creep.');
+        if (buyer != null) effectTargets = [buyer];
+      } else {
+        gameState.gold += cost; // requires the contract — refund
+        print('Reroll Mercenary requires the Mercenary Contract.');
+      }
     }
 
     syncState();

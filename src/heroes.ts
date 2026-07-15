@@ -4,6 +4,7 @@ import { isInGameplay } from './state';
 import { registerSaveSegment } from './save';
 import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants';
 import { getHumanPlayers, nextFrame, forEachUnitInWorld } from './util';
+import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
 
 /** All standard WC3 heroes available for random selection. */
 const HERO_POOL: string[] = [
@@ -319,6 +320,7 @@ export function resetHeroState(): void {
   if (heroesSpawned && spawnedHeroes.length > 0) {
     snapshotHeroItems();
   }
+  releaseMercUnit(); // snapshots merc items if its unit still exists
   heroesSpawned = false;
   spawnedHeroes = [];
   peasantOwnerMap.clear();
@@ -369,6 +371,9 @@ function transferPeasantsAndSpawnHeroes(casterX: number, casterY: number): void 
   for (const pi of chosenHeroPlayers) {
     heroControlCount[pi]++;
   }
+
+  // Spawn the mercenary (if owned and alive) alongside the heroes
+  spawnMercWithHeroes(casterX, casterY, spawnedHeroes.map(s => s.unit.owner.id));
 }
 
 /** Spawn the 2 chosen heroes. Each owner in the array gets one hero.
@@ -428,8 +433,10 @@ export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
 export function endHeroState(): void {
   if (!heroesSpawned) return;
 
-  // Snapshot items before removing heroes
+  // Snapshot items before removing heroes; same for the mercenary, whose
+  // unit is removed by the sweep below
   snapshotHeroItems();
+  releaseMercUnit();
 
   // Remove heroes and anything they summoned (not kill — avoids dead hero
   // portraits in the UI). Human players only ever own peasants outside hero
@@ -490,6 +497,11 @@ function snapshotHeroItems(): void {
 /** Get the spawned hero units. */
 export function getSpawnedHeroes(): Unit[] {
   return spawnedHeroes.map(s => s.unit);
+}
+
+/** Whether heroes are currently summoned (gameplay hero mode is active). */
+export function areHeroesSpawned(): boolean {
+  return heroesSpawned;
 }
 
 /** Find the allHeroes index for a spawned hero unit, or -1 if not a spawned hero. */
