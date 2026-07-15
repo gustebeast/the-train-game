@@ -257,6 +257,27 @@ compiletime(({ objectData, constants }) => {
   readyOrbAttach.targetAttachments = 1;
   readyOrbAttach.targetAttachmentPoint1 = 'head';
 
+  // Train cargo attachment abilities — same held-model trick as the peasant
+  // tool abilities above, but separate abilities so each carrier places the
+  // model independently: peasants hold items in hand, the engine shows stone
+  // and wood at two distinct sprite refs so both can appear at once, and the
+  // track wagon shows a track on its bed. Models reuse the cargo item looks
+  // (see the Wood/Stone item definitions below).
+  const trainStoneAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus9)!;
+  trainStoneAttach.target = 'Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_Rock6.mdx';
+  trainStoneAttach.targetAttachments = 1;
+  trainStoneAttach.targetAttachmentPoint1 = 'sprite,first';
+
+  const trainWoodAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus12)!;
+  trainWoodAttach.target = 'Doodads\\Felwood\\Props\\FelwoodLogStraight\\FelwoodLogStraight.mdx';
+  trainWoodAttach.targetAttachments = 1;
+  trainWoodAttach.targetAttachmentPoint1 = 'sprite,second';
+
+  const wagonTrackAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus15)!;
+  wagonTrackAttach.target = 'war3mapImported\\OmniTrackSmall.mdx';
+  wagonTrackAttach.targetAttachments = 1;
+  wagonTrackAttach.targetAttachmentPoint1 = 'chest';
+
   // Axe item
   const axe = objectData.items.get(constants.items.SturdyWarAxe)!;
   axe.name = 'Axe';

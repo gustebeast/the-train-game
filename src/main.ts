@@ -18,6 +18,7 @@ import { initMinimapIcons } from './minimapIcons';
 import { initPlayerLeave } from './playerLeave';
 import { initGlobalTick } from './globalTick';
 import { initCameraLock } from './cameraLock';
+import { initCargoVisuals } from './cargoVisuals';
 import { syncGold } from './state';
 import { getHumanPlayers } from './util';
 import { log } from './debug';
@@ -53,6 +54,7 @@ function tsMain() {
     initGlobalTick();
     initMinimapIcons();
     initCameraLock();
+    initCargoVisuals();
     initPlayerLeave();
 
     syncGold();
