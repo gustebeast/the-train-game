@@ -5,7 +5,7 @@ import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForLobby } from './items';
 import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
-import { forEachUnitInWorld } from './util';
+import { forEachUnitInWorld, nextFrame } from './util';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
 const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
@@ -33,15 +33,20 @@ const REPEATABLE_STOCK = [
 
 /** Stock a freshly spawned shop. The shop's object data sells nothing by
  *  default — everything for sale is added here, so availability can depend
- *  on game state (the summon upgrade is one-time and disappears once owned). */
+ *  on game state (the summon upgrade is one-time and disappears once owned).
+ *  Stocking is deferred a frame: AddItemToStock in the same instant the
+ *  shop unit is created can fail to register. */
 export function stockShop(shop: Unit): void {
   registerSummonShop(shop);
-  for (const itemId of REPEATABLE_STOCK) {
-    AddItemToStock(shop.handle, itemId, 10, 10);
-  }
-  if (!isSummonUpgradePurchased()) {
-    AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
-  }
+  nextFrame(() => {
+    if (GetUnitTypeId(shop.handle) === 0) return; // shop died/removed
+    for (const itemId of REPEATABLE_STOCK) {
+      AddItemToStock(shop.handle, itemId, 10, 10);
+    }
+    if (!isSummonUpgradePurchased()) {
+      AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
+    }
+  });
 }
 
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
@@ -56,6 +61,14 @@ function playUpgradeEffect(targets: Unit[]): void {
 }
 
 export function initShop(): void {
+  // Blizzard.j's InitNeutralBuildings registers RemovePurchasedItem, which
+  // strips any sold item type from a NEUTRAL PASSIVE seller's stock — for
+  // trigger-added stock that deletes the slot permanently after one
+  // purchase. Our shop is fully trigger-stocked; kill the whole machinery
+  // (the marketplace rotation timer dies with it — no marketplaces here).
+  if (bj_stockItemPurchased != null) DestroyTrigger(bj_stockItemPurchased);
+  if (bj_stockUpdateTimer != null) DestroyTimer(bj_stockUpdateTimer);
+
   const t = Trigger.create();
   t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
   t.addAction(() => {
