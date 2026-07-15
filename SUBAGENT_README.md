@@ -93,6 +93,11 @@ worktree has uncommitted changes from a previous prompt, commit them first.
 
 ## Integrator reference (main session only — sub-agents ignore this)
 
+A UserPromptSubmit hook in `.claude/settings.json` reports any `agent/*`
+branch with commits ahead of `main` at the start of every integrator prompt —
+committed sub-agent work is detected automatically, no explicit notification
+needed.
+
 To merge a submitted branch and build:
 
 ```powershell
