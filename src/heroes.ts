@@ -441,8 +441,14 @@ export function endHeroState(): void {
   // Restore peasant ownership and pan cameras back for players regaining peasant control
   for (const [peasantHandle, originalOwner] of peasantOwnerMap) {
     if (GetUnitTypeId(peasantHandle) !== 0) { // unit still exists
-      SetUnitOwner(peasantHandle, originalOwner.handle, true);
-      PanCameraToTimedForPlayer(originalOwner.handle, GetUnitX(peasantHandle), GetUnitY(peasantHandle), 0.5);
+      if (originalOwner.slotState === PLAYER_SLOT_STATE_PLAYING) {
+        SetUnitOwner(peasantHandle, originalOwner.handle, true);
+        PanCameraToTimedForPlayer(originalOwner.handle, GetUnitX(peasantHandle), GetUnitY(peasantHandle), 0.5);
+      } else {
+        // Original owner left the game — their peasant dies instead of
+        // being restored to an empty slot
+        KillUnit(peasantHandle);
+      }
     }
   }
   peasantOwnerMap.clear();
