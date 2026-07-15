@@ -1,102 +1,70 @@
-// Generates the custom minimap tool-icon assets (TGA textures + MDX models)
-// into maps/TheTrainGame.w3x/war3mapImported/.
+// Generates the custom minimap tool-icon textures (TGA) into
+// maps/TheTrainGame.w3x/war3mapImported/.
 //
 // Run from the project root:  node scripts/generate-minimap-icons.js
 //
-// No extra dependencies — reuses mdx-m3-viewer-th, which the build already
-// uses for .w3x packaging. Each model is a flat unshaded quad textured with
-// a 16x16 glyph; the glyph art is the ASCII grids below ('#' = opaque white,
-// '.' = transparent) and is tinted per-item at runtime by CreateMinimapIcon.
+// CreateMinimapIcon's pingPath takes a 16x16 image file (.blp/.tga/.dds),
+// which the game scales to the standard minimap icon slot. (Passing a 3D
+// model renders it in the wrong coordinate space and can cover the whole
+// screen — don't.) To render the tools at ~50% of the standard icon size,
+// each glyph is drawn in the CENTRAL 8x8 of the 16x16 canvas with a
+// transparent border: half-size relative to the canvas, whether the game
+// normalizes the canvas to the slot or draws it 1:1.
+//
+// Glyph art: ASCII grids below, '#' = opaque white (tinted per-item at
+// runtime by CreateMinimapIcon's RGB args), '.' = transparent.
 
 const fs = require('fs');
 const path = require('path');
-const Model = require('mdx-m3-viewer-th/dist/cjs/parsers/mdlx/model').default;
-
-// Rendered icon size on the minimap comes from the model's quad size in
-// world units — there is no runtime scale API. The stock quest/control-point
-// icons are ~24 units across; 12 (QUAD_HALF 6) targets 50% of that.
-// Tweak and re-run to resize.
-const QUAD_HALF = 6;
 
 const TEX_SIZE = 16;
+const GLYPH_SIZE = 8; // drawn centered — (TEX_SIZE - GLYPH_SIZE) / 2 margin
 const OUT_DIR = path.join(__dirname, '..', 'maps', 'TheTrainGame.w3x', 'war3mapImported');
 
 const GLYPHS = {
   Axe: [
-    '................',
-    '....#####.......',
-    '..#######.......',
-    '.########.......',
-    '.#########......',
-    '..########......',
-    '....######......',
-    '......####......',
-    '......###.......',
-    '......###.......',
-    '......###.......',
-    '......###.......',
-    '......###.......',
-    '......###.......',
-    '......###.......',
-    '................',
+    '.###....',
+    '#####...',
+    '######..',
+    '.#####..',
+    '...##...',
+    '...##...',
+    '...##...',
+    '...##...',
   ],
   Pickaxe: [
-    '................',
-    '.....######.....',
-    '...##########...',
-    '..####.##.####..',
-    '.###...##...###.',
-    '.##....##....##.',
-    '.#.....##.....#.',
-    '.......##.......',
-    '.......##.......',
-    '.......##.......',
-    '.......##.......',
-    '.......##.......',
-    '.......##.......',
-    '.......##.......',
-    '.......##.......',
-    '................',
+    '.######.',
+    '##....##',
+    '#..##..#',
+    '...##...',
+    '...##...',
+    '...##...',
+    '...##...',
+    '...##...',
   ],
   Bucket: [
-    '................',
-    '................',
-    '.##############.',
-    '.##############.',
-    '.##..........##.',
-    '.##..........##.',
-    '..##........##..',
-    '..##........##..',
-    '..##........##..',
-    '...##......##...',
-    '...##......##...',
-    '...##......##...',
-    '...##########...',
-    '...##########...',
-    '................',
-    '................',
+    '########',
+    '##....##',
+    '##....##',
+    '.#....#.',
+    '.#....#.',
+    '.##..##.',
+    '..####..',
+    '........',
   ],
   BucketFull: [
-    '................',
-    '................',
-    '.##############.',
-    '.##############.',
-    '.##############.',
-    '.##############.',
-    '..############..',
-    '..############..',
-    '..############..',
-    '...##########...',
-    '...##########...',
-    '...##########...',
-    '...##########...',
-    '...##########...',
-    '................',
-    '................',
+    '########',
+    '########',
+    '########',
+    '.######.',
+    '.######.',
+    '.######.',
+    '..####..',
+    '........',
   ],
 };
 
-/** Write a 32-bit uncompressed TGA (top-left origin) from an ASCII glyph. */
+/** Write a 32-bit uncompressed TGA (top-left origin) with the glyph centered. */
 function writeTga(filePath, glyph) {
   const header = Buffer.alloc(18);
   header[2] = 2; // uncompressed truecolor
@@ -105,10 +73,14 @@ function writeTga(filePath, glyph) {
   header[16] = 32; // bits per pixel
   header[17] = 0x28; // top-left origin + 8 alpha bits
 
+  const margin = (TEX_SIZE - GLYPH_SIZE) / 2;
   const pixels = Buffer.alloc(TEX_SIZE * TEX_SIZE * 4);
   for (let y = 0; y < TEX_SIZE; y++) {
     for (let x = 0; x < TEX_SIZE; x++) {
-      const on = glyph[y][x] === '#';
+      const gy = y - margin;
+      const gx = x - margin;
+      const on = gy >= 0 && gy < GLYPH_SIZE && gx >= 0 && gx < GLYPH_SIZE
+        && glyph[gy][gx] === '#';
       const i = (y * TEX_SIZE + x) * 4;
       // BGRA — keep RGB white on transparent pixels so filtering doesn't
       // darken the glyph edges
@@ -121,108 +93,14 @@ function writeTga(filePath, glyph) {
   fs.writeFileSync(filePath, Buffer.concat([header, pixels]));
 }
 
-/** Build MDL text for a flat unshaded quad using the given texture. */
-function buildMdl(name, texturePath) {
-  const h = QUAD_HALF;
-  const r = Math.ceil(Math.sqrt(2 * h * h) * 10) / 10;
-  const extent = `
-		MinimumExtent { ${-h}, ${-h}, 0 },
-		MaximumExtent { ${h}, ${h}, 1 },
-		BoundsRadius ${r},`;
-  return `Version {
-	FormatVersion 800,
-}
-Model "${name}" {
-	BlendTime 150,${extent.replace(/\t\t/g, '\t')}
-}
-Sequences 1 {
-	Anim "Stand" {
-		Interval { 0, 1000 },${extent}
-	}
-}
-Textures 1 {
-	Bitmap {
-		Image "${texturePath}",
-	}
-}
-Materials 1 {
-	Material {
-		Layer {
-			FilterMode Blend,
-			Unshaded,
-			Unfogged,
-			TwoSided,
-			static TextureID 0,
-		}
-	}
-}
-Geoset {
-	Vertices 4 {
-		{ ${-h}, ${-h}, 0 },
-		{ ${h}, ${-h}, 0 },
-		{ ${-h}, ${h}, 0 },
-		{ ${h}, ${h}, 0 },
-	},
-	Normals 4 {
-		{ 0, 0, 1 },
-		{ 0, 0, 1 },
-		{ 0, 0, 1 },
-		{ 0, 0, 1 },
-	},
-	TVertices 4 {
-		{ 0, 1 },
-		{ 1, 1 },
-		{ 0, 0 },
-		{ 1, 0 },
-	},
-	VertexGroup {
-		0,
-		0,
-		0,
-		0,
-	},
-	Faces 1 6 {
-		Triangles {
-			{ 0, 1, 2, 2, 1, 3 },
-		},
-	},
-	Groups 1 1 {
-		Matrices { 0 },
-	},${extent.replace(/\t\t/g, '\t')}
-	MaterialID 0,
-	SelectionGroup 0,
-}
-Bone "Root" {
-	ObjectId 0,
-}
-PivotPoints 1 {
-	{ 0, 0, 0 },
-}
-`;
-}
-
 function main() {
   for (const [name, glyph] of Object.entries(GLYPHS)) {
-    if (glyph.length !== TEX_SIZE || glyph.some((row) => row.length !== TEX_SIZE)) {
-      throw new Error(`Glyph ${name} is not ${TEX_SIZE}x${TEX_SIZE}`);
+    if (glyph.length !== GLYPH_SIZE || glyph.some((row) => row.length !== GLYPH_SIZE)) {
+      throw new Error(`Glyph ${name} is not ${GLYPH_SIZE}x${GLYPH_SIZE}`);
     }
-
     const texFile = `Minimap${name}.tga`;
-    const mdxFile = `Minimap${name}.mdx`;
     writeTga(path.join(OUT_DIR, texFile), glyph);
-
-    const model = new Model();
-    model.load(buildMdl(`Minimap${name}`, `war3mapImported\\${texFile}`));
-    const mdx = model.saveMdx();
-    fs.writeFileSync(path.join(OUT_DIR, mdxFile), Buffer.from(mdx.buffer, mdx.byteOffset, mdx.byteLength));
-
-    // Validate: re-parse the written MDX
-    const check = new Model();
-    check.load(new Uint8Array(fs.readFileSync(path.join(OUT_DIR, mdxFile))));
-    if (check.geosets.length !== 1 || check.textures.length !== 1 || check.sequences.length !== 1) {
-      throw new Error(`Generated ${mdxFile} failed validation`);
-    }
-    console.log(`OK ${mdxFile} + ${texFile} (quad ${QUAD_HALF * 2}x${QUAD_HALF * 2})`);
+    console.log(`OK ${texFile} (${TEX_SIZE}x${TEX_SIZE}, glyph ${GLYPH_SIZE}x${GLYPH_SIZE})`);
   }
 }
 

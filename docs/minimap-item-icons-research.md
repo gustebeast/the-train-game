@@ -45,9 +45,13 @@ Key facts:
   but ground items never move, so create/destroy is sufficient.
 - w3ts has **no wrapper class** for `minimapicon` — call the natives directly,
   as the codebase already does for `RemoveItem`, `UnitAddItem`, etc.
-- Optional upgrade: import three tiny billboard `.mdx` models that use each
-  item's icon texture for fully custom minimap markers. Works because
-  `pingPath` accepts any model, but requires new imports; stock + tint needs none.
+- Optional upgrade: **custom icons via imported 16x16 IMAGES** (.tga/.blp) —
+  `pingPath` accepts an image path directly and the game scales it to the
+  standard icon slot. ⚠️ Tested correction: do NOT pass a custom .mdx model —
+  the icon renderer draws model geometry in a wrong coordinate space and even
+  a 12x12-unit quad covers the entire screen. Icon size can only be controlled
+  relative to the canvas (draw the glyph smaller inside the 16x16, leaving a
+  transparent border).
 
 ### Option B — dummy units as minimap dots (rejected)
 
