@@ -30,7 +30,23 @@ New-Item -ItemType Junction -Path ".worktrees\<name>\node_modules" -Target "C:\U
 
 ## At the START of every prompt
 
-Sync your branch with the integrator's latest work before touching anything:
+### Reading the automatic hook notices
+
+A project hook injects branch status at every prompt, in every session. It
+has two sections — as a sub-agent, here is how to handle them:
+
+- **"Agent branches behind main"** — if YOUR branch is listed, the
+  integrator merged new work and you MUST sync (command below) before doing
+  anything else. Other agents' branches in this list are not your problem.
+- **"Pending sub-agent submissions"** — IGNORE this section entirely. It is
+  the integrator's merge queue. Your own branch appearing there just means
+  your submission hasn't been merged yet — that's normal. The
+  `git merge --no-ff` instruction in it is for the integrator only; never
+  run it yourself.
+
+### Sync your branch
+
+Sync at the start of every prompt even if no hook notice appeared yet:
 
 ```powershell
 git -C .worktrees/<name> merge main
@@ -92,6 +108,10 @@ worktree has uncommitted changes from a previous prompt, commit them first.
 ---
 
 ## Integrator reference (main session only — sub-agents ignore this)
+
+The full integrator role — receiving merge requests, verifying builds, and
+presenting them to the user one at a time — is documented in
+`ORCHESTRATOR_README.md`. Hand that file to a new main orchestrator session.
 
 A UserPromptSubmit hook in `.claude/settings.json` reports any `agent/*`
 branch with commits ahead of `main` at the start of every integrator prompt —
