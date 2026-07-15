@@ -16,7 +16,11 @@ way, a branch ahead of `main` is a pending merge request.
 ## Protocol for each merge request
 
 Process **one request at a time**, in the order they arrived (oldest branch
-tip first if unsure). For the current request:
+tip first if unsure). A "request" is a **branch**, not a commit: if a
+sub-agent has several unmerged commits, bundle them into a single merge and
+present them as ONE build — summarize all the commits together and combine
+their verification steps. Never split one agent's commits into separate
+builds. For the current request:
 
 1. **Review** — `git diff main...agent/<name>` and read the changes enough
    to explain them and spot anything risky. You are not a full code
