@@ -60,19 +60,17 @@ function overshootOffset(cur: GridPos, nxt: GridPos): { ox: number; oy: number }
   return { ox, oy };
 }
 
-/** Order the track wagon to the track one behind the engine's target,
- *  so it trails the engine by exactly one track piece. */
-function orderWagonMove(): void {
-  if (trackWagon == null) return;
-  const target = placedTracks[targetIdx - 1];
-  if (target == null) return;
-  const tgt = trackCenter(target);
-  const engineTrack = placedTracks[targetIdx];
-  if (engineTrack != null) {
-    const { ox, oy } = overshootOffset(tgt, trackCenter(engineTrack));
-    trackWagon.issueOrderAt('move', tgt.x + ox, tgt.y + oy);
-  } else {
-    trackWagon.issueOrderAt('move', tgt.x, tgt.y);
+// The engine's current move-order point and the previous one. The wagon is
+// always ordered to the engine's previous point, so it retraces the engine's
+// exact path (including overshoots) one order behind.
+let enginePoint: GridPos | null = null;
+let wagonPoint: GridPos | null = null;
+
+/** Re-issue both cars' current move orders from the stored points. */
+function issueCarOrders(): void {
+  if (enginePoint != null) train.issueOrderAt('move', enginePoint.x, enginePoint.y);
+  if (wagonPoint != null && trackWagon != null) {
+    trackWagon.issueOrderAt('move', wagonPoint.x, wagonPoint.y);
   }
 }
 
@@ -93,8 +91,9 @@ function moveToNext() {
 
   lastMoveTime = os.clock();
   next.invulnerable = true;
-  train.issueOrderAt('move', nxt.x + ox, nxt.y + oy);
-  orderWagonMove();
+  wagonPoint = enginePoint;
+  enginePoint = { x: nxt.x + ox, y: nxt.y + oy };
+  issueCarOrders();
 }
 
 export function getTrainTarget(): Unit | undefined {
@@ -125,19 +124,8 @@ export function reissueMoveOrder(): void {
     return;
   }
 
-  const target = placedTracks[targetIdx];
-  if (target == null) return;
-  const center = trackCenter(target);
-  const current = placedTracks[targetIdx - 1];
-  if (current == null) {
-    train.issueOrderAt('move', center.x, center.y);
-    return;
-  }
-  const cur = trackCenter(current);
-  const { ox, oy } = overshootOffset(cur, center);
-  train.issueOrderAt('move', center.x + ox, center.y + oy);
-  // Item adds cancel the wagon's move order too — re-issue it as well
-  orderWagonMove();
+  // Item adds cancel both cars' move orders — re-issue the stored points
+  issueCarOrders();
 }
 
 export function getTrain(): Unit {
@@ -263,6 +251,10 @@ export function initTrain(unit: Unit, wagon: Unit) {
   setInGameplay(true);
   setupWagonUnit(wagon);
   initTrainUnit(unit);
+  // Seed the order history: the engine's spawn point acts as its "previous
+  // order", so the wagon's first order sends it to the engine's start tile.
+  enginePoint = { x: unit.x, y: unit.y };
+  wagonPoint = null;
   syncState();
   setMoveOrderCallback(() => reissueMoveOrder());
 
