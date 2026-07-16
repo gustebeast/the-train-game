@@ -484,6 +484,64 @@ compiletime(({ objectData, constants }) => {
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
 
+  // Shady Dealer: Tomb of Relics reskinned as an acolyte, sells lobby challenges.
+  // SelectHero(Aneu)/SellItems/ShopPurchaseItem make it usable while neutral.
+  const shadyDealer = objectData.units.get(constants.units.TombOfRelics)!;
+  shadyDealer.name = 'Shady Dealer';
+  shadyDealer.modelFile = 'units\\undead\\Acolyte\\Acolyte';
+  shadyDealer.normal = [
+    constants.abilities.SelectHero,
+    constants.abilities.SellItems,
+    constants.abilities.ShopPurchaseItem,
+    constants.abilities.InvulnerableNeutral,
+  ].join(',');
+  shadyDealer.scalingValueundefined = 1;
+  shadyDealer.selectionScale = 1;
+  shadyDealer.shadowTextureBuilding = 'NONE';
+  shadyDealer.groundTexture = 'NONE';
+  shadyDealer.pathingMap = 'PathTextures\\4x4simplesolid.tga';
+  shadyDealer.collisionSize = 32;
+  shadyDealer.sightRadiusDay = 400;
+  shadyDealer.sightRadiusNight = 400;
+  shadyDealer.itemsSold = [constants.items.MedallionOfCourage, constants.items.PeriaptOfVitality].join(',');
+  shadyDealer.itemsMade = '';
+
+  // Critterpocalypse challenge (MedallionOfCourage — purchased from the Shady Dealer)
+  const critterpocalypse = objectData.items.get(constants.items.MedallionOfCourage)!;
+  critterpocalypse.name = 'Critterpocalypse';
+  critterpocalypse.tooltipBasic = critterpocalypse.name;
+  critterpocalypse.description = 'Every grass tile spawns a critter next round. Beat the round to earn 2 bonus gold.';
+  critterpocalypse.tooltipExtended = critterpocalypse.description;
+  critterpocalypse.goldCost = 1;
+  critterpocalypse.stockMaximum = 1;
+  critterpocalypse.stockReplenishInterval = 3600;
+  critterpocalypse.stockInitialAfterStartDelay = 10;
+  critterpocalypse.useAutomaticallyWhenAcquired = true;
+  critterpocalypse.activelyUsed = false;
+  critterpocalypse.canBeDropped = false;
+  critterpocalypse.perishable = true;
+  critterpocalypse.abilities = '';
+  critterpocalypse.classification = 'PowerUp';
+  critterpocalypse.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSheep.blp';
+
+  // Tough Creep Camp challenge (PeriaptOfVitality — purchased from the Shady Dealer)
+  const toughCamp = objectData.items.get(constants.items.PeriaptOfVitality)!;
+  toughCamp.name = 'Tough Creep Camp';
+  toughCamp.tooltipBasic = toughCamp.name;
+  toughCamp.description = "Next round's creep camp hits far harder. Defeat it to earn 2 bonus gold.";
+  toughCamp.tooltipExtended = toughCamp.description;
+  toughCamp.goldCost = 1;
+  toughCamp.stockMaximum = 1;
+  toughCamp.stockReplenishInterval = 3600;
+  toughCamp.stockInitialAfterStartDelay = 10;
+  toughCamp.useAutomaticallyWhenAcquired = true;
+  toughCamp.activelyUsed = false;
+  toughCamp.canBeDropped = false;
+  toughCamp.perishable = true;
+  toughCamp.abilities = '';
+  toughCamp.classification = 'PowerUp';
+  toughCamp.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGrunt.blp';
+
   // Flame Resistance upgrade (AncientFigurine — purchased from shop)
   const flameResistance = objectData.items.get(constants.items.AncientFigurine)!;
   flameResistance.name = 'Flame Resistance';

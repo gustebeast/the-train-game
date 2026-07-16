@@ -3,12 +3,15 @@ import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
 import { getTrain, getTrackWagon } from './train';
 import { getCrate } from './items';
+import { armCritterpocalypse, armToughCamp } from './challenges';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
 const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
 const RESOURCE_CAPACITY_ID = FourCC(Items.DruidPouch);
 const TRACK_CAPACITY_ID = FourCC(Items.JadeRing);
 const CRATE_CAPACITY_ID = FourCC(Items.LionsRing);
+const CRITTERPOCALYPSE_ID = FourCC(Items.MedallionOfCourage);
+const TOUGH_CAMP_ID = FourCC(Items.PeriaptOfVitality);
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],
@@ -16,6 +19,8 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [RESOURCE_CAPACITY_ID, 1],
   [TRACK_CAPACITY_ID, 1],
   [CRATE_CAPACITY_ID, 1],
+  [CRITTERPOCALYPSE_ID, 1],
+  [TOUGH_CAMP_ID, 1],
 ]);
 
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
@@ -64,6 +69,16 @@ export function initShop(): void {
       gameState.crateMaxStack += 4;
       const crate = getCrate();
       if (crate != null) effectTargets = [crate];
+    } else if (itemTypeId === CRITTERPOCALYPSE_ID) {
+      armCritterpocalypse();
+      print('Critterpocalypse armed! Every grass tile spawns a critter next round — win it for 2 bonus gold.');
+      const buyer = Unit.fromEvent();
+      if (buyer != null) effectTargets = [buyer];
+    } else if (itemTypeId === TOUGH_CAMP_ID) {
+      armToughCamp();
+      print("Tough Creep Camp armed! Next round's camp hits far harder — defeat it for 2 bonus gold.");
+      const buyer = Unit.fromEvent();
+      if (buyer != null) effectTargets = [buyer];
     }
 
     syncState();

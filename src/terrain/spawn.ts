@@ -198,6 +198,12 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           break;
         }
 
+        case Entity.SHADY_DEALER: {
+          const dealer = Unit.create(getNeutralPassive(), FourCC(Units.TombOfRelics), world.x, world.y, 270)!;
+          dealer.invulnerable = true;
+          break;
+        }
+
         case Entity.START_CIRCLE: {
           const startCircle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
           BlzSetUnitName(startCircle.handle, 'Next Round');

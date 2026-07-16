@@ -1,6 +1,7 @@
 import { Unit } from 'w3ts';
 import { setVictoryTriggered } from './track/state';
 import { extinguish, getTrain, getTrackWagon } from './train';
+import { payCritterpocalypseBonus } from './challenges';
 import { gameState, syncGold } from './state';
 import { saveToFile } from './save';
 import { rollCreepCamp } from './creeps';
@@ -25,6 +26,7 @@ export function triggerVictory(lastTrack: Unit): void {
 export function awardVictory(): void {
   gameState.round += 1;
   gameState.gold += GOLD_PER_ROUND;
+  payCritterpocalypseBonus();
   syncGold();
   rollCreepCamp();
   chooseHeroes();

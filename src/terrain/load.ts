@@ -5,6 +5,7 @@ import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback 
 import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
 import { gameState, revertToLobbySnapshot, saveLobbySnapshot } from '../state';
+import { clearChallenges } from '../challenges';
 import { hasHeroes, initRandomHeroes } from '../heroes';
 import { startDPSTest } from '../creeps';
 import { loadCrateForRound, loadCrateForLobby } from '../items';
@@ -53,6 +54,9 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
 }
 
 export function loadLobby(): void {
+  // Spent or reverted either way — challenges never survive into the lobby.
+  // Must clear before the snapshot so Reset Purchases refunds an armed one.
+  clearChallenges();
   saveLobbySnapshot();
   playLobbyMusic();
   SetTimeOfDay(12);

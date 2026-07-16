@@ -3,6 +3,7 @@ import {
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, GRID_W, GRID_H,
   idx, idxToCoords, inBounds, isReserved,
 } from './constants';
+import { isCritterpocalypse } from '../challenges';
 
 
 // --- Grid creation ---
@@ -495,13 +496,14 @@ const P4 = c(Terrain.WHITE_MARBLE, Entity.PLAYER_4);
 const SC = c(Terrain.GRASSY_DIRT, Entity.START_CIRCLE);
 const RC = c(Terrain.GRASSY_DIRT, Entity.REVERT_CIRCLE);
 const SH = c(Terrain.GRASSY_DIRT, Entity.SHOP);
+const DL = c(Terrain.GRASSY_DIRT, Entity.SHADY_DEALER);
 // prettier-ignore
 // Laid out as it appears in-game (top = north = +y, bottom = south = -y).
 // The train start (wagon, engine, start crate) is placed by placeTrainStart
 // anchored at (-4, 0) — the west edge of the y=0 and y=-1 rows.
 const LOBBY_GRID: Cell[][] = [
   [ M, M, M, M, M, M, M, M, M], // y= 4
-  [ M, G, G, M,SH, M, G, G, M], // y= 3
+  [ M, G, G, M,SH, M,DL, G, M], // y= 3
   [ M, G, M, G, M, G, M, G, M], // y= 2
   [ M, M, G, G, M, G, G, M, M], // y= 1
   [ M, G, P1,P2,G, P3,P4,G, M], // y= 0
@@ -637,7 +639,8 @@ export function generateTerrain(difficulty: number, exitX = GRID_MAX_X): Grid {
   placeResources(grid, difficulty);
   placeEntities(grid);
   placeCreepCamp(grid);
-  placeCritters(grid, CRITTER_COUNT);
+  // Critterpocalypse: every eligible grass tile instead of the default count
+  placeCritters(grid, isCritterpocalypse() ? GRID_W * GRID_H : CRITTER_COUNT);
   return grid;
 }
 
