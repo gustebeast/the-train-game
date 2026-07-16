@@ -90,3 +90,31 @@ slightly OUTLASTS the 0.5s roll state — a subtle part of the feel.
   sped-up walk/spin may sell it).
 - Tuning knobs: impulse (dash length), decay factor (snappiness), dead zone
   (stop crispness), roll duration, anim time scale.
+
+## Animation options for the peasant
+
+WeaponlessPeasant.mdx has 22 sequences — stand/walk/attack/death/work
+variants only, NO roll/dodge/tumble (verified by parsing the model).
+
+1. **Special-effect tumble (recommended, zero assets):** hide the unit for
+   the 0.5s roll, spawn a special effect of WeaponlessPeasant.mdx at its
+   position, and each physics tick move it along the dash while rotating
+   `BlzSetSpecialEffectPitch` through a full forward 360° (+ walk anim via
+   `BlzPlaySpecialEffectWithTimeScale`, team color via
+   `BlzSetSpecialEffectColorByPlayer`). Destroy + unhide at roll end.
+   A true somersault of our own art; all natives confirmed in 1.33 types.
+   Caveats: no shadow/selection during the roll (fine — unit is paused and
+   invulnerable anyway); watch for a visual pop at swap.
+2. **Existing anims + tricks (zero assets, cheap):** sped-up Walk while
+   spinning `SetUnitFacing` per tick (reads as a scramble/spin, comedic),
+   or the first half of Death queued into Stand (reads as a dive). Not a
+   real roll but serviceable.
+3. **Hive Workshop — "Villager 255 Animations" by Graber**
+   (hiveworkshop.com/threads/villager-255-animations.192204): 255 anims
+   including Jump [78], Backflip Jump [198], Get Up [75–77] — but per the
+   community index list (thread 263727) NO true forward roll. Using it
+   means replacing the peasant's look entirely (or a jarring mid-roll skin
+   swap), plus re-doing our weaponless edit on that mesh.
+4. **Animation transplant (high effort):** retarget a roll animation onto
+   the peasant skeleton in Retera Model Studio — manual modeling work,
+   can't be automated from here.
