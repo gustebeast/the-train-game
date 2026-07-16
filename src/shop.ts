@@ -5,7 +5,7 @@ import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForLobby } from './items';
 import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
-import { forEachUnitInWorld } from './util';
+import { forEachUnitInWorld, nextFrame } from './util';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
 const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
@@ -22,12 +22,31 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [SUMMON_UPGRADE_ITEM_ID, 1],
 ]);
 
-/** Hook for a freshly spawned shop. All items for sale are pre-listed in
- *  the shop's object data (dynamically ADDED stock never displays in this
- *  engine version — tested), so availability is managed by REMOVAL only:
- *  the summon upgrade is pulled from stock when already owned. */
+/** Repeatable upgrades every shop sells. */
+const REPEATABLE_STOCK = [
+  FLAME_RESISTANCE_ID,
+  TRACK_MANUFACTURING_ID,
+  RESOURCE_CAPACITY_ID,
+  TRACK_CAPACITY_ID,
+  CRATE_CAPACITY_ID,
+];
+
+/** Stock a freshly spawned shop. The shop is a MARKETPLACE-based unit, the
+ *  one shop type whose dynamically added stock displays; everything for
+ *  sale is added here so availability can depend on game state (the summon
+ *  upgrade is one-time and is simply not added once owned). Deferred a
+ *  frame so the adds land after the unit fully exists. */
 export function stockShop(shop: Unit): void {
   registerSummonShop(shop);
+  nextFrame(() => {
+    if (GetUnitTypeId(shop.handle) === 0) return; // shop died/removed
+    for (const itemId of REPEATABLE_STOCK) {
+      AddItemToStock(shop.handle, itemId, 10, 10);
+    }
+    if (!isSummonUpgradePurchased()) {
+      AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
+    }
+  });
 }
 
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl

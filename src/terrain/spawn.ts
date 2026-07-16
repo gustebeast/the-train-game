@@ -194,7 +194,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         }
 
         case Entity.SHOP: {
-          const shop = Unit.create(getNeutralPassive(), FourCC(Units.GoblinMerchant), world.x, world.y, 270)!;
+          const shop = Unit.create(getNeutralPassive(), FourCC(Units.Marketplace), world.x, world.y, 270)!;
           shop.invulnerable = true;
           stockShop(shop);
           break;

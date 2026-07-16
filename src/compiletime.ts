@@ -482,19 +482,20 @@ compiletime(({ objectData, constants }) => {
   unsummonHeroes.buffs = '';
   unsummonHeroes.effect = '';
 
-  // Shop: Goblin Merchant scaled to 1x1 grid square, no default items
-  const shop = objectData.units.get(constants.units.GoblinMerchant)!;
+  // Shop: based on the melee MARKETPLACE (nmrk), the one unit whose
+  // dynamically added stock (AddItemToStock) natively displays — Blizzard's
+  // own rotating-stock flow targets it. Stock is added at runtime in
+  // stockShop (shop.ts) so availability can depend on game state; the
+  // creep-drop rotation and purchase-removal machinery is disabled in
+  // initShop, so only our items ever appear.
+  const shop = objectData.units.get(constants.units.Marketplace)!;
   shop.name = 'Shop';
   shop.scalingValueundefined = 0.5;
   shop.selectionScale = 1;
   shop.groundTexture = ''; // Same texture as a human farm
   shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   shop.collisionSize = 32;
-  // All purchasables are pre-listed here — dynamically ADDING stock to a
-  // shop doesn't display anything in this engine version (tested; even with
-  // marketplace classification + sellable flags). Conditional availability
-  // is done by REMOVAL instead: see stockShop/registerSummonShop.
-  shop.itemsSold = [constants.items.AncientFigurine, constants.items.BracerOfAgility, constants.items.DruidPouch, constants.items.JadeRing, constants.items.LionsRing, constants.items.PendantOfEnergy].join(',');
+  shop.itemsSold = '';
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
