@@ -1,4 +1,3 @@
-import { Timer } from 'w3ts';
 import { W3TS_HOOK, addScriptHook } from 'w3ts/hooks';
 
 import './compiletime';
@@ -18,6 +17,9 @@ import { initHeroes } from './heroes';
 import { initMinimapIcons } from './minimapIcons';
 import { initPlayerLeave } from './playerLeave';
 import { initDash } from './dash';
+import { initGlobalTick } from './globalTick';
+import { initCameraLock } from './cameraLock';
+import { initCargoVisuals } from './cargoVisuals';
 import { syncGold } from './state';
 import { getHumanPlayers } from './util';
 import { log } from './debug';
@@ -50,22 +52,15 @@ function tsMain() {
     initCheat();
     initShop();
     initHeroes();
+    initGlobalTick();
     initMinimapIcons();
+    initCameraLock();
+    initCargoVisuals();
     initPlayerLeave();
     initDash();
 
-    // Lock camera distance at 1200 for all human players
-    const cameraPosition = 1200;
-    const humanPlayers = getHumanPlayers();
-    const cameraTimer = Timer.create();
-    cameraTimer.start(0.5, false, () => {
-      cameraTimer.destroy();
-      humanPlayers.forEach(({ handle }) =>
-        SetCameraFieldForPlayer(handle, CAMERA_FIELD_TARGET_DISTANCE, cameraPosition, 0)
-      );
-    });
-
     syncGold();
+    const humanPlayers = getHumanPlayers();
     humanPlayers.forEach((player) => {
       player.setState(PLAYER_STATE_RESOURCE_LUMBER, 0);
     });
