@@ -122,6 +122,10 @@ compiletime(({ objectData, constants }) => {
     'atar', 'acas', 'adur', 'ahdu', 'acdn', 'amcs', 'aare', 'aran',
     'abuf', 'aeff', 'atp1', 'aub1', 'aut1', 'auu1',
   ]);
+  // Per-level data fields without a digit suffix: field id -> data column
+  const dataFieldPointers: { [id: string]: number } = {
+    Iatt: 1, // Item Damage Bonus "attack bonus" (DataA)
+  };
   function fixAbilityLevels(w3a: any) {
     for (const table of [w3a.originalTable, w3a.customTable]) {
       for (const obj of table.objects) {
@@ -129,6 +133,9 @@ compiletime(({ objectData, constants }) => {
           if (mod.levelOrVariation !== 0) continue;
           if (perLevelFields.has(mod.id)) {
             mod.levelOrVariation = 1;
+          } else if (dataFieldPointers[mod.id] != null) {
+            mod.levelOrVariation = 1;
+            mod.dataPointer = dataFieldPointers[mod.id];
           } else {
             // Ability-specific fields (e.g. Ncl1-6): digit suffix is the dataPointer
             // Exclude attachment point fields like ata0-ata5 which use digits but aren't per-level

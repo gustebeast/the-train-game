@@ -59,21 +59,24 @@ const result = fn({
 
 console.log('compiletime block evaluated OK, result:', JSON.stringify(result));
 
-// Sanity check the current fix: all six attachment abilities must emit Iatt=0.
+// Sanity check the current fix: all six attachment abilities must emit Iatt=0
+// at levelOrVariation 1 — the game engine ignores level-0 mods on per-level
+// data fields, which is how the bonus survived a "successful" zeroing before.
 const files = objectData.save();
 const want = ['AItk', 'AItl', 'AItn', 'AIth', 'AIti', 'AIt6'];
 const got = new Map();
 if (files.w3a) {
   for (const obj of [...files.w3a.originalTable.objects, ...files.w3a.customTable.objects]) {
     for (const mod of obj.modifications) {
-      if (mod.id === 'Iatt') got.set(obj.oldId, mod.value);
+      if (mod.id === 'Iatt') got.set(obj.oldId, { value: mod.value, level: mod.levelOrVariation });
     }
   }
 }
 let ok = true;
 for (const code of want) {
   const v = got.get(code);
-  if (v !== 0) { console.error('MISSING/WRONG Iatt for', code, '- got', v); ok = false; }
+  if (v == null || v.value !== 0) { console.error('MISSING/WRONG Iatt for', code, '- got', JSON.stringify(v)); ok = false; }
+  else if (v.level !== 1) { console.error('Iatt for', code, 'written at level', v.level, '- engine ignores level-0 data mods'); ok = false; }
 }
 if (!ok) process.exit(1);
-console.log('All six attachment abilities emit Iatt=0 into war3map.w3a.');
+console.log('All six attachment abilities emit Iatt=0 at level 1 into war3map.w3a.');
