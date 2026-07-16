@@ -1,9 +1,6 @@
-import { Timer } from 'w3ts';
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, BUCKET_FULL_ID } from './constants';
+import { onGlobalTick } from './globalTick';
 import { getWorldBounds } from './util';
-
-/** How often (seconds) to rescan the map for ground tools. */
-const SCAN_INTERVAL = 0.5;
 
 interface IconStyle {
   red: number;
@@ -86,9 +83,7 @@ function scan(): void {
   }
 }
 
-/** Start the periodic scanner that marks ground tools on the minimap. */
+/** Register the periodic scanner that marks ground tools on the minimap. */
 export function initMinimapIcons(): void {
-  // Raw Timer (not timers.ts createTimer) so the round-reset
-  // destroyAllTimers() doesn't kill the scanner
-  Timer.create().start(SCAN_INTERVAL, true, scan);
+  onGlobalTick(scan);
 }
