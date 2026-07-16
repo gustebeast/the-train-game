@@ -1,5 +1,5 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
-import { CREEP_CAMPS, CreepCamp, CreepUnit, campLevel } from './creep_camps';
+import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import { isMercUpgradeBought } from './mercenary';
 import { registerSaveSegment } from './save';
 import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
@@ -87,7 +87,7 @@ export function rollCreepCamp(): void {
   const maxLevel = isMercUpgradeBought() ? 2 : 1;
   const allowed: number[] = [];
   for (let i = 0; i < camps.length; i++) {
-    if (campLevel(camps[i]) <= maxLevel) allowed.push(i);
+    if (camps[i].level <= maxLevel) allowed.push(i);
   }
   if (allowed.length === 0) return;
   campState = { tileset, campIndex: allowed[GetRandomInt(0, allowed.length - 1)] };
@@ -143,15 +143,16 @@ let spawnedCreeps: Array<{ unit: Unit; campUnit: CreepUnit }> = [];
 export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
   const owner = getNeutralAggressive();
   spawnedCreeps = [];
-  for (let i = 0; i < camp.length && i < 9; i++) {
+  const creeps = camp.creeps;
+  for (let i = 0; i < creeps.length && i < 9; i++) {
     const [dx, dy] = GRID_OFFSETS[i];
-    const u = Unit.create(owner, FourCC(camp[i].id), cx + dx, cy + dy, 270);
+    const u = Unit.create(owner, FourCC(creeps[i].id), cx + dx, cy + dy, 270);
     if (u == null) continue;
     u.invulnerable = true;
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_NUMBER_OF_DICE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);
-    spawnedCreeps.push({ unit: u, campUnit: camp[i] });
+    spawnedCreeps.push({ unit: u, campUnit: creeps[i] });
   }
 }
 

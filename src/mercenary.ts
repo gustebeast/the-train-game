@@ -2,7 +2,7 @@ import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { registerSaveSegment } from './save';
 import { getHumanPlayers } from './util';
-import { CREEP_CAMPS, campLevel } from './creep_camps';
+import { CREEP_CAMPS } from './creep_camps';
 
 /** Campaign unit inventory repurposed for the mercenary: items function like
  *  on a hero (can use), but nothing drops on death — see compiletime.ts. */
@@ -116,8 +116,8 @@ function rollMercType(): number {
   const seen: Record<string, boolean> = {};
   const pool: string[] = [];
   for (const camp of camps) {
-    if (campLevel(camp) > 2) continue;
-    for (const creep of camp) {
+    if (camp.level > 2) continue;
+    for (const creep of camp.creeps) {
       if (seen[creep.id] !== true) {
         seen[creep.id] = true;
         pool.push(creep.id);
