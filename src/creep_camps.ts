@@ -13,11 +13,30 @@ export interface CreepUnit {
 /** A single creep camp composition. */
 export type CreepCamp = CreepUnit[];
 
-/** Camp difficulty level: 3-creep camps are level 1, larger camps level 2.
- *  Level 2 camps only enter the random selection once the Mercenary Contract
- *  shop upgrade is purchased. */
+/** Creep unit levels (rawcode → level) for all neutral 'n…' units, extracted
+ *  from the standard game data at build time. */
+const CREEP_LEVELS = compiletime<Record<string, number>>(({ objectData }) => {
+  const levels: Record<string, number> = {};
+  for (const [id, unit] of Object.entries(objectData.units.game)) {
+    if (id.substring(0, 1) === 'n') {
+      levels[id] = unit.levelundefined;
+    }
+  }
+  return levels;
+});
+
+/** Camp level from the WC3 ladder minimap dot classification, which is the
+ *  SUM of the creep levels in the camp: 1-9 = green (level 1), 10-19 =
+ *  orange (level 2), 20+ = red (level 3). Level 2 camps enter the random
+ *  selection once the Mercenary Contract is purchased; level 3 never rolls. */
 export function campLevel(camp: CreepCamp): number {
-  return camp.length <= 3 ? 1 : 2;
+  let total = 0;
+  for (const creep of camp) {
+    total += CREEP_LEVELS[creep.id] ?? 0;
+  }
+  if (total >= 20) return 3;
+  if (total >= 10) return 2;
+  return 1;
 }
 
 /** Creep camp data extracted from WC3 1v1 Ladder Maps. */

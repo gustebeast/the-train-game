@@ -77,7 +77,8 @@ onAllHeroesDead(() => removeSpawnedCreeps());
 // ---------------------------------------------------------------------------
 
 /** Pick a random creep camp and store in state. Hardcoded to Lordaeron Summer for now.
- *  Only level 1 camps roll until the Mercenary Contract unlocks level 2.
+ *  Only level 1 (green) camps roll until the Mercenary Contract unlocks
+ *  level 2 (orange); level 3 (red) camps never roll.
  *  (campIndex always indexes the full camp list so saves stay stable.) */
 export function rollCreepCamp(): void {
   const tileset = 'Lordaeron Summer';

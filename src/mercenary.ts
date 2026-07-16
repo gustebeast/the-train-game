@@ -2,7 +2,7 @@ import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { registerSaveSegment } from './save';
 import { getHumanPlayers } from './util';
-import { CREEP_CAMPS } from './creep_camps';
+import { CREEP_CAMPS, campLevel } from './creep_camps';
 
 /** Campaign unit inventory repurposed for the mercenary: items function like
  *  on a hero (can use), but nothing drops on death — see compiletime.ts. */
@@ -106,15 +106,17 @@ function pickMercController(): MapPlayer | null {
 // Rolling
 // ---------------------------------------------------------------------------
 
-/** Pick a random creep type from all camps of the tileset (each unique type
- *  weighted equally). The pool includes level 2 camps — the Mercenary
- *  Contract that grants a merc also unlocks them. */
+/** Pick a random creep type from the available camps of the tileset (each
+ *  unique type weighted equally). Includes level 2 camps — the Mercenary
+ *  Contract that grants a merc also unlocks them — but not level 3 (red)
+ *  camps, which never enter the rotation. */
 function rollMercType(): number {
   const camps = CREEP_CAMPS[MERC_TILESET];
   if (camps == null) return 0;
   const seen: Record<string, boolean> = {};
   const pool: string[] = [];
   for (const camp of camps) {
+    if (campLevel(camp) > 2) continue;
     for (const creep of camp) {
       if (seen[creep.id] !== true) {
         seen[creep.id] = true;
