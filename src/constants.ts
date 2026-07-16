@@ -17,6 +17,9 @@ export const BUILD_TRACK_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
 export const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
 export const FILL_ABILITY_ID = FourCC(Abilities.UndefinedNeutralHostile);
 export const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
+// Wand of Negation repurposed as the Hero Reroll cast (its native purge is
+// irrelevant — the target is replaced the moment the spell lands)
+export const REROLL_ABILITY_ID = FourCC(Abilities.ItemPurgeWandOfNegation);
 
 // Upgrades
 // MagicSentry repurposed as the Summon Heroes tech (gates the summon ability)
@@ -31,3 +34,4 @@ export const STONE_ID = FourCC(Items.GemFragment);
 export const TRACK_PIECE_ID = FourCC(Items.MechanicalCritter);
 export const BUCKET_ID = FourCC(Items.EmptyVial);
 export const BUCKET_FULL_ID = FourCC(Items.FullVial);
+export const REROLL_ITEM_ID = FourCC(Items.VoodooDoll);

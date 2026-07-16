@@ -3,8 +3,9 @@ import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
 import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForLobby } from './items';
-import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID } from './constants';
+import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID, REROLL_ITEM_ID } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
+import { hadSummonLastRound } from './heroes';
 import { forEachUnitInWorld, nextFrame } from './util';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
@@ -45,6 +46,10 @@ export function stockShop(shop: Unit): void {
     }
     if (!isSummonUpgradePurchased()) {
       AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
+    }
+    // Rerolls only make sense when last round's heroes stand in the lobby
+    if (hadSummonLastRound()) {
+      AddItemToStock(shop.handle, REROLL_ITEM_ID, 10, 10);
     }
   });
 }
