@@ -27,6 +27,26 @@ let mercDead = false;
 /** Item rawcode IDs the mercenary carries (persist like hero items). */
 let mercItems: number[] = [];
 
+// ---------------------------------------------------------------------------
+// Per-fight state
+// ---------------------------------------------------------------------------
+
+/** The live mercenary unit while heroes are summoned, or null. */
+let mercUnit: Unit | null = null;
+
+/** Player ids owning each spawned hero this summon (duplicates = 2 heroes). */
+let currentHeroOwnerIds: number[] = [];
+
+// ---------------------------------------------------------------------------
+// Control fairness — fewest heroes wins, ties go to least-recently-controlled
+// ---------------------------------------------------------------------------
+
+let controlSeq = 0;
+/** Last control-assignment sequence number per player index (hero or merc). */
+const lastControlled: number[] = [0, 0, 0, 0];
+
+// Save segment (registered after all state above so the closures capture the
+// declared locals — Lua closures can't reference locals declared later).
 registerSaveSegment('mm',
   () => {
     if (!upgradeBought) return '';
@@ -53,25 +73,18 @@ registerSaveSegment('mm',
       }
     }
   },
+  // Reset-then-apply baseline: no contract, no merc, no items
+  () => {
+    upgradeBought = false;
+    mercTypeId = 0;
+    mercDead = false;
+    mercItems = [];
+    mercUnit = null;
+    currentHeroOwnerIds = [];
+    controlSeq = 0;
+    for (let i = 0; i < 4; i++) lastControlled[i] = 0;
+  },
 );
-
-// ---------------------------------------------------------------------------
-// Per-fight state
-// ---------------------------------------------------------------------------
-
-/** The live mercenary unit while heroes are summoned, or null. */
-let mercUnit: Unit | null = null;
-
-/** Player ids owning each spawned hero this summon (duplicates = 2 heroes). */
-let currentHeroOwnerIds: number[] = [];
-
-// ---------------------------------------------------------------------------
-// Control fairness — fewest heroes wins, ties go to least-recently-controlled
-// ---------------------------------------------------------------------------
-
-let controlSeq = 0;
-/** Last control-assignment sequence number per player index (hero or merc). */
-const lastControlled: number[] = [0, 0, 0, 0];
 
 function stampControl(playerId: number): void {
   controlSeq++;

@@ -30,6 +30,10 @@ export function getCrate(): Unit | null {
   return crate;
 }
 
+export function getCrateStart(): Unit | null {
+  return crateStart;
+}
+
 /** Sync the target crate's current inventory into gameState. */
 function syncCrateState(): void {
   if (crate == null) return;

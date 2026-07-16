@@ -117,12 +117,14 @@ function decodeHero(raw: string): HeroData {
   return hero;
 }
 
-// Register save segments h1–h4
+// Register save segments h1–h4. Reset restores the uninitialized-hero
+// baseline (round-0 saves omit hN), letting initRandomHeroes re-roll.
 for (let i = 0; i < 4; i++) {
   const idx = i;
   registerSaveSegment('h' + (idx + 1),
     () => encodeHero(allHeroes[idx]),
     (raw) => { allHeroes[idx] = decodeHero(raw); },
+    () => { allHeroes[idx] = emptyHero(); },
   );
 }
 
@@ -143,6 +145,10 @@ registerSaveSegment('ci',
       chosenIndices = [tonumber(a) ?? 0, tonumber(b) ?? 1];
       chosenFromSave = true;
     }
+  },
+  () => {
+    chosenIndices = [0, 1];
+    chosenFromSave = false;
   },
 );
 
@@ -170,6 +176,9 @@ registerSaveSegment('hc',
       i++;
     }
   },
+  () => {
+    for (let i = 0; i < 4; i++) heroControlCount[i] = 0;
+  },
 );
 
 // Persist chosenHeroPlayers as "hp" segment: "0,3" format
@@ -184,6 +193,10 @@ registerSaveSegment('hp',
       chosenHeroPlayers = loaded;
       heroPlayersFromSave = true;
     }
+  },
+  () => {
+    chosenHeroPlayers = [];
+    heroPlayersFromSave = false;
   },
 );
 
