@@ -61,9 +61,11 @@ export function syncState(): void {
   for (const cb of syncCallbacks) cb();
 }
 
-/** Overwrite state from a loaded object, then sync everything. */
+/** Overwrite state from a loaded object, then sync everything.
+ *  Reset-then-apply: fields missing from the save (e.g. legacy saves
+ *  predating a field) fall back to defaults, never session values. */
 export function applyState(loaded: GameState): void {
-  Object.assign(gameState, loaded);
+  Object.assign(gameState, DEFAULT_STATE, loaded);
   syncState();
 }
 

@@ -67,7 +67,8 @@ function decodeCamp(raw: string): void {
   }
 }
 
-registerSaveSegment('cc', encodeCamp, decodeCamp);
+// Reset re-rolls the camp — the new-game baseline is a fresh random pick
+registerSaveSegment('cc', encodeCamp, decodeCamp, () => rollCreepCamp());
 onHeroesSpawned((heroes) => scaleCreepStats(heroes));
 onAllHeroesDead(() => removeSpawnedCreeps());
 
