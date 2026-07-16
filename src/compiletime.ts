@@ -247,12 +247,15 @@ compiletime(({ objectData, constants }) => {
     constants.abilities.ItemDamageBonusPlus4,
     constants.abilities.ItemDamageBonusPlus6,
   ];
+  // NOTE: no object spread here — the transformer transpiles this block with
+  // ts.transpile() and evals it wrapped in parens; spread emits a `var __assign`
+  // helper above the function expression, which is a SyntaxError in that eval.
   const abilityGameData = objectData.abilities as unknown as { game: Record<string, object> };
-  const pokedDefaults: Record<string, object> = {};
+  const pokedGame: Record<string, object> = Object.assign({}, abilityGameData.game);
   for (const abilityId of attachmentAbilityIds) {
-    pokedDefaults[abilityId] = { ...abilityGameData.game[abilityId], attackBonus: 1 };
+    pokedGame[abilityId] = Object.assign({}, abilityGameData.game[abilityId], { attackBonus: 1 });
   }
-  abilityGameData.game = { ...abilityGameData.game, ...pokedDefaults };
+  abilityGameData.game = pokedGame;
 
   // Axe attachment ability (passive, shows axe model on caster's left hand)
   const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus7)! as StatBonusAbility;
