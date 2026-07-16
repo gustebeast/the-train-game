@@ -225,10 +225,13 @@ compiletime(({ objectData, constants }) => {
     return result;
   };
 
-  // Attachment abilities below repurpose stock item-bonus abilities purely for
-  // their model-attachment art; their stat bonuses are zeroed so carrying a
-  // tool never changes the peasant's combat stats.
-  type StatBonusAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { attackBonus: number; defenseBonusundefined: number };
+  // Attachment abilities below repurpose stock Item Damage Bonus abilities
+  // purely for their model-attachment art; attackBonus is zeroed so carrying a
+  // tool never changes the peasant's combat stats. Only abilities whose bonus
+  // field is actually settable in war3-objectdata-th are used (AItx/AId7/AId8
+  // expose no data field and crash the transformer on assignment), and none
+  // are referenced by items in the creep-camp random drop pools.
+  type StatBonusAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { attackBonus: number };
 
   // Axe attachment ability (passive, shows axe model on caster's left hand)
   const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus7)! as StatBonusAbility;
@@ -255,25 +258,25 @@ compiletime(({ objectData, constants }) => {
   trackAttach.attackBonus = 0;
 
   // Empty bucket attachment ability
-  const bucketAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus20)! as StatBonusAbility;
+  const bucketAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus2)! as StatBonusAbility;
   bucketAttach.target = 'war3mapImported\\Bucket.mdx';
   bucketAttach.targetAttachments = 1;
   bucketAttach.targetAttachmentPoint1 = 'left,hand';
   bucketAttach.attackBonus = 0;
 
   // Full bucket attachment ability
-  const bucketFullAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus7)! as StatBonusAbility;
+  const bucketFullAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus4)! as StatBonusAbility;
   bucketFullAttach.target = 'war3mapImported\\BucketFull.mdx';
   bucketFullAttach.targetAttachments = 1;
   bucketFullAttach.targetAttachmentPoint1 = 'left,hand';
-  bucketFullAttach.defenseBonusundefined = 0;
+  bucketFullAttach.attackBonus = 0;
 
   // Ready orb attachment ability (passive, shows orb model on caster's head)
-  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus8)! as StatBonusAbility;
+  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus6)! as StatBonusAbility;
   readyOrbAttach.target = 'war3mapImported\\ReadyOrb.mdx';
   readyOrbAttach.targetAttachments = 1;
   readyOrbAttach.targetAttachmentPoint1 = 'head';
-  readyOrbAttach.defenseBonusundefined = 0;
+  readyOrbAttach.attackBonus = 0;
 
 
   // Axe item
