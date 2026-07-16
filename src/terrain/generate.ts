@@ -599,6 +599,36 @@ function placeEntities(grid: Grid): void {
   grid.cells[idx(GRID_MIN_X + 6, -2)].entity = Entity.PLAYER_4;
 }
 
+// ============================================================
+// Step 6: Place critters on random grass tiles
+// ============================================================
+
+const CRITTER_COUNT = 15;
+
+/** Mark `count` random empty grass tiles as critter spawns. Runs last so no
+ *  later step overwrites them. */
+function placeCritters(grid: Grid, count: number): void {
+  const candidates: number[] = [];
+  for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
+    for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
+      const i = idx(gx, gy);
+      if (
+        grid.cells[i].terrain === Terrain.GRASS &&
+        grid.cells[i].entity === Entity.NONE &&
+        !isReserved(gx, gy)
+      ) {
+        candidates.push(i);
+      }
+    }
+  }
+  for (let n = 0; n < count && candidates.length > 0; n++) {
+    const ci = GetRandomInt(0, candidates.length - 1);
+    grid.cells[candidates[ci]].entity = Entity.CRITTER;
+    candidates[ci] = candidates[candidates.length - 1];
+    candidates.pop();
+  }
+}
+
 export function generateTerrain(difficulty: number, exitX = GRID_MAX_X): Grid {
   const grid = createGrid();
   generatePath(grid, exitX);
@@ -607,6 +637,7 @@ export function generateTerrain(difficulty: number, exitX = GRID_MAX_X): Grid {
   placeResources(grid, difficulty);
   placeEntities(grid);
   placeCreepCamp(grid);
+  placeCritters(grid, CRITTER_COUNT);
   return grid;
 }
 

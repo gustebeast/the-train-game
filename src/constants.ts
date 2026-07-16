@@ -9,6 +9,16 @@ export const TRACK_WAGON_ID = FourCC(Units.Wagon);
 export const CRATE_ID = FourCC(Units.GrainWarehouse);
 export const WATER_ID = FourCC(Units.Burrow);
 
+// Critters: the wandering-animal set from classic 1v1 melee maps
+export const CRITTER_TYPE_IDS: ReadonlyArray<number> = [
+  FourCC(Units.Rabbit),
+  FourCC(Units.Stag),
+  FourCC(Units.Sheep),
+  FourCC(Units.Pig),
+  FourCC(Units.Chicken),
+  FourCC(Units.Raccoon),
+];
+
 // Abilities
 export const SUMMON_ABILITY_ID = FourCC(Abilities.Roar);
 export const UNSUMMON_ABILITY_ID = FourCC(Abilities.RoarNeutralHostile);

@@ -17,7 +17,7 @@ import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../creeps';
 import { resetHeroState } from '../heroes';
 import { destroyAllTimers } from '../timers';
-import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID } from '../constants';
+import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID, CRITTER_TYPE_IDS } from '../constants';
 import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
 
 // Per-variation scales to normalize rock/granite models to a consistent 128-unit footprint.
@@ -210,6 +210,14 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           BlzSetUnitName(revertCircle.handle, 'Reset Purchases');
           SetUnitVertexColor(revertCircle.handle, 255, 180, 180, 255);
           initReadyZone(world.x, world.y, 'revert');
+          break;
+        }
+
+        case Entity.CRITTER: {
+          const critterType = CRITTER_TYPE_IDS[GetRandomInt(0, CRITTER_TYPE_IDS.length - 1)];
+          const critter = Unit.create(getNeutralPassive(), critterType, world.x, world.y, GetRandomReal(0, 360));
+          // No pathing so a wandering critter can never block track construction
+          if (critter != null) SetUnitPathing(critter.handle, false);
           break;
         }
 
