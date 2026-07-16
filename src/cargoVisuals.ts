@@ -1,29 +1,83 @@
 import { Unit } from 'w3ts';
-import { Abilities } from '@objectdata/abilities';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 import { findItemByType } from './items';
 import { onGlobalTick } from './globalTick';
 import { getTrain, getTrackWagon } from './train';
 
-// Attachment abilities configured in compiletime.ts: stone and wood attach to
-// the engine at distinct sprite refs, tracks attach to the wagon's chest.
-const TRAIN_STONE_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus9);
-const TRAIN_WOOD_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus12);
-const WAGON_TRACK_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus15);
-
-/** Add or remove an attachment ability to match whether cargo is present. */
-function syncAttachment(u: Unit, abilityId: number, show: boolean): void {
-  const has = GetUnitAbilityLevel(u.handle, abilityId) > 0;
-  if (show && !has) {
-    UnitAddAbility(u.handle, abilityId);
-  } else if (!show && has) {
-    UnitRemoveAbility(u.handle, abilityId);
-  }
+/**
+ * One cargo → attached-model rule. Uses AddSpecialEffectTarget (not the
+ * attachment-ability trick the peasant tools use) because effects can be
+ * sized with BlzSetSpecialEffectScale — attachment abilities always render
+ * the model at its natural size, which was far too large for the doodad
+ * rock/log models.
+ */
+interface CargoVisual {
+  itemTypeId: number;
+  model: string;
+  attachPoint: string;
+  scale: number;
+  /** Live effect while shown, and the unit handle it is attached to
+   *  (round resets replace the train units, orphaning the old effect). */
+  effect: effect | null;
+  attachedTo: unit | null;
 }
+
+const engineVisuals: CargoVisual[] = [
+  {
+    itemTypeId: STONE_ID,
+    model: 'Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_Rock6.mdx',
+    attachPoint: 'sprite first',
+    scale: 0.25,
+    effect: null,
+    attachedTo: null,
+  },
+  {
+    itemTypeId: WOOD_ID,
+    model: 'Doodads\\Felwood\\Props\\FelwoodLogStraight\\FelwoodLogStraight.mdx',
+    attachPoint: 'sprite second',
+    scale: 0.25,
+    effect: null,
+    attachedTo: null,
+  },
+];
+
+const wagonVisuals: CargoVisual[] = [
+  {
+    itemTypeId: TRACK_PIECE_ID,
+    model: 'war3mapImported\\OmniTrackSmall.mdx',
+    attachPoint: 'chest',
+    // Deliberately oversized for now: the chest attachment showed nothing in
+    // the first playtest, so this diagnoses whether the model renders at all
+    // or just sits hidden inside the wagon. Tune down once confirmed.
+    scale: 3,
+    effect: null,
+    attachedTo: null,
+  },
+];
 
 function hasCargo(u: Unit, itemTypeId: number): boolean {
   const it = findItemByType(u, itemTypeId);
   return it != null && it.charges > 0;
+}
+
+/** Create/destroy the visual's effect to match the unit's current cargo. */
+function syncVisual(v: CargoVisual, u: Unit): void {
+  const alive = u != null && GetUnitTypeId(u.handle) !== 0;
+  const show = alive && hasCargo(u, v.itemTypeId);
+
+  if (v.effect != null && (!show || v.attachedTo !== u.handle)) {
+    DestroyEffect(v.effect);
+    v.effect = null;
+    v.attachedTo = null;
+  }
+  if (show && v.effect == null) {
+    const e = AddSpecialEffectTarget(v.model, u.handle, v.attachPoint);
+    if (e != null) {
+      BlzSetSpecialEffectScale(e, v.scale);
+      v.effect = e;
+      v.attachedTo = u.handle;
+    }
+  }
 }
 
 /**
@@ -36,13 +90,8 @@ function hasCargo(u: Unit, itemTypeId: number): boolean {
 export function initCargoVisuals(): void {
   onGlobalTick(() => {
     const train = getTrain();
-    if (train != null && GetUnitTypeId(train.handle) !== 0) {
-      syncAttachment(train, TRAIN_STONE_ABILITY_ID, hasCargo(train, STONE_ID));
-      syncAttachment(train, TRAIN_WOOD_ABILITY_ID, hasCargo(train, WOOD_ID));
-    }
+    for (const v of engineVisuals) syncVisual(v, train);
     const wagon = getTrackWagon();
-    if (wagon != null && GetUnitTypeId(wagon.handle) !== 0) {
-      syncAttachment(wagon, WAGON_TRACK_ABILITY_ID, hasCargo(wagon, TRACK_PIECE_ID));
-    }
+    for (const v of wagonVisuals) syncVisual(v, wagon);
   });
 }
