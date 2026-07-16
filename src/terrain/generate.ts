@@ -649,5 +649,6 @@ export function generateCheatTerrain(exitX = GRID_MAX_X, exitY = 0): Grid {
   generatePath(grid, exitX, exitY);
   placeEntities(grid);
   placeCreepCamp(grid, GRID_MIN_X + 4, SPAWN.minY - 2);
+  placeCritters(grid, isCritterpocalypse() ? GRID_W * GRID_H : CRITTER_COUNT);
   return grid;
 }
