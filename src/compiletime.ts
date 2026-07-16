@@ -225,44 +225,55 @@ compiletime(({ objectData, constants }) => {
     return result;
   };
 
+  // Attachment abilities below repurpose stock item-bonus abilities purely for
+  // their model-attachment art; their stat bonuses are zeroed so carrying a
+  // tool never changes the peasant's combat stats.
+  type StatBonusAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { attackBonus: number; defenseBonusundefined: number };
+
   // Axe attachment ability (passive, shows axe model on caster's left hand)
-  const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus7)!;
+  const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus7)! as StatBonusAbility;
   axeAttach.target = 'war3mapImported\\Axe.mdx';
   axeAttach.targetAttachments = 1;
   axeAttach.targetAttachmentPoint1 = 'left,hand';
+  axeAttach.attackBonus = 0;
 
   // Pickaxe attachment ability (passive, shows pickaxe model on caster's left hand)
   // (Pickaxe.mdx's handle texture was swapped from a singleplayer glue-screen
   // asset to AshenTree.blp — the glue texture was suspected in a multiplayer
   // framerate bug)
-  const pickAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus8)!;
+  const pickAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus8)! as StatBonusAbility;
   pickAttach.target = 'war3mapImported\\Pickaxe.mdx';
   pickAttach.targetAttachments = 1;
   pickAttach.targetAttachmentPoint1 = 'left,hand';
+  pickAttach.attackBonus = 0;
 
   // Track piece attachment ability (passive, shows track model in left hand)
-  const trackAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus10)!;
+  const trackAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus10)! as StatBonusAbility;
   trackAttach.target = 'war3mapImported\\OmniTrackSmall.mdx';
   trackAttach.targetAttachments = 1;
   trackAttach.targetAttachmentPoint1 = 'left,hand';
+  trackAttach.attackBonus = 0;
 
   // Empty bucket attachment ability
-  const bucketAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus20)!;
+  const bucketAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus20)! as StatBonusAbility;
   bucketAttach.target = 'war3mapImported\\Bucket.mdx';
   bucketAttach.targetAttachments = 1;
   bucketAttach.targetAttachmentPoint1 = 'left,hand';
+  bucketAttach.attackBonus = 0;
 
   // Full bucket attachment ability
-  const bucketFullAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus7)!;
+  const bucketFullAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus7)! as StatBonusAbility;
   bucketFullAttach.target = 'war3mapImported\\BucketFull.mdx';
   bucketFullAttach.targetAttachments = 1;
   bucketFullAttach.targetAttachmentPoint1 = 'left,hand';
+  bucketFullAttach.defenseBonusundefined = 0;
 
   // Ready orb attachment ability (passive, shows orb model on caster's head)
-  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus8)!;
+  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus8)! as StatBonusAbility;
   readyOrbAttach.target = 'war3mapImported\\ReadyOrb.mdx';
   readyOrbAttach.targetAttachments = 1;
   readyOrbAttach.targetAttachmentPoint1 = 'head';
+  readyOrbAttach.defenseBonusundefined = 0;
 
 
   // Axe item
