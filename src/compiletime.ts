@@ -46,6 +46,11 @@ compiletime(({ objectData, constants }) => {
   train.manaMaximum = 100;
   train.manaInitialAmount = 0;
   train.manaRegeneration = 0;
+  // Not Mechanical: the engine auto-attaches tiered damage fire (and its
+  // sound) to damaged mechanical units at the model's sprite refs. Clearing
+  // the classification suppresses it; the 1HP burning state adds its own
+  // fire explicitly (train.ts igniteBurnVisuals).
+  train.unitClassification = '';
 
   // Track wagon: blood elf wagon unit trailing the engine, holds produced tracks.
   // TrackWagon.mdx is the stock SD BloodElfWagon model copied into the map so
@@ -58,7 +63,9 @@ compiletime(({ objectData, constants }) => {
   trackWagon.modelFile = 'war3mapImported\\TrackWagon.mdx';
   trackWagon.normal = constants.abilities.InventoryHero;
   trackWagon.scalingValueundefined = 0.6;
-  trackWagon.selectionScale = 1;
+  // Negative selection scale hides the health bar (invulnerability doesn't);
+  // the unit stays selectable and give/take targetable
+  trackWagon.selectionScale = -1;
   trackWagon.shadowImageHeight = 100;
   trackWagon.shadowImageWidth = 100;
   trackWagon.shadowImageCenterX = 50;
@@ -256,6 +263,7 @@ compiletime(({ objectData, constants }) => {
   readyOrbAttach.target = 'war3mapImported\\ReadyOrb.mdx';
   readyOrbAttach.targetAttachments = 1;
   readyOrbAttach.targetAttachmentPoint1 = 'head';
+
 
   // Axe item
   const axe = objectData.items.get(constants.items.SturdyWarAxe)!;

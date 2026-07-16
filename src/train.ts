@@ -25,6 +25,28 @@ let crashDeadline: number = 0;
 let gameOver: boolean = false;
 let burning: boolean = false;
 let burnTimer: Timer | null = null;
+let burnEffects: effect[] = [];
+
+/** Attach the full burning look to the engine. The automatic damage fire is
+ *  disabled (the train is no longer classified Mechanical, see compiletime.ts)
+ *  so fire only ever appears here, at the 1HP burning state. */
+function igniteBurnVisuals(): void {
+  if (burnEffects.length > 0) return;
+  for (const point of ['sprite first', 'sprite second', 'sprite third']) {
+    const e = AddSpecialEffectTarget('Environment\\LargeBuildingFire\\LargeBuildingFire1.mdl', train.handle, point);
+    if (e != null) burnEffects.push(e);
+  }
+}
+
+/** Remove the burning look. Scale to 0 first so the fire vanishes instantly
+ *  instead of playing its lingering death animation. */
+function clearBurnVisuals(): void {
+  for (const e of burnEffects) {
+    BlzSetSpecialEffectScale(e, 0);
+    DestroyEffect(e);
+  }
+  burnEffects = [];
+}
 
 export function isBurning(): boolean {
   return burning;
@@ -37,6 +59,7 @@ export function stopGameplay(): void {
 export function extinguish(): void {
   if (!burning) return;
   burning = false;
+  clearBurnVisuals();
   if (burnTimer != null) {
     burnTimer.destroy();
     burnTimer = null;
@@ -219,6 +242,7 @@ function initTrainUnit(unit: Unit): void {
   lowHpTrigger.addAction(() => {
     if (burning || !isInGameplay()) return;
     burning = true;
+    igniteBurnVisuals();
     SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
     BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
     pauseProduction();
@@ -242,6 +266,7 @@ export function initTrain(unit: Unit, wagon: Unit) {
   crashDeadline = 0;
   gameOver = false;
   burning = false;
+  clearBurnVisuals();
   if (burnTimer != null) {
     burnTimer.destroy();
     burnTimer = null;
