@@ -45,12 +45,11 @@ const wagonVisuals: CargoVisual[] = [
   {
     itemTypeId: TRACK_PIECE_ID,
     model: 'war3mapImported\\OmniTrackSmall.mdx',
-    // 'overhead' rather than 'chest': the chest ref sits low enough that the
-    // wagon body swallows the track model (confirmed by the oversized-track
-    // test). Overhead is the highest ref TrackWagon.mdx has (origin/overhead/
-    // chest) — attached transform natives can't move an effect after the
-    // fact, so raising means picking a higher ref.
-    attachPoint: 'overhead',
+    // TrackWagon.mdx's chest ref was repurposed as the cargo anchor: its
+    // pivot is patched to the wagon's rear center at bed height (-85, 0, 75)
+    // via scripts/patch-attachment-pivot.js. (The stock chest position sat
+    // inside the wagon body and swallowed the model; overhead floated it.)
+    attachPoint: 'chest',
     scale: 1.5,
     effect: null,
     attachedTo: null,
