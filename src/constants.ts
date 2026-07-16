@@ -17,6 +17,7 @@ export const BUILD_TRACK_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
 export const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
 export const FILL_ABILITY_ID = FourCC(Abilities.UndefinedNeutralHostile);
 export const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
+export const DASH_ABILITY_ID = FourCC(Abilities.Flare);
 
 // Upgrades
 // MagicSentry repurposed as the Summon Heroes tech (gates the summon ability)
