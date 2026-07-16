@@ -1,5 +1,6 @@
 import { Item, Timer, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
+import { Abilities } from '@objectdata/abilities';
 import { AXE_ID, PICKAXE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID, PEASANT_ID } from './constants';
 import { updateCarryingVisual } from './carrying';
 import { getNeutralPassive } from './teams';
@@ -10,6 +11,8 @@ const RESULT_FILE = 'TheTrainGame/damage_test.txt';
 interface Phase {
   label: string;
   itemId: number | null;
+  /** Attachment ability the carrying system should have granted for this item */
+  abilityId: number | null;
 }
 
 let testRunning = false;
@@ -26,12 +29,12 @@ export function runDamageTest(): void {
   testRunning = true;
 
   const phases: Phase[] = [
-    { label: 'empty', itemId: null },
-    { label: 'axe', itemId: AXE_ID },
-    { label: 'pickaxe', itemId: PICKAXE_ID },
-    { label: 'track', itemId: TRACK_PIECE_ID },
-    { label: 'bucket', itemId: BUCKET_ID },
-    { label: 'fullbucket', itemId: BUCKET_FULL_ID },
+    { label: 'empty', itemId: null, abilityId: null },
+    { label: 'axe', itemId: AXE_ID, abilityId: FourCC(Abilities.ItemDamageBonusPlus7) },
+    { label: 'pickaxe', itemId: PICKAXE_ID, abilityId: FourCC(Abilities.ItemDamageBonusPlus8) },
+    { label: 'track', itemId: TRACK_PIECE_ID, abilityId: FourCC(Abilities.ItemDamageBonusPlus10) },
+    { label: 'bucket', itemId: BUCKET_ID, abilityId: FourCC(Abilities.ItemDamageBonusPlus2) },
+    { label: 'fullbucket', itemId: BUCKET_FULL_ID, abilityId: FourCC(Abilities.ItemDamageBonusPlus4) },
   ];
   const results: string[] = [];
 
@@ -50,6 +53,17 @@ export function runDamageTest(): void {
   BlzSetUnitMaxHP(dummy.handle, 100000);
   SetUnitState(dummy.handle, UNIT_STATE_LIFE, 100000);
   SetUnitMoveSpeed(dummy.handle, 0);
+
+  // Spawn nudging can scatter the pair across unpathable corner terrain where
+  // no path exists and attack orders silently abort. Force exact adjacent
+  // positions (within melee reach) so no walking is ever needed.
+  const placeUnits = (): void => {
+    SetUnitX(attacker.handle, x);
+    SetUnitY(attacker.handle, y);
+    SetUnitX(dummy.handle, x + 64);
+    SetUnitY(dummy.handle, y);
+  };
+  placeUnits();
 
   let phaseIdx = -1;
   let awaitingHit = false;
@@ -108,21 +122,40 @@ export function runDamageTest(): void {
     }
     updateCarryingVisual(attacker);
 
-    // Small settle delay, then order the attack and wait for one hit
-    Timer.create().start(0.3, false, () => {
+    // Readiness is deterministic: the carrying system's attachment ability
+    // must be present (or absent for the empty phase) immediately after the
+    // synchronous item swap. No settle delay needed — verify and go.
+    if (phase.abilityId != null && GetUnitAbilityLevel(attacker.handle, phase.abilityId) === 0) {
+      results.push(phase.label + '=carry-ability-missing');
+      print('damage test: ' + phase.label + ' carry ability missing after pickup');
+      writeResults();
+      nextPhase();
+      return;
+    }
+
+    // Issue the attack on the next game tick (re-entrancy safety only: this
+    // may be running inside the previous phase's damage event).
+    let orderAccepted = false;
+    Timer.create().start(0, false, () => {
       awaitingHit = true;
-      const accepted = IssueTargetOrder(attacker.handle, 'attack', dummy.handle);
-      if (!accepted) {
+      placeUnits();
+      orderAccepted = IssueTargetOrder(attacker.handle, 'attack', dummy.handle);
+      if (!orderAccepted) {
         print('damage test: ' + phase.label + ' attack order REJECTED');
       }
     });
 
-    // Failsafe: no hit within 5s -> record the stall and move on
-    Timer.create().start(5.3, false, () => {
+    // Failsafe: no hit within 4s -> record the stall (with diagnostics) and move on
+    Timer.create().start(4, false, () => {
       if (phaseIdx === myIdx && awaitingHit) {
         awaitingHit = false;
-        results.push(phase.label + '=timeout');
-        print('damage test: ' + phase.label + ' timed out waiting for a hit');
+        const diag = 'order=' + (orderAccepted ? 'ok' : 'rejected')
+          + ' atk=(' + string.format('%.0f', attacker.x) + ',' + string.format('%.0f', attacker.y)
+          + ' hp ' + string.format('%.0f', GetUnitState(attacker.handle, UNIT_STATE_LIFE))
+          + ') dum=(' + string.format('%.0f', dummy.x) + ',' + string.format('%.0f', dummy.y)
+          + ' hp ' + string.format('%.0f', GetUnitState(dummy.handle, UNIT_STATE_LIFE)) + ')';
+        results.push(phase.label + '=timeout ' + diag);
+        print('damage test: ' + phase.label + ' timed out. ' + diag);
         writeResults();
         IssueImmediateOrder(attacker.handle, 'stop');
         nextPhase();
@@ -145,5 +178,10 @@ export function runDamageTest(): void {
   });
 
   print('Damage test starting...');
+  // Write the results file right away: it doubles as a "map is ready" marker
+  // for external harnesses, which can stop input-spamming once it exists.
+  // Must contain at least one line — WC3 creates no file for an empty Preload.
+  results.push('started');
+  writeResults();
   nextPhase();
 }
