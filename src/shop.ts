@@ -2,7 +2,10 @@ import { Trigger, Unit } from 'w3ts';
 import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
 import { getTrain, getTrackWagon } from './train';
-import { getCrate } from './items';
+import { getCrateStart, loadCrateForLobby } from './items';
+import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID } from './constants';
+import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
+import { forEachUnitInWorld, nextFrame } from './util';
 import { armCritterpocalypse, armToughCamp } from './challenges';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
@@ -19,9 +22,37 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [RESOURCE_CAPACITY_ID, 1],
   [TRACK_CAPACITY_ID, 1],
   [CRATE_CAPACITY_ID, 1],
+  [SUMMON_UPGRADE_ITEM_ID, 1],
   [CRITTERPOCALYPSE_ID, 1],
   [TOUGH_CAMP_ID, 1],
 ]);
+
+/** Repeatable upgrades every shop sells. */
+const REPEATABLE_STOCK = [
+  FLAME_RESISTANCE_ID,
+  TRACK_MANUFACTURING_ID,
+  RESOURCE_CAPACITY_ID,
+  TRACK_CAPACITY_ID,
+  CRATE_CAPACITY_ID,
+];
+
+/** Stock a freshly spawned shop. The shop is a MARKETPLACE-based unit, the
+ *  one shop type whose dynamically added stock displays; everything for
+ *  sale is added here so availability can depend on game state (the summon
+ *  upgrade is one-time and is simply not added once owned). Deferred a
+ *  frame so the adds land after the unit fully exists. */
+export function stockShop(shop: Unit): void {
+  registerSummonShop(shop);
+  nextFrame(() => {
+    if (GetUnitTypeId(shop.handle) === 0) return; // shop died/removed
+    for (const itemId of REPEATABLE_STOCK) {
+      AddItemToStock(shop.handle, itemId, 10, 10);
+    }
+    if (!isSummonUpgradePurchased()) {
+      AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
+    }
+  });
+}
 
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
 const EFFECT_ID = 'AIem';
@@ -35,6 +66,14 @@ function playUpgradeEffect(targets: Unit[]): void {
 }
 
 export function initShop(): void {
+  // Blizzard.j's InitNeutralBuildings registers RemovePurchasedItem, which
+  // strips any sold item type from a NEUTRAL PASSIVE seller's stock — for
+  // trigger-added stock that deletes the slot permanently after one
+  // purchase. Our shop is fully trigger-stocked; kill the whole machinery
+  // (the marketplace rotation timer dies with it — no marketplaces here).
+  if (bj_stockItemPurchased != null) DestroyTrigger(bj_stockItemPurchased);
+  if (bj_stockUpdateTimer != null) DestroyTimer(bj_stockUpdateTimer);
+
   const t = Trigger.create();
   t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
   t.addAction(() => {
@@ -44,6 +83,13 @@ export function initShop(): void {
 
     const cost = ITEM_COSTS.get(itemTypeId);
     if (cost == null) return;
+
+    // One-time upgrade already owned — swallow the item without charging
+    if (itemTypeId === SUMMON_UPGRADE_ITEM_ID && isSummonUpgradePurchased()) {
+      RemoveItem(item);
+      return;
+    }
+
     if (gameState.gold < cost) {
       RemoveItem(item);
       return;
@@ -67,8 +113,24 @@ export function initShop(): void {
       effectTargets = [getTrackWagon()];
     } else if (itemTypeId === CRATE_CAPACITY_ID) {
       gameState.crateMaxStack += 4;
-      const crate = getCrate();
-      if (crate != null) effectTargets = [crate];
+      // The shop is in the lobby, where the START crate displays capacity as
+      // item charges — refresh it and play the effect there (the target
+      // crate from getCrate() only exists during gameplay rounds)
+      loadCrateForLobby();
+      const crateStart = getCrateStart();
+      if (crateStart != null) effectTargets = [crateStart];
+    } else if (itemTypeId === SUMMON_UPGRADE_ITEM_ID) {
+      purchaseSummonUpgrade();
+      // The unlock applies to everyone — play the effect on every peasant
+      const targets: Unit[] = [];
+      forEachUnitInWorld(u => {
+        if (GetUnitTypeId(u) === PEASANT_ID) {
+          const peasant = Unit.fromHandle(u);
+          if (peasant != null) targets.push(peasant);
+        }
+      });
+      effectTargets = targets;
+      print('Summon Heroes unlocked!');
     } else if (itemTypeId === CRITTERPOCALYPSE_ID) {
       armCritterpocalypse();
       print('Critterpocalypse armed! Every grass tile spawns a critter next round — win it for 2 bonus gold.');

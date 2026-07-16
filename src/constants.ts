@@ -1,6 +1,7 @@
 import { Abilities } from '@objectdata/abilities';
 import { Items } from '@objectdata/items';
 import { Units } from '@objectdata/units';
+import { Upgrades } from '@objectdata/upgrades';
 
 // Units
 export const PEASANT_ID = FourCC(Units.Peasant);
@@ -27,7 +28,12 @@ export const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
 export const FILL_ABILITY_ID = FourCC(Abilities.UndefinedNeutralHostile);
 export const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
 
+// Upgrades
+// MagicSentry repurposed as the Summon Heroes tech (gates the summon ability)
+export const SUMMON_TECH_ID = FourCC(Upgrades.MagicSentry);
+
 // Items
+export const SUMMON_UPGRADE_ITEM_ID = FourCC(Items.PendantOfEnergy);
 export const AXE_ID = FourCC(Items.SturdyWarAxe);
 export const PICKAXE_ID = FourCC(Items.RustyMiningPick);
 export const WOOD_ID = FourCC(Items.IronwoodBranch);

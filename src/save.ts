@@ -53,16 +53,22 @@ function preloadStore(cacheKey: string, encoded: string): void {
 const extraKeys: string[] = [];
 const extraEncoders: Array<() => string> = [];
 const extraDecoders: Array<(raw: string) => void> = [];
+const extraResets: Array<(() => void) | null> = [];
 
-/** Register an extra save/load segment with its own cache key. */
+/** Register an extra save/load segment with its own cache key.
+ *  `reset` (optional) restores the segment's baseline state; every reset
+ *  runs before any segment decodes, so loading is always reset-then-apply
+ *  and a save without a segment truly means "back to default". */
 export function registerSaveSegment(
   key: string,
   encode: () => string,
   decode: (raw: string) => void,
+  reset?: () => void,
 ): void {
   extraKeys.push(key);
   extraEncoders.push(encode);
   extraDecoders.push(decode);
+  extraResets.push(reset ?? null);
 }
 
 /** Write current gameState + extra segments to save file. */
@@ -96,6 +102,12 @@ export function loadFromFile(): boolean {
   if (loaded.round == null) {
     FlushGameCache(gc);
     return false;
+  }
+
+  // Reset all segments to baseline first — a save without a segment means
+  // "back to default", never "keep whatever the current session has"
+  for (const reset of extraResets) {
+    if (reset != null) reset();
   }
 
   // Load extra segments
