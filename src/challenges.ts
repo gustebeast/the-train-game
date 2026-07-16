@@ -1,11 +1,15 @@
 import { gameState, syncGold } from './state';
+import { registerSaveSegment } from './save';
 
 /**
  * Shady Dealer challenges — optional wagers bought in the lobby for 1 gold
  * that modify the next round and pay 2 gold if their condition is met.
- * Deliberately NOT part of gameState: they are one-round bets that must not
- * be persisted to the save file. Reset Purchases still refunds them because
- * every lobby entry clears the flags before the gold snapshot is taken.
+ *
+ * Lifecycle: armed by purchase, consumed either by paying out or by
+ * awardVictory spending unpaid (lost) wagers before the game is saved.
+ * The save-segment registration gives the system the standard
+ * reset-then-apply behavior, so -load and Reset Purchases restore
+ * challenge state through the same path as every other feature.
  */
 
 const CHALLENGE_BONUS = 2;
@@ -29,26 +33,46 @@ export function isToughCamp(): boolean {
   return toughCamp;
 }
 
-/** Clear all armed challenges. Called on every lobby entry, before the
- *  purchase snapshot is taken. */
+/** Disarm all challenges. Segment reset, and called by awardVictory to
+ *  spend lost wagers before the game is saved. */
 export function clearChallenges(): void {
   critterpocalypse = false;
   toughCamp = false;
 }
 
-/** Award the Critterpocalypse bonus if armed. Called on round victory,
- *  before the game is saved. */
+/** Encode armed challenges as "c=1;t=1" ('' when none are armed). */
+function encodeChallenges(): string {
+  const parts: string[] = [];
+  if (critterpocalypse) parts.push('c=1');
+  if (toughCamp) parts.push('t=1');
+  return table.concat(parts, ';');
+}
+
+/** Decode armed challenges from "c=1;t=1". */
+function decodeChallenges(raw: string): void {
+  for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
+    if (key === 'c' && val === '1') critterpocalypse = true;
+    else if (key === 't' && val === '1') toughCamp = true;
+  }
+}
+
+registerSaveSegment('ch', encodeChallenges, decodeChallenges, clearChallenges);
+
+/** Award the Critterpocalypse bonus if armed, consuming the wager. Called
+ *  on round victory, before the game is saved. */
 export function payCritterpocalypseBonus(): void {
   if (!critterpocalypse) return;
+  critterpocalypse = false;
   gameState.gold += CHALLENGE_BONUS;
   syncGold();
   print('Critterpocalypse survived! +' + I2S(CHALLENGE_BONUS) + ' bonus gold.');
 }
 
-/** Award the Tough Creep Camp bonus if armed. Called when the last creep
- *  of the round's camp dies. */
+/** Award the Tough Creep Camp bonus if armed, consuming the wager. Called
+ *  when the last creep of the round's camp dies. */
 export function payToughCampBonus(): void {
   if (!toughCamp) return;
+  toughCamp = false;
   gameState.gold += CHALLENGE_BONUS;
   syncGold();
   print('Tough creep camp defeated! +' + I2S(CHALLENGE_BONUS) + ' bonus gold.');
