@@ -110,11 +110,17 @@ variants only, NO roll/dodge/tumble (verified by parsing the model).
    or the first half of Death queued into Stand (reads as a dive). Not a
    real roll but serviceable.
 3. **Hive Workshop — "Villager 255 Animations" by Graber**
-   (hiveworkshop.com/threads/villager-255-animations.192204): 255 anims
-   including Jump [78], Backflip Jump [198], Get Up [75–77] — but per the
-   community index list (thread 263727) NO true forward roll. Using it
-   means replacing the peasant's look entirely (or a jarring mid-roll skin
-   swap), plus re-doing our weaponless edit on that mesh.
+   (hiveworkshop.com/threads/villager-255-animations.192204): this is
+   EXACTLY what Shooting Gay uses — its hero model is Villager255.mdx and
+   the roll is packed animation index 31, "Attack Morph - 19" (1167ms;
+   the 255 anims hide under generic names). Adopting it gives us the
+   reference game's actual roll. Trade-offs: the character becomes a
+   villager (different look from our peasant), and it lacks the
+   Stand/Walk Gold/Lumber sequences our carrying visuals rely on
+   (carrying.ts uses the 'gold'/'lumber' animation properties) — so it
+   only fits as a full replacement with carrying rework, or as a
+   0.5s roll-time skin swap (brief character change, masked somewhat by
+   the tumble speed).
 4. **Animation transplant (high effort):** retarget a roll animation onto
    the peasant skeleton in Retera Model Studio — manual modeling work,
    can't be automated from here.
