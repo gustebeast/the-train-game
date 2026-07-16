@@ -233,6 +233,27 @@ compiletime(({ objectData, constants }) => {
   // are referenced by items in the creep-camp random drop pools.
   type StatBonusAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { attackBonus: number };
 
+  // war3-objectdata-th's bundled dataset wrongly lists attackBonus = 0 as the
+  // default for these abilities (the real in-game bonuses are +2..+10), and
+  // the saver only emits modifications that differ from the dataset default —
+  // so a plain `attackBonus = 0` never reaches war3map.w3a and the in-game
+  // bonus stays live. The dataset objects are frozen; swap in unfrozen copies
+  // with a sentinel default so the 0 actually serializes as an Iatt mod.
+  const attachmentAbilityIds = [
+    constants.abilities.ItemDamageBonusPlus7,
+    constants.abilities.ItemDamageBonusPlus8,
+    constants.abilities.ItemDamageBonusPlus10,
+    constants.abilities.ItemDamageBonusPlus2,
+    constants.abilities.ItemDamageBonusPlus4,
+    constants.abilities.ItemDamageBonusPlus6,
+  ];
+  const abilityGameData = objectData.abilities as unknown as { game: Record<string, object> };
+  const pokedDefaults: Record<string, object> = {};
+  for (const abilityId of attachmentAbilityIds) {
+    pokedDefaults[abilityId] = { ...abilityGameData.game[abilityId], attackBonus: 1 };
+  }
+  abilityGameData.game = { ...abilityGameData.game, ...pokedDefaults };
+
   // Axe attachment ability (passive, shows axe model on caster's left hand)
   const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus7)! as StatBonusAbility;
   axeAttach.target = 'war3mapImported\\Axe.mdx';
