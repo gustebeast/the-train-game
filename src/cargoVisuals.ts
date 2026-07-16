@@ -27,7 +27,7 @@ const engineVisuals: CargoVisual[] = [
     itemTypeId: STONE_ID,
     model: 'Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_Rock6.mdx',
     attachPoint: 'sprite first',
-    scale: 0.25,
+    scale: 0.275,
     effect: null,
     attachedTo: null,
   },
@@ -35,7 +35,7 @@ const engineVisuals: CargoVisual[] = [
     itemTypeId: WOOD_ID,
     model: 'Doodads\\Felwood\\Props\\FelwoodLogStraight\\FelwoodLogStraight.mdx',
     attachPoint: 'sprite second',
-    scale: 0.25,
+    scale: 0.275,
     effect: null,
     attachedTo: null,
   },
@@ -45,11 +45,13 @@ const wagonVisuals: CargoVisual[] = [
   {
     itemTypeId: TRACK_PIECE_ID,
     model: 'war3mapImported\\OmniTrackSmall.mdx',
-    attachPoint: 'chest',
-    // Deliberately oversized for now: the chest attachment showed nothing in
-    // the first playtest, so this diagnoses whether the model renders at all
-    // or just sits hidden inside the wagon. Tune down once confirmed.
-    scale: 3,
+    // 'overhead' rather than 'chest': the chest ref sits low enough that the
+    // wagon body swallows the track model (confirmed by the oversized-track
+    // test). Overhead is the highest ref TrackWagon.mdx has (origin/overhead/
+    // chest) — attached transform natives can't move an effect after the
+    // fact, so raising means picking a higher ref.
+    attachPoint: 'overhead',
+    scale: 1.5,
     effect: null,
     attachedTo: null,
   },
