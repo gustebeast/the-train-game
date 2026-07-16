@@ -223,9 +223,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
 
         case Entity.CRITTER: {
           const critterType = CRITTER_TYPE_IDS[GetRandomInt(0, CRITTER_TYPE_IDS.length - 1)];
-          const critter = Unit.create(getNeutralPassive(), critterType, world.x, world.y, GetRandomReal(0, 360));
-          // No pathing so a wandering critter can never block track construction
-          if (critter != null) SetUnitPathing(critter.handle, false);
+          Unit.create(getNeutralPassive(), critterType, world.x, world.y, GetRandomReal(0, 360));
           break;
         }
 

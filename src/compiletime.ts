@@ -508,6 +508,18 @@ compiletime(({ objectData, constants }) => {
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
 
+  // Critters: zero collision so they can't block building placement or shove
+  // players, while normal pathing still keeps them out of trees, water and
+  // the map bounds (disabling pathing let them ghost through everything).
+  const critterTypes = [
+    constants.units.Rabbit, constants.units.Stag, constants.units.Sheep,
+    constants.units.Pig, constants.units.Chicken, constants.units.Raccoon,
+  ];
+  for (const critterType of critterTypes) {
+    const critter = objectData.units.get(critterType)!;
+    critter.collisionSize = 0;
+  }
+
   // Shady Dealer: Tomb of Relics reskinned as an acolyte, sells lobby challenges.
   // SelectHero(Aneu)/SellItems/ShopPurchaseItem make it usable while neutral.
   const shadyDealer = objectData.units.get(constants.units.TombOfRelics)!;
