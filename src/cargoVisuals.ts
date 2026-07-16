@@ -68,6 +68,9 @@ function syncVisual(v: CargoVisual, u: Unit): void {
   const show = alive && hasCargo(u, v.itemTypeId);
 
   if (v.effect != null && (!show || v.attachedTo !== u.handle)) {
+    // Scale to 0 before destroying so the model vanishes instantly instead
+    // of lingering through its death animation
+    BlzSetSpecialEffectScale(v.effect, 0);
     DestroyEffect(v.effect);
     v.effect = null;
     v.attachedTo = null;
