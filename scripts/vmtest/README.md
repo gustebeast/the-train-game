@@ -140,6 +140,12 @@ $env:TRAINVM = 'dougie'      # or brenner / boof / murph
 Otherwise pass `-Vm dougie`, or leave it unset to use the `shared` machine.
 The registry lives in `vms.json`.
 
+**Ready now:** `shared`, `dougie`. `brenner`, `boof` and `murph` are cloned and
+port-assigned but still need their live snapshot minted — the runner will tell
+you so rather than failing obscurely. Minting is step 8 of
+[VM-SETUP.md](VM-SETUP.md) and takes about ten minutes each, most of it the
+snapshot itself.
+
 ---
 
 ## How it works

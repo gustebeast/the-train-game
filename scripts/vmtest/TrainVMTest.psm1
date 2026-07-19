@@ -42,11 +42,17 @@ function Get-TestVm {
     throw "Unknown VM '$Name'. Known VMs: $known"
   }
   $snapshot = if ($entry.PSObject.Properties.Name -contains 'snapshot') { $entry.snapshot } else { $script:Config.snapshot }
+  if ($entry.PSObject.Properties.Name -contains 'ready' -and -not $entry.ready) {
+    throw ("VM '$Name' has no live create-game snapshot yet, so there is nothing to revert to. " +
+           "Mint it by following step 7 of VM-SETUP.md, then set ready:true in vms.json. " +
+           "Until then use -Vm shared or -Vm dougie.")
+  }
   [pscustomobject]@{
     Name          = $Name
     Vmx           = $entry.vmx
     VncPort       = $entry.vncPort
     Snapshot      = $snapshot
+    Ui            = $script:Config.uiSets.($entry.ui)
     GuestUser     = $script:Config.guestUser
     GuestPassword = $script:Config.guestPassword
     GuestHome     = "C:\Users\$($script:Config.guestUser)"
@@ -160,8 +166,8 @@ function Start-TestVmMatch {
   [CmdletBinding()]
   param([object]$Vm, $Connection, [string]$PlayerName = 'agent')
   if ($null -eq $Vm) { $Vm = Get-TestVm }
-  $ui = $script:Config.ui
-  $expected = $script:Config.expectedFramebuffer
+  $ui = $Vm.Ui
+  $expected = $ui.framebuffer
   $actual = "$($Connection.w)x$($Connection.h)"
   if ($expected -and $actual -ne $expected) {
     throw ("VM $($Vm.Name) framebuffer is $actual but the UI coordinates in vms.json " +

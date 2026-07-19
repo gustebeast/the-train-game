@@ -174,20 +174,58 @@ navigation.
 
 ## 8. Clone per agent
 
-Linked clones are copy-on-write, so they share the base disk and each cost only
-their own changes:
+**You cannot clone from a live snapshot.** VMware reports *"The virtual machine
+should not be powered on. It is already running"* even with the VM shut down,
+because a memory snapshot counts as powered on. Make a powered-off snapshot to
+clone from first — revert to the live one, shut the guest down cleanly, then
+snapshot (instant, and no `.vmem` file appears):
 
 ```
-vmrun -T ws clone <golden.vmx> C:\VMs\Dougie\Dougie.vmx linked -snapshot=create-game -cloneName=Dougie
+vmrun -T ws revertToSnapshot <golden.vmx> create-game
+vmrun -T ws start <golden.vmx> nogui
+vmrun -T ws stop  <golden.vmx> soft
+vmrun -T ws snapshot <golden.vmx> base-off
+```
+
+Then clone — linked clones are copy-on-write, so each costs only its own changes
+and takes under a second:
+
+```
+vmrun -T ws clone <golden.vmx> C:\VMs\Dougie\Dougie.vmx linked -snapshot=base-off -cloneName=Dougie
 ```
 
 Per clone, edit the `.vmx`: unique `displayName`, unique
-`RemoteDisplay.vnc.port` (5901–5904), and remove `uuid.bios` / `uuid.location`
-so VMware generates fresh ones.
+`RemoteDisplay.vnc.port` (5901–5904), and drop `uuid.bios` / `uuid.location` /
+`ethernet0.generatedAddress` so VMware generates fresh ones.
 
-Register them in `vms.json` and the runner can address each by name. Multiple
-clones run simultaneously, each independently reachable on its own VNC port and
-via `vmrun`.
+### Clones must run offline
+
+A freshly booted clone finds its **Battle.net session expired** and asks for the
+password. The shared VM never hits this only because its live snapshot froze an
+already-authenticated session. Rather than log in on each clone, run them
+offline — the game does not need Battle.net, and this also removes any question
+of four VMs sharing one account.
+
+Set `ethernet0.startConnected = "FALSE"` in the `.vmx`, then per clone:
+
+1. Boot and wait for the desktop.
+2. Launch WC3 from the guest's Run dialog (Win+R). Send **Escape** before Enter
+   to dismiss the path autocomplete dropdown, which otherwise eats the Enter.
+3. Battle.net reports it could not log in → click **Continue Offline**.
+4. Click **Play**. (The launcher's "Oops! Something went wrong" panel is just
+   the news feed with no network. Ignore it.)
+5. WC3 shows *"There was an error in handling the request"* → **OK**, then
+   **PLAY OFFLINE**.
+6. Single Player → Custom Games → stop at the map list root.
+7. `vmrun -T ws snapshot <clone.vmx> create-game` (~5 minutes).
+8. Set `ready: true` for that VM in `vms.json`.
+
+Clones run **fullscreen** while the original shared VM was minted windowed, so
+their menu coordinates differ. Both sets live in `vms.json` under `uiSets`; each
+VM names the one it uses.
+
+Multiple clones run simultaneously, each independently reachable on its own VNC
+port and via `vmrun`.
 
 ---
 
