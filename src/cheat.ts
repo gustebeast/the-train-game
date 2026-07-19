@@ -1,6 +1,5 @@
 import { Item, Trigger } from 'w3ts';
 import { Players } from 'w3ts/globals';
-import { runDamageTest } from './damagetest';
 import { loadCheatTerrain, loadLobby } from './terrain/load';
 import { TRACK_PIECE_ID, WOOD_ID, STONE_ID } from './constants';
 import { GRID_MIN_X, gridToWorld } from './terrain/constants';
@@ -40,10 +39,6 @@ export function initCheat(): void {
     const stone = Item.create(STONE_ID, stonePos.x, stonePos.y)!;
     stone.charges = 99;
     revealWholeMap();
-  });
-
-  onChatCommand('-damagetest', () => {
-    runDamageTest();
   });
 
   onChatCommand('-load', () => {
