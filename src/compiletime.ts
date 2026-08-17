@@ -264,6 +264,21 @@ compiletime(({ objectData, constants }) => {
       }
     }
     if (result.w3aSkin) fixAbilityLevels(result.w3aSkin);
+    // Upgrade Name (gnam) is a per-level string, but the library emits it at
+    // level 0. WC3 reads an ability's "Requires <name>" text from the upgrade's
+    // level-1 name, so a level-0 override never shows (the summon ability keeps
+    // saying "Requires Magic Sentry"). Bump gnam mods to level 1.
+    for (const table of [result.w3q, result.w3qSkin]) {
+      if (table == null) continue;
+      for (const sub of [table.originalTable, table.customTable]) {
+        if (sub == null) continue;
+        for (const obj of sub.objects) {
+          for (const mod of obj.modifications) {
+            if (mod.id === 'gnam' && mod.levelOrVariation === 0) mod.levelOrVariation = 1;
+          }
+        }
+      }
+    }
     return result;
   };
 
@@ -541,9 +556,10 @@ compiletime(({ objectData, constants }) => {
   // gating the summon ability. Granted via SetPlayerTechResearched when the
   // upgrade is bought from the lobby shop (see summonUpgrade.ts).
   const summonTech = objectData.upgrades.get(constants.upgrades.MagicSentry)!;
-  summonTech.name = 'Summon Heroes Upgrade';
+  // Name shows up in the ability's greyed-out "Requires <name>" text.
+  summonTech.name = 'Shop Upgrade';
   summonTech.levels = 1;
-  summonTech.tooltip = 'Summon Heroes Upgrade';
+  summonTech.tooltip = 'Shop Upgrade';
   summonTech.tooltipExtended = 'Unlocks the Summon Heroes ability.';
 
   // Summon Heroes spell: Roar repurposed as a no-target instant-cast ability
