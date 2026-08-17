@@ -15,6 +15,37 @@ $script:VmRun  = 'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
 $script:Config = Get-Content (Join-Path $PSScriptRoot 'vms.json') -Raw | ConvertFrom-Json
 $script:RepoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
+# --- Focus courtesy -------------------------------------------------------
+# If a VM has an open console tab in the Workstation GUI, reverting/starting it
+# pulls that window to the foreground and steals focus from whatever the user is
+# doing. We can't stop VMware doing it, but we can put the user's window back.
+# Best-effort: capture the foreground window before a power op, restore it after.
+if (-not ('TrainVM.Fg' -as [type])) {
+  Add-Type -Namespace TrainVM -Name Fg -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
+[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
+[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint p);
+[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool f);
+[System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+'@
+}
+function Save-Foreground { try { return [TrainVM.Fg]::GetForegroundWindow() } catch { return [IntPtr]::Zero } }
+function Restore-Foreground([IntPtr]$h) {
+  if ($h -eq [IntPtr]::Zero) { return }
+  try {
+    # Windows only lets a process set the foreground window if it is attached to
+    # the current foreground thread's input, hence the AttachThreadInput dance.
+    $cur = [TrainVM.Fg]::GetForegroundWindow()
+    if ($cur -eq $h) { return }
+    $p = 0
+    $fgThread = [TrainVM.Fg]::GetWindowThreadProcessId($cur, [ref]$p)
+    $me = [TrainVM.Fg]::GetCurrentThreadId()
+    [void][TrainVM.Fg]::AttachThreadInput($me, $fgThread, $true)
+    [void][TrainVM.Fg]::SetForegroundWindow($h)
+    [void][TrainVM.Fg]::AttachThreadInput($me, $fgThread, $false)
+  } catch {}
+}
+
 # vmrun needs -T ws. Without it every guest operation fails with the very
 # misleading "Error: A file was not found".
 function Invoke-VmRun {
@@ -25,27 +56,50 @@ function Invoke-VmRun {
 
 <#
 .SYNOPSIS
-  Look up a VM by agent name (brenner/boof/dougie/murph/shared).
+  Resolve which VM to test on. Normally you pass nothing.
 .DESCRIPTION
-  Falls back to $env:TRAINVM, then the registry default. Set $env:TRAINVM once
-  per session so you never have to pass -Vm.
+  Resolution order:
+    1. explicit -Name
+    2. $env:TRAINVM
+    3. auto-detected from the git branch of the calling worktree: agent/<name>
+  Each agent works in its own worktree (.worktrees/dougie on branch
+  agent/dougie), so step 3 makes the dougie worktree target the dougie VM with
+  zero config, and there is no shared default to fall back onto by accident.
+  Targeting the clone-parent base VM is refused outright.
 #>
 function Get-TestVm {
   [CmdletBinding()]
   param([string]$Name)
   if ([string]::IsNullOrWhiteSpace($Name)) { $Name = $env:TRAINVM }
-  if ([string]::IsNullOrWhiteSpace($Name)) { $Name = $script:Config.default }
+  if ([string]::IsNullOrWhiteSpace($Name)) {
+    # Infer the agent from the current branch (agent/<name>). Run from the repo
+    # root so a worktree reports its own branch, not the main checkout's.
+    $branch = (& git -C $script:RepoRoot rev-parse --abbrev-ref HEAD 2>$null)
+    if ($branch -match '^(?:agent/)?(brenner|boof|dougie|murph)$') { $Name = $matches[1] }
+  }
+  if ([string]::IsNullOrWhiteSpace($Name)) {
+    $known = ($script:Config.vms.PSObject.Properties.Name) -join ', '
+    throw ("Could not determine which VM to use. Pass -Vm <name>, set " +
+           "`$env:TRAINVM, or run from an agent worktree (branch agent/<name>). " +
+           "Named VMs: $known.")
+  }
   $Name = $Name.ToLower()
+  # The base image is the clone parent + mint base; testing on it can corrupt
+  # in-flight clones and is never what an agent wants.
+  if ($Name -in @('base', 'shared', 'traingametest')) {
+    throw ("'$Name' is the clone-parent base image, not a test target. Use your " +
+           "named VM (brenner/boof/dougie/murph) -- normally just run with no -Vm " +
+           "and it is picked from your worktree.")
+  }
   $entry = $script:Config.vms.$Name
   if ($null -eq $entry) {
     $known = ($script:Config.vms.PSObject.Properties.Name) -join ', '
-    throw "Unknown VM '$Name'. Known VMs: $known"
+    throw "Unknown VM '$Name'. Named VMs: $known"
   }
   $snapshot = if ($entry.PSObject.Properties.Name -contains 'snapshot') { $entry.snapshot } else { $script:Config.snapshot }
   if ($entry.PSObject.Properties.Name -contains 'ready' -and -not $entry.ready) {
     throw ("VM '$Name' has no live create-game snapshot yet, so there is nothing to revert to. " +
-           "Mint it by following step 7 of VM-SETUP.md, then set ready:true in vms.json. " +
-           "Until then use -Vm shared or -Vm dougie.")
+           "Mint it by following step 8 of VM-SETUP.md, then set ready:true in vms.json.")
   }
   [pscustomobject]@{
     Name          = $Name
@@ -101,16 +155,31 @@ function Copy-MapToTestVm {
   if ($null -eq $Vm) { $Vm = Get-TestVm }
   if (-not (Test-Path $Map)) { throw "Map not found: $Map. Run 'npm run build' first." }
   $dl = "$($Vm.GuestHome)\Documents\Warcraft III\Maps\Download"
-  $clr = Join-Path $env:TEMP "trainvm-clear-$($Vm.Name).ps1"
-  # Clearing old maps also keeps the listing to exactly one row, so the UI
-  # click coordinates stay valid regardless of what previous runs left behind.
-  Set-Content $clr "Remove-Item '$dl\*.w3x' -Force -ErrorAction SilentlyContinue" -Encoding utf8
-  Invoke-VmRun $Vm CopyFileFromHostToGuest $Vm.Vmx $clr "$($Vm.GuestHome)\clear.ps1" | Out-Null
-  Invoke-VmRun $Vm runProgramInGuest $Vm.Vmx -interactive `
-    'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' '-ExecutionPolicy' 'Bypass' '-File' "$($Vm.GuestHome)\clear.ps1" | Out-Null
+  # Empty the whole Download folder -- files AND leftover subfolders -- so the
+  # uploaded map is the ONLY entry and lands on the firstMapRow coordinate.
+  # (WC3 lists subfolders before maps, so a stray folder would shift the row.)
+  # Recreating the folder with vmrun's native directory ops is ~4s faster than
+  # spawning a guest PowerShell to do it -- delete is recursive, and WC3 is
+  # parked ABOVE Download (not holding it) so the delete succeeds.
+  Invoke-VmRun $Vm deleteDirectoryInGuest $Vm.Vmx $dl 2>$null | Out-Null
+  Invoke-VmRun $Vm createDirectoryInGuest $Vm.Vmx $dl | Out-Null
   $guestName = "ZZ$(Get-Random -Minimum 100000 -Maximum 999999).w3x"
   Invoke-VmRun $Vm CopyFileFromHostToGuest $Vm.Vmx $Map "$dl\$guestName" | Out-Null
   return $guestName
+}
+
+<#
+.SYNOPSIS
+  Fast existence check for a CustomMapData file. No file transfer, so it is
+  cheaper than Get-TestVmResultFile for polling a readiness marker.
+#>
+function Test-TestVmFile {
+  [CmdletBinding()]
+  param([object]$Vm, [Parameter(Mandatory)][string]$Name)
+  if ($null -eq $Vm) { $Vm = Get-TestVm }
+  $guestPath = "$($Vm.GuestHome)\Documents\Warcraft III\CustomMapData\TheTrainGame\$Name"
+  $out = Invoke-VmRun $Vm fileExistsInGuest $Vm.Vmx $guestPath
+  return ("$out" -match 'The file exists')
 }
 
 <#
@@ -230,7 +299,12 @@ function Invoke-MapTest {
   }
 
   Say "reset $($vmInfo.Name) -> $($vmInfo.Snapshot)"
+  # Reverting a VM that has an open console tab yanks the GUI to the front;
+  # capture the user's window and hand focus back once the VM is up.
+  $fg = Save-Foreground
   Reset-TestVm $vmInfo
+  Start-Sleep -Milliseconds 400
+  Restore-Foreground $fg
   Say 'upload map'
   $guestMap = Copy-MapToTestVm $vmInfo -Map $Map
   Say "uploaded as $guestMap"
@@ -244,12 +318,24 @@ function Invoke-MapTest {
     # reliable "we are in game and chat works" signal. Until it shows up, keep
     # tapping space to clear the map's "press any key to continue" screen --
     # harmless once in game (space just recentres the camera).
+    #
+    # We also re-click START GAME if the run looks stuck: a single lobby click
+    # sometimes drops (the lobby wasn't interactive yet), leaving us at the lobby
+    # where space does nothing. The happy path reaches the ready marker in well
+    # under 10s, so we only start re-clicking after that -- re-clicking during a
+    # normal load interferes with it and slows the run.
     Say 'waiting for map ready'
     $deadline = (Get-Date).AddSeconds($ReadyTimeoutSec)
     $ready = $false
+    $waitStart = Get-Date
+    $lastStartClick = Get-Date
     while ((Get-Date) -lt $deadline) {
       Vnc-Tap $conn 0x20
-      if (Get-TestVmResultFile $vmInfo -Name 'test_ready.txt') { $ready = $true; break }
+      if (Test-TestVmFile $vmInfo -Name 'test_ready.txt') { $ready = $true; break }
+      if (((Get-Date) - $waitStart).TotalSeconds -ge 10 -and ((Get-Date) - $lastStartClick).TotalSeconds -ge 5) {
+        Vnc-Click $conn $vmInfo.Ui.startGameButton[0] $vmInfo.Ui.startGameButton[1]
+        $lastStartClick = Get-Date
+      }
       Start-Sleep -Milliseconds 500
     }
     if (-not $ready) {
@@ -315,5 +401,5 @@ function Stop-TestVm {
 }
 
 Export-ModuleMember -Function Invoke-MapTest, Get-TestVm, Reset-TestVm, Stop-TestVm,
-  Copy-MapToTestVm, Get-TestVmResultFile, Get-TestVmScreenshot, Send-TestVmChat,
-  Start-TestVmMatch
+  Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile, Get-TestVmScreenshot,
+  Send-TestVmChat, Start-TestVmMatch

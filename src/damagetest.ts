@@ -104,20 +104,30 @@ function runDamageTest(t: TestReporter): void {
       return;
     }
 
-    // Issue the attack on the next game tick (re-entrancy safety only: this
-    // may be running inside the previous phase's damage event).
+    // Issue the attack, and re-issue it a few times. The very first attack of a
+    // fresh unit can fizzle on target acquisition or die to attack backswing,
+    // which used to time out the 'empty' phase intermittently. Re-placing the
+    // units and re-ordering every second until the hit lands makes it reliable
+    // without slowing the happy path (the hit usually lands on the first order).
     let orderAccepted = false;
-    t.after(0, () => {
-      awaitingHit = true;
+    const issueAttack = (): void => {
+      if (phaseIdx !== myIdx || !awaitingHit) return;
       placeUnits();
       orderAccepted = IssueTargetOrder(attacker.handle, 'attack', dummy.handle);
       if (!orderAccepted) {
         print('damage test: ' + phase.label + ' attack order REJECTED');
       }
+    };
+    t.after(0, () => {
+      awaitingHit = true;
+      issueAttack();
     });
+    t.after(1.5, issueAttack);
+    t.after(3, issueAttack);
+    t.after(4.5, issueAttack);
 
-    // Failsafe: no hit within 4s -> record the stall (with diagnostics) and move on
-    t.after(4, () => {
+    // Failsafe: no hit within 6s -> record the stall (with diagnostics) and move on
+    t.after(6, () => {
       if (phaseIdx === myIdx && awaitingHit) {
         awaitingHit = false;
         const diag = 'order=' + (orderAccepted ? 'ok' : 'rejected')
