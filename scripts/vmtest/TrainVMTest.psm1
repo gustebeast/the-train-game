@@ -102,9 +102,10 @@ function Copy-MapToTestVm {
   if (-not (Test-Path $Map)) { throw "Map not found: $Map. Run 'npm run build' first." }
   $dl = "$($Vm.GuestHome)\Documents\Warcraft III\Maps\Download"
   $clr = Join-Path $env:TEMP "trainvm-clear-$($Vm.Name).ps1"
-  # Clearing old maps also keeps the listing to exactly one row, so the UI
-  # click coordinates stay valid regardless of what previous runs left behind.
-  Set-Content $clr "Remove-Item '$dl\*.w3x' -Force -ErrorAction SilentlyContinue" -Encoding utf8
+  # Empty the whole Download folder -- files AND leftover subfolders -- so the
+  # uploaded map is the ONLY entry and lands on the firstMapRow coordinate.
+  # (WC3 lists subfolders before maps, so a stray folder would shift the row.)
+  Set-Content $clr "Get-ChildItem '$dl' -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue" -Encoding utf8
   Invoke-VmRun $Vm CopyFileFromHostToGuest $Vm.Vmx $clr "$($Vm.GuestHome)\clear.ps1" | Out-Null
   Invoke-VmRun $Vm runProgramInGuest $Vm.Vmx -interactive `
     'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' '-ExecutionPolicy' 'Bypass' '-File' "$($Vm.GuestHome)\clear.ps1" | Out-Null
