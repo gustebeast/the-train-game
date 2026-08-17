@@ -3,6 +3,7 @@ import { Units } from '@objectdata/units';
 import { isInGameplay } from './state';
 import { registerSaveSegment } from './save';
 import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants';
+import { getNeutralPassive } from './teams';
 import { getHumanPlayers, nextFrame, forEachUnitInWorld } from './util';
 import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
 
@@ -151,6 +152,37 @@ registerSaveSegment('ci',
     chosenFromSave = false;
   },
 );
+
+// ---------------------------------------------------------------------------
+// Last summoned heroes — shown in the lobby for rerolling
+// ---------------------------------------------------------------------------
+
+/** Indices into allHeroes of the heroes summoned in the most recent round.
+ *  Empty if Summon Heroes wasn't used. Cleared at round start (load.ts). */
+let lastSummonedIndices: number[] = [];
+
+registerSaveSegment('ls',
+  () => lastSummonedIndices.join(','),
+  (raw) => {
+    const loaded: number[] = [];
+    for (const [val] of string.gmatch(raw, '([^,]+)')) {
+      const idx = tonumber(val);
+      if (idx != null && idx >= 0 && idx < 4) loaded.push(idx);
+    }
+    lastSummonedIndices = loaded;
+  },
+  () => { lastSummonedIndices = []; },
+);
+
+/** Forget the previous round's summons. Called when a new round starts. */
+export function clearLastSummoned(): void {
+  lastSummonedIndices = [];
+}
+
+/** Whether heroes were summoned in the previous round (drives lobby display + reroll stock). */
+export function hadSummonLastRound(): boolean {
+  return lastSummonedIndices.length > 0;
+}
 
 // ---------------------------------------------------------------------------
 // Hero player control — which players control heroes vs peasants
@@ -389,39 +421,48 @@ function transferPeasantsAndSpawnHeroes(casterX: number, casterY: number): void 
   spawnMercWithHeroes(casterX, casterY, spawnedHeroes.map(s => s.unit.owner.id));
 }
 
+/** Create one hero unit from allHeroes[dataIdx] with XP, skills and items
+ *  applied. Tome stat bonuses land one frame later (hero stats must finalize
+ *  first). Shared by round summons and the lobby hero display. */
+function spawnHeroUnit(dataIdx: number, owner: MapPlayer, x: number, y: number): Unit | null {
+  const data = allHeroes[dataIdx];
+  if (data.typeId === 0) return null;
+  const hero = Unit.create(owner, data.typeId, x, y, 270);
+  if (hero == null) return null;
+  if (data.xp > 0) SetHeroXP(hero.handle, data.xp, true);
+  applySpells(hero, data.skills);
+  for (const itemId of data.items) {
+    UnitAddItem(hero.handle, CreateItem(itemId, hero.x, hero.y)!);
+  }
+  nextFrame(() => {
+    const h = hero.handle;
+    if (GetUnitTypeId(h) === 0) return; // removed before the frame elapsed
+    if (data.tomeStr !== 0) SetHeroStr(h, GetHeroStr(h, false) + data.tomeStr, true);
+    if (data.tomeAgi !== 0) SetHeroAgi(h, GetHeroAgi(h, false) + data.tomeAgi, true);
+    if (data.tomeInt !== 0) SetHeroInt(h, GetHeroInt(h, false) + data.tomeInt, true);
+    if (data.tomeHP !== 0) {
+      BlzSetUnitMaxHP(h, BlzGetUnitMaxHP(h) + data.tomeHP);
+      SetUnitState(h, UNIT_STATE_LIFE, BlzGetUnitMaxHP(h));
+    }
+  });
+  return hero;
+}
+
 /** Spawn the 2 chosen heroes. Each owner in the array gets one hero.
  *  If only 1 owner, both heroes go to that player.
  *  Fires onHeroesSpawnedCallback after one frame. */
 export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
   for (let i = 0; i < chosenIndices.length; i++) {
     const dataIdx = chosenIndices[i];
-    const data = allHeroes[dataIdx];
-    if (data.typeId === 0) continue;
     const owner = owners[math.min(i, owners.length - 1)];
-    const hero = Unit.create(owner, data.typeId, x, y, 270);
+    const hero = spawnHeroUnit(dataIdx, owner, x, y);
     if (hero != null) {
       spawnedHeroes.push({ unit: hero, dataIdx });
-      if (data.xp > 0) SetHeroXP(hero.handle, data.xp, true);
-      applySpells(hero, data.skills);
-      for (const itemId of data.items) {
-        UnitAddItem(hero.handle, CreateItem(itemId, hero.x, hero.y)!);
-      }
     }
   }
-  // Wait one frame for hero stats (XP/skills) to finalize, then apply tome bonuses and notify
+  // Wait one frame for hero stats (XP/skills) to finalize, then register
+  // death triggers and notify (tome bonuses are applied by spawnHeroUnit)
   nextFrame(() => {
-    for (const { unit, dataIdx } of spawnedHeroes) {
-      const data = allHeroes[dataIdx];
-      const h = unit.handle;
-      if (data.tomeStr !== 0) SetHeroStr(h, GetHeroStr(h, false) + data.tomeStr, true);
-      if (data.tomeAgi !== 0) SetHeroAgi(h, GetHeroAgi(h, false) + data.tomeAgi, true);
-      if (data.tomeInt !== 0) SetHeroInt(h, GetHeroInt(h, false) + data.tomeInt, true);
-      if (data.tomeHP !== 0) {
-        BlzSetUnitMaxHP(h, BlzGetUnitMaxHP(h) + data.tomeHP);
-        SetUnitState(h, UNIT_STATE_LIFE, BlzGetUnitMaxHP(h));
-      }
-    }
-    // Register hero death triggers
     for (const { unit } of spawnedHeroes) {
       const deathTrig = Trigger.create();
       TriggerRegisterUnitEvent(deathTrig.handle, unit.handle, EVENT_UNIT_DEATH);
@@ -517,6 +558,86 @@ export function areHeroesSpawned(): boolean {
   return heroesSpawned;
 }
 
+// ---------------------------------------------------------------------------
+// Lobby hero display + reroll
+// ---------------------------------------------------------------------------
+
+/** Neutral display copies of last round's summoned heroes, lobby only.
+ *  (Terrain cleanup removes the units; the list is rebuilt each lobby.) */
+let lobbyHeroes: Array<{ unit: Unit; dataIdx: number }> = [];
+
+/** Spawn last round's summoned heroes as neutral lobby units, one per
+ *  position (extras stack on the last position). No-op if Summon Heroes
+ *  wasn't used last round. */
+export function spawnLobbyHeroes(positions: Array<{ x: number; y: number }>): void {
+  lobbyHeroes = [];
+  const owner = getNeutralPassive();
+  lastSummonedIndices.forEach((dataIdx, i) => {
+    const pos = positions[math.min(i, positions.length - 1)];
+    const hero = spawnHeroUnit(dataIdx, owner, pos.x, pos.y);
+    if (hero != null) {
+      hero.invulnerable = true;
+      lobbyHeroes.push({ unit: hero, dataIdx });
+    }
+  });
+}
+
+/** Reroll the lobby hero represented by unitHandle: swap its slot in
+ *  allHeroes to a random hero type not currently in the pool of 4, keeping
+ *  XP, items and tome bonuses (skills are hero-specific and reset), and
+ *  replace the lobby unit in place. Returns false if unitHandle is not a
+ *  lobby hero or no candidate types remain. */
+export function rerollLobbyHero(unitHandle: unit): boolean {
+  const entry = lobbyHeroes.find(e => e.unit.handle === unitHandle);
+  if (entry == null) return false;
+
+  const currentTypes = allHeroes.map(h => h.typeId);
+  const candidates = HERO_POOL.map(n => FourCC(n)).filter(id => !currentTypes.includes(id));
+  if (candidates.length === 0) return false;
+
+  const data = allHeroes[entry.dataIdx];
+  data.typeId = candidates[GetRandomInt(0, candidates.length - 1)];
+  data.skills = {};
+
+  const x = entry.unit.x;
+  const y = entry.unit.y;
+  RemoveUnit(entry.unit.handle);
+  const replacement = spawnHeroUnit(entry.dataIdx, getNeutralPassive(), x, y);
+  if (replacement != null) {
+    replacement.invulnerable = true;
+    entry.unit = replacement;
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Lobby snapshot — pairs with gameState's lobby snapshot so the lobby's
+// "revert purchases" zone also undoes rerolls
+// ---------------------------------------------------------------------------
+
+function cloneHero(h: HeroData): HeroData {
+  return {
+    typeId: h.typeId, xp: h.xp,
+    skills: { ...h.skills }, items: [...h.items],
+    tomeStr: h.tomeStr, tomeAgi: h.tomeAgi, tomeInt: h.tomeInt, tomeHP: h.tomeHP,
+  };
+}
+
+let lobbyHeroSnapshot: HeroData[] | null = null;
+
+/** Snapshot hero data on lobby entry, for revert. */
+export function saveHeroLobbySnapshot(): void {
+  lobbyHeroSnapshot = allHeroes.map(h => cloneHero(h));
+}
+
+/** Restore hero data from the lobby snapshot (undoes rerolls). */
+export function revertHeroesToLobbySnapshot(): void {
+  if (lobbyHeroSnapshot == null) return;
+  for (let i = 0; i < 4; i++) {
+    allHeroes[i] = cloneHero(lobbyHeroSnapshot[i]);
+  }
+}
+
 /** Find the allHeroes index for a spawned hero unit, or -1 if not a spawned hero. */
 function spawnedDataIndexOf(unitHandle: unit): number {
   for (const { unit, dataIdx } of spawnedHeroes) {
@@ -540,6 +661,8 @@ export function initHeroes(): void {
 
     UnitRemoveAbility(caster.handle, SUMMON_ABILITY_ID);
     transferPeasantsAndSpawnHeroes(caster.x, caster.y);
+    // Remember for the next lobby's hero display/reroll
+    lastSummonedIndices = [chosenIndices[0], chosenIndices[1]];
   });
 
   // Unsummon Heroes spell trigger

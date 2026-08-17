@@ -587,6 +587,25 @@ compiletime(({ objectData, constants }) => {
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
+  // Marketplace defaults (select shop, sell stock, invulnerable) plus Apit
+  // so units can pawn items back — the Hero Reroll refund path (reroll.ts)
+  shop.normal = 'Aall,Asid,Apit,Avul';
+
+  // Hero Reroll cast — Wand of Negation repurposed as a unit-target spell.
+  // Its native purge doesn't matter: reroll.ts replaces the target on cast.
+  const rerollCast = objectData.abilities.get(constants.abilities.ItemPurgeWandOfNegation)!;
+  // A peasant (non-hero) carries and casts the reroll item, so the item's
+  // ability must not be hero-only or the peasant can't activate it.
+  rerollCast.heroAbility = false;
+  rerollCast.tooltipNormal = 'Reroll Hero';
+  rerollCast.tooltipNormalExtended = 'Replace a lobby hero with a random new hero. XP and items carry over.';
+  rerollCast.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNTomeRed.blp';
+  rerollCast.targetsAllowed = 'alive,hero,invulnerable,neutral';
+  rerollCast.castRange = 500;
+  rerollCast.caster = '';
+  rerollCast.target = '';
+  rerollCast.effect = '';
+  rerollCast.buffs = '';
 
   // Shady Dealer: Tomb of Relics reskinned as an acolyte, sells lobby challenges.
   // SelectHero(Aneu)/SellItems/ShopPurchaseItem make it usable while neutral.
@@ -812,6 +831,29 @@ compiletime(({ objectData, constants }) => {
   summonUpgrade.abilities = '';
   summonUpgrade.classification = 'PowerUp';
   summonUpgrade.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSelectHeroOn.blp';
+
+  // Hero Reroll (VoodooDoll — purchased from shop, kept in inventory, not a
+  // powerup: the buyer carries it, can pawn it back for a refund, and casts
+  // it on a lobby hero to reroll them (reroll.ts)
+  const heroReroll = objectData.items.get(constants.items.VoodooDoll)!;
+  heroReroll.name = 'Hero Reroll';
+  heroReroll.tooltipBasic = heroReroll.name;
+  heroReroll.description = 'Use on a lobby hero to replace it with a random new hero. XP and items carry over. Sell back to the shop for a full refund.';
+  heroReroll.tooltipExtended = heroReroll.description;
+  heroReroll.goldCost = 1;
+  heroReroll.stockMaximum = 10;
+  heroReroll.stockReplenishInterval = 3600;
+  heroReroll.stockInitialAfterStartDelay = 10;
+  heroReroll.useAutomaticallyWhenAcquired = false;
+  heroReroll.activelyUsed = true;
+  heroReroll.canBeDropped = true;
+  heroReroll.droppedWhenCarrierDies = true;
+  heroReroll.perishable = true;
+  heroReroll.canBeSoldToMerchants = true;
+  heroReroll.numberOfCharges = 1;
+  heroReroll.abilities = constants.abilities.ItemPurgeWandOfNegation;
+  heroReroll.classification = 'Charged';
+  heroReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNTomeRed.blp';
 
   // Scale down all hero types to match peasant size
   const heroTypes: string[] = [
