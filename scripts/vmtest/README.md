@@ -129,6 +129,33 @@ $r.Screenshot          # PNG of the guest at the end of the run
 | `Get-TestVmScreenshot` | Save a PNG of the guest screen. |
 | `Stop-TestVm` | Power off. Optional — the next run reverts anyway. |
 
+### Manual / interactive session
+
+To play the map yourself instead of running an automated measurement — the same
+reset → upload → drive-into-match flow, but it stops at the live map and leaves
+the VM running for you:
+
+```powershell
+npm run build
+powershell -File scripts/vmtest/manual-session.ps1
+```
+
+With no `-Vm` it targets your worktree's VM (`agent/<name>`), just like the
+runner. A VMware console window opens on the host with the map **uploaded into the
+`Maps\Download` folder**. Open that folder, pick the `ZZ…​.w3x`, Create, then
+Start — `Ctrl+Alt` releases the mouse from the window. It does **not** auto-start
+the match or block waiting: the menu-driving is calibrated for the headless
+automated runs, so with the GUI window up those clicks are unreliable, and a
+human watching can just start it. Pass `-AutoStart` to attempt the menu-driving
+anyway (best effort), `-Headless` to skip the window and connect a VNC client to
+`127.0.0.1:<vncPort>` (password `trainvm1`), or `-NoMap` to stop at the Create
+Game screen.
+
+Like `Invoke-MapTest`, it loads whatever `.w3x` is already in `dist/bin`, so
+build first. Everything you do is discarded the next time the VM is reverted, so
+there is nothing to clean up. From PowerShell the same thing is
+`Start-ManualSession`.
+
 ### Picking a VM
 
 Each agent has its own VM so runs never collide, and **normally you pass

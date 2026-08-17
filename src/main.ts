@@ -16,6 +16,7 @@ import { initShop } from './shop';
 import { initHeroes } from './heroes';
 import { initMinimapIcons } from './minimapIcons';
 import { initPlayerLeave } from './playerLeave';
+import { initDash } from './dash';
 import { initGlobalTick } from './globalTick';
 import { initCameraLock } from './cameraLock';
 import { initCargoVisuals } from './cargoVisuals';
@@ -25,6 +26,7 @@ import { log } from './debug';
 
 import { initTestKit } from './testkit';
 import './damagetest'; // registers the 'damage' test; add further test modules here
+import './dashtest'; // registers the 'dash' test (throwaway Dash validation)
 import { loadTerrain } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
@@ -58,6 +60,7 @@ function tsMain() {
     initCameraLock();
     initCargoVisuals();
     initPlayerLeave();
+    initDash();
     // Last: writes the ready marker the VM test runner polls for, so it only
     // appears once every other system has initialised without throwing.
     initTestKit();

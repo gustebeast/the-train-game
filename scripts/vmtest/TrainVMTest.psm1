@@ -122,10 +122,14 @@ function Get-TestVm {
 #>
 function Reset-TestVm {
   [CmdletBinding()]
-  param([object]$Vm)
+  param([object]$Vm, [switch]$Gui)
   if ($null -eq $Vm) { $Vm = Get-TestVm }
+  # Automated runs use 'nogui' so nothing steals focus; manual sessions pass
+  # -Gui so the VMware console window opens on the host for a human to watch
+  # and play. Either way the guest's built-in VNC server stays available.
+  $startArg = if ($Gui) { 'gui' } else { 'nogui' }
   & $script:VmRun revertToSnapshot $Vm.Vmx $Vm.Snapshot 2>&1 | Out-Null
-  $out = & $script:VmRun start $Vm.Vmx nogui 2>&1
+  $out = & $script:VmRun start $Vm.Vmx $startArg 2>&1
   if ($LASTEXITCODE -ne 0) {
     # Known failure mode: a previous run died mid-restore and left a stale
     # checkpoint reference in the vmx. Documented recovery is to drop those
@@ -133,7 +137,7 @@ function Reset-TestVm {
     if ("$out" -match 'checkpoint|CheckpointLate|notCheckpointed') {
       Write-Warning 'Stale checkpoint in vmx; clearing checkpoint.vmState and retrying.'
       (Get-Content $Vm.Vmx) | Where-Object { $_ -notmatch '^checkpoint\.vmState' } | Set-Content $Vm.Vmx
-      & $script:VmRun start $Vm.Vmx nogui 2>&1 | Out-Null
+      & $script:VmRun start $Vm.Vmx $startArg 2>&1 | Out-Null
     } else {
       throw "Could not start $($Vm.Name): $out"
     }
@@ -391,6 +395,107 @@ function Invoke-MapTest {
 
 <#
 .SYNOPSIS
+  Bring the map up in a VM and hand it over for a human to watch and play.
+.DESCRIPTION
+  Reverts the VM to its parked Create Game snapshot, uploads the current build,
+  and leaves the VM running for you -- it never fires a -test command and never
+  tears down. By default the VMware console window opens on the host (-Gui) so
+  you can drive WC3 yourself; pass -Headless to keep it windowless and connect a
+  VNC client to 127.0.0.1:<vncPort> (password below) instead.
+
+  It deliberately does NOT block waiting for the map to go live, and by default
+  does NOT auto-click through the menus. The menu-driving is calibrated for the
+  focus/timing of the headless automated runs; with the GUI window up those
+  clicks are unreliable, and a human watching can just start the match. The map
+  is uploaded into Maps\Download -- open that folder, pick the ZZ*.w3x, Create,
+  Start. Pass -AutoStart to attempt the menu-driving anyway (best effort).
+
+  The session lives on a snapshot-backed VM: everything you do is discarded the
+  next time anyone reverts it (e.g. the next Invoke-MapTest), so there is no
+  cleanup and nothing to commit.
+
+  Like Invoke-MapTest this loads whatever .w3x is already in dist/bin -- build
+  first (npm run build) so the map reflects the code you want to try.
+.PARAMETER AutoStart
+  After uploading, try to drive the menus into a match (best effort) and wait
+  briefly (ReadyTimeoutSec) for the map to signal ready. Never fatal.
+.PARAMETER NoMap
+  Revert and power on only, stopping at WC3's Create Game screen without
+  uploading a map. Useful to poke the menus by hand.
+.EXAMPLE
+  Start-ManualSession
+  # Targets your worktree's VM. VMware window opens with the map uploaded;
+  # open Download and start it.
+.EXAMPLE
+  Start-ManualSession -AutoStart
+  # Also attempts to click into a live match for you.
+.OUTPUTS
+  Vm, Ready, Map, GuestMap, VncHost, VncPort, VncPassword, Gui.
+#>
+function Start-ManualSession {
+  [CmdletBinding()]
+  param(
+    [string]$Vm,
+    [string]$Map,
+    [string]$PlayerName = 'agent',
+    [int]$ReadyTimeoutSec = 30,
+    [switch]$Headless,
+    [switch]$AutoStart,
+    [switch]$NoMap
+  )
+  $vmInfo = Get-TestVm $Vm
+  if (-not $Map) { $Map = Join-Path $script:RepoRoot 'dist\bin\TheTrainGame.w3x' }
+  $gui = -not $Headless
+
+  Write-Host "Reverting $($vmInfo.Name) to '$($vmInfo.Snapshot)' and powering on$(if($gui){' (GUI)'})..."
+  Reset-TestVm $vmInfo -Gui:$gui
+
+  $ready = $false
+  $guestMap = $null
+  if (-not $NoMap) {
+    Write-Host 'Uploading map...'
+    $guestMap = Copy-MapToTestVm $vmInfo -Map $Map
+    Write-Host "Uploaded as $guestMap"
+
+    if ($AutoStart) {
+      $conn = Vnc-Connect $vmInfo.VncPort
+      try {
+        Write-Host 'Attempting to drive into a match (best effort)...'
+        Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
+        Write-Host "Waiting up to ${ReadyTimeoutSec}s for the map to go live..."
+        $deadline = (Get-Date).AddSeconds($ReadyTimeoutSec)
+        while ((Get-Date) -lt $deadline) {
+          Vnc-Tap $conn 0x20
+          if (Get-TestVmResultFile $vmInfo -Name 'test_ready.txt') { $ready = $true; break }
+          Start-Sleep -Milliseconds 500
+        }
+      } finally { $conn.cli.Close() }
+    }
+  }
+
+  Write-Host ''
+  if ($gui) {
+    Write-Host "The VMware window for '$($vmInfo.Name)' is open. Click in to control it; Ctrl+Alt releases the mouse." -ForegroundColor Green
+  } else {
+    Write-Host "Connect a VNC client to 127.0.0.1:$($vmInfo.VncPort) (password: $script:pw) to view/control it." -ForegroundColor Green
+  }
+  if ($NoMap) {
+    Write-Host 'Stopped at the Create Game screen (no map uploaded).'
+  } elseif ($ready) {
+    Write-Host 'Map is live -- go play.' -ForegroundColor Green
+  } else {
+    Write-Host "To start the map: open the Download folder, pick $guestMap, Create, then Start."
+  }
+  Write-Host 'Everything is discarded on the next revert -- nothing to clean up.'
+
+  return [pscustomobject]@{
+    Vm = $vmInfo.Name; Ready = $ready; Map = $Map; GuestMap = $guestMap
+    VncHost = '127.0.0.1'; VncPort = $vmInfo.VncPort; VncPassword = $script:pw; Gui = $gui
+  }
+}
+
+<#
+.SYNOPSIS
   Stop a test VM. Optional -- the next Invoke-MapTest reverts anyway.
 #>
 function Stop-TestVm {
@@ -402,4 +507,4 @@ function Stop-TestVm {
 
 Export-ModuleMember -Function Invoke-MapTest, Get-TestVm, Reset-TestVm, Stop-TestVm,
   Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile, Get-TestVmScreenshot,
-  Send-TestVmChat, Start-TestVmMatch
+  Send-TestVmChat, Start-TestVmMatch, Start-ManualSession

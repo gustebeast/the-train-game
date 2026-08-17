@@ -82,11 +82,12 @@ function playUpgradeEffect(targets: Unit[]): void {
 }
 
 export function initShop(): void {
-  // Blizzard.j's InitNeutralBuildings registers RemovePurchasedItem, which
-  // strips any sold item type from a NEUTRAL PASSIVE seller's stock — for
-  // trigger-added stock that deletes the slot permanently after one
-  // purchase. Our shop is fully trigger-stocked; kill the whole machinery
-  // (the marketplace rotation timer dies with it — no marketplaces here).
+  // Kill Blizzard.j's neutral-shop machinery (InitNeutralBuildings) — both
+  // halves would corrupt our MARKETPLACE-based shop:
+  // - RemovePurchasedItem strips a sold item type from a neutral passive
+  //   seller's stock, permanently deleting trigger-added slots after one sale
+  // - the rotation timer would AddItemToStock random creep-drop items into
+  //   every marketplace-classified unit (i.e. our shop) from 120s onward
   if (bj_stockItemPurchased != null) DestroyTrigger(bj_stockItemPurchased);
   if (bj_stockUpdateTimer != null) DestroyTimer(bj_stockUpdateTimer);
 

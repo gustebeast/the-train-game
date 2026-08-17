@@ -3,8 +3,10 @@
 You are a **sub-agent** working on TheTrainGame, a Warcraft III map written in
 TypeScript (compiled to Lua via `typescript-to-lua`). You work on your own git
 branch inside your own git worktree. A separate **integrator** session (the
-user's main Claude chat) merges your branch into `main` and runs the build.
-You never merge to `main` and you never build or launch the game yourself.
+user's main Claude chat) merges your branch into `main` and runs the official
+build. You never merge to `main`, and you never build or launch anything in the
+main checkout — but you **may** build your own branch inside your own worktree
+to test it on your VM (see "Building & testing your branch" below).
 
 The user will give you an agent name (e.g. `terrain`, `heroes`). If they
 didn't, ask for one before doing anything. Your branch is `agent/<name>` and
@@ -87,22 +89,66 @@ worktree has uncommitted changes from a previous prompt, commit them first.
 ## While working
 
 - **Edit files ONLY inside your worktree** (`.worktrees/<name>/...`). Never
-  edit, build, or switch branches in the main checkout — the integrator is
-  using it.
+  edit, build, or switch branches in the **main checkout** — the integrator is
+  using it. (Building your own branch **inside your worktree** is fine — see
+  below.)
 - All commands run with `git -C .worktrees/<name>` or with the worktree as cwd.
-- **NEVER run** `npm run build`, `npm run test`, or `BuildAndLaunch.bat`. The
-  build rewrites `tsconfig.json` with absolute paths and writes to `dist/`;
-  from a worktree this corrupts the integrator's setup. Building and in-game
-  testing is the integrator's job.
-- **Never commit changes to `tsconfig.json`.** If it shows up as modified,
-  restore it: `git -C .worktrees/<name> checkout -- tsconfig.json`
-- Validate your work with a typecheck instead of a build:
+- **Never run `npm run build` from the main checkout**, and never run
+  `BuildAndLaunch.bat` (it launches WC3 on the developer's own desktop). The
+  official `dist/bin` build and merges to `main` are the integrator's job.
+- For a quick correctness pass without a full build, typecheck:
   ```powershell
   cd .worktrees/<name>; npx tsc -p tsconfig.json --noEmit
   ```
 - Avoid editing binary files under `maps/TheTrainGame.w3x/` unless the task
   requires it — binary conflicts can't be merged. If you must, tell the user
   so no other agent touches the same file.
+
+## Building & testing your branch
+
+You **can** build your own branch to test it in-game — the old "never build"
+rule was overbroad. The build is entirely **cwd-relative** (`scripts/utils.ts`:
+`path.resolve()` off `process.cwd()`, `fs.removeSync("./dist")`, output to
+`./dist/bin`, tsconfig rewrite to `./tsconfig.json`), so running it **with your
+worktree as the current directory writes only inside your worktree** and never
+touches the main checkout's `dist/bin` or `tsconfig.json`. Verified: a worktree
+build leaves the main checkout's map byte-identical.
+
+```powershell
+# ALWAYS cd into your worktree first — never build from the main checkout.
+cd .worktrees/<name>
+npm run build          # writes .worktrees/<name>/dist/bin/TheTrainGame.w3x
+git checkout -- tsconfig.json   # undo the build's cwd-relative rewrite
+```
+
+Rules that keep this safe:
+
+- **cd into your worktree before building.** The build keys off the current
+  directory; run it from the main checkout and you overwrite the integrator's
+  `dist/` and `tsconfig.json`.
+- **Never commit `tsconfig.json`.** The build rewrites it with absolute paths;
+  restore it afterward (`git checkout -- tsconfig.json`). `dist/` and `*.log`
+  are already git-ignored, so those leave no trace.
+- **Never launch WC3 on the host** (`BuildAndLaunch.bat`, or the game
+  executable) — that steals the developer's desktop. Test through your VM
+  instead.
+
+Then test your fresh build in your VM — point the runner at your worktree's
+build with `-Map`:
+
+```powershell
+# Automated headless measurement (see scripts/vmtest/README.md):
+powershell -File scripts/vmtest/run-test.ps1 -Test <name> -Vm <yourvm> `
+  -Map .worktrees/<name>/dist/bin/TheTrainGame.w3x
+
+# Or an interactive session you (or the user) can watch and play:
+powershell -File scripts/vmtest/manual-session.ps1 -Vm <yourvm> `
+  -Map .worktrees/<name>/dist/bin/TheTrainGame.w3x
+```
+
+Use your own VM (`-Vm <name>`) so runs never collide with another agent; if its
+snapshot isn't minted yet (`ready:false` in `scripts/vmtest/vms.json`) fall back
+to `-Vm shared`.
 
 ## At the END of every prompt
 
