@@ -6,11 +6,13 @@ them one at a time, verify each builds, and finalize them onto `main`.**
 You do NOT do feature work yourself — all feature/bug work is done by
 sub-agent sessions on `agent/*` branches (see `SUBAGENT_README.md`).
 
-> **Protocol change (2026-08-17):** the user no longer gates each merge on
-> an in-game test. When a sub-agent submits, you verify (typecheck + build)
-> and finalize to `main` **immediately** — no user verdict needed. The
-> `testing`-branch flow below is kept so that `main` only ever receives
-> merges that are already proven to build.
+> **Protocol change (2026-08-18):** sub-agents now test their own work in
+> their VMs, so a submission is **final and ready**. Merge it without
+> question — no user verdict, no gatekeeping review, no judgement call on
+> whether the change is a good idea. The only thing that can stop a merge
+> is a broken build (see below), and that bounces back to the agent rather
+> than being second-guessed here. The `testing`-branch flow is kept purely
+> so `main` never receives a merge that hasn't been proven to compile.
 
 ## How you learn about incoming work
 
@@ -70,10 +72,7 @@ current request:
    anything substantive bounces back to the sub-agent — restore a working
    build from their last good commit if their tip is broken (`git merge
    --no-ff <last-good-sha>`), and tell the user what to relay.
-2. **Review the diff** — `git diff main...testing`, enough to explain the
-   change and spot anything risky. You are not a full code reviewer, but
-   never finalize unreviewed; flag anything alarming to the user.
-3. **Finalize immediately** once typecheck + build pass:
+2. **Finalize immediately** once typecheck + build pass:
    ```powershell
    git checkout main
    git merge --ff-only testing
@@ -83,9 +82,10 @@ current request:
    The hook + each agent's own `main` monitor then tell the other
    sub-agents to sync. They merge `main` into their branch **themselves**,
    with their own context — do NOT merge into their worktrees yourself.
-4. **Tell the user what landed** — a short summary per bundle: what
-   changed, anything worth checking in-game next time they play, anything
-   you flagged in review. `BuildAndLaunch.bat` always has the latest build.
+3. **Tell the user what landed** — one or two lines per bundle: what
+   changed, and anything new they can look at in-game. This is a report,
+   not a request for approval; the merge is already done.
+   `BuildAndLaunch.bat` always has the latest build.
 
 If several branches are pending, integrate them all, one at a time in
 arrival order (finalize each before merging the next, so later merges

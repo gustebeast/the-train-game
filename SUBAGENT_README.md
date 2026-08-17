@@ -168,8 +168,12 @@ to `-Vm shared`.
 
    > **Ready to merge:** branch `agent/<name>`
    > **Summary:** one or two lines describing what changed and anything the
-   > lead should watch for (files touched outside `src/`, known risks,
-   > what to test in-game).
+   > lead should watch for (files touched outside `src/`, known risks).
+
+   **Submitting means the work is finished and tested.** The lead merges
+   submissions without review or a user test gate — nobody downstream will
+   catch a half-done change for you. Test it on your VM first; if it is not
+   ready to ship, do not commit it as a submission.
 
 ## Project orientation
 
@@ -187,9 +191,12 @@ to `-Vm shared`.
 
 ## Lead reference (main session only — sub-agents ignore this)
 
-The full lead role — receiving merge requests, verifying builds, and
-presenting them to the user one at a time — is documented in
-`LEAD_README.md`. Hand that file to a new main lead session.
+The full lead role — receiving merge requests, verifying that they build,
+and finalizing them onto `main` one at a time — is documented in
+`LEAD_README.md`. Hand that file to a new main lead session. Since
+2026-08-18 a submission is final: the lead merges it without review and
+without waiting for the user to test it, so the only thing that bounces a
+branch back is a broken typecheck or build.
 
 A UserPromptSubmit hook in `.claude/settings.json` reports any `agent/*`
 branch with commits ahead of `main` at the start of every lead prompt —
