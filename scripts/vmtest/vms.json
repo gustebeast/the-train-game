@@ -1,15 +1,15 @@
 {
-  "_comment": "One VM per agent so tests can run concurrently without fighting over a machine. Pick yours with -Vm, or set $env:TRAINVM once per session. 'ready:false' means the VM exists but has no live create-game snapshot yet -- see VM-SETUP.md step 7.",
-  "default": "shared",
+  "_comment": "One VM per agent so tests never collide. The runner auto-selects YOUR VM from your git worktree branch (agent/<name>), so normally you pass nothing. Override with -Vm or $env:TRAINVM. 'ready:false' means the VM exists but has no live create-game snapshot yet -- see VM-SETUP.md step 8.",
   "guestUser": "wc3",
   "guestPassword": "traintest",
   "snapshot": "create-game",
+  "_baseComment": "TrainGameTest is the clone PARENT and mint base -- NOT a test target. Running tests here would interfere with cloning, so it is deliberately absent from 'vms' and the runner refuses to target it.",
+  "base": { "vmx": "C:\\VMs\\TrainGameTest\\TrainGameTest.vmx", "vncPort": 5900, "snapshot": "create-game-v2", "ui": "windowed" },
   "vms": {
-    "shared":  { "vmx": "C:\\VMs\\TrainGameTest\\TrainGameTest.vmx", "vncPort": 5900, "snapshot": "create-game-v2", "ui": "windowed",   "ready": true },
+    "brenner": { "vmx": "C:\\VMs\\Brenner\\Brenner.vmx",             "vncPort": 5901, "ui": "fullscreen", "ready": true },
+    "boof":    { "vmx": "C:\\VMs\\Boof\\Boof.vmx",                   "vncPort": 5902, "ui": "fullscreen", "ready": true },
     "dougie":  { "vmx": "C:\\VMs\\Dougie\\Dougie.vmx",               "vncPort": 5903, "ui": "fullscreen", "ready": true },
-    "brenner": { "vmx": "C:\\VMs\\Brenner\\Brenner.vmx",             "vncPort": 5901, "ui": "fullscreen", "ready": false },
-    "boof":    { "vmx": "C:\\VMs\\Boof\\Boof.vmx",                   "vncPort": 5902, "ui": "fullscreen", "ready": false },
-    "murph":   { "vmx": "C:\\VMs\\Murph\\Murph.vmx",                 "vncPort": 5904, "ui": "fullscreen", "ready": false }
+    "murph":   { "vmx": "C:\\VMs\\Murph\\Murph.vmx",                 "vncPort": 5904, "ui": "fullscreen", "ready": true }
   },
   "_uiComment": "Menu click targets. The shared VM was minted with WC3 in a window; the clones run fullscreen, so their targets differ. Both were captured at a 1656x1249 framebuffer -- if the guest resolution changes, re-capture with Get-TestVmScreenshot.",
   "uiSets": {
@@ -29,7 +29,14 @@
       "createButton":    [1339, 981],
       "nameField":       [827, 493],
       "confirmButton":   [968, 646],
-      "startGameButton": [1339, 981]
+      "startGameButton": [1339, 981],
+      "_mintComment": "Only used by mint-vm.ps1 when first building a clone's snapshot.",
+      "bnetContinueOffline": [1009, 392],
+      "bnetPlay":            [156, 611],
+      "wc3ErrorOk":          [827, 797],
+      "wc3PlayOffline":      [827, 1145],
+      "menuSinglePlayer":    [1219, 488],
+      "menuCustomGames":     [1226, 454]
     }
   }
 }

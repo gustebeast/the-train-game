@@ -8,7 +8,12 @@ function ReadN($st,$n){ $buf=New-Object byte[] $n; $off=0; while($off -lt $n){ $
 function VncResp([byte[]]$ch,[string]$p){ $k=New-Object byte[] 8; for($i=0;$i -lt 8;$i++){ if($i -lt $p.Length){ $c=[byte][char]$p[$i] } else { $c=0 }; $k[$i]=RevBits $c }; $des=[System.Security.Cryptography.DES]::Create(); $des.Mode='ECB'; $des.Padding='None'; $des.Key=$k; return $des.CreateEncryptor().TransformFinalBlock($ch,0,16) }
 
 function Vnc-Connect([int]$port = 5900){
-  $cli=New-Object System.Net.Sockets.TcpClient; $cli.Connect('127.0.0.1',$port)
+  $cli=New-Object System.Net.Sockets.TcpClient
+  # Send each key event in its own packet instead of letting Nagle coalesce a
+  # burst of them -- coalesced bursts arrive at the guest back-to-back and WC3
+  # can sample several within one render frame, which scrambles their order.
+  $cli.NoDelay = $true
+  $cli.Connect('127.0.0.1',$port)
   $s=$cli.GetStream()
   $ver=ReadN $s 12; $s.Write($ver,0,12)
   $nsec=(ReadN $s 1)[0]; $types=ReadN $s $nsec
@@ -50,16 +55,26 @@ function Vnc-Shot($conn, $path){
 function Vnc-Key($conn,[uint32]$ks,[byte]$down){ $m=New-Object byte[] 8; $m[0]=4; $m[1]=$down; $kb=[BitConverter]::GetBytes($ks); [array]::Reverse($kb); [array]::Copy($kb,0,$m,4,4); $conn.s.Write($m,0,8); $conn.s.Flush() }
 function Vnc-Tap($conn,[uint32]$ks){ Vnc-Key $conn $ks 1; Start-Sleep -Milliseconds 50; Vnc-Key $conn $ks 0 }
 $script:ShiftMap = @{ '!'='1';'@'='2';'#'='3';'$'='4';'%'='5';'^'='6';'&'='7';'*'='8';'('='9';')'='0';'_'='-';'+'='=';'{'='[';'}'=']';'|'='\';':'=';';'"'="'";'<'=',';'>'='.';'?'='/';'~'='`' }
-function Vnc-TypeSmart($conn, [string]$text){
+# Type a string over VNC one key at a time. WC3 samples keyboard input once per
+# render frame (~16-33ms), so if two characters are pressed within one frame the
+# game can register them out of order -- the classic "-cheatmode" -> "-cehatmdoe"
+# garble. Every press is therefore fully released and separated by more than a
+# frame before the next begins, and a shifted key holds Shift around only that
+# one press. $CharDelayMs raises the whole cadence further for a slow/busy guest.
+function Vnc-TypeSmart($conn, [string]$text, [int]$CharDelayMs = 0){
+  $hold = 45 + $CharDelayMs   # key held down long enough to span a frame
+  $gap  = 55 + $CharDelayMs   # quiet gap before the next key -- keeps presses in separate frames
   foreach($ch in $text.ToCharArray()){
     $needShift = $false; $base = $ch
     if($ch -cmatch '[A-Z]'){ $needShift = $true; $base = [char]([int][char]$ch + 32) }
     elseif($script:ShiftMap.ContainsKey([string]$ch)){ $needShift = $true; $base = [char]$script:ShiftMap[[string]$ch] }
     $ks = [uint32][int][char]$base
-    if($needShift){ Vnc-Key $conn 0xFFE1 1; Start-Sleep -Milliseconds 15 }
-    Vnc-Key $conn $ks 1; Start-Sleep -Milliseconds 20; Vnc-Key $conn $ks 0
-    if($needShift){ Start-Sleep -Milliseconds 15; Vnc-Key $conn 0xFFE1 0 }
-    Start-Sleep -Milliseconds 15
+    if($needShift){ Vnc-Key $conn 0xFFE1 1; Start-Sleep -Milliseconds 30 }
+    Vnc-Key $conn $ks 1
+    Start-Sleep -Milliseconds $hold
+    Vnc-Key $conn $ks 0
+    if($needShift){ Start-Sleep -Milliseconds 30; Vnc-Key $conn 0xFFE1 0 }
+    Start-Sleep -Milliseconds $gap
   }
 }
 function Vnc-Pointer($conn, [int]$x, [int]$y, [byte]$mask){
