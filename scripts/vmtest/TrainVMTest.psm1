@@ -387,6 +387,108 @@ function Complete-TestVm {
 
 <#
 .SYNOPSIS
+  Check that the test harness itself is sane before trusting a result.
+.DESCRIPTION
+  A green PASS is only meaningful if the harness actually exercised the code you
+  think it did. This verifies the preconditions that otherwise fail silently or
+  confusingly -- most importantly a STALE BUILD (editing src/ but forgetting
+  `npm run build` means the VM runs the previous map and passes happily).
+  Returns an object with Ok plus Checks (name -> Pass/Fail/Warn + detail), and
+  prints a readable table unless -Quiet.
+.PARAMETER Test
+  Optional test name to additionally verify is registered in src/.
+.EXAMPLE
+  powershell -File scripts/vmtest/run-test.ps1 -SelfTest -Test damage
+#>
+function Test-TestHarness {
+  [CmdletBinding()]
+  param([string]$Vm, [string]$Test, [string]$Map, [switch]$Quiet)
+  $checks = [ordered]@{}
+  function Add-Check($name, $state, $detail) { $checks[$name] = [pscustomobject]@{ State = $state; Detail = $detail } }
+
+  # 1. vmrun present -- everything else depends on it.
+  if (Test-Path $script:VmRun) { Add-Check 'vmrun' 'Pass' $script:VmRun }
+  else { Add-Check 'vmrun' 'Fail' "not found at $($script:VmRun) -- is VMware Workstation installed?" }
+
+  # 2. VM resolves (registry, ready flag, base-image refusal, branch auto-detect).
+  $vmInfo = $null
+  try { $vmInfo = Get-TestVm $Vm; Add-Check 'vm resolved' 'Pass' "$($vmInfo.Name) (vnc $($vmInfo.VncPort), snapshot '$($vmInfo.Snapshot)')" }
+  catch { Add-Check 'vm resolved' 'Fail' $_.Exception.Message }
+
+  if ($null -ne $vmInfo) {
+    # 3. vmx on disk.
+    if (Test-Path $vmInfo.Vmx) { Add-Check 'vmx exists' 'Pass' $vmInfo.Vmx }
+    else { Add-Check 'vmx exists' 'Fail' "missing: $($vmInfo.Vmx) -- clone it per VM-SETUP.md" }
+
+    # 4. The snapshot we revert to must exist, or every run cold-boots into nothing.
+    if (Test-Path $vmInfo.Vmx) {
+      $snaps = & $script:VmRun listSnapshots $vmInfo.Vmx 2>&1
+      if ("$snaps" -match [regex]::Escape($vmInfo.Snapshot)) { Add-Check 'snapshot exists' 'Pass' $vmInfo.Snapshot }
+      else { Add-Check 'snapshot exists' 'Fail' "'$($vmInfo.Snapshot)' not found -- mint it (VM-SETUP.md step 8). Have: $("$snaps" -replace '\s+',' ')" }
+    }
+
+    # 5. UI coordinate set present for this VM (windowed vs fullscreen).
+    if ($null -ne $vmInfo.Ui -and $null -ne $vmInfo.Ui.startGameButton) { Add-Check 'ui coords' 'Pass' "framebuffer $($vmInfo.Ui.framebuffer)" }
+    else { Add-Check 'ui coords' 'Fail' "no uiSet for this VM in vms.json ('ui' field)" }
+  }
+
+  # 6. Built map exists, and is NEWER than the newest source file. A stale build
+  #    is the classic false green: the test passes against the previous map.
+  if (-not $Map) { $Map = Join-Path $script:RepoRoot 'dist\bin\TheTrainGame.w3x' }
+  if (Test-Path $Map) {
+    $mapTime = (Get-Item $Map).LastWriteTime
+    $srcDir = Join-Path $script:RepoRoot 'src'
+    $newestSrc = Get-ChildItem $srcDir -Recurse -File -Include *.ts -ErrorAction SilentlyContinue |
+                 Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($null -ne $newestSrc -and $newestSrc.LastWriteTime -gt $mapTime) {
+      $mins = [math]::Round(($newestSrc.LastWriteTime - $mapTime).TotalMinutes,1)
+      Add-Check 'build fresh' 'Fail' "STALE: $($newestSrc.Name) is ${mins} min newer than the built map. Run 'npm run build' or you are testing the previous map."
+    } else {
+      Add-Check 'build fresh' 'Pass' "built $($mapTime.ToString('HH:mm:ss'))"
+    }
+  } else {
+    Add-Check 'build fresh' 'Fail' "no map at $Map -- run 'npm run build'"
+  }
+
+  # 7. initTestKit() wired into main.ts, else the ready marker never appears and
+  #    every run dies with "map never became ready".
+  $mainTs = Join-Path $script:RepoRoot 'src\main.ts'
+  if (Test-Path $mainTs) {
+    $main = Get-Content $mainTs -Raw
+    if ($main -match 'initTestKit\s*\(') { Add-Check 'initTestKit wired' 'Pass' 'called in main.ts' }
+    else { Add-Check 'initTestKit wired' 'Fail' 'main.ts never calls initTestKit() -- the ready marker will never be written' }
+  }
+
+  # 8. If a test name was given, it must be registered and its module imported.
+  if ($Test) {
+    $srcDir = Join-Path $script:RepoRoot 'src'
+    $hits = Select-String -Path (Join-Path $srcDir '*.ts') -Pattern ("registerTest\(\s*'" + [regex]::Escape($Test) + "'") -ErrorAction SilentlyContinue
+    if ($hits) {
+      $file = [IO.Path]::GetFileNameWithoutExtension($hits[0].Path)
+      $main = if (Test-Path (Join-Path $srcDir 'main.ts')) { Get-Content (Join-Path $srcDir 'main.ts') -Raw } else { '' }
+      if ($main -match ("import\s+'\./" + [regex]::Escape($file) + "'")) { Add-Check "test '$Test' registered" 'Pass' "$file.ts, imported by main.ts" }
+      else { Add-Check "test '$Test' registered" 'Fail' "registered in $file.ts but main.ts does not import './$file' -- it will never load" }
+    } else {
+      Add-Check "test '$Test' registered" 'Fail' "no registerTest('$Test', ...) found in src/"
+    }
+  }
+
+  $failed = @($checks.Values | Where-Object { $_.State -eq 'Fail' })
+  $result = [pscustomobject]@{ Ok = ($failed.Count -eq 0); Checks = $checks; Vm = $(if ($vmInfo) { $vmInfo.Name } else { $null }) }
+  if (-not $Quiet) {
+    foreach ($k in $checks.Keys) {
+      $c = $checks[$k]
+      $colour = switch ($c.State) { 'Pass' { 'Green' } 'Warn' { 'Yellow' } default { 'Red' } }
+      Write-Host ("  {0,-24} {1,-5} {2}" -f $k, $c.State, $c.Detail) -ForegroundColor $colour
+    }
+    if ($result.Ok) { Write-Host 'harness OK' -ForegroundColor Green }
+    else { Write-Host "harness NOT ready ($($failed.Count) failing) -- fix the above before trusting a result" -ForegroundColor Red }
+  }
+  return $result
+}
+
+<#
+.SYNOPSIS
   Run your own steps against a live map, with setup and cleanup handled for you.
 .DESCRIPTION
   The flexible sibling of Invoke-MapTest: it resets/resumes the VM, uploads the
@@ -478,7 +580,8 @@ function Invoke-MapTest {
     [int]$TestTimeoutSec = 120,
     [string]$OutDir,
     [switch]$Quiet,
-    [switch]$NoPrewarm
+    [switch]$NoPrewarm,
+    [switch]$AllowNoResults
   )
   $vmInfo = Get-TestVm $Vm
   if (-not $Map)    { $Map    = Join-Path $script:RepoRoot 'dist\bin\TheTrainGame.w3x' }
@@ -543,6 +646,10 @@ function Invoke-MapTest {
         $result.FailureReason = "Test '$Test' did not finish within ${TestTimeoutSec}s (partial results kept)."
       } elseif ($result.Failures.Count -gt 0) {
         $result.FailureReason = "Test reported failures: " + (($result.Failures.Keys) -join ', ')
+      } elseif ($result.Results.Count -eq 0 -and -not $AllowNoResults) {
+        # Finished but reported nothing -- almost always a test that returned
+        # early or forgot t.report(). Passing this would be a false green.
+        $result.FailureReason = "Test '$Test' completed but reported no measurements. Did it call t.report(...)? (Pass -AllowNoResults if a result-free test is intended.)"
       } else {
         $result.Ok = $true
       }
@@ -670,7 +777,7 @@ function Stop-TestVm {
   & $script:VmRun -T ws stop $Vm.Vmx soft 2>&1 | Out-Null
 }
 
-Export-ModuleMember -Function Invoke-MapTest, Use-TestVm, Get-TestVm, Reset-TestVm,
+Export-ModuleMember -Function Invoke-MapTest, Use-TestVm, Test-TestHarness, Get-TestVm, Reset-TestVm,
   Stop-TestVm, Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile,
   Get-TestVmScreenshot, Send-TestVmChat, Start-TestVmMatch, Start-ManualSession,
   Start-PrewarmVm, Get-PrewarmState, Reset-OrResumeTestVm, Wait-TestVmReady,
