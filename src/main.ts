@@ -26,6 +26,7 @@ import { log } from './debug';
 
 import { initTestKit } from './testkit';
 import './damagetest'; // registers the 'damage' test; add further test modules here
+import './dashtest'; // registers the 'dash' test (throwaway Dash validation)
 import { loadTerrain } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
