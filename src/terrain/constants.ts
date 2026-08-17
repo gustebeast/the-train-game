@@ -45,6 +45,8 @@ export enum Entity {
   REVERT_CIRCLE = 19,
   CREEP_CAMP = 20,
   TRACK_WITH_WAGON = 21,
+  CRITTER = 22,
+  SHADY_DEALER = 23,
 }
 
 export interface Cell {

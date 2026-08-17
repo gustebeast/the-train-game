@@ -138,6 +138,10 @@ compiletime(({ objectData, constants }) => {
     'atar', 'acas', 'adur', 'ahdu', 'acdn', 'amcs', 'aare', 'aran',
     'abuf', 'aeff', 'atp1', 'aub1', 'aut1', 'auu1',
   ]);
+  // Per-level data fields without a digit suffix: field id -> data column
+  const dataFieldPointers: { [id: string]: number } = {
+    Iatt: 1, // Item Damage Bonus "attack bonus" (DataA)
+  };
   function fixAbilityLevels(w3a: any) {
     for (const table of [w3a.originalTable, w3a.customTable]) {
       for (const obj of table.objects) {
@@ -145,6 +149,9 @@ compiletime(({ objectData, constants }) => {
           if (mod.levelOrVariation !== 0) continue;
           if (perLevelFields.has(mod.id)) {
             mod.levelOrVariation = 1;
+          } else if (dataFieldPointers[mod.id] != null) {
+            mod.levelOrVariation = 1;
+            mod.dataPointer = dataFieldPointers[mod.id];
           } else {
             // Ability-specific fields (e.g. Ncl1-6): digit suffix is the dataPointer
             // Exclude attachment point fields like ata0-ata5 which use digits but aren't per-level
@@ -248,44 +255,82 @@ compiletime(({ objectData, constants }) => {
     return result;
   };
 
+  // Attachment abilities below repurpose stock Item Damage Bonus abilities
+  // purely for their model-attachment art; attackBonus is zeroed so carrying a
+  // tool never changes the peasant's combat stats. Only abilities whose bonus
+  // field is actually settable in war3-objectdata-th are used (AItx/AId7/AId8
+  // expose no data field and crash the transformer on assignment), and none
+  // are referenced by items in the creep-camp random drop pools.
+  type StatBonusAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { attackBonus: number };
+
+  // war3-objectdata-th's bundled dataset wrongly lists attackBonus = 0 as the
+  // default for these abilities (the real in-game bonuses are +2..+10), and
+  // the saver only emits modifications that differ from the dataset default —
+  // so a plain `attackBonus = 0` never reaches war3map.w3a and the in-game
+  // bonus stays live. The dataset objects are frozen; swap in unfrozen copies
+  // with a sentinel default so the 0 actually serializes as an Iatt mod.
+  const attachmentAbilityIds = [
+    constants.abilities.ItemDamageBonusPlus7,
+    constants.abilities.ItemDamageBonusPlus8,
+    constants.abilities.ItemDamageBonusPlus10,
+    constants.abilities.ItemDamageBonusPlus2,
+    constants.abilities.ItemDamageBonusPlus4,
+    constants.abilities.ItemDamageBonusPlus6,
+  ];
+  // NOTE: no object spread here — the transformer transpiles this block with
+  // ts.transpile() and evals it wrapped in parens; spread emits a `var __assign`
+  // helper above the function expression, which is a SyntaxError in that eval.
+  const abilityGameData = objectData.abilities as unknown as { game: Record<string, object> };
+  const pokedGame: Record<string, object> = Object.assign({}, abilityGameData.game);
+  for (const abilityId of attachmentAbilityIds) {
+    pokedGame[abilityId] = Object.assign({}, abilityGameData.game[abilityId], { attackBonus: 1 });
+  }
+  abilityGameData.game = pokedGame;
+
   // Axe attachment ability (passive, shows axe model on caster's left hand)
-  const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus7)!;
+  const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus7)! as StatBonusAbility;
   axeAttach.target = 'war3mapImported\\Axe.mdx';
   axeAttach.targetAttachments = 1;
   axeAttach.targetAttachmentPoint1 = 'left,hand';
+  axeAttach.attackBonus = 0;
 
   // Pickaxe attachment ability (passive, shows pickaxe model on caster's left hand)
   // (Pickaxe.mdx's handle texture was swapped from a singleplayer glue-screen
   // asset to AshenTree.blp — the glue texture was suspected in a multiplayer
   // framerate bug)
-  const pickAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus8)!;
+  const pickAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus8)! as StatBonusAbility;
   pickAttach.target = 'war3mapImported\\Pickaxe.mdx';
   pickAttach.targetAttachments = 1;
   pickAttach.targetAttachmentPoint1 = 'left,hand';
+  pickAttach.attackBonus = 0;
 
   // Track piece attachment ability (passive, shows track model in left hand)
-  const trackAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus10)!;
+  const trackAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus10)! as StatBonusAbility;
   trackAttach.target = 'war3mapImported\\OmniTrackSmall.mdx';
   trackAttach.targetAttachments = 1;
   trackAttach.targetAttachmentPoint1 = 'left,hand';
+  trackAttach.attackBonus = 0;
 
   // Empty bucket attachment ability
-  const bucketAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus20)!;
+  const bucketAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus2)! as StatBonusAbility;
   bucketAttach.target = 'war3mapImported\\Bucket.mdx';
   bucketAttach.targetAttachments = 1;
   bucketAttach.targetAttachmentPoint1 = 'left,hand';
+  bucketAttach.attackBonus = 0;
 
   // Full bucket attachment ability
-  const bucketFullAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus7)!;
+  const bucketFullAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus4)! as StatBonusAbility;
   bucketFullAttach.target = 'war3mapImported\\BucketFull.mdx';
   bucketFullAttach.targetAttachments = 1;
   bucketFullAttach.targetAttachmentPoint1 = 'left,hand';
+  bucketFullAttach.attackBonus = 0;
 
   // Ready orb attachment ability (passive, shows orb model on caster's head)
-  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemArmorBonusPlus8)!;
+  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus6)! as StatBonusAbility;
   readyOrbAttach.target = 'war3mapImported\\ReadyOrb.mdx';
   readyOrbAttach.targetAttachments = 1;
   readyOrbAttach.targetAttachmentPoint1 = 'head';
+  readyOrbAttach.attackBonus = 0;
 
 
   // Axe item
@@ -530,6 +575,64 @@ compiletime(({ objectData, constants }) => {
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
+
+  // Shady Dealer: Tomb of Relics reskinned as an acolyte, sells lobby challenges.
+  // SelectHero(Aneu)/SellItems/ShopPurchaseItem make it usable while neutral.
+  const shadyDealer = objectData.units.get(constants.units.TombOfRelics)!;
+  shadyDealer.name = 'Shady Dealer';
+  shadyDealer.modelFile = 'units\\undead\\Acolyte\\Acolyte';
+  shadyDealer.normal = [
+    constants.abilities.SelectHero,
+    constants.abilities.SellItems,
+    constants.abilities.ShopPurchaseItem,
+    constants.abilities.InvulnerableNeutral,
+  ].join(',');
+  shadyDealer.scalingValueundefined = 1;
+  shadyDealer.selectionScale = 1;
+  shadyDealer.shadowTextureBuilding = 'NONE';
+  shadyDealer.groundTexture = 'NONE';
+  shadyDealer.pathingMap = 'PathTextures\\4x4simplesolid.tga';
+  shadyDealer.collisionSize = 32;
+  shadyDealer.sightRadiusDay = 400;
+  shadyDealer.sightRadiusNight = 400;
+  shadyDealer.itemsSold = [constants.items.MedallionOfCourage, constants.items.PeriaptOfVitality].join(',');
+  shadyDealer.itemsMade = '';
+
+  // Critterpocalypse challenge (MedallionOfCourage — purchased from the Shady Dealer)
+  const critterpocalypse = objectData.items.get(constants.items.MedallionOfCourage)!;
+  critterpocalypse.name = 'Critterpocalypse';
+  critterpocalypse.tooltipBasic = critterpocalypse.name;
+  critterpocalypse.description = 'Every grass tile spawns a critter next round. Beat the round to earn 2 bonus gold.';
+  critterpocalypse.tooltipExtended = critterpocalypse.description;
+  critterpocalypse.goldCost = 1;
+  critterpocalypse.stockMaximum = 1;
+  critterpocalypse.stockReplenishInterval = 3600;
+  critterpocalypse.stockInitialAfterStartDelay = 10;
+  critterpocalypse.useAutomaticallyWhenAcquired = true;
+  critterpocalypse.activelyUsed = false;
+  critterpocalypse.canBeDropped = false;
+  critterpocalypse.perishable = true;
+  critterpocalypse.abilities = '';
+  critterpocalypse.classification = 'PowerUp';
+  critterpocalypse.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSheep.blp';
+
+  // Tough Creep Camp challenge (PeriaptOfVitality — purchased from the Shady Dealer)
+  const toughCamp = objectData.items.get(constants.items.PeriaptOfVitality)!;
+  toughCamp.name = 'Tough Creep Camp';
+  toughCamp.tooltipBasic = toughCamp.name;
+  toughCamp.description = "Next round's creep camp hits far harder. Defeat it to earn 2 bonus gold.";
+  toughCamp.tooltipExtended = toughCamp.description;
+  toughCamp.goldCost = 1;
+  toughCamp.stockMaximum = 1;
+  toughCamp.stockReplenishInterval = 3600;
+  toughCamp.stockInitialAfterStartDelay = 10;
+  toughCamp.useAutomaticallyWhenAcquired = true;
+  toughCamp.activelyUsed = false;
+  toughCamp.canBeDropped = false;
+  toughCamp.perishable = true;
+  toughCamp.abilities = '';
+  toughCamp.classification = 'PowerUp';
+  toughCamp.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGrunt.blp';
 
   // Flame Resistance upgrade (AncientFigurine — purchased from shop)
   const flameResistance = objectData.items.get(constants.items.AncientFigurine)!;

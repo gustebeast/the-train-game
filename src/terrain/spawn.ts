@@ -18,7 +18,7 @@ import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../cre
 import { resetHeroState } from '../heroes';
 import { stockShop } from '../shop';
 import { destroyAllTimers } from '../timers';
-import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID } from '../constants';
+import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID, CRITTER_TYPE_IDS } from '../constants';
 import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
 
 // Per-variation scales to normalize rock/granite models to a consistent 128-unit footprint.
@@ -200,6 +200,12 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           break;
         }
 
+        case Entity.SHADY_DEALER: {
+          const dealer = Unit.create(getNeutralPassive(), FourCC(Units.TombOfRelics), world.x, world.y, 270)!;
+          dealer.invulnerable = true;
+          break;
+        }
+
         case Entity.START_CIRCLE: {
           const startCircle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
           BlzSetUnitName(startCircle.handle, 'Next Round');
@@ -212,6 +218,12 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           BlzSetUnitName(revertCircle.handle, 'Reset Purchases');
           SetUnitVertexColor(revertCircle.handle, 255, 180, 180, 255);
           initReadyZone(world.x, world.y, 'revert');
+          break;
+        }
+
+        case Entity.CRITTER: {
+          const critterType = CRITTER_TYPE_IDS[GetRandomInt(0, CRITTER_TYPE_IDS.length - 1)];
+          Unit.create(getNeutralPassive(), critterType, world.x, world.y, GetRandomReal(0, 360));
           break;
         }
 

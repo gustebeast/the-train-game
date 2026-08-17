@@ -71,6 +71,57 @@ export function registerSaveSegment(
   extraResets.push(reset ?? null);
 }
 
+/** A complete restorable state: core gameState plus every extra segment,
+ *  encoded exactly as a save file would hold them. */
+interface StateBundle {
+  core: GameState;
+  segments: string[];
+}
+
+/** Capture the current session state as a bundle (the in-memory equivalent
+ *  of writing a save file). */
+function captureStateBundle(): StateBundle {
+  const segments: string[] = [];
+  for (const encode of extraEncoders) {
+    segments.push(encode());
+  }
+  return { core: { ...gameState }, segments };
+}
+
+/** Restore a bundle: reset every segment to baseline, decode the bundle's
+ *  segments over that, then apply core state. The single convergence point
+ *  for -load (bundle read from disk) and Reset Purchases (bundle captured
+ *  in memory on lobby entry). */
+function applyStateBundle(bundle: StateBundle): void {
+  // Reset all segments first — a bundle without a segment means "back to
+  // default", never "keep whatever the current session has"
+  for (const reset of extraResets) {
+    if (reset != null) reset();
+  }
+  for (let i = 0; i < extraKeys.length; i++) {
+    const raw = bundle.segments[i];
+    if (raw != null && raw !== '') {
+      extraDecoders[i](raw);
+    }
+  }
+  applyState(bundle.core);
+}
+
+/** In-memory bundle captured on lobby entry, used by Reset Purchases. */
+let lobbyBundle: StateBundle | null = null;
+
+/** Snapshot the current state for lobby revert. Called on lobby entry. */
+export function saveLobbySnapshot(): void {
+  lobbyBundle = captureStateBundle();
+}
+
+/** Restore the lobby-entry snapshot. Returns false if none exists. */
+export function revertToLobbySnapshot(): boolean {
+  if (lobbyBundle == null) return false;
+  applyStateBundle(lobbyBundle);
+  return true;
+}
+
 /** Write current gameState + extra segments to save file. */
 export function saveToFile(): void {
   PreloadGenClear();
@@ -104,22 +155,13 @@ export function loadFromFile(): boolean {
     return false;
   }
 
-  // Reset all segments to baseline first — a save without a segment means
-  // "back to default", never "keep whatever the current session has"
-  for (const reset of extraResets) {
-    if (reset != null) reset();
-  }
-
-  // Load extra segments
+  // Read all extra segments, then restore through the shared bundle path
+  const segments: string[] = [];
   for (let i = 0; i < extraKeys.length; i++) {
-    const segRaw = GetStoredString(gc, CACHE_CAT, extraKeys[i]);
-    if (segRaw != null && segRaw !== '') {
-      extraDecoders[i](segRaw);
-    }
+    segments.push(GetStoredString(gc, CACHE_CAT, extraKeys[i]) ?? '');
   }
-
   FlushGameCache(gc);
-  applyState(loaded as unknown as GameState);
+  applyStateBundle({ core: loaded as unknown as GameState, segments });
   return true;
 }
 
