@@ -1,122 +1,70 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import { DASH_ABILITY_ID, PEASANT_ID } from './constants';
 
-// Dash physics modeled on the roll from "Shooting Gay 0.6" (see
-// docs/dash-roll-research.md): the cast adds an IMPULSE into a per-unit
-// velocity that a fixed tick decays exponentially — fast burst, smooth
-// bleed-off, motion slightly outlasting the roll.
-const TICK = 0.02;
-const IMPULSE = 50; // units/tick added per cast (~430 units total travel)
-const DECAY = 0.9; // velocity multiplier per tick
-const DEAD_ZONE = 2; // |v| below this snaps to 0
-const MAX_SPEED = 100; // per-axis velocity cap (stacked casts)
-const ROLL_DURATION = 0.5; // seconds of pause/roll state
+// The roll drives the peasant with a normal move order at a boosted speed, so
+// the engine's own pathing keeps it from clipping through rocks, trees, water
+// and the train (an earlier SetUnitX/Y version ignored all collision). Distance
+// = ROLL_SPEED * ROLL_DURATION.
+const ROLL_DISTANCE = 220; // units travelled (was ~430 — halved per feedback)
+const ROLL_DURATION = 0.5; // seconds of the roll
+const ROLL_SPEED = ROLL_DISTANCE / ROLL_DURATION; // move speed during the roll
 const ROLL_ANIM_INDEX = 22; // 'Roll' — transplanted, scripts/transplant-roll-anim.js
 const ROLL_ANIM_TIME_SCALE = 2.3; // 1167ms sequence into ~0.5s
 
-interface DashState {
-  unit: Unit;
-  vx: number;
-  vy: number;
-  rollTimer: Timer | null;
+interface RollState {
+  timer: Timer;
+  defaultSpeed: number;
 }
 
-/** Units with live dash velocity or an active roll, keyed by handle. */
-const states = new Map<unit, DashState>();
+/** Peasants currently mid-roll, keyed by handle. */
+const rolling = new Map<unit, RollState>();
 
-function getState(u: Unit): DashState {
-  let s = states.get(u.handle);
-  if (s == null) {
-    s = { unit: u, vx: 0, vy: 0, rollTimer: null };
-    states.set(u.handle, s);
-  }
-  return s;
+/** True while the unit is executing a roll. Harvest order interception checks
+ *  this so the roll's own move order isn't rejected as a "Requires Axe" etc. */
+export function isRolling(h: unit): boolean {
+  return rolling.has(h);
 }
 
-/** Whether ground units can occupy (x, y). IsTerrainPathable is inverted. */
-function walkable(x: number, y: number): boolean {
-  return !IsTerrainPathable(x, y, PATHING_TYPE_WALKABILITY);
-}
-
-/** Apply velocities: clamp, decay, dead-zone, then move per axis so a
- *  blocked axis doesn't kill the other (slides along obstacles). */
-function tick(): void {
-  const stale: unit[] = [];
-  for (const [handle, s] of states) {
-    if (GetUnitTypeId(handle) === 0) {
-      stale.push(handle);
-      continue;
-    }
-
-    if (s.vx > MAX_SPEED) s.vx = MAX_SPEED;
-    else if (s.vx < -MAX_SPEED) s.vx = -MAX_SPEED;
-    if (s.vy > MAX_SPEED) s.vy = MAX_SPEED;
-    else if (s.vy < -MAX_SPEED) s.vy = -MAX_SPEED;
-
-    let x = GetUnitX(handle);
-    let y = GetUnitY(handle);
-
-    if (s.vx > -DEAD_ZONE && s.vx < DEAD_ZONE) {
-      s.vx = 0;
-    } else {
-      s.vx = s.vx * DECAY;
-      if (walkable(x + s.vx, y)) {
-        x = x + s.vx;
-        SetUnitX(handle, x);
-      }
-    }
-
-    if (s.vy > -DEAD_ZONE && s.vy < DEAD_ZONE) {
-      s.vy = 0;
-    } else {
-      s.vy = s.vy * DECAY;
-      if (walkable(x, y + s.vy)) {
-        y = y + s.vy;
-        SetUnitY(handle, y);
-      }
-    }
-
-    if (s.vx === 0 && s.vy === 0 && s.rollTimer == null) {
-      stale.push(handle);
-    }
-  }
-  for (const h of stale) states.delete(h);
-}
-
-/** End the roll state: restore animation control and orders. Movement may
- *  continue briefly from residual velocity — intentional. */
-function endRoll(s: DashState): void {
-  if (s.rollTimer != null) {
-    s.rollTimer.destroy();
-    s.rollTimer = null;
-  }
-  const h = s.unit.handle;
+/** End the roll: restore speed/animation and halt residual movement. */
+function endRoll(h: unit): void {
+  const s = rolling.get(h);
+  if (s == null) return;
+  s.timer.destroy();
+  rolling.delete(h);
   if (GetUnitTypeId(h) === 0) return; // unit removed mid-roll
   SetUnitTimeScale(h, 1);
-  PauseUnit(h, false);
+  SetUnitMoveSpeed(h, s.defaultSpeed);
   IssueImmediateOrder(h, 'stop');
 }
 
-/** Start (or extend) a roll toward the target point. Note: peasants are
- *  permanently invulnerable in this game, so no invulnerability handling. */
+/** Start (or restart) a roll toward the target point. Peasants are permanently
+ *  invulnerable here, so no invulnerability handling is needed. */
 function startRoll(u: Unit, targetX: number, targetY: number): void {
-  const s = getState(u);
+  const h = u.handle;
   const angle = Atan2(targetY - u.y, targetX - u.x);
-  s.vx = s.vx + IMPULSE * Cos(angle);
-  s.vy = s.vy + IMPULSE * Sin(angle);
+  const destX = u.x + ROLL_DISTANCE * Cos(angle);
+  const destY = u.y + ROLL_DISTANCE * Sin(angle);
 
-  SetUnitFacing(u.handle, angle * bj_RADTODEG);
-  PauseUnit(u.handle, true);
-  SetUnitAnimationByIndex(u.handle, ROLL_ANIM_INDEX);
-  QueueUnitAnimation(u.handle, 'stand');
-  SetUnitTimeScale(u.handle, ROLL_ANIM_TIME_SCALE);
+  // If already rolling, keep the original default speed (don't capture the
+  // boosted one) and reset the timer.
+  const existing = rolling.get(h);
+  const defaultSpeed = existing != null ? existing.defaultSpeed : GetUnitMoveSpeed(h);
+  if (existing != null) existing.timer.destroy();
 
-  if (s.rollTimer == null) s.rollTimer = Timer.create();
-  s.rollTimer.start(ROLL_DURATION, false, () => endRoll(s));
+  SetUnitFacing(h, angle * bj_RADTODEG);
+  SetUnitMoveSpeed(h, ROLL_SPEED);
+  SetUnitTimeScale(h, ROLL_ANIM_TIME_SCALE);
+  SetUnitAnimationByIndex(h, ROLL_ANIM_INDEX);
+  QueueUnitAnimation(h, 'stand');
+  // A normal move order — pathing-respecting, so no clipping through obstacles.
+  IssuePointOrder(h, 'move', destX, destY);
+
+  const timer = Timer.create();
+  rolling.set(h, { timer, defaultSpeed });
+  timer.start(ROLL_DURATION, false, () => endRoll(h));
 }
 
-/** Init the dash: cast trigger (on CHANNEL for keypress-instant response)
- *  and the physics tick. Raw Timer so round resets don't kill it. */
+/** Init the dash: cast trigger on CHANNEL for keypress-instant response. */
 export function initDash(): void {
   const t = Trigger.create();
   t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_CHANNEL);
@@ -126,6 +74,4 @@ export function initDash(): void {
     if (u == null || u.typeId !== PEASANT_ID) return;
     startRoll(u, GetSpellTargetX(), GetSpellTargetY());
   });
-
-  Timer.create().start(TICK, true, tick);
 }
