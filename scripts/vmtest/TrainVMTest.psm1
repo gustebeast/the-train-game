@@ -451,10 +451,18 @@ function Invoke-MapTest {
   }
   finally {
     $conn.cli.Close()
-    # Kick off a detached revert so the next run skips the reset. Runs on both
-    # the pass and the early "not ready" return -- reverting also cleans up a VM
-    # left in a bad state by a failed run.
-    if (-not $NoPrewarm) { Start-PrewarmVm $vmInfo }
+    # Defined end point: a test never leaves its VM running (a running WC3 burns
+    # ~1.5 CPU cores). Default -- kick off a detached revert+suspend so the VM is
+    # parked at zero CPU AND the next run is ready to resume. Runs on both the
+    # pass and the early "not ready" return, so a failed run is cleaned up too.
+    # -NoPrewarm -- just stop the VM (the next run pays the full reset).
+    if ($NoPrewarm) {
+      Say 'stopping VM (-NoPrewarm)'
+      & $script:VmRun -T ws stop $vmInfo.Vmx soft 2>&1 | Out-Null
+    } else {
+      Say 'pre-warming next run (revert + suspend in background)'
+      Start-PrewarmVm $vmInfo
+    }
   }
 
   $result.DurationSeconds = [math]::Round($sw.Elapsed.TotalSeconds,1)

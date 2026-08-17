@@ -209,6 +209,16 @@ list one level *above* the `Download` folder. A run then:
 
 Total ~50s cold. No cleanup is needed; the next revert discards everything.
 
+### Every run has a clean end point
+
+A run **never leaves its VM running** — a running WC3 burns ~1.5 CPU cores, so a
+forgotten VM would spin your fans indefinitely. `Invoke-MapTest` guarantees, in a
+`finally` (so it holds even on failure or a thrown test), that the VM ends either
+**suspended** (default, ready for the next run) or **stopped** (`-NoPrewarm`).
+You don't have to remember to clean up; just call the runner. If you drive a VM
+by hand outside the runner, end with `Stop-TestVm` (or `Start-PrewarmVm` to leave
+it ready).
+
 ### Pre-warming (why repeat runs are ~32s)
 
 The reset is the biggest cost, so after each run the runner reverts the VM to
