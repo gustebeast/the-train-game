@@ -157,20 +157,36 @@ there is nothing to clean up. From PowerShell the same thing is
 
 ### Picking a VM
 
-Each agent has its own VM so runs never collide. Set it once per session:
+Each agent has its own VM so runs never collide, and **normally you pass
+nothing** — the runner reads your git branch (`agent/<name>`) and targets that
+VM automatically. So from the `dougie` worktree, `run-test.ps1` uses the
+`dougie` VM with no configuration.
+
+Override only if you need to:
 
 ```powershell
-$env:TRAINVM = 'dougie'      # or brenner / boof / murph
+$env:TRAINVM = 'boof'        # for this session, or
+run-test.ps1 -Vm boof        # for one run
 ```
 
-Otherwise pass `-Vm dougie`, or leave it unset to use the `shared` machine.
-The registry lives in `vms.json`.
+There is **no shared default** and the clone-parent base image
+(`TrainGameTest`) is not a valid target — the runner refuses it. If it can't
+determine your VM (e.g. run from `main`), it errors instead of guessing.
 
-**Ready now:** `shared`, `dougie`. `brenner`, `boof` and `murph` are cloned and
-port-assigned but still need their live snapshot minted — the runner will tell
-you so rather than failing obscurely. Minting is step 8 of
-[VM-SETUP.md](VM-SETUP.md) and takes about ten minutes each, most of it the
-snapshot itself.
+**The four agent VMs — `brenner`, `boof`, `dougie`, `murph` — are minted and
+verified.** The registry lives in `vms.json`.
+
+## Running two at once
+
+Agents can test their own maps simultaneously — each VM is fully independent
+(own disk, own snapshot, own VNC port):
+
+```powershell
+powershell -File scripts/vmtest/concurrency-test.ps1 -VmA brenner -VmB murph
+```
+
+This runs a full test on both VMs in parallel and confirms they overlapped and
+both passed. Verified: 47.8s of concurrent execution, both green.
 
 ---
 
@@ -188,6 +204,25 @@ list one level *above* the `Download` folder. A run then:
 5. sends `-test <name>` and polls the result file until it ends with `done` (~10s)
 
 No cleanup is needed; the next revert discards everything.
+
+### Audio is silenced at the VM level
+
+WC3 needs an audio device to launch, but VMware pipes guest audio to the host
+speakers. So each VM is minted with its sound device **disconnected at runtime**
+(`vmrun disconnectNamedDevice <vmx> sound`) after WC3 is up but before the
+snapshot — the device stays present (WC3 is happy) but silent, and the snapshot
+freezes it that way. Reverts stay quiet. Nothing in-game or in the guest OS is
+changed.
+
+### Offline entitlement expires (~monthly re-mint)
+
+The VMs run WC3 offline. WC3 Reforged only allows offline play for a limited
+window after the last online sign-in (~30 days), so **every so often the
+snapshots must be re-minted** after one online Battle.net login. Symptom when it
+lapses: a freshly *minted* VM can't get past WC3's PLAY OFFLINE (the button is
+dead). Existing snapshots keep working (they are frozen past that gate) — only
+new minting is blocked. Fix is one login on the base, then re-mint; see
+[VM-SETUP.md](VM-SETUP.md) step 8.
 
 ### Why the filename must be unique
 
