@@ -198,34 +198,74 @@ Per clone, edit the `.vmx`: unique `displayName`, unique
 `RemoteDisplay.vnc.port` (5901–5904), and drop `uuid.bios` / `uuid.location` /
 `ethernet0.generatedAddress` so VMware generates fresh ones.
 
-### Clones must run offline
+### Refresh the offline entitlement first (one online login)
 
-A freshly booted clone finds its **Battle.net session expired** and asks for the
-password. The shared VM never hits this only because its live snapshot froze an
-already-authenticated session. Rather than log in on each clone, run them
-offline — the game does not need Battle.net, and this also removes any question
-of four VMs sharing one account.
+The VMs run WC3 **offline** — the game itself never needs Battle.net, which
+sidesteps four VMs sharing one account. But WC3 Reforged only permits offline
+play for ~30 days after the last online sign-in. Past that, a freshly minted VM
+**cannot get past WC3's PLAY OFFLINE** (the button is dead). Existing live
+snapshots keep working — they are frozen past that gate — so only new minting is
+blocked, which is exactly what you are about to do.
 
-Set `ethernet0.startConnected = "FALSE"` in the `.vmx`, then per clone:
+So before (re-)cloning, refresh the entitlement once on the **base** VM. This is
+the *only* step that needs a human (a password), and it is one login total, not
+one per clone:
 
-1. Boot and wait for the desktop.
-2. Launch WC3 from the guest's Run dialog (Win+R). Send **Escape** before Enter
-   to dismiss the path autocomplete dropdown, which otherwise eats the Enter.
-3. Battle.net reports it could not log in → click **Continue Offline**.
-4. Click **Play**. (The launcher's "Oops! Something went wrong" panel is just
-   the news feed with no network. Ignore it.)
-5. WC3 shows *"There was an error in handling the request"* → **OK**, then
-   **PLAY OFFLINE**.
-6. Single Player → Custom Games → stop at the map list root.
-7. `vmrun -T ws snapshot <clone.vmx> create-game` (~5 minutes).
-8. Set `ready: true` for that VM in `vms.json`.
+1. Boot the base with its NIC connected. Launch Battle.net; it shows "Welcome
+   back / session expired". Open the VMware GUI console (`vmware.exe <vmx>`) so
+   the human can type the password, and log in **Online**. (Battle.net may apply
+   a required update first — click **Restart Now** and wait.)
+2. Launch WC3 online once (Battle.net → Warcraft III → Play). Reaching the main
+   menu with **MULTIPLAYER enabled** confirms the offline grace is refreshed.
+3. Close WC3, shut the guest down cleanly, and take a fresh powered-off snapshot
+   (`base-off2`). All clones will inherit the refreshed entitlement.
+
+The saved "keep me logged in" token is **single-use across clones** — the first
+clone to go online consumes it, so the others still show "session expired". That
+is fine: they never need to log in (see below).
+
+### Mint each clone (offline, no login)
+
+Clone from the refreshed `base-off2` and set each clone's `.vmx`: unique
+`displayName`, unique `RemoteDisplay.vnc.port` (5901–5904),
+`ethernet0.startConnected = "FALSE"`, and drop `uuid.bios` / `uuid.location` /
+`ethernet0.generatedAddress` for fresh identity. Then per clone:
+
+1. Boot (NIC off from the vmx). Wait for the desktop.
+2. **Prime Battle.net's offline path:** connect the NIC
+   (`vmrun connectNamedDevice <vmx> ethernet0`), launch Battle.net, let it reach
+   "session expired" (this is Battle.net *reaching* Blizzard — required for it to
+   offer Continue Offline). Then disconnect the NIC
+   (`disconnectNamedDevice <vmx> ethernet0`) and kill+relaunch Battle.net. Now it
+   shows **"Could not log in / Continue Offline"**. (With the NIC off from the
+   start it just hangs at "Connecting…" forever — it must fail a real attempt.)
+3. **Silence audio:** `vmrun disconnectNamedDevice <vmx> sound` (WC3 already
+   initialised its audio, so this is safe and stays silent through the snapshot).
+4. Continue Offline → Warcraft III tab → Play → WC3 VPN error **OK** →
+   **PLAY OFFLINE** (now enabled thanks to the refreshed entitlement) → main menu.
+5. Single Player → Custom Games. If it opens inside a subfolder (top row is
+   "(up one level)"), double-click that until the top row is the **Download**
+   folder — the runner's coordinates assume Download is the top row.
+6. `vmrun -T ws snapshot <clone.vmx> create-game` (~5 minutes).
+7. Set `ready: true` for that VM in `vms.json`, then validate:
+   `run-test.ps1 -Vm <name>`.
+
+> **Do NOT mint while online.** A snapshot taken with WC3 online replays a stale
+> session on revert and pops a "DISCONNECT — disconnected from Battle.net" dialog
+> that breaks the runner. The snapshot must be in committed **offline** mode
+> (past PLAY OFFLINE). If you accidentally minted online, revert (which triggers
+> the DISCONNECT dialog), click its **PLAY OFFLINE**, navigate back to the root,
+> and re-snapshot.
 
 Clones run **fullscreen** while the original shared VM was minted windowed, so
 their menu coordinates differ. Both sets live in `vms.json` under `uiSets`; each
 VM names the one it uses.
 
+`mint-vm.ps1` automates the click-driving with screenshot checkpoints, but the
+Battle.net timing varies enough that minting is best supervised.
+
 Multiple clones run simultaneously, each independently reachable on its own VNC
-port and via `vmrun`.
+port and via `vmrun` — see `concurrency-test.ps1`.
 
 ---
 
