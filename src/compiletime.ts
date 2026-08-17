@@ -107,6 +107,11 @@ compiletime(({ objectData, constants }) => {
   dash.caster = '';
   dash.target = '';
   dash.effect = '';
+  // Alleria's Flare ships with a tech-tree requirement ("requires Flare"), which
+  // greys the button out and makes the cast order get rejected. Clear it so the
+  // repurposed dash is always castable. (Found via in-game test: the peasant had
+  // the ability but the 'flare' order was refused and channelFired stayed 0.)
+  dash.requirements = '';
 
   // Build track spell (BuildTinyFarm — repurposed for one-click track placement)
   const buildTrack = objectData.abilities.get(constants.abilities.BuildTinyFarm)!;
