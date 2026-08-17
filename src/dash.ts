@@ -98,8 +98,9 @@ function endRoll(s: DashState): void {
 }
 
 /** Start (or extend) a roll toward the target point. Note: peasants are
- *  permanently invulnerable in this game, so no invulnerability handling. */
-function startRoll(u: Unit, targetX: number, targetY: number): void {
+ *  permanently invulnerable in this game, so no invulnerability handling.
+ *  Exported so the in-game test can drive the physics without an ability cast. */
+export function startRoll(u: Unit, targetX: number, targetY: number): void {
   const s = getState(u);
   const angle = Atan2(targetY - u.y, targetX - u.x);
   s.vx = s.vx + IMPULSE * Cos(angle);

@@ -1,6 +1,7 @@
-import { Unit } from 'w3ts';
+import { Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { PEASANT_ID, DASH_ABILITY_ID } from './constants';
+import { startRoll } from './dash';
 import { getWorldBounds } from './util';
 import { registerTest, TestReporter } from './testkit';
 
@@ -54,40 +55,59 @@ function runDashTest(t: TestReporter): void {
   t.report('chosenDy', bestDy);
   t.report('clearCellsAhead', bestClear); // out of 15
 
-  const sx = GetUnitX(peasant.handle);
-  const sy = GetUnitY(peasant.handle);
   const targetX = startX + bestDx * 600;
   const targetY = startY + bestDy * 600;
 
-  // Cast the actual ability rather than poking dash.ts internals.
-  const accepted = IssuePointOrderById(peasant.handle, OrderId('flare'), targetX, targetY);
-  t.report('orderAccepted', accepted ? 1 : 0);
+  // Spy: does casting Afla ever produce a channel event on the peasant?
+  let channelFired = 0;
+  const spy = Trigger.create();
+  TriggerRegisterUnitEvent(spy.handle, peasant.handle, EVENT_UNIT_SPELL_CHANNEL);
+  spy.addAction(t.guard(() => { channelFired = 1; }));
 
-  // Mid-roll (~0.25s, inside ROLL_DURATION 0.5): unit should be paused and
-  // already moving.
-  t.after(0.25, () => {
-    t.report('pausedMidRoll', IsUnitPaused(peasant.handle) ? 1 : 0);
-    const mdx = GetUnitX(peasant.handle) - sx;
-    const mdy = GetUnitY(peasant.handle) - sy;
-    t.report('movedByMidRoll', SquareRoot(mdx * mdx + mdy * mdy));
-  });
+  // (1) ABILITY-CAST path. Give the freshly created unit a generous settle
+  // (1.5s) before ordering, so a rejection means the ability genuinely can't
+  // be cast — not just "too soon after create". A real in-game peasant has
+  // existed far longer, so this is the fair comparison.
+  t.after(1.5, () => {
+    const oid = OrderId('flare');
+    t.report('orderIdFlare', oid);
+    const accepted = IssuePointOrderById(peasant.handle, oid, targetX, targetY);
+    t.report('orderAccepted', accepted ? 1 : 0);
+    t.report('curOrderAfter', GetUnitCurrentOrder(peasant.handle));
 
-  // After roll + residual velocity bleed-off (~0.9s): total travel & heading.
-  t.after(0.9, () => {
-    const dx = GetUnitX(peasant.handle) - sx;
-    const dy = GetUnitY(peasant.handle) - sy;
-    const dist = SquareRoot(dx * dx + dy * dy);
-    // Decompose along / perpendicular to the intended heading.
-    const along = dx * bestDx + dy * bestDy;
-    const perp = dx * bestDy - dy * bestDx;
-    t.report('distTravelled', dist);
-    t.report('alongHeading', along); // want a big positive number (~300-430)
-    t.report('perpHeading', perp); // want near 0
-    t.report('pausedAfterRoll', IsUnitPaused(peasant.handle) ? 1 : 0); // want 0
-    const ok = along > 150 && perp < 80 && perp > -80 ? 1 : 0;
-    t.report('movedTowardTarget', ok);
-    peasant.destroy();
-    t.done();
+    t.after(0.4, () => {
+      t.report('channelFired', channelFired); // 1 == the cast really triggered dash
+
+      // (2) PHYSICS path. Drive the roll directly (bypassing the cast) to
+      // validate movement/pause regardless of whether the cast fired.
+      IssueImmediateOrder(peasant.handle, 'stop');
+      const sx = GetUnitX(peasant.handle);
+      const sy = GetUnitY(peasant.handle);
+      startRoll(peasant, targetX, targetY);
+
+      t.after(0.25, () => {
+        t.report('pausedMidRoll', IsUnitPaused(peasant.handle) ? 1 : 0);
+        const mdx = GetUnitX(peasant.handle) - sx;
+        const mdy = GetUnitY(peasant.handle) - sy;
+        t.report('movedByMidRoll', SquareRoot(mdx * mdx + mdy * mdy));
+      });
+
+      t.after(0.9, () => {
+        const dx = GetUnitX(peasant.handle) - sx;
+        const dy = GetUnitY(peasant.handle) - sy;
+        const dist = SquareRoot(dx * dx + dy * dy);
+        const along = dx * bestDx + dy * bestDy;
+        const perp = dx * bestDy - dy * bestDx;
+        t.report('distTravelled', dist);
+        t.report('alongHeading', along);
+        t.report('perpHeading', perp);
+        t.report('pausedAfterRoll', IsUnitPaused(peasant.handle) ? 1 : 0);
+        const ok = along > 150 && perp < 80 && perp > -80 ? 1 : 0;
+        t.report('movedTowardTarget', ok);
+        peasant.destroy();
+        t.done();
+      });
+    });
   });
 }
 
