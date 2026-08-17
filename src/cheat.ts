@@ -1,10 +1,11 @@
-import { Item, Trigger } from 'w3ts';
+import { Destructable, Item, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { loadCheatTerrain, loadLobby } from './terrain/load';
-import { TRACK_PIECE_ID, WOOD_ID, STONE_ID } from './constants';
-import { GRID_MIN_X, gridToWorld } from './terrain/constants';
+import { TRACK_PIECE_ID, WOOD_ID, STONE_ID, PEASANT_ID, WATER_ID, TRAIN_ID } from './constants';
+import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants';
 import { loadFromFile } from './save';
 import { stopGameplay } from './train';
+import { getNeutralPassive } from './teams';
 import { getHumanPlayers, getWorldBounds } from './util';
 
 /** Reveal the whole map to all human players for the rest of the session.
@@ -39,6 +40,29 @@ export function initCheat(): void {
     const stone = Item.create(STONE_ID, stonePos.x, stonePos.y)!;
     stone.charges = 99;
     revealWholeMap();
+  });
+
+  // Roll obstacle arena: clears a patch around the camera and drops one of each
+  // collision hazard around a fresh peasant so you can roll (E) into each and
+  // confirm the roll no longer clips through them. rock=E, tree=N, water=W,
+  // train=S. Reveals the map so the arena is fully visible.
+  onChatCommand('-rolltest', () => {
+    revealWholeMap();
+    const ax = GetCameraTargetPositionX();
+    const ay = GetCameraTargetPositionY();
+    const r = Rect(ax - 700, ay - 700, ax + 700, ay + 700);
+    EnumDestructablesInRect(r, undefined, () => RemoveDestructable(GetEnumDestructable()!));
+    RemoveRect(r);
+    const d = 340;
+    Destructable.create(FourCC(ROCK_RAW), ax + d, ay, 0, 1.4, 0);
+    Destructable.create(FourCC(TREE_RAW), ax, ay + d, 0, 1.0, 0);
+    const water = Unit.create(getNeutralPassive(), WATER_ID, ax - d, ay, 0);
+    if (water != null) water.invulnerable = true;
+    const train = Unit.create(getNeutralPassive(), TRAIN_ID, ax, ay - d, 0);
+    if (train != null) train.invulnerable = true;
+    CreateUnit(Players[0].handle, PEASANT_ID, ax, ay, 90);
+    PanCameraToTimed(ax, ay, 0);
+    print('Roll arena: rock=E, tree=N, water=W, train=S. Cast Roll (E) into each.');
   });
 
   onChatCommand('-load', () => {
