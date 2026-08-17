@@ -8,7 +8,7 @@
     "shared":  { "vmx": "C:\\VMs\\TrainGameTest\\TrainGameTest.vmx", "vncPort": 5900, "snapshot": "create-game-v2", "ui": "windowed",   "ready": true },
     "dougie":  { "vmx": "C:\\VMs\\Dougie\\Dougie.vmx",               "vncPort": 5903, "ui": "fullscreen", "ready": true },
     "brenner": { "vmx": "C:\\VMs\\Brenner\\Brenner.vmx",             "vncPort": 5901, "ui": "fullscreen", "ready": false },
-    "boof":    { "vmx": "C:\\VMs\\Boof\\Boof.vmx",                   "vncPort": 5902, "ui": "fullscreen", "ready": false },
+    "boof":    { "vmx": "C:\\VMs\\Boof\\Boof.vmx",                   "vncPort": 5902, "ui": "fullscreen", "ready": true },
     "murph":   { "vmx": "C:\\VMs\\Murph\\Murph.vmx",                 "vncPort": 5904, "ui": "fullscreen", "ready": false }
   },
   "_uiComment": "Menu click targets. The shared VM was minted with WC3 in a window; the clones run fullscreen, so their targets differ. Both were captured at a 1656x1249 framebuffer -- if the guest resolution changes, re-capture with Get-TestVmScreenshot.",
