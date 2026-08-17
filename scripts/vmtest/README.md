@@ -209,28 +209,40 @@ list one level *above* the `Download` folder. A run then:
 
 Total ~50s cold. No cleanup is needed; the next revert discards everything.
 
-### Pre-warming (why repeat runs are ~28s)
+### Pre-warming (why repeat runs are ~32s)
 
-The reset is the biggest cost, so after each run the runner reverts the VM back
-to Create Game in a **detached background process** — during your build/edit
-time, off the critical path. The next run finds the VM already warm and skips
-the reset, starting straight at the map upload:
+The reset is the biggest cost, so after each run the runner reverts the VM to
+Create Game and **suspends** it, in a detached background process — during your
+build/edit time, off the critical path. The next run finds it suspended and
+*resumes* it (~5s) instead of doing the full ~15-20s reset:
 
 ```
-[   0.0s] using pre-warmed dougie (skipped reset)
-[   0.1s] upload map
+[   0.0s] resuming pre-warmed dougie (skipped reset)
+[   4.9s] upload map
 ...
-PASS (28.4s)
+PASS (31.8s)
 ```
 
-A state file (`%TEMP%\trainvm-prewarm-<vm>.state`) tracks it: `warming` while
-the revert is in flight, `warm` when ready. If a run starts while a pre-warm is
-still going it waits for it; if the marker is stale (pre-warm died) it resets
-normally. Back-to-back runs with no gap see no benefit (the pre-warm hasn't
-finished) but are no slower.
+Suspending (rather than leaving it running) matters for more than speed: a
+running WC3 renders its menu at ~1.5 CPU cores continuously, so four idle VMs
+left running would peg your fans. Suspended, a VM renders nothing — **zero CPU
+while idle** — and still resumes in ~5s.
 
-Cost: the VM stays running (~6GB) between runs. Pass `-NoPrewarm` to skip it and
-leave the VM powered off — repeat runs then pay the full reset again.
+A state file (`%TEMP%\trainvm-prewarm-<vm>.state`) tracks it: `warming` while the
+revert+suspend is in flight, `warm` once suspended and ready. A run starting
+mid-pre-warm waits for it; if the VM was powered off since (no `.vmss`), it
+falls back to a full reset. Back-to-back runs with no gap don't benefit (the
+pre-warm hasn't finished) but are no slower.
+
+Pass `-NoPrewarm` to skip it and leave the VM powered off — repeat runs then pay
+the full reset again.
+
+> **Reducing render load further:** a running VM's ~1.5 cores comes mostly from
+> `maxfps=200` in the guest's `War3Preferences.txt` — WC3 renders the menu at up
+> to 200fps. Setting `maxfps=30` roughly halves it. It only applies on a fresh
+> WC3 launch, so it takes effect on the next re-mint (see VM-SETUP.md); it does
+> not change render resolution, so the runner's click coordinates are unaffected.
+> With suspend-on-idle this is a minor optimisation (idle VMs already cost zero).
 
 ### Audio is silenced at the VM level
 
