@@ -615,7 +615,7 @@ let lobbyHeroSnapshot: HeroData[] | null = null;
 
 /** Snapshot hero data on lobby entry, for revert. */
 export function saveHeroLobbySnapshot(): void {
-  lobbyHeroSnapshot = allHeroes.map(cloneHero);
+  lobbyHeroSnapshot = allHeroes.map(h => cloneHero(h));
 }
 
 /** Restore hero data from the lobby snapshot (undoes rerolls). */
