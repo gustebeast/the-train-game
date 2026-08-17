@@ -24,6 +24,8 @@ import { syncGold } from './state';
 import { getHumanPlayers } from './util';
 import { log } from './debug';
 
+import { initTestKit } from './testkit';
+import './damagetest'; // registers the 'damage' test; add further test modules here
 import { loadTerrain } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
@@ -58,6 +60,9 @@ function tsMain() {
     initCameraLock();
     initCargoVisuals();
     initPlayerLeave();
+    // Last: writes the ready marker the VM test runner polls for, so it only
+    // appears once every other system has initialised without throwing.
+    initTestKit();
 
     syncGold();
     const humanPlayers = getHumanPlayers();

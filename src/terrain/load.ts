@@ -4,7 +4,8 @@ import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
-import { gameState, revertToLobbySnapshot, saveLobbySnapshot } from '../state';
+import { gameState } from '../state';
+import { revertToLobbySnapshot, saveLobbySnapshot } from '../save';
 import {
   hasHeroes, initRandomHeroes, spawnLobbyHeroes, clearLastSummoned,
   saveHeroLobbySnapshot, revertHeroesToLobbySnapshot,
