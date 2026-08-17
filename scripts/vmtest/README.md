@@ -131,17 +131,24 @@ $r.Screenshot          # PNG of the guest at the end of the run
 
 ### Picking a VM
 
-Each agent has its own VM so runs never collide. Set it once per session:
+Each agent has its own VM so runs never collide, and **normally you pass
+nothing** — the runner reads your git branch (`agent/<name>`) and targets that
+VM automatically. So from the `dougie` worktree, `run-test.ps1` uses the
+`dougie` VM with no configuration.
+
+Override only if you need to:
 
 ```powershell
-$env:TRAINVM = 'dougie'      # or brenner / boof / murph
+$env:TRAINVM = 'boof'        # for this session, or
+run-test.ps1 -Vm boof        # for one run
 ```
 
-Otherwise pass `-Vm dougie`, or leave it unset to use the `shared` machine.
-The registry lives in `vms.json`.
+There is **no shared default** and the clone-parent base image
+(`TrainGameTest`) is not a valid target — the runner refuses it. If it can't
+determine your VM (e.g. run from `main`), it errors instead of guessing.
 
-**All five VMs are minted and verified:** `shared`, `brenner`, `boof`, `dougie`,
-`murph`. Each agent has its own, so runs never collide.
+**The four agent VMs — `brenner`, `boof`, `dougie`, `murph` — are minted and
+verified.** The registry lives in `vms.json`.
 
 ## Running two at once
 
