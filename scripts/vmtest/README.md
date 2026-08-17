@@ -119,7 +119,9 @@ $r.Screenshot          # PNG of the guest at the end of the run
 
 | Function | Purpose |
 |---|---|
-| `Invoke-MapTest` | The whole flow. Start here. |
+| `Invoke-MapTest` | Run a registered test, get parsed results. Start here. |
+| `Use-TestVm` | Your own steps against a live map, with cleanup guaranteed. |
+| `Test-TestHarness` | Verify the harness is sound (see self-check below). |
 | `Get-TestVm` | Resolve a VM by name. |
 | `Reset-TestVm` | Revert to the snapshot and power on. |
 | `Copy-MapToTestVm` | Upload a `.w3x` under a fresh unique name. |
@@ -128,6 +130,28 @@ $r.Screenshot          # PNG of the guest at the end of the run
 | `Get-TestVmResultFile` | Read a file from the guest's CustomMapData. |
 | `Get-TestVmScreenshot` | Save a PNG of the guest screen. |
 | `Stop-TestVm` | Power off. Optional — the next run reverts anyway. |
+
+### If something looks wrong: self-check first
+
+```powershell
+powershell -File scripts/vmtest/run-test.ps1 -SelfTest
+```
+
+A few seconds, no VM boot. It verifies the things that otherwise fail
+confusingly — or silently: `vmrun` present, your VM resolves, its snapshot
+exists, UI coordinates match, `initTestKit()` is wired into `main.ts`, your test
+is registered *and* imported, and — most importantly — that **the built map is
+newer than your newest source file**. Editing `src/` and forgetting
+`npm run build` means the VM runs the *previous* map and passes happily; that is
+the one failure a green result can't warn you about, so the check refuses it.
+
+This also runs automatically before every test, and **blocks the run** if the
+harness is unsound rather than handing you an untrustworthy result. Override with
+`-SkipSelfTest` if you really mean it.
+
+A test that finishes without calling `t.report(...)` at least once also **fails**
+now, rather than passing with an empty result set — a test that measured nothing
+is not a passing test. Pass `-AllowNoResults` if a result-free test is intended.
 
 ### Custom flows (screenshots, cheats, anything)
 
