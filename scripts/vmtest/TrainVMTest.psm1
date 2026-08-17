@@ -154,7 +154,13 @@ function Get-PrewarmState($Vm) {
   $f = Get-PrewarmStateFile $Vm
   if (-not (Test-Path $f)) { return 'cold' }
   $s = (Get-Content $f -Raw -ErrorAction SilentlyContinue).Trim()
-  if ($s -eq 'warm') { return 'warm' }
+  if ($s -eq 'warm') {
+    # Only trust 'warm' if the VM is actually still running -- it may have been
+    # stopped (GUI, manual, reboot) since the pre-warm, in which case skipping
+    # the reset would run the test against a powered-off VM. Fall back to cold.
+    if ((& $script:VmRun list) -match [regex]::Escape($Vm.Vmx)) { return 'warm' }
+    return 'cold'
+  }
   if ($s -eq 'warming') {
     # A 'warming' marker older than 90s means the pre-warm process died; the
     # revert takes ~20s, so anything this old is stale -> treat as cold.
