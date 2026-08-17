@@ -195,6 +195,13 @@ compiletime(({ objectData, constants }) => {
       { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
       { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
+    Aihn: [ // UnitInventoryHuman (mercenary inventory): hero-like item use, no drop on death
+      { id: 'inv1', variableType: 0, dataPointer: 1, value: 6 }, // itemCapacity
+      { id: 'inv2', variableType: 0, dataPointer: 2, value: 0 }, // dropItemsOnDeath = false
+      { id: 'inv3', variableType: 0, dataPointer: 3, value: 1 }, // canUseItems
+      { id: 'inv4', variableType: 0, dataPointer: 4, value: 1 }, // canGetItems
+      { id: 'inv5', variableType: 0, dataPointer: 5, value: 1 }, // canDropItems
+    ],
   };
   const originalSave = objectData.save.bind(objectData);
   objectData.save = () => {
@@ -700,6 +707,65 @@ compiletime(({ objectData, constants }) => {
   crateCapacity.abilities = '';
   crateCapacity.classification = 'PowerUp';
   crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMonsterLure.blp';
+
+  // Mercenary Contract (MogrinsReport — purchased from shop, one per game)
+  const mercContract = objectData.items.get(constants.items.MogrinsReport)!;
+  mercContract.name = 'Mercenary Contract';
+  mercContract.tooltipBasic = mercContract.name;
+  mercContract.description = 'Unlocks level 2 creep camps and recruits a random mercenary creep that joins your heroes whenever they are summoned. If the mercenary dies it is gone for good (reroll to replace it). One purchase per game.';
+  mercContract.tooltipExtended = mercContract.description;
+  mercContract.goldCost = 1;
+  mercContract.stockMaximum = 1;
+  mercContract.stockReplenishInterval = 3600;
+  mercContract.stockInitialAfterStartDelay = 10;
+  mercContract.useAutomaticallyWhenAcquired = true;
+  mercContract.activelyUsed = false;
+  mercContract.canBeDropped = false;
+  mercContract.perishable = true;
+  mercContract.abilities = '';
+  mercContract.classification = 'PowerUp';
+  mercContract.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMedalionOfCourage.blp';
+
+  // Reroll Mercenary (HoodOfCunning — purchased from shop, repeatable)
+  const mercReroll = objectData.items.get(constants.items.HoodOfCunning)!;
+  mercReroll.name = 'Reroll Mercenary';
+  mercReroll.tooltipBasic = mercReroll.name;
+  mercReroll.description = 'Replaces your mercenary (dead or alive) with a new random creep. Carried items transfer to the new mercenary.';
+  mercReroll.tooltipExtended = mercReroll.description;
+  mercReroll.goldCost = 1;
+  mercReroll.stockMaximum = 10;
+  mercReroll.stockReplenishInterval = 3600;
+  mercReroll.stockInitialAfterStartDelay = 10;
+  mercReroll.useAutomaticallyWhenAcquired = true;
+  mercReroll.activelyUsed = false;
+  mercReroll.canBeDropped = false;
+  mercReroll.perishable = true;
+  mercReroll.abilities = '';
+  mercReroll.classification = 'PowerUp';
+  mercReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHoodOfCunning.blp';
+
+  // Mercenary inventory: a rolled mercenary is a plain creep type, and WC3 only
+  // grants working inventory slots for an inventory ability present on the unit
+  // at CREATION time — UnitAddAbility at runtime shows the ability but yields 0
+  // slots (verified in-game). So bake InventoryHero (the same ability the
+  // peasant carries tools with) onto every Lordaeron Summer creep type, the pool
+  // rollMercType draws mercenaries from. Enemy camp copies get an (unused) empty
+  // inventory too — harmless. Death-drop is prevented in code (mercenary.ts
+  // removes items on death after snapshotting), so no ability-level drop config
+  // is needed. Keep this list in sync with CREEP_CAMPS['Lordaeron Summer'].
+  const mercCreepTypes = [
+    'nfsh', 'nftb', 'nftk', 'nftr', 'nftt', 'ngna', 'ngnb', 'ngno', 'ngns',
+    'ngnv', 'ngnw', 'ngrk', 'ngst', 'nkob', 'nkog', 'nkot', 'nmfs', 'nmrl',
+    'nmrm', 'nmrr', 'nogl', 'nogm', 'nogr', 'nomg', 'nrdr', 'nsc2', 'nsc3',
+    'nscb', 'ntrg', 'ntrh', 'ntrs', 'ntrt', 'nwzg',
+  ];
+  for (const creepId of mercCreepTypes) {
+    const creep = objectData.units.get(creepId);
+    if (creep == null) continue;
+    const existing = (creep.normal as unknown as string) ?? '';
+    if (existing.indexOf(constants.abilities.InventoryHero) !== -1) continue;
+    creep.normal = (existing !== '' ? existing + ',' : '') + constants.abilities.InventoryHero;
+  }
 
   // Summon Heroes upgrade (PendantOfEnergy — purchased from shop, one-time)
   const summonUpgrade = objectData.items.get(constants.items.PendantOfEnergy)!;

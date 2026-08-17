@@ -5,6 +5,8 @@ import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForLobby } from './items';
 import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
+import { isMercUpgradeBought, buyMercContract, rerollMerc } from './mercenary';
+import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
 import { forEachUnitInWorld, nextFrame } from './util';
 import { armCritterpocalypse, armToughCamp } from './challenges';
 
@@ -13,6 +15,8 @@ const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
 const RESOURCE_CAPACITY_ID = FourCC(Items.DruidPouch);
 const TRACK_CAPACITY_ID = FourCC(Items.JadeRing);
 const CRATE_CAPACITY_ID = FourCC(Items.LionsRing);
+const MERC_CONTRACT_ID = FourCC(Items.MogrinsReport);
+const MERC_REROLL_ID = FourCC(Items.HoodOfCunning);
 const CRITTERPOCALYPSE_ID = FourCC(Items.MedallionOfCourage);
 const TOUGH_CAMP_ID = FourCC(Items.PeriaptOfVitality);
 
@@ -23,6 +27,8 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [TRACK_CAPACITY_ID, 1],
   [CRATE_CAPACITY_ID, 1],
   [SUMMON_UPGRADE_ITEM_ID, 1],
+  [MERC_CONTRACT_ID, 1],
+  [MERC_REROLL_ID, 1],
   [CRITTERPOCALYPSE_ID, 1],
   [TOUGH_CAMP_ID, 1],
 ]);
@@ -36,13 +42,18 @@ const REPEATABLE_STOCK = [
   CRATE_CAPACITY_ID,
 ];
 
+/** The current shop unit, so purchases can adjust its stock. */
+let currentShop: Unit | null = null;
+
 /** Stock a freshly spawned shop. The shop is a MARKETPLACE-based unit, the
  *  one shop type whose dynamically added stock displays; everything for
- *  sale is added here so availability can depend on game state (the summon
- *  upgrade is one-time and is simply not added once owned). Deferred a
- *  frame so the adds land after the unit fully exists. */
+ *  sale is added here so availability can depend on game state (one-time
+ *  upgrades are simply not added once owned; Reroll Mercenary only appears
+ *  once the contract is owned). Deferred a frame so the adds land after
+ *  the unit fully exists. */
 export function stockShop(shop: Unit): void {
   registerSummonShop(shop);
+  currentShop = shop;
   nextFrame(() => {
     if (GetUnitTypeId(shop.handle) === 0) return; // shop died/removed
     for (const itemId of REPEATABLE_STOCK) {
@@ -50,6 +61,11 @@ export function stockShop(shop: Unit): void {
     }
     if (!isSummonUpgradePurchased()) {
       AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
+    }
+    if (!isMercUpgradeBought()) {
+      AddItemToStock(shop.handle, MERC_CONTRACT_ID, 1, 1);
+    } else {
+      AddItemToStock(shop.handle, MERC_REROLL_ID, 10, 10);
     }
   });
 }
@@ -84,8 +100,17 @@ export function initShop(): void {
     const cost = ITEM_COSTS.get(itemTypeId);
     if (cost == null) return;
 
-    // One-time upgrade already owned — swallow the item without charging
+    // One-time upgrades already owned — swallow the item without charging
     if (itemTypeId === SUMMON_UPGRADE_ITEM_ID && isSummonUpgradePurchased()) {
+      RemoveItem(item);
+      return;
+    }
+    if (itemTypeId === MERC_CONTRACT_ID && isMercUpgradeBought()) {
+      RemoveItem(item);
+      return;
+    }
+    // Reroll is only stocked once the contract is owned, but guard anyway
+    if (itemTypeId === MERC_REROLL_ID && !isMercUpgradeBought()) {
       RemoveItem(item);
       return;
     }
@@ -131,6 +156,32 @@ export function initShop(): void {
       });
       effectTargets = targets;
       print('Summon Heroes unlocked!');
+    } else if (itemTypeId === MERC_CONTRACT_ID) {
+      buyMercContract();
+      // Stop selling the contract; start selling rerolls
+      if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
+        RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_ID);
+        AddItemToStock(currentShop.handle, MERC_REROLL_ID, 10, 10);
+      }
+      print('Mercenary Contract purchased: level 2 creep camps unlocked; a mercenary will join your next hero summon.');
+      const buyer = Unit.fromHandle(GetTriggerUnit());
+      if (buyer != null) effectTargets = [buyer];
+    } else if (itemTypeId === MERC_REROLL_ID) {
+      // If a dead merc is replaced mid-fight, spawn the new one at a living
+      // hero (the fight is at the camp, not the shop); fall back to the buyer
+      const buyer = Unit.fromHandle(GetTriggerUnit());
+      let bx = buyer != null ? buyer.x : 0;
+      let by = buyer != null ? buyer.y : 0;
+      for (const h of getSpawnedHeroes()) {
+        if (GetUnitState(h.handle, UNIT_STATE_LIFE) > 0) {
+          bx = h.x;
+          by = h.y;
+          break;
+        }
+      }
+      rerollMerc(bx, by, areHeroesSpawned());
+      print('Mercenary rerolled — items carry over to the new creep.');
+      if (buyer != null) effectTargets = [buyer];
     } else if (itemTypeId === CRITTERPOCALYPSE_ID) {
       armCritterpocalypse();
       print('Critterpocalypse armed! Every grass tile spawns a critter next round — win it for 2 bonus gold.');

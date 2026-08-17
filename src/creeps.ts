@@ -1,5 +1,6 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
+import { isMercUpgradeBought } from './mercenary';
 import { registerSaveSegment } from './save';
 import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
 import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
@@ -79,13 +80,21 @@ onAllHeroesDead(() => removeSpawnedCreeps());
 // Camp selection
 // ---------------------------------------------------------------------------
 
-/** Pick a random creep camp and store in state. Hardcoded to Lordaeron Summer for now. */
+/** Pick a random creep camp and store in state. Hardcoded to Lordaeron Summer for now.
+ *  Only level 1 (green) camps roll until the Mercenary Contract unlocks
+ *  level 2 (orange); level 3 (red) camps never roll.
+ *  (campIndex always indexes the full camp list so saves stay stable.) */
 export function rollCreepCamp(): void {
   const tileset = 'Lordaeron Summer';
   const camps = CREEP_CAMPS[tileset];
   if (camps == null || camps.length === 0) return;
-  const index = GetRandomInt(0, camps.length - 1);
-  campState = { tileset, campIndex: index };
+  const maxLevel = isMercUpgradeBought() ? 2 : 1;
+  const allowed: number[] = [];
+  for (let i = 0; i < camps.length; i++) {
+    if (camps[i].level <= maxLevel) allowed.push(i);
+  }
+  if (allowed.length === 0) return;
+  campState = { tileset, campIndex: allowed[GetRandomInt(0, allowed.length - 1)] };
 }
 
 /** Get the selected camp, or null if none selected. */
@@ -138,15 +147,16 @@ let spawnedCreeps: Array<{ unit: Unit; campUnit: CreepUnit }> = [];
 export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
   const owner = getNeutralAggressive();
   spawnedCreeps = [];
-  for (let i = 0; i < camp.length && i < 9; i++) {
+  const creeps = camp.creeps;
+  for (let i = 0; i < creeps.length && i < 9; i++) {
     const [dx, dy] = GRID_OFFSETS[i];
-    const u = Unit.create(owner, FourCC(camp[i].id), cx + dx, cy + dy, 270);
+    const u = Unit.create(owner, FourCC(creeps[i].id), cx + dx, cy + dy, 270);
     if (u == null) continue;
     u.invulnerable = true;
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_NUMBER_OF_DICE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);
-    spawnedCreeps.push({ unit: u, campUnit: camp[i] });
+    spawnedCreeps.push({ unit: u, campUnit: creeps[i] });
   }
 }
 
