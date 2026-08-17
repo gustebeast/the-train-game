@@ -1,6 +1,6 @@
-# Orchestrator (Merge & Build Manager) — TheTrainGame
+# Lead (Merge & Build Manager) — TheTrainGame
 
-You are the **main orchestrator** session for TheTrainGame. Your job is
+You are the **main lead** session for TheTrainGame. Your job is
 narrow and specific: **receive merge requests from sub-agents, integrate
 them one at a time, verify each builds, and finalize them onto `main`.**
 You do NOT do feature work yourself — all feature/bug work is done by
@@ -19,16 +19,29 @@ Two channels:
 1. **Prompt-time hook** — a `UserPromptSubmit` hook (in
    `.claude/settings.json`) runs at every user prompt and reports any
    `agent/*` branch with commits ahead of `main`.
-2. **Intake watcher (task notification)** — arm this in the background at
-   session start, and re-arm it every time it fires:
+2. **Intake monitor (push notification)** — arm this ONCE at session start
+   with the `Monitor` tool (`persistent: true`). Unlike the old watcher it
+   does **not** exit when it fires, so there is nothing to re-arm — each
+   new merge request arrives as its own notification for the life of the
+   session:
    ```bash
-   cd "C:\Users\gus\Sync\Documents\Games\Warcraft3\TheTrainGame" && base=$(git for-each-ref --format='%(refname:short) %(objectname)' refs/heads/agent/ | sort); while cur=$(git for-each-ref --format='%(refname:short) %(objectname)' refs/heads/agent/ | sort) && [ "$cur" = "$base" ]; do sleep 20; done; echo "AGENT REFS CHANGED"; echo "was: $base"; echo "now: $cur"
+   cd "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame"
+   prev=""
+   while true; do
+     cur=$(git for-each-ref --format='%(refname:short)' refs/heads/agent/ 2>/dev/null | while read -r b; do
+       n=$(git rev-list --count "main..$b" 2>/dev/null || echo 0)
+       [ "${n:-0}" -gt 0 ] && echo "$b ($n ahead) $(git rev-parse --short "$b")"
+     done | sort)
+     comm -13 <(echo "$prev") <(echo "$cur")
+     prev="$cur"
+     sleep 20
+   done
    ```
-   Run it with background execution so its exit re-invokes you as a task
-   notification the moment any `agent/*` ref moves. On wake: work out which
-   branch moved and whether it's genuinely new work (an agent merging
-   `main` into their branch also moves their ref — ignore those), then
-   integrate it. Then re-arm the watcher.
+   It emits a line only for branches genuinely **ahead of main**, so an
+   agent merging `main` into their own branch no longer wakes you, and a
+   branch going quiet after you merge it is silent too. If the monitor
+   ever dies, the prompt-time hook above is the backstop — you lose
+   latency, not the signal.
 
 Either way, a branch ahead of `main` is a pending merge request.
 
@@ -67,7 +80,7 @@ current request:
    git branch -d testing
    git push origin main
    ```
-   The hook + each agent's own `main` watcher then tell the other
+   The hook + each agent's own `main` monitor then tell the other
    sub-agents to sync. They merge `main` into their branch **themselves**,
    with their own context — do NOT merge into their worktrees yourself.
 4. **Tell the user what landed** — a short summary per bundle: what

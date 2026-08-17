@@ -2,7 +2,7 @@
 
 You are a **sub-agent** working on TheTrainGame, a Warcraft III map written in
 TypeScript (compiled to Lua via `typescript-to-lua`). You work on your own git
-branch inside your own git worktree. A separate **integrator** session (the
+branch inside your own git worktree. A separate **lead** session (the
 user's main Claude chat) merges your branch into `main` and runs the official
 build. You never merge to `main`, and you never build or launch anything in the
 main checkout — but you **may** build your own branch inside your own worktree
@@ -38,12 +38,12 @@ A project hook injects branch status at every prompt, in every session. It
 has two sections — as a sub-agent, here is how to handle them:
 
 - **"Agent branches behind main"** — if YOUR branch is listed, the
-  integrator merged new work and you MUST sync (command below) before doing
+  lead merged new work and you MUST sync (command below) before doing
   anything else. Other agents' branches in this list are not your problem.
 - **"Pending sub-agent submissions"** — IGNORE this section entirely. It is
-  the integrator's merge queue. Your own branch appearing there just means
+  the lead's merge queue. Your own branch appearing there just means
   your submission hasn't been merged yet — that's normal. The
-  `git merge --no-ff` instruction in it is for the integrator only; never
+  `git merge --no-ff` instruction in it is for the lead only; never
   run it yourself.
 
 ### Sync your branch
@@ -54,33 +54,37 @@ Sync at the start of every prompt even if no hook notice appeared yet:
 git -C .worktrees/<name> merge main
 ```
 
-**If all your work has been merged into main** (i.e. `git -C .worktrees/<name> log main..HEAD --no-merges` prints nothing), sync by resetting instead of merging, so your branch doesn't accumulate empty sync-merge commits that make the integrator's "pending submissions" notice list you as having work when you don't:
+**If all your work has been merged into main** (i.e. `git -C .worktrees/<name> log main..HEAD --no-merges` prints nothing), sync by resetting instead of merging, so your branch doesn't accumulate empty sync-merge commits that make the lead's "pending submissions" notice list you as having work when you don't:
 
 ```powershell
 git -C .worktrees/<name> reset --hard main
 ```
 
-### Arm your main-watcher (once per session)
+### Arm your main-monitor (once per session)
 
 So you pick up finalized work immediately instead of at your next prompt,
-keep a watcher on `main` running in the background (use your background
-execution so its exit re-invokes you as a task notification — don't run it
-in the foreground, it blocks):
+watch `main` with the `Monitor` tool (`persistent: true`). It streams one
+notification per change and never exits, so there is nothing to re-arm:
 
 ```bash
-cd "C:\Users\gus\Sync\Documents\Games\Warcraft3\TheTrainGame" && base=$(git rev-parse main); while [ "$(git rev-parse main)" = "$base" ]; do sleep 20; done; echo "main moved: $base -> $(git rev-parse main)"
+cd "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame"
+prev=$(git rev-parse main)
+while true; do
+  cur=$(git rev-parse main 2>/dev/null || echo "$prev")
+  [ "$cur" != "$prev" ] && echo "main moved: $prev -> $cur"
+  prev="$cur"
+  sleep 20
+done
 ```
 
-Arm it at the start of your first prompt, and re-arm it each time it fires.
-When the task notification arrives (the integrator finalized new work):
+When a notification arrives (the lead finalized new work):
 
 1. Merge: `git -C .worktrees/<name> merge main` — resolve any conflicts
    YOURSELF, using your knowledge of your own changes and what they mean.
-   You own this merge; the integrator will not do it for you.
+   You own this merge; the lead will not do it for you.
 2. Typecheck (`npx tsc -p tsconfig.json --noEmit` from your worktree) and
    fix any fallout the new code causes in your work.
-3. Commit the merge if it isn't already committed, re-arm the watcher, and
-   report briefly what came in and whether it affected your work.
+3. Commit the merge if it isn't already committed, then report briefly what came in and whether it affected your work.
 
 Resolve any conflicts yourself (keep both sides' intent; when in doubt about
 the `main` side, prefer `main` and re-apply your change on top). If your
@@ -89,13 +93,13 @@ worktree has uncommitted changes from a previous prompt, commit them first.
 ## While working
 
 - **Edit files ONLY inside your worktree** (`.worktrees/<name>/...`). Never
-  edit, build, or switch branches in the **main checkout** — the integrator is
+  edit, build, or switch branches in the **main checkout** — the lead is
   using it. (Building your own branch **inside your worktree** is fine — see
   below.)
 - All commands run with `git -C .worktrees/<name>` or with the worktree as cwd.
 - **Never run `npm run build` from the main checkout**, and never run
   `BuildAndLaunch.bat` (it launches WC3 on the developer's own desktop). The
-  official `dist/bin` build and merges to `main` are the integrator's job.
+  official `dist/bin` build and merges to `main` are the lead's job.
 - For a quick correctness pass without a full build, typecheck:
   ```powershell
   cd .worktrees/<name>; npx tsc -p tsconfig.json --noEmit
@@ -124,7 +128,7 @@ git checkout -- tsconfig.json   # undo the build's cwd-relative rewrite
 Rules that keep this safe:
 
 - **cd into your worktree before building.** The build keys off the current
-  directory; run it from the main checkout and you overwrite the integrator's
+  directory; run it from the main checkout and you overwrite the lead's
   `dist/` and `tsconfig.json`.
 - **Never commit `tsconfig.json`.** The build rewrites it with absolute paths;
   restore it afterward (`git checkout -- tsconfig.json`). `dist/` and `*.log`
@@ -160,11 +164,11 @@ to `-Vm shared`.
    ```
 3. Verify `git -C .worktrees/<name> status` is clean.
 4. End your response with a **submission block** so the user can relay it to
-   the integrator:
+   the lead:
 
    > **Ready to merge:** branch `agent/<name>`
    > **Summary:** one or two lines describing what changed and anything the
-   > integrator should watch for (files touched outside `src/`, known risks,
+   > lead should watch for (files touched outside `src/`, known risks,
    > what to test in-game).
 
 ## Project orientation
@@ -181,14 +185,14 @@ to `-Vm shared`.
 
 ---
 
-## Integrator reference (main session only — sub-agents ignore this)
+## Lead reference (main session only — sub-agents ignore this)
 
-The full integrator role — receiving merge requests, verifying builds, and
+The full lead role — receiving merge requests, verifying builds, and
 presenting them to the user one at a time — is documented in
-`ORCHESTRATOR_README.md`. Hand that file to a new main orchestrator session.
+`LEAD_README.md`. Hand that file to a new main lead session.
 
 A UserPromptSubmit hook in `.claude/settings.json` reports any `agent/*`
-branch with commits ahead of `main` at the start of every integrator prompt —
+branch with commits ahead of `main` at the start of every lead prompt —
 committed sub-agent work is detected automatically, no explicit notification
 needed.
 
