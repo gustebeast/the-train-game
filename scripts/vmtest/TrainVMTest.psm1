@@ -145,20 +145,22 @@ function Reset-TestVm {
 }
 
 # --- Pre-warming ----------------------------------------------------------
-# After a test, a detached process reverts the VM back to create-game so the
-# NEXT test can skip the ~15-20s reset (the revert runs during the agent's
-# build/edit time). A state file tracks it: 'warming' while the revert is in
-# flight, 'warm' once the VM is reverted and running. See prewarm.ps1.
+# After a test, a detached process reverts the VM to create-game and SUSPENDS
+# it, so the NEXT test skips the ~15-20s reset (resume takes ~3s) AND the VM
+# burns no CPU while idle (a running WC3 renders its menu at ~1.5 cores). The
+# revert+suspend runs during the agent's build/edit time. A state file tracks
+# it: 'warming' while in flight, 'warm' once suspended and ready. See prewarm.ps1.
 function Get-PrewarmStateFile($Vm) { Join-Path $env:TEMP "trainvm-prewarm-$($Vm.Name).state" }
 function Get-PrewarmState($Vm) {
   $f = Get-PrewarmStateFile $Vm
   if (-not (Test-Path $f)) { return 'cold' }
   $s = (Get-Content $f -Raw -ErrorAction SilentlyContinue).Trim()
   if ($s -eq 'warm') {
-    # Only trust 'warm' if the VM is actually still running -- it may have been
-    # stopped (GUI, manual, reboot) since the pre-warm, in which case skipping
-    # the reset would run the test against a powered-off VM. Fall back to cold.
-    if ((& $script:VmRun list) -match [regex]::Escape($Vm.Vmx)) { return 'warm' }
+    # Only trust 'warm' if a suspend state actually exists (.vmss) -- the VM may
+    # have been powered off (GUI, manual, reboot) since the pre-warm, in which
+    # case resuming would cold-boot instead of landing at create-game. Fall back
+    # to cold and do a full reset.
+    if (Get-ChildItem (Split-Path $Vm.Vmx) -Filter '*.vmss' -ErrorAction SilentlyContinue) { return 'warm' }
     return 'cold'
   }
   if ($s -eq 'warming') {
@@ -344,8 +346,8 @@ function Invoke-MapTest {
     Screenshot = (Join-Path $OutDir 'final.png')
   }
 
-  # If a previous run pre-warmed this VM it is already reverted and running at
-  # create-game, so we can skip the ~15-20s reset. If a pre-warm is still in
+  # If a previous run pre-warmed this VM it is suspended at create-game, so we
+  # resume it (~3s) instead of the ~15-20s full reset. If a pre-warm is still in
   # flight, wait for it rather than starting a conflicting revert.
   $stateFile = Get-PrewarmStateFile $vmInfo
   if ((Get-PrewarmState $vmInfo) -eq 'warming') {
@@ -354,8 +356,12 @@ function Invoke-MapTest {
     while ((Get-Date) -lt $wd -and (Get-PrewarmState $vmInfo) -eq 'warming') { Start-Sleep -Milliseconds 500 }
   }
   if ((Get-PrewarmState $vmInfo) -eq 'warm') {
-    Say "using pre-warmed $($vmInfo.Name) (skipped reset)"
+    Say "resuming pre-warmed $($vmInfo.Name) (skipped reset)"
     Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
+    $fg = Save-Foreground
+    & $script:VmRun -T ws start $vmInfo.Vmx nogui 2>&1 | Out-Null   # resume from suspend
+    Start-Sleep -Milliseconds 400
+    Restore-Foreground $fg
   } else {
     Say "reset $($vmInfo.Name) -> $($vmInfo.Snapshot)"
     # Reverting a VM that has an open console tab yanks the GUI to the front;
