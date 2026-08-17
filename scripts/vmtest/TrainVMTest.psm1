@@ -397,10 +397,11 @@ function Invoke-MapTest {
   Revert and power on only, stopping at WC3's Create Game screen without
   uploading a map. Useful to poke the menus by hand.
 .EXAMPLE
-  Start-ManualSession -Vm shared
-  # VMware window opens with the map uploaded; open Download and start it.
+  Start-ManualSession
+  # Targets your worktree's VM. VMware window opens with the map uploaded;
+  # open Download and start it.
 .EXAMPLE
-  Start-ManualSession -Vm shared -AutoStart
+  Start-ManualSession -AutoStart
   # Also attempts to click into a live match for you.
 .OUTPUTS
   Vm, Ready, Map, GuestMap, VncHost, VncPort, VncPassword, Gui.

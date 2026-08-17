@@ -3,7 +3,9 @@
 # in TrainVMTest.psm1 for the details.
 #
 #   npm run build
-#   powershell -File scripts/vmtest/manual-session.ps1 -Vm shared
+#   powershell -File scripts/vmtest/manual-session.ps1
+#
+# With no -Vm it targets your worktree's VM (agent/<name>), same as the runner.
 #
 # A VMware console window opens on the host with the map uploaded into the
 # Download folder; open it and start the match yourself. Pass -AutoStart to try

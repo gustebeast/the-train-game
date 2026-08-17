@@ -137,10 +137,11 @@ the VM running for you:
 
 ```powershell
 npm run build
-powershell -File scripts/vmtest/manual-session.ps1 -Vm shared
+powershell -File scripts/vmtest/manual-session.ps1
 ```
 
-A VMware console window opens on the host with the map **uploaded into the
+With no `-Vm` it targets your worktree's VM (`agent/<name>`), just like the
+runner. A VMware console window opens on the host with the map **uploaded into the
 `Maps\Download` folder**. Open that folder, pick the `ZZ…​.w3x`, Create, then
 Start — `Ctrl+Alt` releases the mouse from the window. It does **not** auto-start
 the match or block waiting: the menu-driving is calibrated for the headless
@@ -153,7 +154,7 @@ Game screen.
 Like `Invoke-MapTest`, it loads whatever `.w3x` is already in `dist/bin`, so
 build first. Everything you do is discarded the next time the VM is reverted, so
 there is nothing to clean up. From PowerShell the same thing is
-`Start-ManualSession -Vm shared`.
+`Start-ManualSession`.
 
 ### Picking a VM
 
