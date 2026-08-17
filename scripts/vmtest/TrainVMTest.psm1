@@ -144,6 +144,41 @@ function Reset-TestVm {
   }
 }
 
+# --- Pre-warming ----------------------------------------------------------
+# After a test, a detached process reverts the VM back to create-game so the
+# NEXT test can skip the ~15-20s reset (the revert runs during the agent's
+# build/edit time). A state file tracks it: 'warming' while the revert is in
+# flight, 'warm' once the VM is reverted and running. See prewarm.ps1.
+function Get-PrewarmStateFile($Vm) { Join-Path $env:TEMP "trainvm-prewarm-$($Vm.Name).state" }
+function Get-PrewarmState($Vm) {
+  $f = Get-PrewarmStateFile $Vm
+  if (-not (Test-Path $f)) { return 'cold' }
+  $s = (Get-Content $f -Raw -ErrorAction SilentlyContinue).Trim()
+  if ($s -eq 'warm') { return 'warm' }
+  if ($s -eq 'warming') {
+    # A 'warming' marker older than 90s means the pre-warm process died; the
+    # revert takes ~20s, so anything this old is stale -> treat as cold.
+    if (((Get-Date) - (Get-Item $f).LastWriteTime).TotalSeconds -gt 90) { return 'cold' }
+    return 'warming'
+  }
+  return 'cold'
+}
+
+<#
+.SYNOPSIS
+  Launch a detached background revert so the next test skips the reset.
+#>
+function Start-PrewarmVm {
+  [CmdletBinding()]
+  param([object]$Vm)
+  if ($null -eq $Vm) { $Vm = Get-TestVm }
+  $script = Join-Path $PSScriptRoot 'prewarm.ps1'
+  Start-Process powershell -WindowStyle Hidden -ArgumentList @(
+    '-NoProfile','-ExecutionPolicy','Bypass','-File', $script,
+    '-Vmx', $Vm.Vmx, '-Snapshot', $Vm.Snapshot, '-StateFile', (Get-PrewarmStateFile $Vm)
+  ) | Out-Null
+}
+
 <#
 .SYNOPSIS
   Copy the built .w3x into the guest under a filename that has never existed.
@@ -286,7 +321,8 @@ function Invoke-MapTest {
     [int]$ReadyTimeoutSec = 90,
     [int]$TestTimeoutSec = 120,
     [string]$OutDir,
-    [switch]$Quiet
+    [switch]$Quiet,
+    [switch]$NoPrewarm
   )
   $vmInfo = Get-TestVm $Vm
   if (-not $Map)    { $Map    = Join-Path $script:RepoRoot 'dist\bin\TheTrainGame.w3x' }
@@ -302,13 +338,28 @@ function Invoke-MapTest {
     Screenshot = (Join-Path $OutDir 'final.png')
   }
 
-  Say "reset $($vmInfo.Name) -> $($vmInfo.Snapshot)"
-  # Reverting a VM that has an open console tab yanks the GUI to the front;
-  # capture the user's window and hand focus back once the VM is up.
-  $fg = Save-Foreground
-  Reset-TestVm $vmInfo
-  Start-Sleep -Milliseconds 400
-  Restore-Foreground $fg
+  # If a previous run pre-warmed this VM it is already reverted and running at
+  # create-game, so we can skip the ~15-20s reset. If a pre-warm is still in
+  # flight, wait for it rather than starting a conflicting revert.
+  $stateFile = Get-PrewarmStateFile $vmInfo
+  if ((Get-PrewarmState $vmInfo) -eq 'warming') {
+    Say 'waiting for background pre-warm to finish'
+    $wd = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $wd -and (Get-PrewarmState $vmInfo) -eq 'warming') { Start-Sleep -Milliseconds 500 }
+  }
+  if ((Get-PrewarmState $vmInfo) -eq 'warm') {
+    Say "using pre-warmed $($vmInfo.Name) (skipped reset)"
+    Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
+  } else {
+    Say "reset $($vmInfo.Name) -> $($vmInfo.Snapshot)"
+    # Reverting a VM that has an open console tab yanks the GUI to the front;
+    # capture the user's window and hand focus back once the VM is up.
+    Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
+    $fg = Save-Foreground
+    Reset-TestVm $vmInfo
+    Start-Sleep -Milliseconds 400
+    Restore-Foreground $fg
+  }
   Say 'upload map'
   $guestMap = Copy-MapToTestVm $vmInfo -Map $Map
   Say "uploaded as $guestMap"
@@ -386,7 +437,13 @@ function Invoke-MapTest {
       }
     }
   }
-  finally { $conn.cli.Close() }
+  finally {
+    $conn.cli.Close()
+    # Kick off a detached revert so the next run skips the reset. Runs on both
+    # the pass and the early "not ready" return -- reverting also cleans up a VM
+    # left in a bad state by a failed run.
+    if (-not $NoPrewarm) { Start-PrewarmVm $vmInfo }
+  }
 
   $result.DurationSeconds = [math]::Round($sw.Elapsed.TotalSeconds,1)
   Say ("done -- " + $(if($result.Ok){'PASS'}else{'FAIL: ' + $result.FailureReason}))
@@ -507,4 +564,5 @@ function Stop-TestVm {
 
 Export-ModuleMember -Function Invoke-MapTest, Get-TestVm, Reset-TestVm, Stop-TestVm,
   Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile, Get-TestVmScreenshot,
-  Send-TestVmChat, Start-TestVmMatch, Start-ManualSession
+  Send-TestVmChat, Start-TestVmMatch, Start-ManualSession, Start-PrewarmVm,
+  Get-PrewarmState

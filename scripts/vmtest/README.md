@@ -207,7 +207,30 @@ list one level *above* the `Download` folder. A run then:
    looks stuck at the lobby (~8-12s)
 5. sends `-test <name>` and polls the result file until it ends with `done` (~9s)
 
-Total ~50s. No cleanup is needed; the next revert discards everything.
+Total ~50s cold. No cleanup is needed; the next revert discards everything.
+
+### Pre-warming (why repeat runs are ~28s)
+
+The reset is the biggest cost, so after each run the runner reverts the VM back
+to Create Game in a **detached background process** — during your build/edit
+time, off the critical path. The next run finds the VM already warm and skips
+the reset, starting straight at the map upload:
+
+```
+[   0.0s] using pre-warmed dougie (skipped reset)
+[   0.1s] upload map
+...
+PASS (28.4s)
+```
+
+A state file (`%TEMP%\trainvm-prewarm-<vm>.state`) tracks it: `warming` while
+the revert is in flight, `warm` when ready. If a run starts while a pre-warm is
+still going it waits for it; if the marker is stale (pre-warm died) it resets
+normally. Back-to-back runs with no gap see no benefit (the pre-warm hasn't
+finished) but are no slower.
+
+Cost: the VM stays running (~6GB) between runs. Pass `-NoPrewarm` to skip it and
+leave the VM powered off — repeat runs then pay the full reset again.
 
 ### Audio is silenced at the VM level
 
