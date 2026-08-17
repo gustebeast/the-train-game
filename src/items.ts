@@ -4,7 +4,7 @@ import { gameState } from './state';
 import { nextFrame } from './util';
 import {
   AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
-  PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
+  PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, REROLL_ITEM_ID,
   BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID, FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID,
 } from './constants';
 
@@ -442,11 +442,16 @@ export function initItems(): void {
       }
     };
 
-    // Peasants can only pick up train items (tools, resources, buckets)
-    if (unit.typeId === PEASANT_ID && !isTrainItem(pickedType)) {
+    // Peasants can only pick up train items (tools, resources, buckets) — plus
+    // the Hero Reroll, which is bought from the shop and carried until cast.
+    if (unit.typeId === PEASANT_ID && !isTrainItem(pickedType) && pickedType !== REROLL_ITEM_ID) {
       rejectPickup();
       return;
     }
+
+    // The reroll is carried alongside tools without the tool swap/merge logic
+    // below (it's not a resource/tool). Nothing else to do on pickup.
+    if (pickedType === REROLL_ITEM_ID) return;
 
     // Heroes can't pick up train items
     if (IsUnitType(unit.handle, UNIT_TYPE_HERO) && isTrainItem(pickedType)) {

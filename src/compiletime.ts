@@ -559,6 +559,9 @@ compiletime(({ objectData, constants }) => {
   // Hero Reroll cast — Wand of Negation repurposed as a unit-target spell.
   // Its native purge doesn't matter: reroll.ts replaces the target on cast.
   const rerollCast = objectData.abilities.get(constants.abilities.ItemPurgeWandOfNegation)!;
+  // A peasant (non-hero) carries and casts the reroll item, so the item's
+  // ability must not be hero-only or the peasant can't activate it.
+  rerollCast.heroAbility = false;
   rerollCast.tooltipNormal = 'Reroll Hero';
   rerollCast.tooltipNormalExtended = 'Replace a lobby hero with a random new hero. XP and items carry over.';
   rerollCast.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNTomeRed.blp';
