@@ -4,9 +4,13 @@ import { registerSaveSegment } from './save';
 import { getHumanPlayers } from './util';
 import { CREEP_CAMPS } from './creep_camps';
 
-/** Campaign unit inventory repurposed for the mercenary: items function like
- *  on a hero (can use), but nothing drops on death — see compiletime.ts. */
-const MERC_INVENTORY_ABILITY_ID = FourCC(Abilities.UnitInventoryHuman);
+/** Hero-style inventory (the same ability the peasant carries tools with). It
+ *  is BAKED onto every merc-able creep type in object data (see compiletime.ts):
+ *  WC3 only creates working inventory slots for an inventory ability the unit
+ *  has at creation time, so adding one at runtime yields 0 slots. This runtime
+ *  add is therefore a harmless no-op backstop. Items are stripped on death
+ *  before they can drop (snapshotMercItems keeps them for a later reroll). */
+const MERC_INVENTORY_ABILITY_ID = FourCC(Abilities.InventoryHero);
 
 /** Must match the tileset used by rollCreepCamp in creeps.ts. */
 const MERC_TILESET = 'Lordaeron Summer';
@@ -226,6 +230,13 @@ function spawnMercUnit(owner: MapPlayer, x: number, y: number): void {
   deathTrig.addAction(() => {
     if (mercUnit != null && mercUnit.handle === GetTriggerUnit()) {
       snapshotMercItems();
+      // Strip the items before the corpse drops them: they are saved in
+      // mercItems for a later reroll, so dropping them too would duplicate them
+      // as free loot on the ground.
+      for (let slot = 0; slot < 6; slot++) {
+        const it = UnitItemInSlot(mercUnit.handle, slot);
+        if (it != null) RemoveItem(it);
+      }
       mercDead = true;
       mercUnit = null;
     }

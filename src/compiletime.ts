@@ -744,6 +744,29 @@ compiletime(({ objectData, constants }) => {
   mercReroll.classification = 'PowerUp';
   mercReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHoodOfCunning.blp';
 
+  // Mercenary inventory: a rolled mercenary is a plain creep type, and WC3 only
+  // grants working inventory slots for an inventory ability present on the unit
+  // at CREATION time — UnitAddAbility at runtime shows the ability but yields 0
+  // slots (verified in-game). So bake InventoryHero (the same ability the
+  // peasant carries tools with) onto every Lordaeron Summer creep type, the pool
+  // rollMercType draws mercenaries from. Enemy camp copies get an (unused) empty
+  // inventory too — harmless. Death-drop is prevented in code (mercenary.ts
+  // removes items on death after snapshotting), so no ability-level drop config
+  // is needed. Keep this list in sync with CREEP_CAMPS['Lordaeron Summer'].
+  const mercCreepTypes = [
+    'nfsh', 'nftb', 'nftk', 'nftr', 'nftt', 'ngna', 'ngnb', 'ngno', 'ngns',
+    'ngnv', 'ngnw', 'ngrk', 'ngst', 'nkob', 'nkog', 'nkot', 'nmfs', 'nmrl',
+    'nmrm', 'nmrr', 'nogl', 'nogm', 'nogr', 'nomg', 'nrdr', 'nsc2', 'nsc3',
+    'nscb', 'ntrg', 'ntrh', 'ntrs', 'ntrt', 'nwzg',
+  ];
+  for (const creepId of mercCreepTypes) {
+    const creep = objectData.units.get(creepId);
+    if (creep == null) continue;
+    const existing = (creep.normal as unknown as string) ?? '';
+    if (existing.indexOf(constants.abilities.InventoryHero) !== -1) continue;
+    creep.normal = (existing !== '' ? existing + ',' : '') + constants.abilities.InventoryHero;
+  }
+
   // Summon Heroes upgrade (PendantOfEnergy — purchased from shop, one-time)
   const summonUpgrade = objectData.items.get(constants.items.PendantOfEnergy)!;
   summonUpgrade.name = 'Summon Heroes Upgrade';
