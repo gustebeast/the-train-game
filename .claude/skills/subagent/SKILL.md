@@ -25,8 +25,9 @@ this skill only bootstraps you into the role and does not restate it.
    If all your work is already merged (`git -C .worktrees/<name> log main..HEAD
    --no-merges` prints nothing), use `reset --hard main` instead so you don't
    accumulate empty sync-merges that make you look like you have pending work.
-4. **Arm your main-monitor** with the `Monitor` tool, `persistent: true`
-   (command in the README). It never exits — arm it once per session.
+4. **Do NOT arm a background watcher.** An always-running task makes your
+   chat look permanently busy. The `UserPromptSubmit` hook already reports
+   when you are behind `main` at the start of every prompt.
 
 ## Non-negotiables
 

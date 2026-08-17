@@ -60,24 +60,18 @@ git -C .worktrees/<name> merge main
 git -C .worktrees/<name> reset --hard main
 ```
 
-### Arm your main-monitor (once per session)
+### Do NOT run a background watcher
 
-So you pick up finalized work immediately instead of at your next prompt,
-watch `main` with the `Monitor` tool (`persistent: true`). It streams one
-notification per change and never exits, so there is nothing to re-arm:
+Earlier versions of this doc told you to keep a background watcher on `main`
+so you would pick up finalized work the moment it landed. **Do not do that.**
+An always-armed background task makes your chat display as permanently busy,
+so the user can no longer tell which agents are actually working. The latency
+it saved bought nothing: you are idle until the user prompts you, and the
+`UserPromptSubmit` hook already tells you at the start of every prompt if you
+are behind `main`.
 
-```bash
-cd "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame"
-prev=$(git rev-parse main)
-while true; do
-  cur=$(git rev-parse main 2>/dev/null || echo "$prev")
-  [ "$cur" != "$prev" ] && echo "main moved: $prev -> $cur"
-  prev="$cur"
-  sleep 20
-done
-```
-
-When a notification arrives (the lead finalized new work):
+So: sync at the start of each prompt (above), and when the hook says you are
+behind `main`:
 
 1. Merge: `git -C .worktrees/<name> merge main` — resolve any conflicts
    YOURSELF, using your knowledge of your own changes and what they mean.

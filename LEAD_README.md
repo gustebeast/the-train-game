@@ -45,6 +45,13 @@ Two channels:
    ever dies, the prompt-time hook above is the backstop — you lose
    latency, not the signal.
 
+   **You are the only role that runs one.** A persistent monitor shows up
+   as a permanently "running task" and makes its chat look busy forever,
+   which is why sub-agents no longer run one — it would destroy the user's
+   ability to see which agents are actually working. That cost is worth
+   paying once, here, because you are expected to integrate submissions
+   unattended; it is not worth paying five times.
+
 Either way, a branch ahead of `main` is a pending merge request.
 
 ## Protocol for each merge request
