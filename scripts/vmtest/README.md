@@ -169,15 +169,18 @@ both passed. Verified: 47.8s of concurrent execution, both green.
 Each VM holds a **live snapshot** parked on WC3's Create Game screen, in the map
 list one level *above* the `Download` folder. A run then:
 
-1. reverts to that snapshot and powers on (~11s) — every run starts identical
-2. deletes the old map and uploads the new build **under a fresh random
-   filename** (~6s)
+1. reverts to that snapshot and powers on (~15-20s) — every run starts
+   identical; this is the dominant cost and is inherent to restoring the VM's
+   6GB memory snapshot
+2. empties the Download folder and uploads the new build **under a fresh random
+   filename** (~4s, via native `vmrun` directory ops)
 3. drives the menus over VNC: Download → map → Create → name → Start (~8s)
-4. taps space until the map writes its ready marker, which is the only reliable
-   "the game is live and accepting chat" signal (~5s)
-5. sends `-test <name>` and polls the result file until it ends with `done` (~10s)
+4. taps space until the map writes its ready marker — the only reliable "the
+   game is live and accepting chat" signal — re-clicking START GAME if a run
+   looks stuck at the lobby (~8-12s)
+5. sends `-test <name>` and polls the result file until it ends with `done` (~9s)
 
-No cleanup is needed; the next revert discards everything.
+Total ~50s. No cleanup is needed; the next revert discards everything.
 
 ### Audio is silenced at the VM level
 
