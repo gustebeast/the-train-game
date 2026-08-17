@@ -115,6 +115,32 @@ resolve against the real `main`).
 - Sub-agents should not merge the `testing` branch (it's throwaway);
   point them at `main` or the other agent's branch instead.
 
+### VM test infrastructure (yours since 2026-08-18)
+
+You own the test VMs and their code: `scripts/vmtest/*` (module, `run-test.ps1`,
+`mint-vm.ps1`, `prewarm.ps1`, `vms.json`) and `src/testkit.ts`. Sub-agents only
+write and run tests against it; when it breaks they report to you. It is shared
+plumbing with a shared failure mode, so it needs one owner.
+
+- **Machines** (at `C:\VMs\`, not in git): `TrainGameTest` (5900) is the clone
+  parent and mint base — never a test target; `Brenner` (5901), `Boof` (5902),
+  `Dougie` (5903), `Murph` (5904) are the agent VMs. Guest `wc3`/`traintest`.
+- **Recurring task — re-mint roughly monthly.** WC3 Reforged allows offline play
+  only ~30 days after the last online sign-in. Existing snapshots keep working,
+  but minting a new one is blocked: WC3's PLAY OFFLINE goes dead. Symptom from
+  an agent: "PLAY OFFLINE is disabled". Fix: one online Battle.net login, then
+  re-clone + re-mint all four (`VM-SETUP.md` step 8, ~45 min mostly waiting).
+  **The Battle.net login is the only step needing the user** — you cannot do it,
+  and one login covers all four VMs, so batch it and ask once.
+- **First debugging step for any "tests are broken" report:**
+  `scripts/vmtest/run-test.ps1 -SelfTest`. It verifies vmrun, VM, snapshot, UI
+  coords, `initTestKit` wiring, test registration, and build freshness in a few
+  seconds without booting anything, and it pre-flights every run so a stale
+  build cannot produce a false green.
+- Deep knowledge is written down: `scripts/vmtest/README.md` (using the
+  harness) and `scripts/vmtest/VM-SETUP.md` (building/re-minting, and the traps
+  that each cost hours).
+
 ## Project context in one paragraph
 
 TheTrainGame is a WC3 map: TypeScript in `src/` compiled to Lua via

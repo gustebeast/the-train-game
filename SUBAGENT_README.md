@@ -144,9 +144,18 @@ powershell -File scripts/vmtest/manual-session.ps1 -Vm <yourvm> `
   -Map .worktrees/<name>/dist/bin/TheTrainGame.w3x
 ```
 
-Use your own VM (`-Vm <name>`) so runs never collide with another agent; if its
-snapshot isn't minted yet (`ready:false` in `scripts/vmtest/vms.json`) fall back
-to `-Vm shared`.
+The runner **auto-targets your own VM** from your branch (`agent/<name>`), so
+you normally pass no `-Vm` at all. If your VM has no minted snapshot yet
+(`ready:false` in `scripts/vmtest/vms.json`), ask the lead to mint it — there
+is no shared fallback; the runner refuses `shared`/`base`/`traingametest`
+because that is the clone parent and testing on it can corrupt in-flight clones.
+
+**The VM infrastructure is lead-owned.** You write and run tests; you do not
+edit `scripts/vmtest/*`, `src/testkit.ts`, or re-mint VMs. When the harness
+misbehaves, run `scripts/vmtest/run-test.ps1 -SelfTest` first — it checks
+vmrun, your VM, the snapshot, UI coords, `initTestKit` wiring, test
+registration, and whether the built map is actually newer than `src/` — and
+report that output to the lead rather than fixing the plumbing yourself.
 
 ## At the END of every prompt
 
