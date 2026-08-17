@@ -129,6 +129,34 @@ $r.Screenshot          # PNG of the guest at the end of the run
 | `Get-TestVmScreenshot` | Save a PNG of the guest screen. |
 | `Stop-TestVm` | Power off. Optional — the next run reverts anyway. |
 
+### Custom flows (screenshots, cheats, anything)
+
+When you need something `Invoke-MapTest` doesn't do — fire a chat command and
+grab a frame, poke several commands, read a file mid-match — **do not hand-roll
+`Reset-TestVm` → upload → … yourself**: it's easy to forget the cleanup and
+leave the VM running (a running WC3 burns ~1.5 CPU cores). Use `Use-TestVm`
+instead. It does the setup (reset/resume → upload → live match) and, in a
+`finally`, the exact same cleanup the standard runner uses (revert+suspend), no
+matter what your body does or throws. You just fill in the middle:
+
+```powershell
+Import-Module .\scripts\vmtest\TrainVMTest.psm1 -Force
+Use-TestVm -Vm dougie -Body {
+  param($vm, $conn)                      # map is loaded and live
+  Send-TestVmChat $conn '-cheatmode'
+  Start-Sleep -Seconds 3
+  Get-TestVmScreenshot $vm -Path C:\out\peasant.png -Connection $conn
+}
+# VM is suspended and ready for the next run -- you didn't have to clean up.
+```
+
+`$conn` is a live VNC connection (see `Send-TestVmChat`, `Get-TestVmScreenshot`,
+and the `Vnc-*` helpers in `vnc-fast.ps1`). Pass `-NoMap` to get the VM at the
+Create Game menu instead of in a match, or `-NoPrewarm` to stop the VM at the
+end instead of suspending it. If you must drop even lower, the shared pieces are
+exported too — `Reset-OrResumeTestVm`, `Wait-TestVmReady`, `Complete-TestVm` —
+but always end with `Complete-TestVm` (or `Start-PrewarmVm` / `Stop-TestVm`).
+
 ### Manual / interactive session
 
 To play the map yourself instead of running an automated measurement — the same
@@ -215,9 +243,10 @@ A run **never leaves its VM running** — a running WC3 burns ~1.5 CPU cores, so
 forgotten VM would spin your fans indefinitely. `Invoke-MapTest` guarantees, in a
 `finally` (so it holds even on failure or a thrown test), that the VM ends either
 **suspended** (default, ready for the next run) or **stopped** (`-NoPrewarm`).
-You don't have to remember to clean up; just call the runner. If you drive a VM
-by hand outside the runner, end with `Stop-TestVm` (or `Start-PrewarmVm` to leave
-it ready).
+You don't have to remember to clean up; just call the runner. For custom flows
+the runner doesn't cover, use `Use-TestVm { ... }` (see *Custom flows* below) —
+it gives you the same guarantee. Only if you drive the primitives directly must
+you end with `Complete-TestVm` (or `Stop-TestVm` / `Start-PrewarmVm`).
 
 ### Pre-warming (why repeat runs are ~32s)
 

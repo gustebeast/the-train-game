@@ -303,6 +303,154 @@ function Start-TestVmMatch {
   Vnc-Click    $Connection $ui.startGameButton[0] $ui.startGameButton[1]
 }
 
+# --- Session lifecycle (shared by Invoke-MapTest and Use-TestVm) -----------
+# Each takes an optional -Log scriptblock ({ param($m) ... }) so the caller can
+# route messages through its own timestamped logger; it defaults to Write-Host.
+
+<#
+.SYNOPSIS
+  Get the VM to a live, clean create-game menu -- resume it if a prior run
+  pre-warmed it (~3s), otherwise a full reset (~15-20s).
+#>
+function Reset-OrResumeTestVm {
+  [CmdletBinding()]
+  param([object]$Vm, [scriptblock]$Log = { param($m) Write-Host $m })
+  if ($null -eq $Vm) { $Vm = Get-TestVm }
+  $stateFile = Get-PrewarmStateFile $Vm
+  if ((Get-PrewarmState $Vm) -eq 'warming') {
+    & $Log 'waiting for background pre-warm to finish'
+    $wd = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $wd -and (Get-PrewarmState $Vm) -eq 'warming') { Start-Sleep -Milliseconds 500 }
+  }
+  # Reverting/resuming a VM with an open GUI console tab yanks that window to the
+  # front; capture the user's window and hand focus back once the VM is up.
+  $fg = Save-Foreground
+  if ((Get-PrewarmState $Vm) -eq 'warm') {
+    & $Log "resuming pre-warmed $($Vm.Name) (skipped reset)"
+    Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
+    & $script:VmRun -T ws start $Vm.Vmx nogui 2>&1 | Out-Null   # resume from suspend
+  } else {
+    & $Log "reset $($Vm.Name) -> $($Vm.Snapshot)"
+    Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
+    Reset-TestVm $Vm
+  }
+  Start-Sleep -Milliseconds 400
+  Restore-Foreground $fg
+}
+
+<#
+.SYNOPSIS
+  After Start-TestVmMatch, wait until the map writes its ready marker. Returns
+  $true if the map went live, $false on timeout. Re-clicks START GAME if a run
+  looks stuck at the lobby.
+#>
+function Wait-TestVmReady {
+  [CmdletBinding()]
+  param([Parameter(Mandatory)]$Connection, [object]$Vm, [int]$TimeoutSec = 90,
+        [scriptblock]$Log = { param($m) Write-Host $m })
+  if ($null -eq $Vm) { $Vm = Get-TestVm }
+  & $Log 'waiting for map ready'
+  $deadline = (Get-Date).AddSeconds($TimeoutSec)
+  $waitStart = Get-Date; $lastStartClick = Get-Date
+  while ((Get-Date) -lt $deadline) {
+    Vnc-Tap $Connection 0x20   # dismiss "press any key to continue"; harmless in-game
+    if (Test-TestVmFile $Vm -Name 'test_ready.txt') { return $true }
+    # A single lobby START GAME click sometimes drops. The happy path is ready in
+    # <10s, so only re-click after that -- re-clicking during a normal load slows it.
+    if (((Get-Date) - $waitStart).TotalSeconds -ge 10 -and ((Get-Date) - $lastStartClick).TotalSeconds -ge 5) {
+      Vnc-Click $Connection $Vm.Ui.startGameButton[0] $Vm.Ui.startGameButton[1]
+      $lastStartClick = Get-Date
+    }
+    Start-Sleep -Milliseconds 500
+  }
+  return $false
+}
+
+<#
+.SYNOPSIS
+  The clean end point: a run never leaves its VM running (a running WC3 burns
+  ~1.5 CPU cores). Default -- detached revert+suspend (VM at 0 CPU, next run
+  resumes). -NoPrewarm -- stop the VM (next run pays the full reset).
+#>
+function Complete-TestVm {
+  [CmdletBinding()]
+  param([object]$Vm, [switch]$NoPrewarm, [scriptblock]$Log = { param($m) Write-Host $m })
+  if ($null -eq $Vm) { $Vm = Get-TestVm }
+  if ($NoPrewarm) {
+    & $Log 'stopping VM (-NoPrewarm)'
+    & $script:VmRun -T ws stop $Vm.Vmx soft 2>&1 | Out-Null
+  } else {
+    & $Log 'pre-warming next run (revert + suspend in background)'
+    Start-PrewarmVm $Vm
+  }
+}
+
+<#
+.SYNOPSIS
+  Run your own steps against a live map, with setup and cleanup handled for you.
+.DESCRIPTION
+  The flexible sibling of Invoke-MapTest: it resets/resumes the VM, uploads the
+  map, drives into a live match, then invokes your -Body scriptblock with
+  ($vm, $conn) -- do whatever you need (send chat commands, grab screenshots,
+  read files). Whatever your body does or throws, the VM is cleaned up in a
+  finally (revert+suspend, or -NoPrewarm to stop). This is how a custom flow
+  gets the same "never leave a VM running" guarantee as the standard runner --
+  use it instead of hand-rolling Reset -> upload -> ... and forgetting cleanup.
+.PARAMETER Body
+  Scriptblock invoked as & $Body $vm $conn. $conn is a live VNC connection
+  (see Send-TestVmChat / Get-TestVmScreenshot / Vnc-* in vnc-fast.ps1).
+.PARAMETER NoMap
+  Skip the map upload + match start; the body gets the VM at the create-game
+  menu instead of in a live match.
+.EXAMPLE
+  # Screenshot the peasant after a cheat command:
+  Use-TestVm -Vm dougie -Body {
+    param($vm, $conn)
+    Send-TestVmChat $conn '-cheatmode'
+    Start-Sleep -Seconds 3
+    Get-TestVmScreenshot $vm -Path C:\out\peasant.png -Connection $conn
+  }
+#>
+function Use-TestVm {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory)][scriptblock]$Body,
+    [string]$Vm,
+    [string]$Map,
+    [string]$PlayerName = 'agent',
+    [int]$ReadyTimeoutSec = 90,
+    [switch]$NoMap,
+    [switch]$NoPrewarm,
+    [switch]$Quiet
+  )
+  $vmInfo = Get-TestVm $Vm
+  if (-not $Map) { $Map = Join-Path $script:RepoRoot 'dist\bin\TheTrainGame.w3x' }
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $log = { param($m) if (-not $Quiet) { Write-Host ("[{0,6:N1}s] {1}" -f $sw.Elapsed.TotalSeconds, $m) } }.GetNewClosure()
+
+  Reset-OrResumeTestVm $vmInfo -Log $log
+  if (-not $NoMap) {
+    & $log 'upload map'
+    $guestMap = Copy-MapToTestVm $vmInfo -Map $Map
+    & $log "uploaded as $guestMap"
+  }
+  $conn = Vnc-Connect $vmInfo.VncPort
+  try {
+    if (-not $NoMap) {
+      & $log 'start match'
+      Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
+      if (-not (Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $log)) {
+        throw "Map never became ready within ${ReadyTimeoutSec}s. Is initTestKit() called in main.ts?"
+      }
+    }
+    & $Body $vmInfo $conn
+  }
+  finally {
+    $conn.cli.Close()
+    Complete-TestVm $vmInfo -NoPrewarm:$NoPrewarm -Log $log
+  }
+}
+
 <#
 .SYNOPSIS
   Build-free end-to-end test run: reset VM, load the map, run a test, return results.
@@ -337,7 +485,7 @@ function Invoke-MapTest {
   if (-not $OutDir) { $OutDir = Join-Path $env:TEMP "trainvm-$($vmInfo.Name)" }
   New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
   $sw = [Diagnostics.Stopwatch]::StartNew()
-  function Say($m){ if (-not $Quiet) { Write-Host ("[{0,6:N1}s] {1}" -f $sw.Elapsed.TotalSeconds, $m) } }
+  $Say = { param($m) if (-not $Quiet) { Write-Host ("[{0,6:N1}s] {1}" -f $sw.Elapsed.TotalSeconds, $m) } }.GetNewClosure()
 
   $result = [ordered]@{
     Ok = $false; Test = $Test; Vm = $vmInfo.Name
@@ -346,65 +494,16 @@ function Invoke-MapTest {
     Screenshot = (Join-Path $OutDir 'final.png')
   }
 
-  # If a previous run pre-warmed this VM it is suspended at create-game, so we
-  # resume it (~3s) instead of the ~15-20s full reset. If a pre-warm is still in
-  # flight, wait for it rather than starting a conflicting revert.
-  $stateFile = Get-PrewarmStateFile $vmInfo
-  if ((Get-PrewarmState $vmInfo) -eq 'warming') {
-    Say 'waiting for background pre-warm to finish'
-    $wd = (Get-Date).AddSeconds(60)
-    while ((Get-Date) -lt $wd -and (Get-PrewarmState $vmInfo) -eq 'warming') { Start-Sleep -Milliseconds 500 }
-  }
-  if ((Get-PrewarmState $vmInfo) -eq 'warm') {
-    Say "resuming pre-warmed $($vmInfo.Name) (skipped reset)"
-    Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
-    $fg = Save-Foreground
-    & $script:VmRun -T ws start $vmInfo.Vmx nogui 2>&1 | Out-Null   # resume from suspend
-    Start-Sleep -Milliseconds 400
-    Restore-Foreground $fg
-  } else {
-    Say "reset $($vmInfo.Name) -> $($vmInfo.Snapshot)"
-    # Reverting a VM that has an open console tab yanks the GUI to the front;
-    # capture the user's window and hand focus back once the VM is up.
-    Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
-    $fg = Save-Foreground
-    Reset-TestVm $vmInfo
-    Start-Sleep -Milliseconds 400
-    Restore-Foreground $fg
-  }
-  Say 'upload map'
+  Reset-OrResumeTestVm $vmInfo -Log $Say
+  & $Say 'upload map'
   $guestMap = Copy-MapToTestVm $vmInfo -Map $Map
-  Say "uploaded as $guestMap"
+  & $Say "uploaded as $guestMap"
 
   $conn = Vnc-Connect $vmInfo.VncPort
   try {
-    Say 'start match'
+    & $Say 'start match'
     Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
-
-    # The map writes test_ready.txt from initTestKit(), which is the only
-    # reliable "we are in game and chat works" signal. Until it shows up, keep
-    # tapping space to clear the map's "press any key to continue" screen --
-    # harmless once in game (space just recentres the camera).
-    #
-    # We also re-click START GAME if the run looks stuck: a single lobby click
-    # sometimes drops (the lobby wasn't interactive yet), leaving us at the lobby
-    # where space does nothing. The happy path reaches the ready marker in well
-    # under 10s, so we only start re-clicking after that -- re-clicking during a
-    # normal load interferes with it and slows the run.
-    Say 'waiting for map ready'
-    $deadline = (Get-Date).AddSeconds($ReadyTimeoutSec)
-    $ready = $false
-    $waitStart = Get-Date
-    $lastStartClick = Get-Date
-    while ((Get-Date) -lt $deadline) {
-      Vnc-Tap $conn 0x20
-      if (Test-TestVmFile $vmInfo -Name 'test_ready.txt') { $ready = $true; break }
-      if (((Get-Date) - $waitStart).TotalSeconds -ge 10 -and ((Get-Date) - $lastStartClick).TotalSeconds -ge 5) {
-        Vnc-Click $conn $vmInfo.Ui.startGameButton[0] $vmInfo.Ui.startGameButton[1]
-        $lastStartClick = Get-Date
-      }
-      Start-Sleep -Milliseconds 500
-    }
+    $ready = Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $Say
     if (-not $ready) {
       $result.FailureReason = "Map never became ready within ${ReadyTimeoutSec}s. Is initTestKit() called in main.ts? See $($result.Screenshot)."
       Get-TestVmScreenshot $vmInfo -Path $result.Screenshot -Connection $conn | Out-Null
@@ -412,7 +511,7 @@ function Invoke-MapTest {
       return [pscustomobject]$result
     }
 
-    Say "running -test $Test"
+    & $Say "running -test $Test"
     Send-TestVmChat $conn "-test $Test"
 
     # Results are rewritten after every measurement, so existence alone can
@@ -451,22 +550,11 @@ function Invoke-MapTest {
   }
   finally {
     $conn.cli.Close()
-    # Defined end point: a test never leaves its VM running (a running WC3 burns
-    # ~1.5 CPU cores). Default -- kick off a detached revert+suspend so the VM is
-    # parked at zero CPU AND the next run is ready to resume. Runs on both the
-    # pass and the early "not ready" return, so a failed run is cleaned up too.
-    # -NoPrewarm -- just stop the VM (the next run pays the full reset).
-    if ($NoPrewarm) {
-      Say 'stopping VM (-NoPrewarm)'
-      & $script:VmRun -T ws stop $vmInfo.Vmx soft 2>&1 | Out-Null
-    } else {
-      Say 'pre-warming next run (revert + suspend in background)'
-      Start-PrewarmVm $vmInfo
-    }
+    Complete-TestVm $vmInfo -NoPrewarm:$NoPrewarm -Log $Say
   }
 
   $result.DurationSeconds = [math]::Round($sw.Elapsed.TotalSeconds,1)
-  Say ("done -- " + $(if($result.Ok){'PASS'}else{'FAIL: ' + $result.FailureReason}))
+  & $Say ("done -- " + $(if($result.Ok){'PASS'}else{'FAIL: ' + $result.FailureReason}))
   return [pscustomobject]$result
 }
 
@@ -582,7 +670,8 @@ function Stop-TestVm {
   & $script:VmRun -T ws stop $Vm.Vmx soft 2>&1 | Out-Null
 }
 
-Export-ModuleMember -Function Invoke-MapTest, Get-TestVm, Reset-TestVm, Stop-TestVm,
-  Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile, Get-TestVmScreenshot,
-  Send-TestVmChat, Start-TestVmMatch, Start-ManualSession, Start-PrewarmVm,
-  Get-PrewarmState
+Export-ModuleMember -Function Invoke-MapTest, Use-TestVm, Get-TestVm, Reset-TestVm,
+  Stop-TestVm, Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile,
+  Get-TestVmScreenshot, Send-TestVmChat, Start-TestVmMatch, Start-ManualSession,
+  Start-PrewarmVm, Get-PrewarmState, Reset-OrResumeTestVm, Wait-TestVmReady,
+  Complete-TestVm
