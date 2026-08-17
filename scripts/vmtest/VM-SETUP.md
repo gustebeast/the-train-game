@@ -231,18 +231,32 @@ Clone from the refreshed `base-off2` and set each clone's `.vmx`: unique
 `ethernet0.startConnected = "FALSE"`, and drop `uuid.bios` / `uuid.location` /
 `ethernet0.generatedAddress` for fresh identity. Then per clone:
 
+After configuring the vmx, **boot each clone once and verify its VNC port** —
+VMware silently rewrites `RemoteDisplay.vnc.port` back to the default 5900 in the
+vmx if it can't bind the configured port at start (seen on Murph). Check with
+`Test-NetConnection 127.0.0.1 -Port <port>`; if it landed on 5900, stop the VM,
+re-set the port in the vmx, and restart.
+
+**Render-CPU tuning (optional but recommended):** before the clone's WC3 launch,
+set `maxfps=15` in the guest's `War3Preferences.txt` (WC3 reads it only at
+launch). A running WC3 renders its menu at ~1.5 CPU cores at the stock
+`maxfps=200`; `maxfps=15` cuts that to ~0.3-0.4. It does not change render
+resolution, so the runner's click coordinates are unaffected. Set it on the
+**base** before re-cloning and all clones inherit it. (Classic/SD graphics —
+already the default here — is the other big reducer.)
+
+Then per clone:
+
 1. Boot (NIC off from the vmx). Wait for the desktop.
-2. **Prime Battle.net's offline path:** connect the NIC
-   (`vmrun connectNamedDevice <vmx> ethernet0`), launch Battle.net, let it reach
-   "session expired" (this is Battle.net *reaching* Blizzard — required for it to
-   offer Continue Offline). Then disconnect the NIC
-   (`disconnectNamedDevice <vmx> ethernet0`) and kill+relaunch Battle.net. Now it
-   shows **"Could not log in / Continue Offline"**. (With the NIC off from the
-   start it just hangs at "Connecting…" forever — it must fail a real attempt.)
-3. **Silence audio:** `vmrun disconnectNamedDevice <vmx> sound` (WC3 already
-   initialised its audio, so this is safe and stays silent through the snapshot).
-4. Continue Offline → Warcraft III tab → Play → WC3 VPN error **OK** →
-   **PLAY OFFLINE** (now enabled thanks to the refreshed entitlement) → main menu.
+2. **Silence audio:** `vmrun disconnectNamedDevice <vmx> sound`.
+3. Launch Battle.net (it will sit at "Connecting…" with the NIC off — that's
+   fine). If the base snapshot was taken while logged in and the entitlement is
+   fresh, you do **not** need to prime the offline path: just launch WC3 straight
+   from here (Warcraft III tab → Play) and use WC3's own PLAY OFFLINE. Only if
+   WC3's PLAY OFFLINE is dead (lapsed entitlement) do you need the online-refresh
+   dance — see *Refresh the offline entitlement* above.
+4. WC3 VPN error **OK** → **PLAY OFFLINE** → main menu (offline, MULTIPLAYER
+   greyed).
 5. Single Player → Custom Games. If it opens inside a subfolder (top row is
    "(up one level)"), double-click that until the top row is the **Download**
    folder — the runner's coordinates assume Download is the top row.
