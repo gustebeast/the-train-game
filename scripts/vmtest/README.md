@@ -1,0 +1,203 @@
+# Automated in-game testing
+
+Run the map for real — in Warcraft III, in a VM — and get measurements back in
+about 40 seconds. Nothing appears on the developer's desktop: no window steals
+focus, no keystrokes leak into other applications.
+
+```powershell
+npm run build
+powershell -File scripts/vmtest/run-test.ps1 -Test damage
+```
+
+```
+[   0.0s] reset shared -> create-game-v2
+[  17.0s] start match
+[  29.7s] running -test damage
+[  39.1s] done -- PASS
+
+Results:
+  empty          7.50
+  axe            7.50
+  ...
+PASS (39.1s)
+```
+
+Use this whenever a question is only really answerable in-game: actual damage
+dealt, whether an ability applied, what a unit's state is after some
+interaction. It beats reasoning about object data, because it measures what the
+engine really did.
+
+---
+
+## Writing a test
+
+A test lives in `src/`, measures something, and reports `key=value` lines.
+
+```ts
+// src/mytest.ts
+import { registerTest } from './testkit';
+
+registerTest('mystuff', t => {
+  const peasant = Unit.create(Players[0], PEASANT_ID, 0, 0, 0)!;
+  t.report('startingHp', GetUnitState(peasant.handle, UNIT_STATE_LIFE));
+
+  // Anything asynchronous goes through t.after, never a raw Timer.
+  t.after(1, () => {
+    t.report('hpAfter1s', GetUnitState(peasant.handle, UNIT_STATE_LIFE));
+    peasant.destroy();
+    t.done();          // required -- the runner waits for this
+  });
+});
+```
+
+Register the module in `src/main.ts` so it loads:
+
+```ts
+import './mytest';   // next to the existing import './damagetest'
+```
+
+Then run it:
+
+```powershell
+npm run build
+powershell -File scripts/vmtest/run-test.ps1 -Test mystuff
+```
+
+`registerTest('mystuff', ...)` exposes the in-game chat command `-test mystuff`,
+which is also how you drive it by hand while playing.
+
+### The reporter
+
+| Call | Purpose |
+|---|---|
+| `t.report(key, value)` | Record a measurement. Numbers are formatted to 2dp. |
+| `t.fail(key, reason)` | Record a failure for one key and keep going. |
+| `t.done()` | Finish the run. **Always call this**, including on failure paths. |
+| `t.after(seconds, fn)` | Delayed callback, errors reported instead of swallowed. |
+| `t.guard(fn)` | Wrap any other callback (e.g. a trigger action) the same way. |
+
+Results are rewritten after every `report`, so a test that hangs half way still
+leaves its partial output behind to diagnose.
+
+### Two rules worth internalising
+
+**Never use a bare `Timer` or unwrapped trigger action inside a test.** WC3
+silently swallows anything thrown inside those callbacks. A crash then looks
+exactly like a hang, and you burn a full timeout learning nothing. `t.after`
+and `t.guard` turn it into a reported `error=FAIL ...` line.
+
+**Put `this: void` on any callback type you store and call later.**
+typescript-to-lua compiles `obj.fn(arg)` into the method call `obj:fn(arg)`
+unless the type says otherwise, which silently shifts every argument by one.
+This cost an hour; see the comment on `RegisteredTest` in `testkit.ts`.
+
+---
+
+## Running tests
+
+### CLI
+
+```powershell
+powershell -File scripts/vmtest/run-test.ps1 -Test damage [-Vm dougie] [-TestTimeoutSec 120]
+```
+
+Exits non-zero on failure, so it slots straight into a check script.
+
+### From PowerShell
+
+```powershell
+Import-Module .\scripts\vmtest\TrainVMTest.psm1 -Force
+$r = Invoke-MapTest -Test damage
+
+$r.Ok                  # $true / $false
+$r.Results['axe']      # '7.50'
+$r.Failures            # key -> reason, for anything that failed
+$r.FailureReason       # why the run as a whole failed
+$r.Raw                 # the unparsed result file
+$r.Screenshot          # PNG of the guest at the end of the run
+```
+
+| Function | Purpose |
+|---|---|
+| `Invoke-MapTest` | The whole flow. Start here. |
+| `Get-TestVm` | Resolve a VM by name. |
+| `Reset-TestVm` | Revert to the snapshot and power on. |
+| `Copy-MapToTestVm` | Upload a `.w3x` under a fresh unique name. |
+| `Start-TestVmMatch` | Drive the menus from Create Game into a live match. |
+| `Send-TestVmChat` | Type a chat command into the running game. |
+| `Get-TestVmResultFile` | Read a file from the guest's CustomMapData. |
+| `Get-TestVmScreenshot` | Save a PNG of the guest screen. |
+| `Stop-TestVm` | Power off. Optional — the next run reverts anyway. |
+
+### Picking a VM
+
+Each agent has its own VM so runs never collide. Set it once per session:
+
+```powershell
+$env:TRAINVM = 'dougie'      # or brenner / boof / murph
+```
+
+Otherwise pass `-Vm dougie`, or leave it unset to use the `shared` machine.
+The registry lives in `vms.json`.
+
+**Ready now:** `shared`, `dougie`. `brenner`, `boof` and `murph` are cloned and
+port-assigned but still need their live snapshot minted — the runner will tell
+you so rather than failing obscurely. Minting is step 8 of
+[VM-SETUP.md](VM-SETUP.md) and takes about ten minutes each, most of it the
+snapshot itself.
+
+---
+
+## How it works
+
+Each VM holds a **live snapshot** parked on WC3's Create Game screen, in the map
+list one level *above* the `Download` folder. A run then:
+
+1. reverts to that snapshot and powers on (~11s) — every run starts identical
+2. deletes the old map and uploads the new build **under a fresh random
+   filename** (~6s)
+3. drives the menus over VNC: Download → map → Create → name → Start (~8s)
+4. taps space until the map writes its ready marker, which is the only reliable
+   "the game is live and accepting chat" signal (~5s)
+5. sends `-test <name>` and polls the result file until it ends with `done` (~10s)
+
+No cleanup is needed; the next revert discards everything.
+
+### Why the filename must be unique
+
+A WC3 restored from a live snapshot **will not** load a map that overwrites a
+filename it already knew about — it reports *"The map is unavailable or
+corrupted"* regardless of where the file lives or when it is written. The same
+process loads a map that arrives under a filename which did not exist when the
+snapshot was taken, and reads its metadata correctly.
+
+That is why `Copy-MapToTestVm` generates `ZZ<random>.w3x` every run. Do not
+"optimise" this into a fixed name; that is precisely the case that fails.
+
+### Why the ready marker comes from a timer
+
+`initTestKit()` runs during map init, while the game is still paused behind the
+"press any key to continue" screen. A marker written inline appears seconds
+before the game is actually running, so the runner would stop dismissing that
+screen and fire its chat command into a paused game where no timer ever
+advances. Game timers only tick once play begins, so writing the marker from a
+`Timer` fires it at exactly the right moment.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `Map never became ready` | `initTestKit()` missing from `main.ts`, or the map threw during init. Check `$r.Screenshot`. |
+| `No results for '<name>'` | Test not registered, or its module isn't imported from `main.ts`. |
+| `error=FAIL attempt to call a nil value` | A callback type is missing `this: void`. |
+| `did not finish within Ns` | The test never called `t.done()` on some path. |
+| `The map is unavailable or corrupted` | Something reused a map filename. See above. |
+| `Error: A file was not found` from vmrun | `-T ws` missing. The module always passes it. |
+| Framebuffer size mismatch error | The guest resolution drifted from the coordinates in `vms.json`. Re-capture with `Get-TestVmScreenshot`. |
+
+Guest scripts must write under `C:\Users\wc3\`; `runProgramInGuest -interactive`
+is not elevated and cannot write to `C:\`.
+
+To rebuild the VMs from scratch, see [VM-SETUP.md](VM-SETUP.md).

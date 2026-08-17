@@ -4,6 +4,7 @@ import { isMercUpgradeBought } from './mercenary';
 import { registerSaveSegment } from './save';
 import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
 import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
+import { isToughCamp, payToughCampBonus } from './challenges';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { TRACK_SIZE } from './track/constants';
 
@@ -12,6 +13,8 @@ const FIRST_CAMP_XP = 90;
 const DPS_TEST_DURATION = 30;
 /** Creep DPS multiplier — scales creep output above measured hero DPS as a balance constant. */
 const CREEP_DPS_ADVANTAGE = 1.1;
+/** Creep DPS multiplier when the Tough Creep Camp challenge is armed. */
+const TOUGH_CAMP_DPS_ADVANTAGE = 1.5;
 
 /** Whether we're in DPS test mode (lobby sparring). */
 let dpsTestMode = false;
@@ -238,8 +241,9 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
     for (const h of heroes) heroDPS += getDPS(h.handle);
   }
   const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
+  const dpsAdvantage = isToughCamp() ? TOUGH_CAMP_DPS_ADVANTAGE : CREEP_DPS_ADVANTAGE;
   return {
-    dpsScale: effectiveCreepDPS > 0 ? (heroDPS * CREEP_DPS_ADVANTAGE) / effectiveCreepDPS : 1,
+    dpsScale: effectiveCreepDPS > 0 ? (heroDPS * dpsAdvantage) / effectiveCreepDPS : 1,
     ehpScale: creepEHP > 0 ? heroEHP / creepEHP : 1,
   };
 }
@@ -315,6 +319,7 @@ export function scaleCreepStats(heroes: Unit[]): void {
         // Check if all creeps are dead — grant Unsummon Heroes to peasants
         if (spawnedCreeps.every(c => GetUnitState(c.unit.handle, UNIT_STATE_LIFE) <= 0)) {
           grantUnsummonToAllPeasants();
+          payToughCampBonus();
         }
       });
     }

@@ -44,9 +44,6 @@ export function setInGameplay(value: boolean): void {
   inGameplay = value;
 }
 
-/** Snapshot of gameState taken on lobby entry, used for revert. */
-let lobbySnapshot: GameState | null = null;
-
 /** Registered callbacks to run after syncState (e.g. syncTrainStats). */
 const syncCallbacks: Array<() => void> = [];
 
@@ -74,14 +71,3 @@ export function syncGold(): void {
   getHumanPlayers().forEach(p => p.setState(PLAYER_STATE_RESOURCE_GOLD, gameState.gold));
 }
 
-/** Save a snapshot of the current gameState for lobby revert. */
-export function saveLobbySnapshot(): void {
-  lobbySnapshot = { ...gameState };
-}
-
-/** Restore gameState from the lobby snapshot. Returns false if no snapshot exists. */
-export function revertToLobbySnapshot(): boolean {
-  if (lobbySnapshot == null) return false;
-  applyState(lobbySnapshot);
-  return true;
-}

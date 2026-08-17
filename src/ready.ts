@@ -3,7 +3,7 @@ import { Abilities } from '@objectdata/abilities';
 import { PEASANT_ID } from './constants';
 import { getHumanPlayers } from './util';
 
-const READY_ORB_ABILITY_ID = FourCC(Abilities.ItemArmorBonusPlus8);
+const READY_ORB_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus6);
 const REGION_HALF = 128; // 2x2 grid cells = 256 world units, half = 128
 
 interface ZoneConfig {

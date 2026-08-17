@@ -8,14 +8,17 @@ import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } f
 import { isMercUpgradeBought, buyMercContract, rerollMerc } from './mercenary';
 import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
 import { forEachUnitInWorld, nextFrame } from './util';
+import { armCritterpocalypse, armToughCamp } from './challenges';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
 const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
 const RESOURCE_CAPACITY_ID = FourCC(Items.DruidPouch);
 const TRACK_CAPACITY_ID = FourCC(Items.JadeRing);
 const CRATE_CAPACITY_ID = FourCC(Items.LionsRing);
-const MERC_CONTRACT_ID = FourCC(Items.MedallionOfCourage);
+const MERC_CONTRACT_ID = FourCC(Items.MogrinsReport);
 const MERC_REROLL_ID = FourCC(Items.HoodOfCunning);
+const CRITTERPOCALYPSE_ID = FourCC(Items.MedallionOfCourage);
+const TOUGH_CAMP_ID = FourCC(Items.PeriaptOfVitality);
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],
@@ -26,6 +29,8 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [SUMMON_UPGRADE_ITEM_ID, 1],
   [MERC_CONTRACT_ID, 1],
   [MERC_REROLL_ID, 1],
+  [CRITTERPOCALYPSE_ID, 1],
+  [TOUGH_CAMP_ID, 1],
 ]);
 
 /** Repeatable upgrades every shop sells. */
@@ -176,6 +181,16 @@ export function initShop(): void {
       }
       rerollMerc(bx, by, areHeroesSpawned());
       print('Mercenary rerolled — items carry over to the new creep.');
+      if (buyer != null) effectTargets = [buyer];
+    } else if (itemTypeId === CRITTERPOCALYPSE_ID) {
+      armCritterpocalypse();
+      print('Critterpocalypse armed! Every grass tile spawns a critter next round — win it for 2 bonus gold.');
+      const buyer = Unit.fromEvent();
+      if (buyer != null) effectTargets = [buyer];
+    } else if (itemTypeId === TOUGH_CAMP_ID) {
+      armToughCamp();
+      print("Tough Creep Camp armed! Next round's camp hits far harder — defeat it for 2 bonus gold.");
+      const buyer = Unit.fromEvent();
       if (buyer != null) effectTargets = [buyer];
     }
 
