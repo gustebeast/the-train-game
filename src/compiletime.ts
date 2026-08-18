@@ -119,7 +119,10 @@ compiletime(({ objectData, constants }) => {
   // turns and stands still), and a non-zero follow-through keeps the channel
   // running after an instant cast.
   dash.disableOtherAbilities = 0;
-  dash.followThroughTime = 0;
+  // Not zero: a channel with no window at all is skipped outright when it is
+  // queued behind another order (measured: the cast never reached the trigger).
+  // 0.1s is the smallest window that still fires.
+  dash.followThroughTime = 0.1;
   dash.artDuration = 0;
   dash.heroAbility = false;
   dash.levels = 1;
@@ -128,8 +131,8 @@ compiletime(({ objectData, constants }) => {
   // Channel keeps channelling for its Duration; leave it non-zero and the
   // peasant stands mid-cast until something interrupts (a queued order does,
   // an empty queue does not — the 'turns around and does nothing' case).
-  dash.durationNormal = 0;
-  dash.durationHero = 0;
+  dash.durationNormal = 0.1;
+  dash.durationHero = 0.1;
   dash.tooltipNormal = 'Dash';
   dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
   dash.iconNormal = 'ReplaceableTextures\CommandButtons\BTNEvasion.blp';

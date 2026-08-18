@@ -1,6 +1,7 @@
 import { Timer, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { PEASANT_ID, DASH_ABILITY_ID } from './constants';
+import { getDashDebug } from './dash';
 import { registerTest, TestReporter } from './testkit';
 
 // Times the player's exact sequence, with all three orders issued UP FRONT
@@ -118,13 +119,15 @@ function runDashDelayTest(t: TestReporter): void {
         t.report('tDashMoveEnd', tDashMoveEnd);
         t.report('tNextOrder', tNextOrder);
         t.report('tNextMoveStart', tNextMoveStart);
+        const d = getDashDebug();
+        t.report('dashFired', d[0] > -99999 ? 1 : 0); // did the queued cast reach our trigger?
+        t.report('dashIssuedMove', d[3]);            // 0=left the queue alone (correct when queued)
         t.report('sawSpeedBoost', sawBoost);
         t.report('stallAfterDash', longestStall);
         t.report('gapAfterDash', tNextMoveStart > 0 && tDashMoveEnd > 0 ? tNextMoveStart - tDashMoveEnd : -1);
         t.report('orderToMoveGap', tNextMoveStart > 0 && tNextOrder > 0 ? tNextMoveStart - tNextOrder : -1);
         t.report('finalDist', (GetUnitX(h) - ax) * ux + (GetUnitY(h) - ay) * uy);
-        p.destroy();
-        t.done();
+        t.after(2.0, () => { p.destroy(); t.done(); });
       }
     }));
   });
