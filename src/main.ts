@@ -34,8 +34,6 @@ import { loadTerrain } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
 function tsMain() {
-  print('TheTrainGame script started');
-
   try {
     // Init harvest before terrain so death triggers exist for destructable registration
     initHarvest();
