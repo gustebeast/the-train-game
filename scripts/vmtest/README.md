@@ -93,6 +93,29 @@ This cost an hour; see the comment on `RegisteredTest` in `testkit.ts`.
 
 ---
 
+## Watching the VMs (the wall)
+
+```
+VmWall.bat                      # or: powershell -File scripts/vmtest/vm-wall.ps1
+```
+
+All four VMs tiled 2x2, live. Each tile is its own VNC viewer on that VM's port
+(5901-5904), independent of VMware's GUI -- which matters because VMware console
+tabs cannot be kept open: the runner starts VMs with `nogui` and powers them off
+between tests, and Workstation closes a tab when its VM stops. Tiles here simply
+go dark ("powered off") and relight by themselves when the next test boots that
+VM, so the window can be left open all day.
+
+Watching never disturbs a run: VMware's VNC server accepts concurrent clients,
+and the wall only reads the framebuffer -- it sends no input.
+
+- Runs at `guestMaxFps` from `vms.json` (15), which is also what the guests
+  render at; capturing faster only re-reads frames WC3 has not redrawn.
+  Override with `-Fps`.
+- `-Topmost` keeps it above other windows; `-TileWidth` trades sharpness for CPU.
+- Frames come as **incremental** updates (changed rectangles only). Requesting
+  full 1656x1249 frames instead costs ~1s each in PowerShell -- roughly 1 fps.
+
 ## Running tests
 
 ### CLI
@@ -302,7 +325,7 @@ the full reset again.
 
 > **Reducing render load further:** a running VM's ~1.5 cores comes mostly from
 > `maxfps=200` in the guest's `War3Preferences.txt` — WC3 renders the menu at up
-> to 200fps. Setting `maxfps=30` roughly halves it. It only applies on a fresh
+> to 200fps. The VMs are set to `vms.json`'s `guestMaxFps` (15). It only applies on a fresh
 > WC3 launch, so it takes effect on the next re-mint (see VM-SETUP.md); it does
 > not change render resolution, so the runner's click coordinates are unaffected.
 > With suspend-on-idle this is a minor optimisation (idle VMs already cost zero).
