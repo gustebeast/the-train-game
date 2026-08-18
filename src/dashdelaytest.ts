@@ -75,6 +75,9 @@ function runDashDelayTest(t: TestReporter): void {
     let tNextMoveStart = -1;
     let lastX = GetUnitX(h); let lastY = GetUnitY(h);
     let sawDash = false;
+    let stallStart = -1;
+    let longestStall = 0;
+    let sawBoost = 0;
 
     const sampler = Timer.create();
     sampler.start(SAMPLE, true, t.guard(() => {
@@ -86,22 +89,37 @@ function runDashDelayTest(t: TestReporter): void {
       lastX = x; lastY = y;
 
       const boosted = GetUnitMoveSpeed(h) > baseSpeed + 1;
-      if (!sawDash && (ord === FLARE || ord === OrderId('channel') || boosted)) { sawDash = true; tDashOrder = elapsed; }
-      if (boosted) t.report('sawSpeedBoost', 1);
+      if (boosted) sawBoost = 1;
+      // Detect the dash strictly by its own order, so the stall window starts in
+      // the right place.
+      if (!sawDash && ord === FLARE) { sawDash = true; tDashOrder = elapsed; }
 
       if (sawDash) {
         // First stationary sample after the dash order = dash movement finished.
         if (tDashMoveEnd < 0 && !moving) tDashMoveEnd = elapsed;
         if (tNextOrder < 0 && ord === MOVE) tNextOrder = elapsed;
         if (tDashMoveEnd > 0 && tNextMoveStart < 0 && moving) tNextMoveStart = elapsed;
+        // Robust fallback: the longest continuous stationary stretch after the
+        // dash begins is what the player experiences as the pause.
+        if (!moving) {
+          if (stallStart < 0) stallStart = elapsed;
+          const len = elapsed - stallStart + SAMPLE;
+          if (len > longestStall) longestStall = len;
+        } else {
+          stallStart = -1;
+        }
       }
 
-      if (elapsed > 12.0 || (tNextMoveStart > 0 && elapsed > tNextMoveStart + 0.4)) {
+      const travelled = (x - ax) * ux + (y - ay) * uy;
+      const arrived = travelled > 760;
+      if (arrived || elapsed > 9.0 || (tNextMoveStart > 0 && elapsed > tNextMoveStart + 0.4)) {
         sampler.destroy();
         t.report('tDashOrder', tDashOrder);
         t.report('tDashMoveEnd', tDashMoveEnd);
         t.report('tNextOrder', tNextOrder);
         t.report('tNextMoveStart', tNextMoveStart);
+        t.report('sawSpeedBoost', sawBoost);
+        t.report('stallAfterDash', longestStall);
         t.report('gapAfterDash', tNextMoveStart > 0 && tDashMoveEnd > 0 ? tNextMoveStart - tDashMoveEnd : -1);
         t.report('orderToMoveGap', tNextMoveStart > 0 && tNextOrder > 0 ? tNextMoveStart - tNextOrder : -1);
         t.report('finalDist', (GetUnitX(h) - ax) * ux + (GetUnitY(h) - ay) * uy);

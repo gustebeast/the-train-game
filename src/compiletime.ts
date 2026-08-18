@@ -87,7 +87,7 @@ compiletime(({ objectData, constants }) => {
   // and couldn't path empty tile corridors at all.
   peasant.collisionSize = 32;
   peasant.structuresBuilt = '';
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral, constants.abilities.Flare].join(',');
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral, 'A000'].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
@@ -99,25 +99,40 @@ compiletime(({ objectData, constants }) => {
   peasant.animationCastPoint = 0;
   peasant.animationCastBackswing = 0;
 
-  // Dash spell (Flare — repurposed as an instant point-target dash;
-  // the reveal is neutralized via forcedMods zeros). Handled in dash.ts.
-  const dash = objectData.abilities.get(constants.abilities.Flare)!;
+  // Dash spell: A000, a Channel-based ability authored in the World Editor
+  // (base order 'flare', Follow Through Time 0, Art Duration 0). Channel is the
+  // only base whose follow-through can be zeroed, and that leftover cast time
+  // is what stalls the order queued behind the dash — measured 0.24s on Flare
+  // even with cast point/backswing zeroed, versus 0.06s here. Its own base
+  // order keeps a dash from being mistaken for give/take's 'channel' order,
+  // which would drop the item the peasant is carrying.
+  type ChannelAbil = NonNullable<ReturnType<typeof objectData.abilities.get>> & {
+    followThroughTime: number; artDuration: number; disableOtherAbilities: number;
+  };
+  const dash = objectData.abilities.get('A000')! as ChannelAbil;
+  // Channel defaults matter here: 'Disable Other Abilities' is true by default,
+  // which makes the engine REJECT the move order the dash issues (the peasant
+  // turns and stands still), and a non-zero follow-through keeps the channel
+  // running after an instant cast.
+  dash.disableOtherAbilities = 0;
+  dash.followThroughTime = 0;
+  dash.artDuration = 0;
   dash.heroAbility = false;
   dash.levels = 1;
+  dash.castRange = 99999;
+  dash.requirements = '';
+  // Channel keeps channelling for its Duration; leave it non-zero and the
+  // peasant stands mid-cast until something interrupts (a queued order does,
+  // an empty queue does not — the 'turns around and does nothing' case).
+  dash.durationNormal = 0;
+  dash.durationHero = 0;
   dash.tooltipNormal = 'Dash';
   dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
-  dash.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNEvasion.blp';
+  dash.iconNormal = 'ReplaceableTextures\CommandButtons\BTNEvasion.blp';
   dash.hotkeyNormal = 'E';
-  dash.castRange = 99999;
   dash.caster = '';
   dash.target = '';
   dash.effect = '';
-  // Alleria's Flare ships with a tech-tree requirement ("requires Flare"), which
-  // greys the button out and makes the cast order get rejected. Clear it so the
-  // repurposed dash is always castable. (Found via in-game test: the peasant had
-  // the ability but the 'flare' order was refused and channelFired stayed 0.)
-  dash.requirements = '';
-  dash.castingTime = 0;
 
   // Build track spell (BuildTinyFarm — repurposed for one-click track placement)
   const buildTrack = objectData.abilities.get(constants.abilities.BuildTinyFarm)!;
@@ -186,13 +201,6 @@ compiletime(({ objectData, constants }) => {
       { id: 'Ncl1', variableType: 2, dataPointer: 1, value: 0 }, // followThroughTime
       { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
       { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
-    ],
-    Afla: [ // Flare (roll/dash spell) — also neutralizes the area reveal
-      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
-      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
-      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
-      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
-      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
     Afod: [ // FingerOfDeath neutral hostile (bridge spell)
       { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
