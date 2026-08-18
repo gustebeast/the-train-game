@@ -463,6 +463,25 @@ function Test-TestHarness {
     else { Add-Check 'initTestKit wired' 'Fail' 'main.ts never calls initTestKit() -- the ready marker will never be written' }
   }
 
+  # 7b. autoRun, if set, must name the test being run. initTestKit('damage') plus
+  #     a run of 'dash' fails in the most misleading way available: the runner
+  #     sends -test dash, testkit's re-entrancy guard correctly ignores it
+  #     because damage is already running, and the run times out waiting for a
+  #     results file that was never going to appear. (Raised by dougie.)
+  if (Test-Path $mainTs) {
+    $main = Get-Content $mainTs -Raw
+    if ($main -match "initTestKit\s*\(\s*'([^']+)'") {
+      $auto = $matches[1]
+      if (-not $Test) { Add-Check 'autoRun' 'Warn' "main.ts auto-runs '$auto' on start" }
+      elseif ($auto -eq $Test) { Add-Check 'autoRun' 'Pass' "main.ts auto-runs '$auto' -- no chat command needed" }
+      else {
+        Add-Check 'autoRun' 'Fail' ("main.ts auto-runs '$auto' but this run wants '$Test'. The auto-run test " +
+          "starts first, the guard then ignores the -test command, and the run times out waiting for " +
+          "test_$Test.txt. Change initTestKit('$auto') to initTestKit('$Test') or initTestKit().")
+      }
+    }
+  }
+
   # 8. If a test name was given, it must be registered and its module imported.
   if ($Test) {
     $srcDir = Join-Path $script:RepoRoot 'src'

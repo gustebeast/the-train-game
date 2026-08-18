@@ -224,6 +224,43 @@ The saved "keep me logged in" token is **single-use across clones** — the firs
 clone to go online consumes it, so the others still show "session expired". That
 is fine: they never need to log in (see below).
 
+### LAN readiness (already baked into `base-off4`)
+
+The clones can play each other over LAN, which is the only way to exercise
+behaviour needing a second real player (a leaver's units being despawned, say).
+Three things make it work; the first two live in the base image as of
+`base-off4` (2026-08-18) and need no repeating:
+
+1. **Bonjour.** Reforged uses Apple's mDNS for LAN discovery; without it
+   LOCAL AREA NETWORK only offers *"INSTALL BONJOUR"*. Installed silently from
+   the host's own cached package — no download needed:
+   `msiexec /i bonjour.msi /qn /norestart`, then verify `mDNSResponder.exe`
+   exists and the `Bonjour Service` is running.
+2. **Firewall.** Out of the box the guests cannot even ping each other. The
+   Warcraft rules ship scoped to the **Public** profile only, which is why they
+   never applied; they are now widened to `Any`, plus program-scoped allow rules
+   for `mDNSResponder.exe` and `Warcraft III.exe`, and ICMPv4 echo so peer
+   reachability is diagnosable. **Program-scoped on purpose:** Reforged does
+   *not* use port 6112 — it binds a dynamic high port and advertises it over
+   mDNS, so any port-based rule is the wrong tool. (Disabling the firewall
+   outright also works and is proven, but is a blunt instrument.)
+3. **A unique hostname per VM**, which `mint-vm.ps1` now sets automatically
+   (`brenner` -> `WC3BRENNER`) on first boot, before WC3 is launched, so the
+   required reboot costs no extra menu navigation. This one is the killer:
+   every clone otherwise inherits `WC3TEST`, and Reforged resolves LAN peers
+   **by hostname**, so each VM resolves the other to itself. The symptom is
+   deeply misleading — discovery works perfectly (game listed, right map, right
+   host) while every join silently bounces at 999ms ping, with no error shown.
+
+**One snapshot serves both.** The snapshot stays parked exactly where it was,
+at the single-player Custom Games root, so the common single-player run is
+unchanged; a LAN test simply navigates from there (~20s of menus). Do not mint a
+separate LAN snapshot.
+
+Still unverified: WC3's LAN menu opening on the new base, because the base's
+Battle.net session had expired and launching WC3 needs one online login. Do that
+during the next entitlement refresh — the two go together.
+
 ### Mint each clone (offline, no login)
 
 Clone from the refreshed `base-off2` and set each clone's `.vmx`: unique

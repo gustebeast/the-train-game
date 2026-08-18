@@ -32,14 +32,45 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $step = 0
 function Shot($c, $label){ $script:step++; Vnc-Shot $c (Join-Path $OutDir ("{0:D2}-{1}.png" -f $script:step, $label)); Write-Host "  shot $label" }
 
-if (-not $SkipBoot) {
-  Write-Host "Booting $Vm (offline)..."
-  & $vmrun -T ws start $vmx nogui 2>&1 | Out-Null
+function Wait-Desktop($label) {
   $sw=[Diagnostics.Stopwatch]::StartNew()
   do { Start-Sleep -Seconds 5; $p="$(& $vmrun @guest listProcessesInGuest $vmx 2>&1)" }
   while ($p -notmatch 'explorer.exe' -and $sw.Elapsed.TotalSeconds -lt 200)
-  Write-Host "  desktop up"
+  if ($p -notmatch 'explorer.exe') { throw "Guest never reached the desktop ($label)" }
+  Write-Host "  desktop up ($label)"
   Start-Sleep -Seconds 3
+}
+
+if (-not $SkipBoot) {
+  Write-Host "Booting $Vm..."
+  & $vmrun -T ws start $vmx nogui 2>&1 | Out-Null
+  Wait-Desktop 'first boot'
+
+  # Every clone inherits the base image's computer name (WC3TEST). Warcraft III
+  # Reforged resolves LAN peers BY HOSTNAME over mDNS, so identical names make
+  # each VM resolve the other to itself. The symptom is deeply misleading:
+  # discovery works perfectly -- the game is listed with the right map and host
+  # -- but every join silently bounces back to the browser at 999ms ping, with
+  # no error anywhere. Name each VM after its agent, before WC3 is ever
+  # launched, so the reboot costs no extra menu navigation.
+  $hostName = 'WC3' + $Vm.ToUpper()
+  $current = ''
+  & $vmrun @guest runProgramInGuest $vmx -noWait 'C:\Windows\System32\cmd.exe' '/c' "hostname > C:\hn.txt" 2>&1 | Out-Null
+  Start-Sleep -Seconds 4
+  $hnLocal = Join-Path $OutDir 'hostname.txt'
+  & $vmrun @guest CopyFileFromGuestToHost $vmx 'C:\hn.txt' $hnLocal 2>&1 | Out-Null
+  if (Test-Path $hnLocal) { $current = (Get-Content $hnLocal -Raw).Trim() }
+
+  if ($current -eq $hostName) {
+    Write-Host "  hostname already $hostName"
+  } else {
+    Write-Host "  renaming $current -> $hostName (LAN peer resolution)"
+    & $vmrun @guest runProgramInGuest $vmx 'C:\Windows\System32\WindowsPowerShell1.0\powershell.exe' `
+      '-Command' "Rename-Computer -NewName $hostName -Force" 2>&1 | Out-Null
+    & $vmrun -T ws reset $vmx soft 2>&1 | Out-Null
+    Start-Sleep -Seconds 10
+    Wait-Desktop 'after rename'
+  }
 }
 
 $c = Vnc-Connect $port
@@ -106,3 +137,6 @@ $sw=[Diagnostics.Stopwatch]::StartNew()
 Write-Host ("  done in {0}s" -f [math]::Round($sw.Elapsed.TotalSeconds,0))
 & $vmrun listSnapshots $vmx
 Write-Host "Now set ready:true for '$Vm' in vms.json and validate with run-test.ps1 -Vm $Vm."
+Write-Host "This snapshot serves single player AND LAN: it is parked at the Custom Games"
+Write-Host "root as before, and the base image carries Bonjour + firewall rules, so a LAN"
+Write-Host "test just navigates there from the same snapshot."
