@@ -137,6 +137,12 @@ compiletime(({ objectData, constants }) => {
   dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
   dash.iconNormal = 'ReplaceableTextures\CommandButtons\BTNEvasion.blp';
   dash.hotkeyNormal = 'E';
+  // Give the dash its own command-card slot. Nothing else in the map sets a
+  // button position, so every custom ability lands on the same default square
+  // and they hide each other — the dash button was simply absent from the card,
+  // which is why the E hotkey did nothing under real input.
+  dash.buttonPositionNormalX = 2;
+  dash.buttonPositionNormalY = 0;
   dash.caster = '';
   dash.target = '';
   dash.effect = '';
@@ -164,6 +170,8 @@ compiletime(({ objectData, constants }) => {
   giveTake.tooltipNormal = 'Give/Take Item';
   giveTake.tooltipNormalExtended = 'When holding an item, can be used to drop it on the ground or give it to a building/unit. When not holding an item, can be used to pick up an item on the ground or pull from a building. When pulling items from buildings, tracks will be pulled first, then wood, then stone.';
   giveTake.hotkeyNormal = 'W';
+  giveTake.buttonPositionNormalX = 1;
+  giveTake.buttonPositionNormalY = 0;
 
   // Monkey-patch save to fix per-level ability fields (library bug: doesn't set
   // levelOrVariation/dataPointer for ability-specific fields like Ncl1-Ncl6)
