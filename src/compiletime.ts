@@ -627,9 +627,14 @@ compiletime(({ objectData, constants }) => {
   shop.itemsMade = '';
   shop.sightRadiusDay = 400;
   shop.sightRadiusNight = 400;
-  // Marketplace defaults (select shop, sell stock, invulnerable) plus Apit
-  // so units can pawn items back — the Hero Reroll refund path (reroll.ts)
-  shop.normal = 'Aall,Asid,Apit,Avul';
+  // Do NOT hand-write this unit's ability list. The Marketplace ships with
+  // 'Aneu,Asid,Avul,Asud,Apit', and Aneu is "Select Hero" -- the ability that
+  // gives the shop a unit to hand a purchase to. An earlier override dropped
+  // Aneu (swapping in Aall, "Shop Sharing, Allied Bldg."), and without it every
+  // purchase had no buyer and fell on the ground instead of entering an
+  // inventory. Apit ("Shop Purchase Item", needed for the reroll pawn/refund
+  // path in reroll.ts) is already one of those defaults, so leaving the list
+  // alone gets it for free.
 
   // Hero Reroll cast — Wand of Negation repurposed as a unit-target spell.
   // Its native purge doesn't matter: reroll.ts replaces the target on cast.
