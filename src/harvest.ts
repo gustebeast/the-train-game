@@ -2,7 +2,6 @@ import { Destructable, Item, Trigger, Unit } from 'w3ts';
 import { TREE_RAW, ROCK_RAW, GRANITE_RAW } from './terrain/constants';
 import { unitHasItemType, rejectOrder } from './items';
 import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID } from './constants';
-import { isRolling } from './dash';
 
 
 const TREE_DEST_ID = FourCC(TREE_RAW);
@@ -112,7 +111,6 @@ export function initHarvest(): void {
 
     const unit = Unit.fromEvent();
     if (unit == null) return;
-    if (isRolling(unit.handle)) return; // don't reject the dash's own move order
     handleResourceOrder(unit, dest);
   });
 
@@ -124,7 +122,6 @@ export function initHarvest(): void {
     const y = GetOrderPointY();
     const unit = Unit.fromEvent();
     if (unit == null) return;
-    if (isRolling(unit.handle)) return; // don't reject the dash's own move order
 
     const dest = findResourceDestAt(x, y);
     if (dest == null) return;
