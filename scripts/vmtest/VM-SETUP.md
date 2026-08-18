@@ -238,9 +238,12 @@ vmx if it can't bind the configured port at start (seen on Murph). Check with
 re-set the port in the vmx, and restart.
 
 **Render-CPU tuning (optional but recommended):** before the clone's WC3 launch,
-set `maxfps=15` in the guest's `War3Preferences.txt` (WC3 reads it only at
+set `maxfps` in the guest's `War3Preferences.txt` to `guestMaxFps` from
+`vms.json` (15) (WC3 reads it only at
 launch). A running WC3 renders its menu at ~1.5 CPU cores at the stock
-`maxfps=200`; `maxfps=15` cuts that to ~0.3-0.4. It does not change render
+`maxfps=200`; 15 cuts that to ~0.3-0.4. Keep the two in step: `vms.json`'s
+`guestMaxFps` is the recorded value, and `vm-wall.ps1` caps its capture rate
+at it (capturing faster only re-reads frames the guest has not redrawn). It does not change render
 resolution, so the runner's click coordinates are unaffected. Set it on the
 **base** before re-cloning and all clones inherit it. (Classic/SD graphics —
 already the default here — is the other big reducer.)

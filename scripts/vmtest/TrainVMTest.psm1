@@ -142,6 +142,10 @@ function Reset-TestVm {
       throw "Could not start $($Vm.Name): $out"
     }
   }
+  # Silence the guest on every start. The snapshot is minted with sound already
+  # disconnected, but a revert re-attaches the device (sound.startConnected), so
+  # without this the host hears WC3's menu music whenever a test runs.
+  & $script:VmRun -T ws disconnectNamedDevice $Vm.Vmx sound 2>&1 | Out-Null
 }
 
 # --- Pre-warming ----------------------------------------------------------

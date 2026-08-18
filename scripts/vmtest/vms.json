@@ -3,6 +3,8 @@
   "guestUser": "wc3",
   "guestPassword": "traintest",
   "snapshot": "create-game",
+  "_guestMaxFpsComment": "WC3's maxfps in the guest's War3Preferences.txt. It caps how fast the guests render (and so how fast anything can watch them); vm-wall.ps1 defaults its capture rate to this. Change it here AND in each guest's War3Preferences.txt.",
+  "guestMaxFps": 15,
   "_baseComment": "TrainGameTest is the clone PARENT and mint base -- NOT a test target. Running tests here would interfere with cloning, so it is deliberately absent from 'vms' and the runner refuses to target it.",
   "base": {
     "vmx": "C:\\VMs\\TrainGameTest\\TrainGameTest.vmx",
