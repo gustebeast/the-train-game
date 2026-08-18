@@ -4,39 +4,119 @@
   "guestPassword": "traintest",
   "snapshot": "create-game",
   "_baseComment": "TrainGameTest is the clone PARENT and mint base -- NOT a test target. Running tests here would interfere with cloning, so it is deliberately absent from 'vms' and the runner refuses to target it.",
-  "base": { "vmx": "C:\\VMs\\TrainGameTest\\TrainGameTest.vmx", "vncPort": 5900, "snapshot": "create-game-v2", "ui": "windowed" },
+  "base": {
+    "vmx": "C:\\VMs\\TrainGameTest\\TrainGameTest.vmx",
+    "vncPort": 5900,
+    "snapshot": "create-game-v2",
+    "ui": "windowed"
+  },
   "vms": {
-    "brenner": { "vmx": "C:\\VMs\\Brenner\\Brenner.vmx",             "vncPort": 5901, "ui": "fullscreen", "ready": true },
-    "boof":    { "vmx": "C:\\VMs\\Boof\\Boof.vmx",                   "vncPort": 5902, "ui": "fullscreen", "ready": true },
-    "dougie":  { "vmx": "C:\\VMs\\Dougie\\Dougie.vmx",               "vncPort": 5903, "ui": "fullscreen", "ready": true },
-    "murph":   { "vmx": "C:\\VMs\\Murph\\Murph.vmx",                 "vncPort": 5904, "ui": "fullscreen", "ready": true }
+    "brenner": {
+      "vmx": "C:\\VMs\\Brenner\\Brenner.vmx",
+      "vncPort": 5901,
+      "ui": "fullscreen",
+      "ready": true
+    },
+    "boof": {
+      "vmx": "C:\\VMs\\Boof\\Boof.vmx",
+      "vncPort": 5902,
+      "ui": "fullscreen",
+      "ready": true
+    },
+    "dougie": {
+      "vmx": "C:\\VMs\\Dougie\\Dougie.vmx",
+      "vncPort": 5903,
+      "ui": "fullscreen",
+      "ready": true
+    },
+    "murph": {
+      "vmx": "C:\\VMs\\Murph\\Murph.vmx",
+      "vncPort": 5904,
+      "ui": "fullscreen",
+      "ready": false,
+      "_note": "2026-08-18: the Battle.net session inside this VM expired. Its snapshot reaches the lobby, but WC3 still believes it is Battle.net-connected and re-prompts ENTER PLAYER NAME at START GAME, so runs time out. Needs a proper offline re-mint, which needs one online Battle.net login first (lead task)."
+    }
   },
   "_uiComment": "Menu click targets. The shared VM was minted with WC3 in a window; the clones run fullscreen, so their targets differ. Both were captured at a 1656x1249 framebuffer -- if the guest resolution changes, re-capture with Get-TestVmScreenshot.",
   "uiSets": {
     "windowed": {
       "framebuffer": "1656x1249",
-      "downloadFolder":  [810, 339],
-      "firstMapRow":     [810, 378],
-      "createButton":    [1222, 852],
-      "nameField":       [827, 504],
-      "confirmButton":   [930, 611],
-      "startGameButton": [1222, 853]
+      "downloadFolder": [
+        810,
+        339
+      ],
+      "firstMapRow": [
+        810,
+        378
+      ],
+      "createButton": [
+        1222,
+        852
+      ],
+      "nameField": [
+        827,
+        504
+      ],
+      "confirmButton": [
+        930,
+        611
+      ],
+      "startGameButton": [
+        1222,
+        853
+      ]
     },
     "fullscreen": {
       "framebuffer": "1656x1249",
-      "downloadFolder":  [783, 263],
-      "firstMapRow":     [783, 319],
-      "createButton":    [1339, 981],
-      "nameField":       [827, 493],
-      "confirmButton":   [968, 646],
-      "startGameButton": [1339, 981],
+      "downloadFolder": [
+        783,
+        263
+      ],
+      "firstMapRow": [
+        783,
+        319
+      ],
+      "createButton": [
+        1339,
+        981
+      ],
+      "nameField": [
+        827,
+        493
+      ],
+      "confirmButton": [
+        968,
+        646
+      ],
+      "startGameButton": [
+        1339,
+        981
+      ],
       "_mintComment": "Only used by mint-vm.ps1 when first building a clone's snapshot.",
-      "bnetContinueOffline": [1009, 392],
-      "bnetPlay":            [156, 611],
-      "wc3ErrorOk":          [827, 797],
-      "wc3PlayOffline":      [827, 1145],
-      "menuSinglePlayer":    [1219, 488],
-      "menuCustomGames":     [1226, 454]
+      "bnetContinueOffline": [
+        1009,
+        392
+      ],
+      "bnetPlay": [
+        156,
+        611
+      ],
+      "wc3ErrorOk": [
+        827,
+        797
+      ],
+      "wc3PlayOffline": [
+        827,
+        1145
+      ],
+      "menuSinglePlayer": [
+        1219,
+        488
+      ],
+      "menuCustomGames": [
+        1226,
+        454
+      ]
     }
   }
 }
