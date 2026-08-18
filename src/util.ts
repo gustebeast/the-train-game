@@ -37,3 +37,25 @@ export function forEachUnitInWorld(cb: (u: unit) => void): void {
   });
   DestroyGroup(g);
 }
+
+/** WC3 inventories are six slots wide. */
+const INVENTORY_SLOTS = 6;
+
+/** Run cb for every item a unit is carrying, skipping empty slots. */
+export function forEachInventoryItem(handle: unit, cb: (this: void, it: item) => void): void {
+  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
+    const it = UnitItemInSlot(handle, slot);
+    if (it != null) cb(it);
+  }
+}
+
+/** Item type ids a unit is carrying, in slot order. Used to snapshot an
+ *  inventory for the save file and to carry items across a respawn. */
+export function getInventoryItemIds(handle: unit): number[] {
+  const ids: number[] = [];
+  forEachInventoryItem(handle, it => {
+    const id = GetItemTypeId(it);
+    if (id !== 0) ids.push(id);
+  });
+  return ids;
+}

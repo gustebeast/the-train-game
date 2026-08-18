@@ -35,10 +35,25 @@ function encodeRecord(record: Record<string, number>, keyMap: Record<string, str
   return table.concat(parts, ';');
 }
 
+/** Split a "k=v;k=v;..." record into its raw string fields.
+ *
+ *  Every save segment shares this one wire format, so the split lives here
+ *  rather than being re-derived per segment — a change to the format (escaping
+ *  ';' or '=' in values, say) then reaches all of them. Values stay strings
+ *  because segments interpret them differently: numbers, '1' as a boolean, or
+ *  a comma-joined list. */
+export function parseFields(raw: string): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
+    fields[key] = val;
+  }
+  return fields;
+}
+
 /** Decode a "k=v;k=v;..." string into a Record, expanding short keys via keyMap. */
 function decodeRecord(raw: string, keyMap: Record<string, string>): Record<string, number> {
   const result: Record<string, number> = {};
-  for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
+  for (const [key, val] of pairs(parseFields(raw))) {
     result[keyMap[key] ?? key] = tonumber(val) ?? 0;
   }
   return result;

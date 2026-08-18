@@ -1,5 +1,5 @@
 import { gameState, syncGold } from './state';
-import { registerSaveSegment } from './save';
+import { registerSaveSegment, parseFields } from './save';
 
 /**
  * Shady Dealer challenges — optional wagers bought in the lobby for 1 gold
@@ -50,10 +50,9 @@ function encodeChallenges(): string {
 
 /** Decode armed challenges from "c=1;t=1". */
 function decodeChallenges(raw: string): void {
-  for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
-    if (key === 'c' && val === '1') critterpocalypse = true;
-    else if (key === 't' && val === '1') toughCamp = true;
-  }
+  const fields = parseFields(raw);
+  if (fields['c'] === '1') critterpocalypse = true;
+  if (fields['t'] === '1') toughCamp = true;
 }
 
 registerSaveSegment('ch', encodeChallenges, decodeChallenges, clearChallenges);

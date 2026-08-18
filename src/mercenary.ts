@@ -1,7 +1,7 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
-import { registerSaveSegment } from './save';
-import { getHumanPlayers } from './util';
+import { registerSaveSegment, parseFields } from './save';
+import { getHumanPlayers, getInventoryItemIds, forEachInventoryItem } from './util';
 import { CREEP_CAMPS } from './creep_camps';
 
 /** Hero-style inventory (the same ability the peasant carries tools with). It
@@ -61,7 +61,7 @@ registerSaveSegment('mm',
     return table.concat(parts, ';');
   },
   (raw) => {
-    for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
+    for (const [key, val] of pairs(parseFields(raw))) {
       if (key === 'b') {
         upgradeBought = val === '1';
       } else if (key === 't') {
@@ -201,16 +201,7 @@ export function rerollMerc(buyerX: number, buyerY: number, spawnNow: boolean): b
 
 function snapshotMercItems(): void {
   if (mercUnit == null) return;
-  const h = mercUnit.handle;
-  const items: number[] = [];
-  for (let slot = 0; slot < 6; slot++) {
-    const it = UnitItemInSlot(h, slot);
-    if (it != null) {
-      const id = GetItemTypeId(it);
-      if (id !== 0) items.push(id);
-    }
-  }
-  mercItems = items;
+  mercItems = getInventoryItemIds(mercUnit.handle);
 }
 
 function spawnMercUnit(owner: MapPlayer, x: number, y: number): void {
@@ -233,10 +224,7 @@ function spawnMercUnit(owner: MapPlayer, x: number, y: number): void {
       // Strip the items before the corpse drops them: they are saved in
       // mercItems for a later reroll, so dropping them too would duplicate them
       // as free loot on the ground.
-      for (let slot = 0; slot < 6; slot++) {
-        const it = UnitItemInSlot(mercUnit.handle, slot);
-        if (it != null) RemoveItem(it);
-      }
+      forEachInventoryItem(mercUnit.handle, it => RemoveItem(it));
       mercDead = true;
       mercUnit = null;
     }

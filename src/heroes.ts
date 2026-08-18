@@ -1,10 +1,10 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { isInGameplay } from './state';
-import { registerSaveSegment } from './save';
+import { registerSaveSegment, parseFields } from './save';
 import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants';
 import { getNeutralPassive } from './teams';
-import { getHumanPlayers, nextFrame, forEachUnitInWorld } from './util';
+import { getHumanPlayers, nextFrame, forEachUnitInWorld, getInventoryItemIds } from './util';
 import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
 
 /** All standard WC3 heroes available for random selection. */
@@ -93,7 +93,7 @@ function encodeHero(hero: HeroData): string {
 /** Decode "t=FourCC;x=XP;ts=1;ta=2;ti=0;it=id1,id2,...;abilId=level;..." into a HeroData. */
 function decodeHero(raw: string): HeroData {
   const hero = emptyHero();
-  for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
+  for (const [key, val] of pairs(parseFields(raw))) {
     if (key === 't') {
       hero.typeId = tonumber(val) ?? 0;
     } else if (key === 'x') {
@@ -535,16 +535,7 @@ export function grantUnsummonToAllPeasants(): void {
 /** Snapshot the current inventory of all spawned heroes into persistent state. */
 function snapshotHeroItems(): void {
   for (const { unit, dataIdx } of spawnedHeroes) {
-    const h = unit.handle;
-    const items: number[] = [];
-    for (let slot = 0; slot < 6; slot++) {
-      const it = UnitItemInSlot(h, slot);
-      if (it != null) {
-        const id = GetItemTypeId(it);
-        if (id !== 0) items.push(id);
-      }
-    }
-    allHeroes[dataIdx].items = items;
+    allHeroes[dataIdx].items = getInventoryItemIds(unit.handle);
   }
 }
 

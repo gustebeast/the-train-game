@@ -1,7 +1,7 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import { isMercUpgradeBought } from './mercenary';
-import { registerSaveSegment } from './save';
+import { registerSaveSegment, parseFields } from './save';
 import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
 import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
 import { isToughCamp, payToughCampBonus } from './challenges';
@@ -62,7 +62,7 @@ function encodeCamp(): string {
 function decodeCamp(raw: string): void {
   let tileset = '';
   let campIndex = 0;
-  for (const [key, val] of string.gmatch(raw, '([^;=]+)=([^;]+)')) {
+  for (const [key, val] of pairs(parseFields(raw))) {
     if (key === 't') tileset = val;
     else if (key === 'i') campIndex = tonumber(val) ?? 0;
   }
