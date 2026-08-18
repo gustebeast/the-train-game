@@ -93,6 +93,29 @@ This cost an hour; see the comment on `RegisteredTest` in `testkit.ts`.
 
 ---
 
+## Skipping the chat command (autoRun)
+
+`initTestKit()` in `src/main.ts` takes an optional test name:
+
+```ts
+initTestKit('damage');   // runs as soon as play begins, no chat command
+```
+
+The runner normally selects a test by typing `-test <name>` over VNC, and that
+is the most fragile step in a run: WC3 samples the keyboard once per render
+frame, so fast input transposes characters (`-cheatmode` -> `-cehatmdoe`), which
+is why `Vnc-TypeSmart` types deliberately slowly. `autoRun` removes the step
+instead of working around it.
+
+It starts from the same timer that writes the readiness marker, which matters:
+map init runs while the game is still paused behind "press any key", and a test
+started there would sit in a world where no timer ever advances.
+
+Set it while iterating on one test in your own branch (you build your own map
+anyway); leave it off in what gets merged, so the shared map keeps letting
+`-test <name>` choose. Leaving it on is not harmful if the runner also sends the
+chat command -- the re-entrancy guard ignores the duplicate.
+
 ## Watching the VMs (the wall)
 
 ```

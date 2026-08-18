@@ -9,7 +9,6 @@ import { isMercUpgradeBought, buyMercContract, rerollMerc } from './mercenary';
 import { areHeroesSpawned, getSpawnedHeroes, hadSummonLastRound } from './heroes';
 import { forEachUnitInWorld, nextFrame } from './util';
 import { armCritterpocalypse, armToughCamp } from './challenges';
-import { onGlobalTick } from './globalTick';
 
 const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
 const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
@@ -99,163 +98,109 @@ export function initShop(): void {
   const t = Trigger.create();
   t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
   t.addAction(() => {
-    resolvePurchase(GetManipulatedItem(), Unit.fromHandle(GetTriggerUnit()));
-  });
+    const item = GetManipulatedItem();
+    if (item == null) return;
+    const itemTypeId = GetItemTypeId(item);
 
-  // A purchase made with the SHOP selected has no buying unit, so WC3 drops the
-  // item on the ground and fires NO event at all (neither SELL_ITEM nor
-  // PICKUP_ITEM — both measured as zero in-game). Without this sweep the
-  // upgrade only applied if the player then walked over and picked the item up.
-  // Resolving it from the ground makes every purchase take effect immediately.
-  onGlobalTick(collectShopDrops);
-}
+    const cost = ITEM_COSTS.get(itemTypeId);
+    if (cost == null) return;
 
-/** Apply a purchased shop item. `buyer` is whoever picked it up, or the unit we
- *  attribute a shop-side (ground) purchase to — it is only used to aim the
- *  purchase effect, so having none is fine. */
-function resolvePurchase(item: item | undefined, buyer: Unit | undefined): void {
-  if (item == null) return;
-  const itemTypeId = GetItemTypeId(item);
+    // One-time upgrades already owned — swallow the item without charging
+    if (itemTypeId === SUMMON_UPGRADE_ITEM_ID && isSummonUpgradePurchased()) {
+      RemoveItem(item);
+      return;
+    }
+    if (itemTypeId === MERC_CONTRACT_ID && isMercUpgradeBought()) {
+      RemoveItem(item);
+      return;
+    }
+    // Reroll is only stocked once the contract is owned, but guard anyway
+    if (itemTypeId === MERC_REROLL_ID && !isMercUpgradeBought()) {
+      RemoveItem(item);
+      return;
+    }
 
-  const cost = ITEM_COSTS.get(itemTypeId);
-  if (cost == null) return;
+    if (gameState.gold < cost) {
+      RemoveItem(item);
+      return;
+    }
+    gameState.gold -= cost;
 
-  // One-time upgrades already owned — swallow the item without charging
-  if (itemTypeId === SUMMON_UPGRADE_ITEM_ID && isSummonUpgradePurchased()) {
-    RemoveItem(item);
-    return;
-  }
-  if (itemTypeId === MERC_CONTRACT_ID && isMercUpgradeBought()) {
-    RemoveItem(item);
-    return;
-  }
-  // Reroll is only stocked once the contract is owned, but guard anyway
-  if (itemTypeId === MERC_REROLL_ID && !isMercUpgradeBought()) {
-    RemoveItem(item);
-    return;
-  }
+    let effectTargets: Unit[] = [];
 
-  if (gameState.gold < cost) {
-    RemoveItem(item);
-    return;
-  }
-  gameState.gold -= cost;
-
-  let effectTargets: Unit[] = [];
-
-  if (itemTypeId === FLAME_RESISTANCE_ID) {
-    gameState.trainMaxHP += 10;
-    effectTargets = [getTrain()];
-  } else if (itemTypeId === TRACK_MANUFACTURING_ID) {
-    gameState.trainMaxMana -= 10;
-    if (gameState.trainMaxMana < 10) gameState.trainMaxMana = 10;
-    effectTargets = [getTrain()];
-  } else if (itemTypeId === RESOURCE_CAPACITY_ID) {
-    gameState.trainCargoMaxStack += 2;
-    effectTargets = [getTrain()];
-  } else if (itemTypeId === TRACK_CAPACITY_ID) {
-    gameState.trainTrackMaxStack += 2;
-    effectTargets = [getTrackWagon()];
-  } else if (itemTypeId === CRATE_CAPACITY_ID) {
-    gameState.crateMaxStack += 4;
-    // The shop is in the lobby, where the START crate displays capacity as
-    // item charges — refresh it and play the effect there (the target
-    // crate from getCrate() only exists during gameplay rounds)
-    loadCrateForLobby();
-    const crateStart = getCrateStart();
-    if (crateStart != null) effectTargets = [crateStart];
-  } else if (itemTypeId === SUMMON_UPGRADE_ITEM_ID) {
-    purchaseSummonUpgrade();
-    // The unlock applies to everyone — play the effect on every peasant
-    const targets: Unit[] = [];
-    forEachUnitInWorld(u => {
-      if (GetUnitTypeId(u) === PEASANT_ID) {
-        const peasant = Unit.fromHandle(u);
-        if (peasant != null) targets.push(peasant);
+    if (itemTypeId === FLAME_RESISTANCE_ID) {
+      gameState.trainMaxHP += 10;
+      effectTargets = [getTrain()];
+    } else if (itemTypeId === TRACK_MANUFACTURING_ID) {
+      gameState.trainMaxMana -= 10;
+      if (gameState.trainMaxMana < 10) gameState.trainMaxMana = 10;
+      effectTargets = [getTrain()];
+    } else if (itemTypeId === RESOURCE_CAPACITY_ID) {
+      gameState.trainCargoMaxStack += 2;
+      effectTargets = [getTrain()];
+    } else if (itemTypeId === TRACK_CAPACITY_ID) {
+      gameState.trainTrackMaxStack += 2;
+      effectTargets = [getTrackWagon()];
+    } else if (itemTypeId === CRATE_CAPACITY_ID) {
+      gameState.crateMaxStack += 4;
+      // The shop is in the lobby, where the START crate displays capacity as
+      // item charges — refresh it and play the effect there (the target
+      // crate from getCrate() only exists during gameplay rounds)
+      loadCrateForLobby();
+      const crateStart = getCrateStart();
+      if (crateStart != null) effectTargets = [crateStart];
+    } else if (itemTypeId === SUMMON_UPGRADE_ITEM_ID) {
+      purchaseSummonUpgrade();
+      // The unlock applies to everyone — play the effect on every peasant
+      const targets: Unit[] = [];
+      forEachUnitInWorld(u => {
+        if (GetUnitTypeId(u) === PEASANT_ID) {
+          const peasant = Unit.fromHandle(u);
+          if (peasant != null) targets.push(peasant);
+        }
+      });
+      effectTargets = targets;
+      print('Summon Heroes unlocked!');
+    } else if (itemTypeId === MERC_CONTRACT_ID) {
+      buyMercContract();
+      // Stop selling the contract; start selling rerolls
+      if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
+        RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_ID);
+        AddItemToStock(currentShop.handle, MERC_REROLL_ID, 10, 10);
       }
-    });
-    effectTargets = targets;
-    print('Summon Heroes unlocked!');
-  } else if (itemTypeId === MERC_CONTRACT_ID) {
-    buyMercContract();
-    // Stop selling the contract; start selling rerolls
-    if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
-      RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_ID);
-      AddItemToStock(currentShop.handle, MERC_REROLL_ID, 10, 10);
-    }
-    print('Mercenary Contract purchased: level 2 creep camps unlocked; a mercenary will join your next hero summon.');
-    if (buyer != null) effectTargets = [buyer];
-  } else if (itemTypeId === MERC_REROLL_ID) {
-    // If a dead merc is replaced mid-fight, spawn the new one at a living
-    // hero (the fight is at the camp, not the shop); fall back to the buyer
-    let bx = buyer != null ? buyer.x : 0;
-    let by = buyer != null ? buyer.y : 0;
-    for (const h of getSpawnedHeroes()) {
-      if (GetUnitState(h.handle, UNIT_STATE_LIFE) > 0) {
-        bx = h.x;
-        by = h.y;
-        break;
+      print('Mercenary Contract purchased: level 2 creep camps unlocked; a mercenary will join your next hero summon.');
+      const buyer = Unit.fromHandle(GetTriggerUnit());
+      if (buyer != null) effectTargets = [buyer];
+    } else if (itemTypeId === MERC_REROLL_ID) {
+      // If a dead merc is replaced mid-fight, spawn the new one at a living
+      // hero (the fight is at the camp, not the shop); fall back to the buyer
+      const buyer = Unit.fromHandle(GetTriggerUnit());
+      let bx = buyer != null ? buyer.x : 0;
+      let by = buyer != null ? buyer.y : 0;
+      for (const h of getSpawnedHeroes()) {
+        if (GetUnitState(h.handle, UNIT_STATE_LIFE) > 0) {
+          bx = h.x;
+          by = h.y;
+          break;
+        }
       }
+      rerollMerc(bx, by, areHeroesSpawned());
+      print('Mercenary rerolled — items carry over to the new creep.');
+      if (buyer != null) effectTargets = [buyer];
+    } else if (itemTypeId === CRITTERPOCALYPSE_ID) {
+      armCritterpocalypse();
+      print('Critterpocalypse armed! Every grass tile spawns a critter next round — win it for 2 bonus gold.');
+      const buyer = Unit.fromEvent();
+      if (buyer != null) effectTargets = [buyer];
+    } else if (itemTypeId === TOUGH_CAMP_ID) {
+      armToughCamp();
+      print("Tough Creep Camp armed! Next round's camp hits far harder — defeat it for 2 bonus gold.");
+      const buyer = Unit.fromEvent();
+      if (buyer != null) effectTargets = [buyer];
     }
-    rerollMerc(bx, by, areHeroesSpawned());
-    print('Mercenary rerolled — items carry over to the new creep.');
-    if (buyer != null) effectTargets = [buyer];
-  } else if (itemTypeId === CRITTERPOCALYPSE_ID) {
-    armCritterpocalypse();
-    print('Critterpocalypse armed! Every grass tile spawns a critter next round — win it for 2 bonus gold.');
-    const buyer = Unit.fromEvent();
-    if (buyer != null) effectTargets = [buyer];
-  } else if (itemTypeId === TOUGH_CAMP_ID) {
-    armToughCamp();
-    print("Tough Creep Camp armed! Next round's camp hits far harder — defeat it for 2 bonus gold.");
-    const buyer = Unit.fromEvent();
-    if (buyer != null) effectTargets = [buyer];
-  }
 
-  syncState();
-  playUpgradeEffect(effectTargets);
-  RemoveItem(item);
-}
-
-/** Radius around the shop searched for just-purchased items lying on the
- *  ground. Generous: WC3 scatters the drop around the building's footprint. */
-const SHOP_DROP_RADIUS = 512;
-
-/** Resolve any shop stock sitting on the ground next to the shop. Shop items
- *  are all consumed the instant they are acquired, so anything of a for-sale
- *  type lying here is a purchase that never reached a buyer. */
-function collectShopDrops(): void {
-  const shop = currentShop;
-  if (shop == null || GetUnitTypeId(shop.handle) === 0) return;
-  const sx = shop.x;
-  const sy = shop.y;
-
-  const rect = Rect(sx - SHOP_DROP_RADIUS, sy - SHOP_DROP_RADIUS,
-                    sx + SHOP_DROP_RADIUS, sy + SHOP_DROP_RADIUS);
-  const dropped: item[] = [];
-  EnumItemsInRect(rect, undefined, () => {
-    const it = GetEnumItem();
-    if (it == null) return;
-    // Ignore items already held by a unit; only loose ground items are drops.
-    if (ITEM_COSTS.get(GetItemTypeId(it)) != null && !IsItemOwned(it)) dropped.push(it);
+    syncState();
+    playUpgradeEffect(effectTargets);
+    RemoveItem(item);
   });
-  RemoveRect(rect);
-  if (dropped.length === 0) return;
-
-  // Attribute the purchase to the nearest peasant purely so the effect has
-  // something to play on (the shop-selected purchase names no buyer).
-  let buyer: Unit | undefined = undefined;
-  let bestDist = 0;
-  forEachUnitInWorld(u => {
-    if (GetUnitTypeId(u) !== PEASANT_ID) return;
-    const dx = GetUnitX(u) - sx;
-    const dy = GetUnitY(u) - sy;
-    const d = dx * dx + dy * dy;
-    if (buyer == null || d < bestDist) {
-      bestDist = d;
-      buyer = Unit.fromHandle(u);
-    }
-  });
-
-  for (const it of dropped) resolvePurchase(it, buyer);
 }
