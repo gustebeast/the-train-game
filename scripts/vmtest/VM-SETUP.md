@@ -270,6 +270,20 @@ Then per clone:
 > (past PLAY OFFLINE). If you accidentally minted online, revert (which triggers
 > the DISCONNECT dialog), click its **PLAY OFFLINE**, navigate back to the root,
 > and re-snapshot.
+>
+> **That in-place recovery often is not enough** (learned re-minting Murph,
+> 2026-08-18). Dismissing the DISCONNECT clears the dialog, but the WC3 process
+> is still a Battle.net-connected session, and the repaired snapshot fails later
+> and more confusingly: the run reaches the lobby, then WC3 prompts **ENTER
+> PLAYER NAME** at START GAME and the runner times out at "map never became
+> ready". Once a snapshot has been minted online, relaunch WC3 from scratch with
+> the NIC disconnected and mint properly rather than patching the old session.
+
+> **Reach Custom Games via SINGLE PLAYER, not LOCAL AREA NETWORK.** Both lead to
+> a "Create Game" screen that looks nearly identical, but the LAN one adds a
+> GAME NAME field, joins a Battle.net chat channel, and demands a player name at
+> START GAME — none of which the runner drives, so it hangs. The correct screen
+> is subtitled **Single Player** and has no GAME NAME field.
 
 Clones run **fullscreen** while the original shared VM was minted windowed, so
 their menu coordinates differ. Both sets live in `vms.json` under `uiSets`; each

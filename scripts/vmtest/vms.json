@@ -33,8 +33,7 @@
       "vmx": "C:\\VMs\\Murph\\Murph.vmx",
       "vncPort": 5904,
       "ui": "fullscreen",
-      "ready": false,
-      "_note": "2026-08-18: the Battle.net session inside this VM expired. Its snapshot reaches the lobby, but WC3 still believes it is Battle.net-connected and re-prompts ENTER PLAYER NAME at START GAME, so runs time out. Needs a proper offline re-mint, which needs one online Battle.net login first (lead task)."
+      "ready": true
     }
   },
   "_uiComment": "Menu click targets. The shared VM was minted with WC3 in a window; the clones run fullscreen, so their targets differ. Both were captured at a 1656x1249 framebuffer -- if the guest resolution changes, re-capture with Get-TestVmScreenshot.",
