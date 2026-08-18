@@ -16,7 +16,7 @@ import { DASH_ABILITY_ID, PEASANT_ID } from './constants';
 // unit at the cast point itself — safe there precisely because the queue is
 // empty. No 'stop' is ever issued, so the queue advances with no delay.
 const DASH_SPEED = 522; // WC3's default max move speed (peasant base is ~190)
-const DASH_DURATION = 0.5; // seconds of boosted speed
+const DASH_DURATION = 0.6; // seconds of boosted speed
 const BARE_DASH_GRACE = 0.12; // s to wait before deciding the queue is empty
 const DASH_ANIM_INDEX = 22; // 'Roll' — transplanted, scripts/transplant-roll-anim.js
 

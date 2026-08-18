@@ -96,6 +96,10 @@ compiletime(({ objectData, constants }) => {
   // The cast point/backswing keep a spell order "in progress" for ~0.3s after an
   // instant cast, which delays whatever the player queued behind it. Dash needs
   // the queue to advance immediately, so both are zeroed.
+  // SetUnitMoveSpeed is clamped to the unit's own maximum, which defaults to
+  // 400 — the dash was only reaching 2.1x base, which barely reads on screen.
+  // 522 is WC3's gameplay-constant ceiling.
+  peasant.speedMaximum = 522;
   peasant.animationCastPoint = 0;
   peasant.animationCastBackswing = 0;
 
