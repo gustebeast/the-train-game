@@ -65,6 +65,25 @@ export function initCheat(): void {
     print('Roll arena: rock=E, tree=N, water=W, train=S. Cast Roll (E) into each.');
   });
 
+  // Make your first peasant roll east on command — handy for eyeballing the
+  // roll animation and for checking a queued follow-up order still runs.
+  onChatCommand('-rollnow', () => {
+    const g = CreateGroup()!;
+    GroupEnumUnitsOfPlayer(g, Players[0].handle, undefined);
+    let pe: unit | undefined;
+    ForGroup(g, () => {
+      const u = GetEnumUnit();
+      if (pe == null && u != null && GetUnitTypeId(u) === PEASANT_ID) pe = u;
+    });
+    DestroyGroup(g);
+    if (pe == null) { print('rollnow: no peasant'); return; }
+    const p = pe;
+    PanCameraToTimed(GetUnitX(p), GetUnitY(p), 0);
+    SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 1100, 0);
+    IssuePointOrderById(p, OrderId('flare')!, GetUnitX(p) + 400, GetUnitY(p));
+    print('rollnow: rolling east');
+  });
+
   onChatCommand('-load', () => {
     if (loadFromFile()) {
       print('Save loaded. Entering lobby...');
