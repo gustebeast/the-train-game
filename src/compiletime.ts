@@ -264,10 +264,10 @@ compiletime(({ objectData, constants }) => {
       }
     }
     if (result.w3aSkin) fixAbilityLevels(result.w3aSkin);
-    // Upgrade Name (gnam) is a per-level string, but the library emits it at
-    // level 0. WC3 reads an ability's "Requires <name>" text from the upgrade's
-    // level-1 name, so a level-0 override never shows (the summon ability keeps
-    // saying "Requires Magic Sentry"). Bump gnam mods to level 1.
+    // Upgrade Name (gnam) is a per-level string and the library emits it at
+    // level 0, which the engine ignores -- the same rule fixAbilityLevels
+    // applies to abilities. Without this bump the name silently does not apply
+    // (A/B tested in-game: level 0 still showed the stock "Magic Sentry").
     for (const table of [result.w3q, result.w3qSkin]) {
       if (table == null) continue;
       for (const sub of [table.originalTable, table.customTable]) {
@@ -277,6 +277,24 @@ compiletime(({ objectData, constants }) => {
             if (mod.id === 'gnam' && mod.levelOrVariation === 0) mod.levelOrVariation = 1;
           }
         }
+      }
+    }
+    // war3-transformer writes only w3u/w3t/w3b/w3d/w3a (+Skin) -- it emits NO
+    // upgrade file at all, so every objectData.upgrades edit was silently
+    // discarded and the summon gate kept showing its stock name "Magic Sentry".
+    // Write the upgrade table ourselves into the dist folder build.ts packages.
+    // It must land in war3map.w3q: the engine reads an ability's
+    // "Requires <name>" text from there, NOT from war3mapSkin.w3q (verified
+    // in-game -- the skin file alone leaves the stock name showing).
+    const fsMod = require('fs');
+    const cfg = JSON.parse(fsMod.readFileSync('config.json', 'utf8'));
+    const outDir = './dist/' + cfg.mapFolder;
+    if (fsMod.existsSync(outDir)) {
+      const upgrades = result.w3q != null ? result.w3q : result.w3qSkin;
+      if (upgrades != null) {
+        const bytes = upgrades.save();
+        fsMod.writeFileSync(outDir + '/war3map.w3q', bytes);
+        fsMod.writeFileSync(outDir + '/war3mapSkin.w3q', bytes);
       }
     }
     return result;
