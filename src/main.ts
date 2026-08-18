@@ -27,6 +27,7 @@ import { log } from './debug';
 
 import { initTestKit } from './testkit';
 import './damagetest'; // registers the 'damage' test; add further test modules here
+import './dashdelaytest'; // measures the dash -> next-order gap
 import { loadTerrain } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
