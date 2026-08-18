@@ -62,12 +62,12 @@ export function initCheat(): void {
     if (train != null) train.invulnerable = true;
     CreateUnit(Players[0].handle, PEASANT_ID, ax, ay, 90);
     PanCameraToTimed(ax, ay, 0);
-    print('Roll arena: rock=E, tree=N, water=W, train=S. Cast Roll (E) into each.');
+    print('Dash arena: rock=E, tree=N, water=W, train=S. Cast Dash (E) into each.');
   });
 
-  // Make your first peasant roll east on command — handy for eyeballing the
-  // roll animation and for checking a queued follow-up order still runs.
-  onChatCommand('-rollnow', () => {
+  // Make your first peasant dash east on command — handy for eyeballing the
+  // dash and for checking a queued follow-up order still runs.
+  onChatCommand('-dashnow', () => {
     const g = CreateGroup()!;
     GroupEnumUnitsOfPlayer(g, Players[0].handle, undefined);
     let pe: unit | undefined;
@@ -81,7 +81,7 @@ export function initCheat(): void {
     PanCameraToTimed(GetUnitX(p), GetUnitY(p), 0);
     SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 1100, 0);
     IssuePointOrderById(p, OrderId('flare')!, GetUnitX(p) + 400, GetUnitY(p));
-    print('rollnow: rolling east');
+    print('dashnow: dashing east');
   });
 
   onChatCommand('-load', () => {

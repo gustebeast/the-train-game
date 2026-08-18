@@ -93,14 +93,19 @@ compiletime(({ objectData, constants }) => {
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
   peasant.attack1DamageNumberOfDice = 1;
   peasant.attack1DamageSidesPerDie = 1;
+  // The cast point/backswing keep a spell order "in progress" for ~0.3s after an
+  // instant cast, which delays whatever the player queued behind it. Dash needs
+  // the queue to advance immediately, so both are zeroed.
+  peasant.animationCastPoint = 0;
+  peasant.animationCastBackswing = 0;
 
-  // Roll/dash spell (Flare — repurposed as an instant point-target dash;
+  // Dash spell (Flare — repurposed as an instant point-target dash;
   // the reveal is neutralized via forcedMods zeros). Handled in dash.ts.
   const dash = objectData.abilities.get(constants.abilities.Flare)!;
   dash.heroAbility = false;
   dash.levels = 1;
-  dash.tooltipNormal = 'Roll';
-  dash.tooltipNormalExtended = 'Dodge-roll toward the target point.';
+  dash.tooltipNormal = 'Dash';
+  dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
   dash.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNEvasion.blp';
   dash.hotkeyNormal = 'E';
   dash.castRange = 99999;
@@ -112,6 +117,7 @@ compiletime(({ objectData, constants }) => {
   // repurposed dash is always castable. (Found via in-game test: the peasant had
   // the ability but the 'flare' order was refused and channelFired stayed 0.)
   dash.requirements = '';
+  dash.castingTime = 0;
 
   // Build track spell (BuildTinyFarm — repurposed for one-click track placement)
   const buildTrack = objectData.abilities.get(constants.abilities.BuildTinyFarm)!;
