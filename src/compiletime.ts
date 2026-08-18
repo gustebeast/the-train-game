@@ -137,6 +137,12 @@ compiletime(({ objectData, constants }) => {
   dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
   dash.iconNormal = 'ReplaceableTextures\CommandButtons\BTNEvasion.blp';
   dash.hotkeyNormal = 'E';
+  // Row 0 is the stock Move/Stop/Hold/Attack row, so an ability placed there is
+  // hidden behind them — that is why the Dash button was missing from the card
+  // even though the peasant had the ability. Row 1 holds the custom abilities
+  // (give/take sits at its left), so put the dash beside them.
+  dash.buttonPositionNormalX = 2;
+  dash.buttonPositionNormalY = 1;
   dash.caster = '';
   dash.target = '';
   dash.effect = '';
