@@ -1,6 +1,6 @@
 import { Timer, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
-import { PEASANT_ID } from './constants';
+import { PEASANT_ID, DASH_ABILITY_ID } from './constants';
 import { registerTest, TestReporter } from './testkit';
 
 // Times the player's exact sequence, with all three orders issued UP FRONT
@@ -47,8 +47,17 @@ function runDashDelayTest(t: TestReporter): void {
   const p = Unit.create(Players[0], PEASANT_ID, ax, ay, 0)!;
   SetUnitX(p.handle, ax); SetUnitY(p.handle, ay);
   const h = p.handle;
+  // Frame the test area so the run is watchable in the VM.
+  // Frame the whole run: centre on the mid-point of the corridor, zoomed out.
+  PanCameraToTimed(ax + ux * 300, ay + uy * 300, 0);
+  SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 3400, 0);
   const FLARE = OrderId('flare');
   const MOVE = OrderId('move');
+
+  t.report('hasDashAbility', GetUnitAbilityLevel(p.handle, DASH_ABILITY_ID));
+  t.report('flareOrderId', OrderId('flare'));
+  t.report('channelOrderId', OrderId('channel'));
+  const baseSpeed = GetUnitMoveSpeed(p.handle);
 
   t.after(1.0, () => {
     // All three issued now, long first leg so the queue is full well before the
@@ -76,7 +85,9 @@ function runDashDelayTest(t: TestReporter): void {
       const moving = dx * dx + dy * dy > EPS * EPS;
       lastX = x; lastY = y;
 
-      if (!sawDash && ord === FLARE) { sawDash = true; tDashOrder = elapsed; }
+      const boosted = GetUnitMoveSpeed(h) > baseSpeed + 1;
+      if (!sawDash && (ord === FLARE || ord === OrderId('channel') || boosted)) { sawDash = true; tDashOrder = elapsed; }
+      if (boosted) t.report('sawSpeedBoost', 1);
 
       if (sawDash) {
         // First stationary sample after the dash order = dash movement finished.
