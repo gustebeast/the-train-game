@@ -48,3 +48,9 @@ STRING 11
 Player 23
 }
 
+STRING 12
+// Abilities: A000 (Roll), Name (Name)
+{
+Roll
+}
+

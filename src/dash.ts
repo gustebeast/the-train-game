@@ -16,7 +16,8 @@ import { DASH_ABILITY_ID, PEASANT_ID } from './constants';
 // unit at the cast point itself — safe there precisely because the queue is
 // empty. No 'stop' is ever issued, so the queue advances with no delay.
 const DASH_SPEED = 522; // WC3's default max move speed (peasant base is ~190)
-const DASH_DURATION = 0.5; // seconds of boosted speed
+const DASH_DURATION = 0.6; // seconds of boosted speed
+const BARE_DASH_GRACE = 0.12; // s to wait before deciding the queue is empty
 const DASH_ANIM_INDEX = 22; // 'Roll' — transplanted, scripts/transplant-roll-anim.js
 
 interface DashState {
@@ -26,6 +27,13 @@ interface DashState {
 
 /** Peasants currently dashing, keyed by handle. */
 const dashing = new Map<unit, DashState>();
+
+// Diagnostics, read through a function: TSTL importers snapshot a mutable
+// `export let`, so an exported variable would always read its initial value.
+const dbg = { tx: -99999, ty: -99999, ord: -1, issued: 0 };
+export function getDashDebug(): number[] {
+  return [dbg.tx, dbg.ty, dbg.ord, dbg.issued];
+}
 
 /** True while the unit is mid-dash. */
 export function isDashing(h: unit): boolean {
@@ -46,6 +54,7 @@ function endDash(h: unit): void {
 
 function startDash(u: Unit, targetX: number, targetY: number): void {
   const h = u.handle;
+  dbg.tx = targetX; dbg.ty = targetY; dbg.ord = -1; dbg.issued = 0;
 
   // Re-dashing: keep the original speed, don't capture the boosted one.
   const existing = dashing.get(h);
@@ -60,17 +69,33 @@ function startDash(u: Unit, targetX: number, targetY: number): void {
   dashing.set(h, { timer, baseSpeed });
   timer.start(DASH_DURATION, false, () => endDash(h));
 
-  // Shortly after, the cast has resolved and the queue has advanced: the
-  // current order is either whatever the player queued behind the dash, or
-  // nothing (still the cast itself, or idle). Only in the latter case do we
-  // supply a destination — that way a queued order is never clobbered.
-  Timer.create().start(0.10, false, () => {
-    if (GetUnitTypeId(h) === 0) return;
+  // Channel is a CHANNELLING spell: its order stays current until something
+  // interrupts it. A queued order does that by itself (which is why a
+  // shift-queued move runs straight after the dash, and why we must not touch
+  // it). With an empty queue nothing interrupts, so the peasant would just
+  // stand there mid-channel — the "turned around and did nothing" case.
+  //
+  // That difference is the discriminator: if the channel is STILL running a
+  // beat after the cast, the queue was empty, and only then do we end it and
+  // supply the dash's own destination.
+  const dashOrder = OrderId('flare');
+  const poll = Timer.create();
+  let waited = 0;
+  poll.start(0.02, true, () => {
+    waited = waited + 0.02;
+    if (GetUnitTypeId(h) === 0) { poll.destroy(); return; }
     const ord = GetUnitCurrentOrder(h);
-    // Idle, or still showing the dash's own cast order: nothing was queued.
-    if (ord === 0 || ord === OrderId('flare')) {
-      IssuePointOrder(h, 'move', targetX, targetY);
-    }
+    dbg.ord = ord;
+    if (ord !== dashOrder) { poll.destroy(); return; } // something queued — leave it
+    if (waited < BARE_DASH_GRACE) return;              // still deciding
+    poll.destroy();
+    // Nothing was queued: end the channel and dash to the cast point. The stop
+    // is safe precisely because there is no queue to discard.
+    IssueImmediateOrder(h, 'stop');
+    Timer.create().start(0.02, false, () => {
+      if (GetUnitTypeId(h) === 0) return;
+      dbg.issued = IssuePointOrder(h, 'move', targetX, targetY) ? 1 : 2;
+    });
   });
 }
 
