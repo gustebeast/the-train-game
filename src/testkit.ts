@@ -126,38 +126,57 @@ export function registerTest(name: string, run: (this: void, reporter: TestRepor
   tests.push({ name, run });
 }
 
+/** Start a registered test by name. Shared by the `-test` chat command and by
+ *  autoRun, so both get the same re-entrancy guard and crash handling. */
+function startTest(name: string): void {
+  const test = tests.find(t => t.name === name);
+  if (test == null) {
+    print('testkit: no test named ' + name);
+    return;
+  }
+  // Re-entrancy guard: the runner may retry the chat command if it thinks the
+  // first one was swallowed, and tests spawn units, so running one twice
+  // concurrently would corrupt both sets of results. This also makes the
+  // runner's chat command harmless when autoRun already started the same test.
+  if (running != null) {
+    print('testkit: ' + running + ' still running, ignoring ' + name);
+    return;
+  }
+  running = name;
+  const reporter = createReporter(name);
+  const originalDone = reporter.done;
+  reporter.done = () => {
+    originalDone();
+    running = null;
+  };
+  // WC3 swallows errors thrown inside trigger actions, which would leave the
+  // harness waiting out its full timeout with no idea why. Turn a crash into a
+  // reported failure instead.
+  try {
+    test.run(reporter);
+  } catch (e) {
+    reporter.fail('error', tostring(e));
+    reporter.done();
+  }
+}
+
 /** Wire up the `-test <name>` chat commands and announce readiness.
- *  Call once from main.ts after all test modules have been imported. */
-export function initTestKit(): void {
+ *  Call once from main.ts after all test modules have been imported.
+ *
+ *  Pass `autoRun` to start that test as soon as play begins, with no chat
+ *  command at all: `initTestKit('damage')`. Typing the command over VNC is the
+ *  most fragile step in a run — WC3 samples the keyboard once per render frame,
+ *  so fast input transposes characters — and autoRun removes it entirely. Build
+ *  your own branch with it set while iterating on one test; leave it off for
+ *  the shared map so `-test <name>` still selects a test. */
+export function initTestKit(autoRun?: string): void {
   for (const test of tests) {
     const trigger = Trigger.create();
     Players.forEach(p => {
       TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, '-test ' + test.name, true);
     });
     trigger.addAction(() => {
-      // Re-entrancy guard: the runner may retry the chat command if it thinks
-      // the first one was swallowed, and tests spawn units, so running one
-      // twice concurrently would corrupt both sets of results.
-      if (running != null) {
-        print('testkit: ' + running + ' still running, ignoring ' + test.name);
-        return;
-      }
-      running = test.name;
-      const reporter = createReporter(test.name);
-      const originalDone = reporter.done;
-      reporter.done = () => {
-        originalDone();
-        running = null;
-      };
-      // WC3 swallows errors thrown inside trigger actions, which would leave
-      // the harness waiting out its full timeout with no idea why. Turn a
-      // crash into a reported failure instead.
-      try {
-        test.run(reporter);
-      } catch (e) {
-        reporter.fail('error', tostring(e));
-        reporter.done();
-      }
+      startTest(test.name);
     });
   }
 
@@ -176,5 +195,11 @@ export function initTestKit(): void {
   }
   Timer.create().start(0.5, false, () => {
     writeFile(READY_FILE, names);
+    // Same reason this marker is on a timer: init runs while the game is still
+    // paused, and a test started there would sit in a world where no timer ever
+    // advances. Starting here means play has genuinely begun.
+    if (autoRun != null) {
+      startTest(autoRun);
+    }
   });
 }
