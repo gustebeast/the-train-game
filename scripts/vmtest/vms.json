@@ -2,6 +2,7 @@
   "_comment": "One VM per agent so tests never collide. The runner auto-selects YOUR VM from your git worktree branch (agent/<name>), so normally you pass nothing. Override with -Vm or $env:TRAINVM. 'ready:false' means the VM exists but has no live create-game snapshot yet -- see VM-SETUP.md step 8.",
   "guestUser": "wc3",
   "guestPassword": "traintest",
+  "vncPassword": "trainvm1",
   "snapshot": "create-game",
   "_guestMaxFpsComment": "WC3's maxfps in the guest's War3Preferences.txt. It caps how fast the guests render (and so how fast anything can watch them); vm-wall.ps1 defaults its capture rate to this. Change it here AND in each guest's War3Preferences.txt.",
   "guestMaxFps": 15,

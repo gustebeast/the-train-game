@@ -54,22 +54,34 @@ if (-not $SkipBoot) {
   # no error anywhere. Name each VM after its agent, before WC3 is ever
   # launched, so the reboot costs no extra menu navigation.
   $hostName = 'WC3' + $Vm.ToUpper()
-  $current = ''
-  & $vmrun @guest runProgramInGuest $vmx -noWait 'C:\Windows\System32\cmd.exe' '/c' "hostname > C:\hn.txt" 2>&1 | Out-Null
-  Start-Sleep -Seconds 4
+  $ps = 'C:' + [char]92 + 'Windows' + [char]92 + 'System32' + [char]92 + 'WindowsPowerShell' + [char]92 + 'v1.0' + [char]92 + 'powershell.exe'
   $hnLocal = Join-Path $OutDir 'hostname.txt'
-  & $vmrun @guest CopyFileFromGuestToHost $vmx 'C:\hn.txt' $hnLocal 2>&1 | Out-Null
-  if (Test-Path $hnLocal) { $current = (Get-Content $hnLocal -Raw).Trim() }
 
+  function Get-GuestHostname {
+    if (Test-Path $hnLocal) { Remove-Item $hnLocal -Force }
+    & $vmrun @guest runProgramInGuest $vmx -noWait $ps '-Command' '$env:COMPUTERNAME | Set-Content C:\hn.txt' 2>&1 | Out-Null
+    Start-Sleep -Seconds 5
+    & $vmrun @guest CopyFileFromGuestToHost $vmx 'C:\hn.txt' $hnLocal 2>&1 | Out-Null
+    if (Test-Path $hnLocal) { return (Get-Content $hnLocal -Raw).Trim() }
+    return ''
+  }
+
+  $current = Get-GuestHostname
   if ($current -eq $hostName) {
     Write-Host "  hostname already $hostName"
   } else {
-    Write-Host "  renaming $current -> $hostName (LAN peer resolution)"
-    & $vmrun @guest runProgramInGuest $vmx 'C:\Windows\System32\WindowsPowerShell1.0\powershell.exe' `
-      '-Command' "Rename-Computer -NewName $hostName -Force" 2>&1 | Out-Null
+    Write-Host "  renaming '$current' -> $hostName (LAN peer resolution)"
+    $r = & $vmrun @guest runProgramInGuest $vmx $ps '-Command' "Rename-Computer -NewName $hostName -Force" 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Rename-Computer failed: $r" }
     & $vmrun -T ws reset $vmx soft 2>&1 | Out-Null
-    Start-Sleep -Seconds 10
+    Start-Sleep -Seconds 15
     Wait-Desktop 'after rename'
+    # Verify rather than assume: a silently-failed rename produces a VM that
+    # tests fine on its own and then cannot be joined over LAN, which is a
+    # miserable thing to debug later.
+    $after = Get-GuestHostname
+    if ($after -ne $hostName) { throw "Hostname is '$after', expected '$hostName' -- LAN peer resolution would break." }
+    Write-Host "  hostname now $after"
   }
 }
 
@@ -131,6 +143,10 @@ if ($DriveOnly) {
 Write-Host "Disconnecting sound..."
 & $vmrun -T ws disconnectNamedDevice $vmx sound 2>&1 | Out-Null
 
+if ((& $vmrun listSnapshots $vmx) -match '(?m)^create-game$') {
+  Write-Host 'Removing the previous create-game snapshot...'
+  & $vmrun deleteSnapshot $vmx create-game 2>&1 | Out-Null
+}
 Write-Host "Snapshotting create-game (~5 min)..."
 $sw=[Diagnostics.Stopwatch]::StartNew()
 & $vmrun -T ws snapshot $vmx create-game 2>&1 | Out-Null

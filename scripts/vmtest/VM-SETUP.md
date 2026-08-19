@@ -257,16 +257,44 @@ at the single-player Custom Games root, so the common single-player run is
 unchanged; a LAN test simply navigates from there (~20s of menus). Do not mint a
 separate LAN snapshot.
 
-Still unverified: WC3's LAN menu opening on the new base, because the base's
-Battle.net session had expired and launching WC3 needs one online login. Do that
-during the next entitlement refresh — the two go together.
+**Verified end to end on 2026-08-18**: on the base, WC3 launched with MULTIPLAYER
+enabled (entitlement fresh) and LOCAL AREA NETWORK opened straight into the game
+browser with no "INSTALL BONJOUR" prompt; after re-cloning, `WC3BRENNER` resolved
+`WC3BOOF` by hostname over mDNS and pinged it. All four clones then passed the
+damage test.
+
+One wrinkle worth knowing: clicking LOCAL AREA NETWORK **while online** drops the
+Battle.net session and throws the DISCONNECT dialog. Click PLAY OFFLINE and you
+land back on the main menu; LAN then opens cleanly. Minted VMs are already
+offline, so they never see this.
 
 ### Mint each clone (offline, no login)
 
-Clone from the refreshed `base-off2` and set each clone's `.vmx`: unique
-`displayName`, unique `RemoteDisplay.vnc.port` (5901–5904),
-`ethernet0.startConnected = "FALSE"`, and drop `uuid.bios` / `uuid.location` /
-`ethernet0.generatedAddress` for fresh identity. Then per clone:
+**`clone-vm.ps1` does the cloning and the whole `.vmx` rewrite**, so the manual
+edits below are background rather than a checklist:
+
+```powershell
+powershell -File scripts/vmtest/clone-vm.ps1 -Vm murph -Replace   # linked clone from base-off5
+powershell -File scripts/vmtest/mint-vm.ps1  -Vm murph            # rename, drive menus, snapshot
+powershell -File scripts/vmtest/run-test.ps1 -Vm murph            # validate
+```
+
+It clones from `base-off5` (linked, so each agent costs ~6 GB against the shared
+parent) and sets: unique `displayName`, unique `RemoteDisplay.vnc.port`
+(5901–5904), `ethernet0.startConnected = "FALSE"`, `sound.startConnected =
+"FALSE"`, `uuid.action = "create"`, and drops `uuid.bios` / `uuid.location` /
+`ethernet0.generatedAddress` so each clone gets a fresh identity — a duplicate
+MAC breaks LAN peering as surely as a duplicate hostname does.
+
+`mint-vm.ps1` then renames the guest (`murph` -> `WC3MURPH`), **verifies the
+rename actually took**, drives WC3 to the Custom Games root and snapshots. The
+verification matters: a silently-failed rename yields a VM that tests fine alone
+and cannot be joined over LAN. Ask how I know.
+
+The NIC is left disconnected so WC3 commits to PLAY OFFLINE and no stale
+Battle.net session is frozen into the snapshot. A LAN test connects it at
+runtime with `vmrun -T ws connectNamedDevice <vmx> ethernet0`, which keeps the
+far more common single-player path exactly as it was. Then per clone:
 
 After configuring the vmx, **boot each clone once and verify its VNC port** —
 VMware silently rewrites `RemoteDisplay.vnc.port` back to the default 5900 in the
