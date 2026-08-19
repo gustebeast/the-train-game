@@ -300,10 +300,28 @@ function Start-TestVmMatch {
   Start-Sleep -Milliseconds 500
   Vnc-Click    $Connection $ui.createButton[0]    $ui.createButton[1]
   Start-Sleep -Milliseconds 1500
-  Vnc-Click    $Connection $ui.nameField[0]       $ui.nameField[1]
-  Vnc-TypeSmart $Connection $PlayerName
-  Vnc-Click    $Connection $ui.confirmButton[0]   $ui.confirmButton[1]
-  Start-Sleep -Seconds 3
+
+  # ENTER PLAYER NAME is the step that actually strands runs. The guest profile
+  # has no saved name, so CREATE always raises this dialog, and CONFIRM on an
+  # EMPTY field is a no-op -- the dialog just sits there until the run times
+  # out (observed: correct map selected, empty name box, 90s burned).
+  # Typing is the fragile part (WC3 samples the keyboard once per render frame,
+  # and the field needs a moment to take focus after the dialog animates in),
+  # so give focus time to settle, then confirm with BOTH Enter and the button.
+  # Repeat a few times: a second pass costs ~2s and is harmless once the dialog
+  # is gone, which beats losing the whole run to a swallowed keystroke.
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    Vnc-Click $Connection $ui.nameField[0] $ui.nameField[1]
+    Start-Sleep -Milliseconds 400
+    Vnc-TypeSmart $Connection $PlayerName
+    Start-Sleep -Milliseconds 300
+    Vnc-Tap $Connection 0xFF0D                                      # Enter
+    Start-Sleep -Milliseconds 300
+    Vnc-Click $Connection $ui.confirmButton[0] $ui.confirmButton[1]
+    Start-Sleep -Milliseconds 900
+  }
+
+  Start-Sleep -Seconds 2
   Vnc-Click    $Connection $ui.startGameButton[0] $ui.startGameButton[1]
 }
 
@@ -351,14 +369,34 @@ function Reset-OrResumeTestVm {
 function Wait-TestVmReady {
   [CmdletBinding()]
   param([Parameter(Mandatory)]$Connection, [object]$Vm, [int]$TimeoutSec = 90,
-        [scriptblock]$Log = { param($m) Write-Host $m })
+        [scriptblock]$Log = { param($m) Write-Host $m },
+        [scriptblock]$Recover, [int]$RecoverAfterSec = 25)
   if ($null -eq $Vm) { $Vm = Get-TestVm }
   & $Log 'waiting for map ready'
   $deadline = (Get-Date).AddSeconds($TimeoutSec)
   $waitStart = Get-Date; $lastStartClick = Get-Date
+  $recovered = $false
   while ((Get-Date) -lt $deadline) {
     Vnc-Tap $Connection 0x20   # dismiss "press any key to continue"; harmless in-game
     if (Test-TestVmFile $Vm -Name 'test_ready.txt') { return $true }
+    # Menu navigation can derail: if the very first click after a resume is
+    # swallowed, the Download folder is never entered, a STOCK map stays
+    # selected, and CREATE then parks on an empty ENTER PLAYER NAME dialog that
+    # nothing downstream can clear -- the run just burns its whole timeout.
+    # Back out with ESC and drive the menu again, once.
+    if (-not $recovered -and $null -ne $Recover -and
+        ((Get-Date) - $waitStart).TotalSeconds -ge $RecoverAfterSec) {
+      $recovered = $true
+      & $Log 'not ready yet -- backing out and re-driving the menu'
+      # Exactly ONE ESC: that dismisses the name dialog and lands back on the
+      # Create Game map list, which is where the re-drive expects to start. A
+      # second ESC would leave Create Game altogether and the re-drive would
+      # then click blindly through the main menu.
+      Vnc-Tap $Connection 0xFF1B
+      Start-Sleep -Milliseconds 1200
+      & $Recover
+      $waitStart = Get-Date; $lastStartClick = Get-Date
+    }
     # A single lobby START GAME click sometimes drops. The happy path is ready in
     # <10s, so only re-click after that -- re-clicking during a normal load slows it.
     if (((Get-Date) - $waitStart).TotalSeconds -ge 10 -and ((Get-Date) - $lastStartClick).TotalSeconds -ge 5) {
@@ -564,7 +602,8 @@ function Use-TestVm {
     if (-not $NoMap) {
       & $log 'start match'
       Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
-      if (-not (Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $log)) {
+      $redrive = { Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName }.GetNewClosure()
+      if (-not (Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $log -Recover $redrive)) {
         throw "Map never became ready within ${ReadyTimeoutSec}s. Is initTestKit() called in main.ts?"
       }
     }
@@ -629,7 +668,8 @@ function Invoke-MapTest {
   try {
     & $Say 'start match'
     Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
-    $ready = Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $Say
+    $redrive = { Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName }.GetNewClosure()
+    $ready = Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $Say -Recover $redrive
     if (-not $ready) {
       $result.FailureReason = "Map never became ready within ${ReadyTimeoutSec}s. Is initTestKit() called in main.ts? See $($result.Screenshot)."
       Get-TestVmScreenshot $vmInfo -Path $result.Screenshot -Connection $conn | Out-Null

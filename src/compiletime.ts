@@ -659,14 +659,16 @@ compiletime(({ objectData, constants }) => {
 
   // Hero Reroll cast — Wand of Negation repurposed as a unit-target spell.
   // Its native purge doesn't matter: reroll.ts replaces the target on cast.
-  const rerollCast = objectData.abilities.get(constants.abilities.ItemPurgeWandOfNegation)!;
+  const rerollCast = objectData.abilities.get(constants.abilities.ItemIllusions)!;
   // A peasant (non-hero) carries and casts the reroll item, so the item's
   // ability must not be hero-only or the peasant can't activate it.
   rerollCast.heroAbility = false;
   rerollCast.tooltipNormal = 'Reroll Hero';
   rerollCast.tooltipNormalExtended = 'Replace a lobby hero with a random new hero. XP and items carry over.';
-  rerollCast.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNTomeRed.blp';
-  rerollCast.targetsAllowed = 'alive,hero,invulnerable,neutral';
+  rerollCast.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
+  // Must include the friendly/own-player flags: the target is one of YOUR OWN
+  // lobby heroes, and without them the hero is not a legal target at all.
+  rerollCast.targetsAllowed = 'alive,allies,friend,hero,invulnerable,neutral,player,vulnerable';
   rerollCast.castRange = 500;
   rerollCast.caster = '';
   rerollCast.target = '';
@@ -917,9 +919,9 @@ compiletime(({ objectData, constants }) => {
   heroReroll.perishable = true;
   heroReroll.canBeSoldToMerchants = true;
   heroReroll.numberOfCharges = 1;
-  heroReroll.abilities = constants.abilities.ItemPurgeWandOfNegation;
+  heroReroll.abilities = constants.abilities.ItemIllusions;
   heroReroll.classification = 'Charged';
-  heroReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNTomeRed.blp';
+  heroReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
 
   // Scale down all hero types to match peasant size
   const heroTypes: string[] = [

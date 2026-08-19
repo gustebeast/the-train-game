@@ -1,4 +1,6 @@
 import { Timer, Trigger } from 'w3ts';
+import { loadLobby } from './terrain/load';
+import { stopGameplay } from './train';
 import { Players } from 'w3ts/globals';
 
 /** In-map half of the automated test harness.
@@ -40,6 +42,17 @@ function writeFile(path: string, lines: string[]): void {
     Preload(line);
   }
   PreloadGenEnd(path);
+}
+
+/** Put the map in the LOBBY, the way the -load cheat does but without needing a
+ *  save file. Lobby-only features (the shop, hero display, the Hero Reroll)
+ *  cannot be exercised from the gameplay area, and every test that needs them
+ *  would otherwise hand-roll the same two calls. Call it first in such a test;
+ *  the lobby finishes building on the following frames, so do your setup from
+ *  `t.after(...)` rather than inline. */
+export function enterLobby(): void {
+  stopGameplay();
+  loadLobby();
 }
 
 export interface TestReporter {
