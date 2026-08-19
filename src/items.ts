@@ -1,9 +1,10 @@
 import { Item, Trigger, Unit } from 'w3ts';
 import { updateCarryingVisual } from './carrying';
 import { gameState } from './state';
+import { canHold, isResourceItem } from './itemRules';
 import { nextFrame } from './util';
 import {
-  AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
+  WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, REROLL_ITEM_ID,
   BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID, FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID,
 } from './constants';
@@ -183,15 +184,10 @@ export function getMaxStack(u: Unit, itemTypeId?: number): number {
   return gameState.peasantMaxStack;
 }
 
+/** Re-exported so existing callers keep working; the definition lives with the
+ *  rest of the item classification in itemRules.ts. */
 export function isResource(itemTypeId: number): boolean {
-  return itemTypeId === WOOD_ID || itemTypeId === STONE_ID || itemTypeId === TRACK_PIECE_ID;
-}
-
-/** Items reserved for the train game systems (peasants, train, crate). */
-function isTrainItem(itemTypeId: number): boolean {
-  return isResource(itemTypeId)
-    || itemTypeId === AXE_ID || itemTypeId === PICKAXE_ID
-    || itemTypeId === BUCKET_ID || itemTypeId === BUCKET_FULL_ID;
+  return isResourceItem(itemTypeId);
 }
 
 /** Check whether a unit is carrying an item of the given type. */
@@ -231,14 +227,16 @@ export function findAnyItem(u: Unit): Item | null {
  * Returns an error message string if rejected, or null if accepted.
  */
 export function validateGive(itemTypeId: number, target: Unit): string | null {
+  // Same holding rules as a pickup -- see itemRules.canHold.
+  const forbidden = canHold(target, itemTypeId);
+  if (forbidden != null) return forbidden;
+
+  // Below here is transfer POLICY, not a holding rule: these targets can hold
+  // the item perfectly well, they just may not be handed one by a player.
+
   // The track wagon is filled by the engine's production — only take
   if (isTrackWagon(target)) {
     return "Can't load the wagon!";
-  }
-
-  // Storage units only accept resources (track, wood, stone)
-  if (isStorage(target) && !isResource(itemTypeId)) {
-    return "Can't store that!";
   }
 
   // Can't give tracks to the train — only take
@@ -433,37 +431,33 @@ export function initItems(): void {
     // The unit that gave us this item, if it came from another unit
     const giver = dropper != null && dropper !== unit.handle ? dropper : null;
 
-    // Remove the picked item; return it to the giver (with an optional message) if one exists.
+    // Remove the picked item; return it to the giver (with an optional message)
+    // if one exists. With no giver the item simply drops back on the ground --
+    // show the reason over the unit that tried, or a refused pickup looks like
+    // the click did nothing.
     const rejectPickup = (msg?: string): void => {
       unit.removeItem(picked);
       if (giver != null) {
         UnitAddItem(giver, picked.handle);
         if (msg != null) showFloatingText(giver, msg);
+      } else if (msg != null) {
+        showFloatingText(unit.handle, msg);
       }
     };
 
-    // Peasants can only pick up train items (tools, resources, buckets) — plus
-    // the Hero Reroll, which is bought from the shop and carried until cast.
-    if (unit.typeId === PEASANT_ID && !isTrainItem(pickedType) && pickedType !== REROLL_ITEM_ID) {
-      rejectPickup();
+    // WHO CAN HOLD WHAT: one shared check (itemRules.canHold) covers picking an
+    // item up off the ground AND being handed one by right-click, since both
+    // arrive here as a pickup. The give/take spell asks the same function via
+    // validateGive, so the rules exist in exactly one place.
+    const forbidden = canHold(unit, pickedType);
+    if (forbidden != null) {
+      rejectPickup(forbidden);
       return;
     }
 
-    // The reroll is carried alongside tools without the tool swap/merge logic
-    // below (it's not a resource/tool). Nothing else to do on pickup.
+    // Allowed, but carried alongside tools without the tool swap/merge logic
+    // below (it is neither resource nor tool). Nothing else to do on pickup.
     if (pickedType === REROLL_ITEM_ID) return;
-
-    // Heroes can't pick up train items
-    if (IsUnitType(unit.handle, UNIT_TYPE_HERO) && isTrainItem(pickedType)) {
-      rejectPickup();
-      return;
-    }
-
-    // Storage units only accept resources
-    if (isStorage(unit) && !pickedIsResource) {
-      rejectPickup("Can't store that!");
-      return;
-    }
 
     // Can't give tracks to the train (but allow internally produced tracks)
     if (isTrain(unit) && pickedType === TRACK_PIECE_ID && giver != null) {
