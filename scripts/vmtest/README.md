@@ -394,6 +394,9 @@ advances. Game timers only tick once play begins, so writing the marker from a
 
 ---
 
+See [FLAKINESS.md](FLAKINESS.md) for why runs go intermittently red, and how
+to write a test that does not do it to itself.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
