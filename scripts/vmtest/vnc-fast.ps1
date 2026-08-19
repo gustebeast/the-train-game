@@ -24,7 +24,9 @@ function Vnc-Connect([int]$port = 5900){
   $w=BE16 $si[0..1]; $h=BE16 $si[2..3]
   $pf=[byte[]]@(0,0,0,0, 32,24,0,1, 0,255,0,255,0,255, 16,8,0, 0,0,0); $s.Write($pf,0,20)
   $se=[byte[]]@(2,0,0,1, 0,0,0,0); $s.Write($se,0,8)
-  return [pscustomobject]@{ cli=$cli; s=$s; w=$w; h=$h }
+  # port is carried so callers can reconnect: a second capture on an existing
+  # connection only receives CHANGED rectangles and comes back nearly black.
+  return [pscustomobject]@{ cli=$cli; s=$s; w=$w; h=$h; port=$port }
 }
 
 function Vnc-Shot($conn, $path){

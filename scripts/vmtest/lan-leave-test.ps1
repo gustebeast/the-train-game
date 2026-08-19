@@ -26,7 +26,13 @@ param(
   # (fe80::...) when IPv6 is on, and the join then fails while discovery still
   # works -- the misleading 999ms-bounce signature. Forcing IPv4 makes the peer
   # resolve to its 192.168.x address. -KeepIpv6 to test with it left on.
-  [switch]$KeepIpv6
+  [switch]$KeepIpv6,
+  # Relaunch WC3 from scratch after the revert instead of using the WC3 frozen
+  # into the snapshot. The snapshot's WC3 discovers LAN games correctly but every
+  # join bounces at 999ms, while the one join that ever worked was a freshly
+  # launched WC3 -- the suspicion being that a game restored from a memory
+  # snapshot comes back with unusable network sockets. Costs ~3 min per run.
+  [switch]$FreshLaunch
 )
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'TrainVMTest.psm1') -Force
@@ -56,9 +62,21 @@ $lan = @{
   join          = @(637, 1047)
 }
 $step = 0
+# Capture on a FRESH connection every time, not on the driving one.
+#
+# Vnc-Shot paints a blank bitmap and fills only the rectangles the server sends.
+# A connection that has already received a frame is sent just the CHANGED
+# region, so every capture after the first on the same connection comes back
+# nearly black -- which is indistinguishable from "the screen went dark" and
+# makes exactly the diagnostic screenshots you need to read useless. A new
+# client always gets a full frame.
 function Shot($c, $tag) {
   $script:step++
-  Vnc-Shot $c (Join-Path $OutDir ("{0:D2}-{1}.png" -f $script:step, $tag))
+  $path = Join-Path $OutDir ("{0:D2}-{1}.png" -f $script:step, $tag)
+  $port = if ($c.PSObject.Properties.Name -contains 'port') { $c.port } else { $null }
+  if ($null -eq $port) { Vnc-Shot $c $path; return }
+  $fresh = Vnc-Connect $port
+  try { Vnc-Shot $fresh $path } finally { $fresh.cli.Close() }
 }
 
 # --- 1. both VMs to a clean create-game, networked ------------------------
@@ -93,6 +111,43 @@ if (-not $KeepIpv6) {
   Start-Sleep -Seconds 6
 }
 
+# --- 1b. optionally relaunch WC3 so its sockets are built on a live adapter ---
+if ($FreshLaunch) {
+  Say 'killing WC3 on both and relaunching it fresh'
+  foreach ($vm in @($h, $j)) {
+    & $vmrun @guest runProgramInGuest $vm.Vmx 'C:\Windows\System32\taskkill.exe' '/IM' 'Warcraft III.exe' '/F' 2>&1 | Out-Null
+  }
+  Start-Sleep -Seconds 8
+  # Killing WC3 leaves the Battle.net client in the foreground (it sits at
+  # "Connecting..." forever on host-only, which is fine). Relaunch from its Play
+  # button rather than typing a path into the Run dialog -- the Run dialog never
+  # gets focus with Battle.net in front, and this is the same path the mint uses.
+  foreach ($vm in @($h, $j)) {
+    $c = Vnc-Connect $vm.VncPort
+    try {
+      Vnc-Click $c $ui.bnetPlay[0] $ui.bnetPlay[1]
+    } finally { $c.cli.Close() }
+  }
+  Say 'waiting for WC3 to come up on both'
+  foreach ($vm in @($h, $j)) {
+    $t = [Diagnostics.Stopwatch]::StartNew()
+    do { Start-Sleep -Seconds 5; $p = "$(& $vmrun @guest listProcessesInGuest $vm.Vmx 2>&1)" }
+    while ($p -notmatch 'Warcraft III\.exe' -and $t.Elapsed.TotalSeconds -lt 240)
+    if ($p -notmatch 'Warcraft III\.exe') { throw "WC3 did not relaunch on $($vm.Name)" }
+  }
+  Start-Sleep -Seconds 30
+  # Same offline path the mint drives: VPN error OK -> PLAY OFFLINE -> menu.
+  foreach ($vm in @($h, $j)) {
+    $c = Vnc-Connect $vm.VncPort
+    try {
+      Vnc-Click $c $ui.wc3ErrorOk[0] $ui.wc3ErrorOk[1];       Start-Sleep -Seconds 2
+      Vnc-Click $c $ui.wc3PlayOffline[0] $ui.wc3PlayOffline[1]; Start-Sleep -Seconds 10
+      Shot $c "fresh-$($vm.Name)-menu"
+    } finally { $c.cli.Close() }
+  }
+  Say 'both relaunched and sitting at the main menu'
+}
+
 # --- 2. the SAME map filename on both -- LAN matches host and joiner by name --
 $shared = "ZZLAN$(Get-Random -Minimum 1000 -Maximum 9999).w3x"
 Say "upload $shared to both"
@@ -106,8 +161,15 @@ foreach ($vm in @($h, $j)) {
 # --- 3. out of Create Game and into the LAN menu --------------------------
 # One snapshot serves single player AND LAN, so a LAN run pays this navigation.
 function Enter-Lan($conn) {
-  Vnc-Click $conn $lan.back[0] $lan.back[1]; Start-Sleep -Seconds 3        # -> Single Player
-  Vnc-Click $conn $lan.back[0] $lan.back[1]; Start-Sleep -Seconds 3        # -> main menu
+  # Where WC3 starts depends on how we got here, and getting this wrong is
+  # destructive rather than merely wrong: BACK on the MAIN MENU is EXIT, so an
+  # extra back-click quits the game.
+  #   snapshot revert -> parked on Create Game, so two BACKs reach the main menu
+  #   -FreshLaunch    -> already AT the main menu, so no BACKs at all
+  if (-not $FreshLaunch) {
+    Vnc-Click $conn $lan.back[0] $lan.back[1]; Start-Sleep -Seconds 3      # -> Single Player
+    Vnc-Click $conn $lan.back[0] $lan.back[1]; Start-Sleep -Seconds 3      # -> main menu
+  }
   # The first LAN click is often eaten by the menu transition.
   Vnc-Click $conn $lan.menuLan[0] $lan.menuLan[1]; Start-Sleep -Seconds 3
   Vnc-Click $conn $lan.menuLan[0] $lan.menuLan[1]; Start-Sleep -Seconds 5
@@ -146,14 +208,58 @@ Enter-Lan $jc
 Vnc-Click $jc $lan.refresh[0] $lan.refresh[1]; Start-Sleep -Seconds 5
 Shot $jc 'joiner-list'
 Vnc-Click $jc $lan.firstGameRow[0] $lan.firstGameRow[1]; Start-Sleep -Milliseconds 700
-Vnc-Click $jc $lan.join[0] $lan.join[1]; Start-Sleep -Seconds 3
-# The player-name prompt appears on every JOIN and the typing does not always
-# land, so screenshot it rather than trusting it.
-Vnc-Click $jc $ui.nameField[0] $ui.nameField[1]; Start-Sleep -Milliseconds 500
-Vnc-TypeSmart $jc $JoinVm; Start-Sleep -Milliseconds 400
-Shot $jc 'joiner-name'
-Vnc-Click $jc $ui.confirmButton[0] $ui.confirmButton[1]; Start-Sleep -Seconds 10
+Vnc-Click $jc $lan.join[0] $lan.join[1]
+# JOIN still raises ENTER PLAYER NAME, but the field is ALREADY filled with the
+# name baked into the snapshot -- so this only has to press CONFIRM. Do not
+# click the field and do not type: the old code typed the VM name on top of the
+# baked one, which is why the host shows up as 'agentdougie'. Leaving the dialog
+# unanswered simply means the join never happens and the host starts alone.
+Start-Sleep -Seconds 6
+Shot $jc 'joiner-name-prompt'
+Vnc-Click $jc $ui.confirmButton[0] $ui.confirmButton[1]
+# Catch the moment of truth. A failed join shows its error briefly and then
+# drops back to the browser, so a single screenshot 12s later only ever shows
+# the aftermath -- which is why every run so far looked like "it just bounced".
+# What address is WC3 actually dialling? The join is refused instantly and
+# silently, so the useful question is not "did it fail" but "who did it try to
+# talk to" -- an unreachable or wrong peer address looks exactly like this.
+$dial = @'
+$p = Get-Process 'Warcraft III' -ErrorAction SilentlyContinue
+$out = @()
+if ($null -eq $p) { $out += 'WC3 NOT RUNNING' }
+else {
+  $out += 'tcp:'
+  Get-NetTCPConnection -OwningProcess $p.Id -ErrorAction SilentlyContinue |
+    ForEach-Object { $out += ("  {0}:{1} -> {2}:{3} [{4}]" -f $_.LocalAddress,$_.LocalPort,$_.RemoteAddress,$_.RemotePort,$_.State) }
+  $out += 'udp:'
+  Get-NetUDPEndpoint -OwningProcess $p.Id -ErrorAction SilentlyContinue |
+    ForEach-Object { $out += ("  {0}:{1}" -f $_.LocalAddress,$_.LocalPort) }
+}
+$out -join [Environment]::NewLine | Set-Content C:\dial.txt
+'@
+$dialLocal = Join-Path $OutDir 'dial.ps1'
+Set-Content $dialLocal $dial -Encoding ASCII
+& $vmrun @guest CopyFileFromHostToGuest $j.Vmx $dialLocal 'C:\dial.ps1' | Out-Null
+& $vmrun @guest runProgramInGuest $j.Vmx 'C:\Windows\System32\WindowsPowerShell1.0\powershell.exe' '-ExecutionPolicy' 'Bypass' '-File' 'C:\dial.ps1' 2>&1 | Out-Null
+& $vmrun @guest CopyFileFromGuestToHost $j.Vmx 'C:\dial.txt' (Join-Path $OutDir 'joiner-dial.txt') 2>&1 | Out-Null
+if (Test-Path (Join-Path $OutDir 'joiner-dial.txt')) {
+  Say 'joiner WC3 sockets at join time:'
+  Get-Content (Join-Path $OutDir 'joiner-dial.txt') | ForEach-Object { Write-Host "    $_" }
+}
+Start-Sleep -Seconds 2;  Shot $jc 'joiner-after-confirm-2s'
+Start-Sleep -Seconds 3;  Shot $jc 'joiner-after-confirm-5s'
+Start-Sleep -Seconds 4;  Shot $jc 'joiner-after-confirm-9s'
+Start-Sleep -Seconds 6
 Shot $jc 'joiner-joined'
+
+# WC3 records what actually happened to a join attempt. Pull both logs while the
+# guests are still up -- reading pixels only tells you the joiner bounced back
+# to the browser, not why.
+foreach ($vm in @($h, $j)) {
+  $dst = Join-Path $OutDir ("war3log-" + $vm.Name + ".txt")
+  & $vmrun @guest CopyFileFromGuestToHost $vm.Vmx (Join-Path $vm.GuestHome 'Documents\Warcraft III\Logs\War3Log.txt') $dst 2>&1 | Out-Null
+  if (Test-Path $dst) { Say ("captured War3Log for " + $vm.Name) }
+}
 Shot $hc 'host-lobby-2p'
 
 # --- 5. host starts the match -------------------------------------------

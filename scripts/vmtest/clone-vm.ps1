@@ -10,7 +10,12 @@
 param(
   [Parameter(Mandatory)][string]$Vm,
   [string]$Snapshot = 'base-off5',
-  [switch]$Replace
+  [switch]$Replace,
+  # hostonly (default): VM-to-VM LAN with NO route to the internet. This is what
+  # makes LAN testing safe -- Battle.net is unreachable, so a test run can never
+  # consume the single-use session token or churn the ~30-day offline
+  # entitlement. nat is for the rare case of deliberately wanting WAN.
+  [ValidateSet('hostonly','nat')][string]$Network = 'hostonly'
 )
 $ErrorActionPreference = 'Stop'
 $vmrun = 'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
@@ -43,7 +48,7 @@ if ($LASTEXITCODE -ne 0) { throw "Clone failed: $out" }
 # Rewrite the identity- and device-scoped settings. Everything here differs per
 # clone or must not be inherited from the base.
 $lines = Get-Content $vmx | Where-Object {
-  $_ -notmatch '^(displayName|RemoteDisplay\.vnc\.(enabled|port|password)|ethernet0\.(startConnected|generatedAddress|generatedAddressOffset|address|addressType)|sound\.startConnected|uuid\.(bios|location|action))\s*='
+  $_ -notmatch '^(displayName|RemoteDisplay\.vnc\.(enabled|port|password)|ethernet0\.(startConnected|generatedAddress|generatedAddressOffset|address|addressType|connectionType)|sound\.startConnected|uuid\.(bios|location|action))\s*='
 }
 $lines += 'displayName = "' + $display + '"'
 $lines += 'RemoteDisplay.vnc.enabled = "TRUE"'
@@ -52,11 +57,14 @@ $lines += 'RemoteDisplay.vnc.password = "' + $cfg.vncPassword + '"'
 # Fresh network identity: a duplicate MAC on the NAT subnet breaks LAN peering
 # as surely as a duplicate hostname does.
 $lines += 'ethernet0.addressType = "generated"'
-# Minted offline so WC3 commits to PLAY OFFLINE and no stale Battle.net session
-# is frozen into the snapshot. A LAN test connects the NIC at runtime with
-# `vmrun connectNamedDevice <vmx> ethernet0` -- that keeps the far more common
-# single-player path exactly as it was.
-$lines += 'ethernet0.startConnected = "FALSE"'
+$lines += 'ethernet0.connectionType = "' + $Network + '"'
+# The NIC is CONNECTED at boot and stays connected. WC3 sets up its networking
+# when it launches, so a WC3 frozen into a snapshot that booted with no adapter
+# can discover LAN games but cannot host or join one -- connecting the NIC after
+# the revert is too late. Minting with the adapter live is what makes a LAN join
+# work. On hostonly this costs nothing: there is no WAN to reach, so WC3 still
+# takes the PLAY OFFLINE path exactly as before.
+$lines += 'ethernet0.startConnected = "TRUE"'
 $lines += 'sound.startConnected = "FALSE"'
 # Take the new identity silently instead of prompting "moved or copied?"
 $lines += 'uuid.action = "create"'

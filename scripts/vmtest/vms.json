@@ -118,6 +118,14 @@
       "menuCustomGames": [
         1226,
         454
+      ],
+      "backButton": [
+        135,
+        1204
+      ],
+      "upOneLevel": [
+        783,
+        263
       ]
     }
   }
