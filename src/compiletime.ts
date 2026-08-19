@@ -135,7 +135,7 @@ compiletime(({ objectData, constants }) => {
   dash.durationHero = 0.1;
   dash.tooltipNormal = 'Dash';
   dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
-  dash.iconNormal = 'ReplaceableTextures\CommandButtons\BTNEvasion.blp';
+  dash.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNEvasion.blp';
   dash.hotkeyNormal = 'E';
   // Row 0 is the stock Move/Stop/Hold/Attack row, so an ability placed there is
   // hidden behind them — that is why the Dash button was missing from the card
