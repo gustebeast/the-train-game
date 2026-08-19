@@ -27,6 +27,7 @@ import { log } from './debug';
 
 import { initTestKit } from './testkit';
 import './damagetest'; // registers the 'damage' test; add further test modules here
+import './leavetest'; // LAN: leaver's units are despawned
 import './inputwatchtest'; // observes a real VNC-driven input sequence
 import './baredashtest'; // throwaway: bare-dash diagnosis
 import './dashdelaytest'; // measures the dash -> next-order gap
