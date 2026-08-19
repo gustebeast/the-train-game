@@ -209,13 +209,24 @@ Vnc-Click $jc $lan.refresh[0] $lan.refresh[1]; Start-Sleep -Seconds 5
 Shot $jc 'joiner-list'
 Vnc-Click $jc $lan.firstGameRow[0] $lan.firstGameRow[1]; Start-Sleep -Milliseconds 700
 Vnc-Click $jc $lan.join[0] $lan.join[1]
-# JOIN still raises ENTER PLAYER NAME, but the field is ALREADY filled with the
-# name baked into the snapshot -- so this only has to press CONFIRM. Do not
-# click the field and do not type: the old code typed the VM name on top of the
-# baked one, which is why the host shows up as 'agentdougie'. Leaving the dialog
-# unanswered simply means the join never happens and the host starts alone.
+# JOIN always raises ENTER PLAYER NAME. ALWAYS type into it -- never rely on the
+# field being pre-filled.
+#
+# The baked name lives only in the snapshot's PROCESS MEMORY, so it is present
+# on the resume path and GONE after -FreshLaunch, which arrives here with an
+# empty field. WC3 refuses an empty name and the join never happens, and that
+# looks identical -- on screen and in a packet capture -- to the join itself
+# failing. Every -FreshLaunch result recorded before 2026-08-19 was measuring
+# that, not the join.
+#
+# Typing is correct on both paths: it appends to the baked name on the resume
+# path ('agentmurph') and stands alone after a fresh launch ('murph'). Both are
+# non-empty and differ from the host's name, which is all the join requires.
 Start-Sleep -Seconds 6
 Shot $jc 'joiner-name-prompt'
+Vnc-Click $jc $ui.nameField[0] $ui.nameField[1]; Start-Sleep -Milliseconds 400
+Vnc-TypeSmart $jc $JoinVm; Start-Sleep -Milliseconds 400
+Shot $jc 'joiner-name-typed'
 Vnc-Click $jc $ui.confirmButton[0] $ui.confirmButton[1]
 # Catch the moment of truth. A failed join shows its error briefly and then
 # drops back to the browser, so a single screenshot 12s later only ever shows
@@ -239,12 +250,25 @@ $out -join [Environment]::NewLine | Set-Content C:\dial.txt
 '@
 $dialLocal = Join-Path $OutDir 'dial.ps1'
 Set-Content $dialLocal $dial -Encoding ASCII
-& $vmrun @guest CopyFileFromHostToGuest $j.Vmx $dialLocal 'C:\dial.ps1' | Out-Null
-& $vmrun @guest runProgramInGuest $j.Vmx 'C:\Windows\System32\WindowsPowerShell1.0\powershell.exe' '-ExecutionPolicy' 'Bypass' '-File' 'C:\dial.ps1' 2>&1 | Out-Null
-& $vmrun @guest CopyFileFromGuestToHost $j.Vmx 'C:\dial.txt' (Join-Path $OutDir 'joiner-dial.txt') 2>&1 | Out-Null
-if (Test-Path (Join-Path $OutDir 'joiner-dial.txt')) {
-  Say 'joiner WC3 sockets at join time:'
-  Get-Content (Join-Path $OutDir 'joiner-dial.txt') | ForEach-Object { Write-Host "    $_" }
+# Dump BOTH sides at the same moment. The joiner alone cannot distinguish "it
+# dialled the wrong address" from "it never dialled at all"; the host's inbound
+# connection list separates them.
+foreach ($vm in @($j, $h)) {
+  $tag = if ($vm.Name -eq $j.Name) { 'joiner' } else { 'host' }
+  $dst = Join-Path $OutDir "dial-$tag.txt"
+  if (Test-Path $dst) { Remove-Item $dst -Force }
+  & $vmrun @guest CopyFileFromHostToGuest $vm.Vmx $dialLocal 'C:\dial.ps1' | Out-Null
+  & $vmrun @guest runProgramInGuest $vm.Vmx 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' '-ExecutionPolicy' 'Bypass' '-File' 'C:\dial.ps1' 2>&1 | Out-Null
+  & $vmrun @guest CopyFileFromGuestToHost $vm.Vmx 'C:\dial.txt' $dst 2>&1 | Out-Null
+  if (Test-Path $dst) {
+    Say "$tag WC3 sockets at join time:"
+    Get-Content $dst | ForEach-Object { Write-Host "    $_" }
+  } else {
+    # A silent diagnostic failure is how three earlier conclusions in this
+    # investigation turned out to be wrong. Say so rather than letting an
+    # empty result read as "there was nothing to see".
+    Say "WARNING: $tag socket dump produced NOTHING -- this run is blind on that side."
+  }
 }
 Start-Sleep -Seconds 2;  Shot $jc 'joiner-after-confirm-2s'
 Start-Sleep -Seconds 3;  Shot $jc 'joiner-after-confirm-5s'

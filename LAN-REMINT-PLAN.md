@@ -47,7 +47,77 @@ Ruled out by direct experiment; each was tried and the join still failed:
 - IPv6 **disabled** on both adapters.
 - Hostnames **confirmed unique** at the moment of the attempt.
 
-## 3. Leading hypothesis (untested — I ran out of VM)
+## 2b. Later findings from the lead (2026-08-19) — read before re-testing
+
+Three things below are now settled by direct measurement. Do not spend VM time
+re-testing them.
+
+**§3's hypothesis is disproven.** WC3 relaunched fresh, with the NIC live and an
+IP already assigned, behaves identically — same silent bounce. The snapshot's
+frozen sockets are not the cause. `scripts/vmtest/lan-mdns-probe.ps1
+-FreshLaunch` reproduces this in ~4 minutes.
+
+**mDNS is healthy, end to end.** Measured with Bonjour's own `dns-sd.exe`, which
+ships in the guest at `C:\Windows\System32\dns-sd.exe`:
+
+- the service type is `_blizzard._udp`
+- the host's advertisement resolves from the joiner:
+  `mdns._blizzard._udp.local. can be reached at WC3DOUGIE.local.:NNNNN`
+- `WC3DOUGIE.local` → `192.168.31.128` from the joiner, and the reverse
+  direction works too (`lan-name-probe.ps1`)
+
+**The advertised port looks wrong but is not.** `dns-sd` reports a port that
+nothing on the host is bound to. It is the **byte-swapped** form of WC3's real
+TCP listening port — WC3 writes the SRV port in the opposite byte order from the
+spec, so a correct mDNS client displays nonsense while a second WC3 reads it back
+correctly:
+
+| advertised | hex | swapped | WC3's actual TCP listener |
+|---|---|---|---|
+| 47315 | `0xB8D3` | `0xD3B8` = 54200 | 54200 |
+| 39384 | `0x99D8` | `0xD899` = 55449 | 55449 |
+
+So the join target is a **TCP** port, and `lan-diagnose.ps1` already proved the
+joiner can reach it. Anyone who rediscovers the mismatch should stop here rather
+than chase it — it cost a full cycle.
+
+### What the joiner actually does at the moment of a join
+
+Captured with `pktmon` (built into the guest) on both sides, with a control ping
+that must appear or the run declares itself invalid —
+`scripts/vmtest/lan-capture.ps1`:
+
+- **The joiner emits no TCP at all. Not one SYN, to any address.** 897 decoded
+  packets across a join attempt and not a single connection attempt.
+- Nothing is refusing the join. The joiner gives up before it transmits.
+- What it *does* emit is a stream of failing DNS lookups to the host-only
+  gateway `192.168.31.1:53`, which runs no DNS server:
+  `us.actual.battle.net`, `distribution.version.battle.net`,
+  `telemetry-in.battle.net`.
+
+**Leading hypothesis now: host-only networking is itself the cause.** The one
+join that ever succeeded predates the switch to host-only (§4.1 recommended that
+switch *after* that success). Reforged reaches its Battle.net service layer even
+for LAN, and on host-only those endpoints are unreachable by construction.
+
+Testing this means putting a VM on the WAN, which the owner has ruled out except
+for the monthly entitlement refresh — so it needs their decision, not a quiet
+experiment. If it is ever tested, the cheap version is: switch **one** pair to
+`nat` for a single run and see whether the joiner emits a SYN. That one packet
+settles it.
+
+### A harness bug that invalidated earlier results
+
+`-FreshLaunch` never worked. The baked player name lives only in the snapshot's
+**process memory**, so killing and relaunching WC3 arrives at ENTER PLAYER NAME
+with an **empty field**; WC3 refuses an empty name, and the join never happens.
+On screen and in a capture that is indistinguishable from the join failing.
+
+Every `-FreshLaunch` conclusion recorded before 2026-08-19 measured that, not the
+join. Both `lan-leave-test.ps1` and `lan-capture.ps1` now always type into the
+field instead of trusting it to be pre-filled.
+
+## 3. Leading hypothesis — DISPROVEN, see 2b
 
 **WC3 must be launched while the network adapter is live.**
 
