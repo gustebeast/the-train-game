@@ -1,24 +1,18 @@
 import { Trigger, Unit } from 'w3ts';
-import { Items } from '@objectdata/items';
 import { gameState, syncState } from './state';
 import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForLobby } from './items';
-import { SUMMON_UPGRADE_ITEM_ID, PEASANT_ID, REROLL_ITEM_ID } from './constants';
+import {
+  SUMMON_UPGRADE_ITEM_ID, PEASANT_ID, REROLL_ITEM_ID,
+  FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
+  TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, MERC_CONTRACT_ID, MERC_REROLL_ID,
+  CRITTERPOCALYPSE_ID, TOUGH_CAMP_ID,
+} from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
 import { isMercUpgradeBought, buyMercContract, rerollMerc } from './mercenary';
 import { areHeroesSpawned, getSpawnedHeroes, hadSummonLastRound } from './heroes';
 import { forEachUnitInWorld, nextFrame } from './util';
 import { armCritterpocalypse, armToughCamp } from './challenges';
-
-const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
-const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
-const RESOURCE_CAPACITY_ID = FourCC(Items.DruidPouch);
-const TRACK_CAPACITY_ID = FourCC(Items.JadeRing);
-const CRATE_CAPACITY_ID = FourCC(Items.LionsRing);
-const MERC_CONTRACT_ID = FourCC(Items.MogrinsReport);
-const MERC_REROLL_ID = FourCC(Items.HoodOfCunning);
-const CRITTERPOCALYPSE_ID = FourCC(Items.MedallionOfCourage);
-const TOUGH_CAMP_ID = FourCC(Items.PeriaptOfVitality);
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],
