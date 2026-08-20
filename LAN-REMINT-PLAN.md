@@ -95,16 +95,61 @@ that must appear or the run declares itself invalid —
   `us.actual.battle.net`, `distribution.version.battle.net`,
   `telemetry-in.battle.net`.
 
-**Leading hypothesis now: host-only networking is itself the cause.** The one
-join that ever succeeded predates the switch to host-only (§4.1 recommended that
-switch *after* that success). Reforged reaches its Battle.net service layer even
-for LAN, and on host-only those endpoints are unreachable by construction.
+### Battle.net reachability is NOT the cause (tested on WAN, 2026-08-19)
 
-Testing this means putting a VM on the WAN, which the owner has ruled out except
-for the monthly entitlement refresh — so it needs their decision, not a quiet
-experiment. If it is ever tested, the cheap version is: switch **one** pair to
-`nat` for a single run and see whether the joiner emits a SYN. That one packet
-settles it.
+The obvious reading of those DNS failures — that Reforged needs its Battle.net
+layer before it will attempt a LAN connection — is **wrong**. Tested with
+`lan-capture.ps1 -Nat`, which switches the pair to NAT for one run (the vmx edit
+must sit between the revert and the start; reverting rewrites it back):
+
+- Battle.net resolved and was reachable (`bnet=34.125.12.10`)
+- the joiner emitted **92 SYNs** — every one of them to the internet
+- traffic to the peer: still **zero**
+
+So the DNS flood is Battle.net.exe and Agent phoning home, not the join path.
+`-Nat` restores host-only when it finishes, and a revert would anyway.
+
+### A real defect, found and fixed, that was still not the blocker
+
+The host was **not publishing an A record for its own hostname**. It announced
+its `_blizzard._udp` service (hence a correctly listed game) while nothing on the
+network ever answered with an address for `WC3DOUGIE.local.` — the SRV target.
+Cause: mDNSResponder starts inside the snapshot while the adapter is still
+disconnected, so it has no interface to publish a host record on.
+
+`lan-capture.ps1 -RestartBonjour` fixes it — `A 192.168.31.128` goes from 0
+announcements to 4, and the joiner's browse response now carries the address.
+**The join still fails**, so this was a genuine gap but not the cause. The
+durable version is to start Bonjour *after* the NIC is live during the mint,
+which costs nothing per run; it is deliberately opt-in here rather than adding
+~20s to every LAN run for an unproven benefit.
+
+**Beware: resolving the peer from PowerShell does not test what WC3 tests.**
+`[System.Net.Dns]::GetHostAddresses('WC3DOUGIE.local')` succeeds via LLMNR and
+NetBIOS fallback even when mDNS has no such record. `lan-name-probe.ps1` passed
+for hours while WC3, which uses the Bonjour API and only mDNS, had nothing.
+
+### Leading hypothesis now: the clones share one Battle.net account
+
+Both guests carry the same profile directory:
+
+```
+C:\Users\wc3\Documents\Warcraft III\BattleNet\394069848\
+```
+
+They are linked clones of a single login. Reforged identifies players by
+Battle.net account, and a client asked to join a game hosted by **its own
+account** has every reason to refuse locally — which is exactly what is
+observed: no connection attempt, no error text, a permanent 999ms ping, and
+nothing wrong anywhere below the game.
+
+This fits all the evidence better than any network explanation, and every
+network explanation has now been eliminated by measurement.
+
+**Testing it needs a second Blizzard account with a Reforged license** — an
+account creation and probably a purchase, so it is the owner's call, not
+something to try quietly. If a second account is available, the test is one run:
+sign the joiner VM into it and see whether a SYN appears.
 
 ### A harness bug that invalidated earlier results
 

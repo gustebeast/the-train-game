@@ -37,6 +37,23 @@ param(
   # exactly: the joiner emits no packets at all, so it is not being rejected by
   # the host, it is giving up on its own.
   [switch]$FreshLaunch,
+  # Run this one attempt on NAT instead of host-only, i.e. WITH internet access.
+  #
+  # The joiner spends a join attempt failing DNS lookups for us.actual.battle.net
+  # and friends, and the only join that ever succeeded in this project predates
+  # the switch to host-only. This is the single measurement that settles whether
+  # Reforged needs to reach its Battle.net layer before it will attempt a LAN
+  # connection: on NAT the joiner either emits a SYN or it does not.
+  #
+  # Only ever use this deliberately. Going online refreshes the offline
+  # entitlement (which is time-based, not consumed) but it also burns the shared
+  # Battle.net session token across clones, so expect at most one VM to
+  # auto-login afterwards. Nothing here is permanent: a snapshot revert rewrites
+  # the vmx back to host-only on its own, and this script restores it too.
+  [switch]$Nat,
+  # Restart mDNSResponder after the NIC is connected, so it publishes a host
+  # (A) record for the guest. See the block where this is used.
+  [switch]$RestartBonjour,
   [string]$OutDir = 'C:\VMs\lan-capture'
 )
 $ErrorActionPreference = 'Stop'
@@ -78,6 +95,17 @@ function Shot($vm, $tag) {
 Say 'reset both'
 foreach ($vm in @($h, $j)) {
   & $vmrun revertToSnapshot $vm.Vmx $vm.Snapshot 2>&1 | Out-Null
+  if ($Nat) {
+    # The edit MUST sit between the revert and the start. Reverting restores the
+    # snapshot's hardware config and rewrites this line back to host-only, so an
+    # edit made any earlier is silently undone -- which would leave the run
+    # measuring host-only while reporting NAT.
+    $txt = [IO.File]::ReadAllText($vm.Vmx)
+    $txt = $txt.Replace('ethernet0.connectionType = "hostonly"', 'ethernet0.connectionType = "nat"')
+    [IO.File]::WriteAllText($vm.Vmx, $txt)
+    $now = (Select-String -Path $vm.Vmx -Pattern 'ethernet0.connectionType').Line
+    if ($now -notmatch 'nat') { throw "Could not switch $($vm.Name) to NAT; vmx still says: $now" }
+  }
   & $vmrun -T ws start $vm.Vmx nogui 2>&1 | Out-Null
   & $vmrun -T ws disconnectNamedDevice $vm.Vmx sound 2>&1 | Out-Null
   & $vmrun -T ws connectNamedDevice $vm.Vmx ethernet0 2>&1 | Out-Null
@@ -94,6 +122,60 @@ foreach ($vm in @($h, $j)) {
   $state = Guest-Eval $vm $prep "prep-$($vm.Name)"
   Say "  $state"
   if ($state -match 'True') { throw "Firewall still enabled on $($vm.Name) -- a capture here would be meaningless." }
+}
+
+# NAT puts the guests on a different subnet, so the hard-coded host-only
+# addresses would aim the pktmon filter and the control ping at machines that no
+# longer exist. Ask the guests instead of assuming.
+$addr = @'
+$l = @()
+$l += 'ip=' + (((Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -ne '127.0.0.1' }).IPAddress) -join ',')
+try { $l += 'bnet=' + (([System.Net.Dns]::GetHostAddresses('us.actual.battle.net') | ForEach-Object { $_.IPAddressToString }) -join ',') }
+catch { $l += 'bnet=UNRESOLVED' }
+$l -join ' ' | Set-Content C:\probe.txt
+'@
+foreach ($vm in @($h, $j)) {
+  $info = Guest-Eval $vm $addr "addr-$($vm.Name)"
+  Say "  $($vm.Name): $info"
+  if ($info -match 'ip=([\d\.]+)') {
+    if ($vm.Name -eq $h.Name) { $HostIp = $matches[1] } else { $JoinIp = $matches[1] }
+  }
+  # Fail loudly rather than run a NAT test that is secretly still offline: the
+  # whole point of -Nat is that Battle.net is reachable.
+  if ($Nat -and $info -match 'bnet=UNRESOLVED') { throw "$($vm.Name) is on NAT but still cannot resolve Battle.net -- the run would prove nothing." }
+  if (-not $Nat -and $info -notmatch 'bnet=UNRESOLVED') { Say "  NOTE: $($vm.Name) resolved Battle.net without -Nat; this guest is NOT isolated." }
+}
+Say "addresses in play: host=$HostIp joiner=$JoinIp"
+
+if ($RestartBonjour) {
+  # Restart mDNSResponder now that the NIC is live.
+  #
+  # Measured cause of the failed join: the host announces its _blizzard._udp
+  # service (so the game lists correctly, with the right name, map and player
+  # count) but never publishes an A record for its own hostname. The SRV record
+  # points at WC3DOUGIE.local. and nothing ever answers with an address for it,
+  # so the joiner holds a name it cannot resolve, has nothing to dial, and gives
+  # up silently -- no packets, no error, a permanent 999ms ping.
+  #
+  # The responder is started inside the snapshot while the adapter is still
+  # disconnected, which leaves it with no interface to publish a host record on.
+  # WC3's own service registration happens later, when hosting, and does go out.
+  #
+  # Note that resolving the peer from PowerShell does NOT catch this: the Windows
+  # resolver falls back to LLMNR and NetBIOS, which both work here. WC3 uses the
+  # Bonjour API, which has only mDNS.
+  Say 'restarting Bonjour on both, now that the adapter is up'
+  $bonjour = @'
+Restart-Service 'Bonjour Service' -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 6
+('bonjour=' + (Get-Service 'Bonjour Service' -ErrorAction SilentlyContinue).Status) | Set-Content C:\probe.txt
+'@
+  foreach ($vm in @($h, $j)) {
+    $st = Guest-Eval $vm $bonjour "bonjour-$($vm.Name)"
+    Say "  $($vm.Name): $st"
+    if ($st -notmatch 'Running') { throw "Bonjour is not running on $($vm.Name) after the restart." }
+  }
+  Start-Sleep -Seconds 12
 }
 
 Say 'upload the map to both'
@@ -263,4 +345,23 @@ if ($icmp -eq 0) {
 Write-Host ''
 Write-Host '--- first 120 decoded records ---'
 ($decoded -split "`r?`n" | Select-Object -First 120) | ForEach-Object { Write-Host "  $_" }
+
+# The question this whole script exists to answer: did the joiner's WC3 try to
+# open a connection at all? On host-only the answer has been a flat no, to any
+# address, every time.
+$syn = ([regex]::Matches($decodedJ, 'Flags \[S\]|SYN')).Count
+Write-Host ''
+if ($syn -gt 0) {
+  Write-Host "JOINER ATTEMPTED A CONNECTION: $syn SYN packet(s) in its own capture." -ForegroundColor Green
+} else {
+  Write-Host 'JOINER SENT NO SYN AT ALL -- it gave up before transmitting, same as every host-only run.' -ForegroundColor Red
+}
+if ($Nat) {
+  Say 'restoring host-only networking on both'
+  foreach ($vm in @($h, $j)) {
+    $txt = [IO.File]::ReadAllText($vm.Vmx)
+    $txt = $txt.Replace('ethernet0.connectionType = "nat"', 'ethernet0.connectionType = "hostonly"')
+    [IO.File]::WriteAllText($vm.Vmx, $txt)
+  }
+}
 Say "full capture in $(Join-Path $OutDir 'capture.txt')"
