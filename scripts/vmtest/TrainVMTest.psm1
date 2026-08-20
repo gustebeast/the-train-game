@@ -120,6 +120,25 @@ function Get-TestVm {
   The snapshot is a live one parked on WC3's Create Game screen, so this both
   resets state and skips the ~60s of launching and navigating WC3.
 #>
+function Set-TestVmHostOnly {
+  [CmdletBinding()]
+  param([Parameter(Mandatory)][string]$Vmx)
+  # Force host-only networking, every start, no exceptions.
+  #
+  # A guest that can reach the internet can reach Battle.net, and going online
+  # churns the single-use session token shared across all the clones. Host-only
+  # makes that impossible by construction rather than by convention.
+  #
+  # This has to run AFTER the revert and BEFORE the start: reverting restores
+  # the snapshot's hardware config, so a clone minted while on NAT comes back as
+  # NAT every single time and no one-off vmx edit survives. Brenner and Boof
+  # were both found sitting on NAT this way.
+  if (-not (Test-Path $Vmx)) { return }
+  $txt = [IO.File]::ReadAllText($Vmx)
+  $fixed = [regex]::Replace($txt, 'ethernet0\.connectionType\s*=\s*"[^"]*"', 'ethernet0.connectionType = "hostonly"')
+  if ($fixed -ne $txt) { [IO.File]::WriteAllText($Vmx, $fixed) }
+}
+
 function Reset-TestVm {
   [CmdletBinding()]
   param([object]$Vm, [switch]$Gui)
@@ -129,6 +148,7 @@ function Reset-TestVm {
   # and play. Either way the guest's built-in VNC server stays available.
   $startArg = if ($Gui) { 'gui' } else { 'nogui' }
   & $script:VmRun revertToSnapshot $Vm.Vmx $Vm.Snapshot 2>&1 | Out-Null
+  Set-TestVmHostOnly -Vmx $Vm.Vmx
   $out = & $script:VmRun start $Vm.Vmx $startArg 2>&1
   if ($LASTEXITCODE -ne 0) {
     # Known failure mode: a previous run died mid-restore and left a stale
@@ -815,4 +835,4 @@ Export-ModuleMember -Function Invoke-MapTest, Use-TestVm, Test-TestHarness, Get-
   Stop-TestVm, Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile,
   Get-TestVmScreenshot, Send-TestVmChat, Start-TestVmMatch, Start-ManualSession,
   Start-PrewarmVm, Get-PrewarmState, Reset-OrResumeTestVm, Wait-TestVmReady,
-  Complete-TestVm
+  Complete-TestVm, Set-TestVmHostOnly

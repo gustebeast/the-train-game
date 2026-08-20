@@ -14,6 +14,16 @@ $ErrorActionPreference = 'SilentlyContinue'
 $vmrun = 'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
 Set-Content $StateFile 'warming' -Encoding ascii
 & $vmrun revertToSnapshot $Vmx $Snapshot | Out-Null
+# Same guarantee the runner enforces (Set-TestVmHostOnly), duplicated because
+# this script runs standalone and does not import the module: a guest that can
+# reach the internet can reach Battle.net and churn the shared session token.
+# It must sit between the revert and the start -- the revert restores the
+# snapshot's network config, so a clone minted on NAT comes back as NAT.
+if (Test-Path $Vmx) {
+  $txt = [IO.File]::ReadAllText($Vmx)
+  $fixed = [regex]::Replace($txt, 'ethernet0\.connectionType\s*=\s*"[^"]*"', 'ethernet0.connectionType = "hostonly"')
+  if ($fixed -ne $txt) { [IO.File]::WriteAllText($Vmx, $fixed) }
+}
 # Reverting a live snapshot leaves the VM running; the start is a defensive
 # no-op in case it doesn't, so the following suspend always has a running VM.
 & $vmrun -T ws start $Vmx nogui | Out-Null
