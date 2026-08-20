@@ -224,48 +224,58 @@ The saved "keep me logged in" token is **single-use across clones** — the firs
 clone to go online consumes it, so the others still show "session expired". That
 is fine: they never need to log in (see below).
 
-### LAN readiness (already baked into `base-off4`)
+### LAN: attempted, abandoned (2026-08-19)
 
-The clones can play each other over LAN, which is the only way to exercise
-behaviour needing a second real player (a leaver's units being despawned, say).
-Three things make it work; the first two live in the base image as of
-`base-off4` (2026-08-18) and need no repeating:
+**This harness is single-player only. Do not build multiplayer tests against it,
+and do not reopen the LAN work without reading this first.**
 
-1. **Bonjour.** Reforged uses Apple's mDNS for LAN discovery; without it
-   LOCAL AREA NETWORK only offers *"INSTALL BONJOUR"*. Installed silently from
-   the host's own cached package — no download needed:
-   `msiexec /i bonjour.msi /qn /norestart`, then verify `mDNSResponder.exe`
-   exists and the `Bonjour Service` is running.
-2. **Firewall.** Out of the box the guests cannot even ping each other. The
-   Warcraft rules ship scoped to the **Public** profile only, which is why they
-   never applied; they are now widened to `Any`, plus program-scoped allow rules
-   for `mDNSResponder.exe` and `Warcraft III.exe`, and ICMPv4 echo so peer
-   reachability is diagnosable. **Program-scoped on purpose:** Reforged does
-   *not* use port 6112 — it binds a dynamic high port and advertises it over
-   mDNS, so any port-based rule is the wrong tool. (Disabling the firewall
-   outright also works and is proven, but is a blunt instrument.)
-3. **A unique hostname per VM**, which `mint-vm.ps1` now sets automatically
-   (`brenner` -> `WC3BRENNER`) on first boot, before WC3 is launched, so the
-   required reboot costs no extra menu navigation. This one is the killer:
-   every clone otherwise inherits `WC3TEST`, and Reforged resolves LAN peers
-   **by hostname**, so each VM resolves the other to itself. The symptom is
-   deeply misleading — discovery works perfectly (game listed, right map, right
-   host) while every join silently bounces at 999ms ping, with no error shown.
+Two VMs could discover each other's games perfectly — correct game name, map,
+host and player count — but **every join failed**, silently, with a permanent
+999ms ping and no error anywhere in the UI. It was chased to the wire and then
+dropped as not worth further cost.
 
-**One snapshot serves both.** The snapshot stays parked exactly where it was,
-at the single-player Custom Games root, so the common single-player run is
-unchanged; a LAN test simply navigates from there (~20s of menus). Do not mint a
-separate LAN snapshot.
+What was eliminated, each by direct measurement rather than reasoning:
 
-**Verified end to end on 2026-08-18**: on the base, WC3 launched with MULTIPLAYER
-enabled (entitlement fresh) and LOCAL AREA NETWORK opened straight into the game
-browser with no "INSTALL BONJOUR" prompt; after re-cloning, `WC3BRENNER` resolved
-`WC3BOOF` by hostname over mDNS and pinged it. All four clones then passed the
-damage test.
+| Suspect | Result |
+|---|---|
+| ICMP / TCP / UDP between guests | all pass |
+| Guest firewall | verified off; unchanged |
+| IPv6 link-local addresses | disabled; unchanged |
+| Duplicate hostnames | unique and verified (`WC3DOUGIE` / `WC3MURPH`) |
+| mDNS discovery and service resolution | healthy both ways |
+| WC3 launched with a dead NIC | fresh launch behaves identically |
+| Joiner missing the map at index time | map on disk before launch; unchanged |
+| Battle.net unreachable on host-only | tested on NAT with WAN: 92 SYNs to the internet, still **zero** to the peer |
 
-One wrinkle worth knowing: clicking LOCAL AREA NETWORK **while online** drops the
-Battle.net session and throws the DISCONNECT dialog. Click PLAY OFFLINE and you
-land back on the main menu; LAN then opens cleanly. Minted VMs are already
+The decisive measurement, taken with `pktmon` on both guests: **the joiner emits
+no TCP at all during a join — not one SYN, to any address.** Nothing is refusing
+the join; the client gives up before it transmits. That is why every
+network-layer fix changed nothing.
+
+**Leading suspect when work stopped:** the clones share one Battle.net identity.
+Every guest carries the same profile directory,
+`Documents\Warcraft III\BattleNet\394069848\`, because they are linked clones of
+a single login. Reforged identifies players by account, and a client refusing to
+join a game hosted by its own account matches every observation. Confirming it
+needs a second Blizzard account with a Reforged license.
+
+Two traps worth keeping, because both produced confident wrong answers:
+
+- **`[System.Net.Dns]::GetHostAddresses('WC3DOUGIE.local')` does not test what
+  WC3 tests.** It succeeds via LLMNR and NetBIOS fallback even when mDNS holds
+  no such record. WC3 uses the Bonjour API, which has only mDNS.
+- **mDNSResponder starts inside the snapshot while the adapter is disconnected**,
+  so it publishes no host (A) record at all — the service is advertised but its
+  SRV target resolves to nothing. Restarting `Bonjour Service` after the NIC is
+  live fixes that specific gap. If Bonjour is ever needed again, start it after
+  the NIC.
+
+The scripts are in git history; `git log --diff-filter=D -- scripts/vmtest/lan-*`
+finds them, and commits `ba95700` and `f5a08e4` carry the full findings.
+
+One wrinkle worth knowing if the menus are ever driven again: clicking LOCAL AREA
+NETWORK **while online** drops the Battle.net session and throws the DISCONNECT
+dialog. Click PLAY OFFLINE and you land back on the main menu. Minted VMs are
 offline, so they never see this.
 
 ### Mint each clone (offline, no login)
@@ -288,13 +298,15 @@ MAC breaks LAN peering as surely as a duplicate hostname does.
 
 `mint-vm.ps1` then renames the guest (`murph` -> `WC3MURPH`), **verifies the
 rename actually took**, drives WC3 to the Custom Games root and snapshots. The
-verification matters: a silently-failed rename yields a VM that tests fine alone
-and cannot be joined over LAN. Ask how I know.
+rename is no longer load-bearing now that LAN is out of scope, but the
+verification is kept: it is cheap, and a guest that silently keeps the base
+image's name is a sign the mint did not go as intended.
 
 The NIC is left disconnected so WC3 commits to PLAY OFFLINE and no stale
-Battle.net session is frozen into the snapshot. A LAN test connects it at
-runtime with `vmrun -T ws connectNamedDevice <vmx> ethernet0`, which keeps the
-far more common single-player path exactly as it was. Then per clone:
+Battle.net session is frozen into the snapshot. Single-player runs never connect
+it. The adapter is wired to a **host-only** network, so even if something does
+connect it the guest cannot reach Battle.net — which is what protects the
+offline entitlement from being churned by a test run. Then per clone:
 
 After configuring the vmx, **boot each clone once and verify its VNC port** —
 VMware silently rewrites `RemoteDisplay.vnc.port` back to the default 5900 in the
