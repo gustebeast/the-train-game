@@ -8,7 +8,11 @@
 param(
   [Parameter(Mandatory)][string]$Vmx,
   [Parameter(Mandatory)][string]$Snapshot,
-  [Parameter(Mandatory)][string]$StateFile
+  [Parameter(Mandatory)][string]$StateFile,
+  # 'off' unplugs the NIC before the suspend, so the VM this leaves parked --
+  # and every resume of it -- has no network. Passed in by Start-PrewarmVm
+  # because this script runs standalone and cannot read the VM config itself.
+  [string]$Network = 'hostonly'
 )
 $ErrorActionPreference = 'SilentlyContinue'
 $vmrun = 'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
@@ -27,5 +31,9 @@ if (Test-Path $Vmx) {
 # Reverting a live snapshot leaves the VM running; the start is a defensive
 # no-op in case it doesn't, so the following suspend always has a running VM.
 & $vmrun -T ws start $Vmx nogui | Out-Null
+# Unplug before suspending: the adapter's connected state is saved with the
+# suspend, so doing it here means every later resume comes back with no network
+# too, not just this one.
+if ($Network -eq 'off') { & $vmrun -T ws disconnectNamedDevice $Vmx ethernet0 | Out-Null }
 & $vmrun -T ws suspend $Vmx | Out-Null
 Set-Content $StateFile 'warm' -Encoding ascii

@@ -110,6 +110,11 @@ function Get-TestVm {
     GuestUser     = $script:Config.guestUser
     GuestPassword = $script:Config.guestPassword
     GuestHome     = "C:\Users\$($script:Config.guestUser)"
+    # 'off' unplugs the virtual NIC on every start; anything else leaves it on
+    # the host-only network. Single-player tests need no network at all, and a
+    # guest with no cable cannot reach Battle.net even if some future change
+    # puts it back on a routable network by accident.
+    Network       = if ($entry.PSObject.Properties.Name -contains 'network') { $entry.network } else { 'hostonly' }
   }
 }
 
@@ -166,6 +171,29 @@ function Reset-TestVm {
   # disconnected, but a revert re-attaches the device (sound.startConnected), so
   # without this the host hears WC3's menu music whenever a test runs.
   & $script:VmRun -T ws disconnectNamedDevice $Vm.Vmx sound 2>&1 | Out-Null
+  Disconnect-TestVmNic $Vm
+}
+
+<#
+.SYNOPSIS
+  Unplug the virtual NIC on VMs configured with network = 'off'.
+.DESCRIPTION
+  Same reasoning as the sound device above, and the same reason it is done at
+  RUNTIME rather than in the vmx: these are live snapshots, so the adapter's
+  connected state is part of the saved memory state and comes back however it
+  was when the snapshot was minted -- ethernet0.startConnected in the vmx does
+  not decide it. Only disconnectNamedDevice reliably does.
+
+  Single-player tests need no network at all, so the safest configuration is no
+  cable. It also removes the last path to Battle.net, whose session token is
+  shared across every clone and consumed by the first one that gets online.
+#>
+function Disconnect-TestVmNic {
+  [CmdletBinding()]
+  param([object]$Vm)
+  if ($null -eq $Vm) { $Vm = Get-TestVm }
+  if ($Vm.Network -ne 'off') { return }
+  & $script:VmRun -T ws disconnectNamedDevice $Vm.Vmx ethernet0 2>&1 | Out-Null
 }
 
 # --- Pre-warming ----------------------------------------------------------
@@ -207,7 +235,8 @@ function Start-PrewarmVm {
   $script = Join-Path $PSScriptRoot 'prewarm.ps1'
   Start-Process powershell -WindowStyle Hidden -ArgumentList @(
     '-NoProfile','-ExecutionPolicy','Bypass','-File', $script,
-    '-Vmx', $Vm.Vmx, '-Snapshot', $Vm.Snapshot, '-StateFile', (Get-PrewarmStateFile $Vm)
+    '-Vmx', $Vm.Vmx, '-Snapshot', $Vm.Snapshot, '-StateFile', (Get-PrewarmStateFile $Vm),
+    '-Network', $Vm.Network
   ) | Out-Null
 }
 
@@ -364,6 +393,10 @@ function Reset-OrResumeTestVm {
     & $Log "resuming pre-warmed $($Vm.Name) (skipped reset)"
     Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
     & $script:VmRun -T ws start $Vm.Vmx nogui 2>&1 | Out-Null   # resume from suspend
+    # The resume path skips Reset-TestVm entirely, so it has to unplug the NIC
+    # itself; a suspended VM comes back with whatever devices it was suspended
+    # holding.
+    Disconnect-TestVmNic $Vm
   } else {
     & $Log "reset $($Vm.Name) -> $($Vm.Snapshot)"
     Remove-Item $stateFile -Force -ErrorAction SilentlyContinue

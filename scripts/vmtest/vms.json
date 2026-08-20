@@ -6,6 +6,7 @@
   "snapshot": "create-game",
   "_guestMaxFpsComment": "WC3's maxfps in the guest's War3Preferences.txt. It caps how fast the guests render (and so how fast anything can watch them); vm-wall.ps1 defaults its capture rate to this. Change it here AND in each guest's War3Preferences.txt.",
   "guestMaxFps": 15,
+  "_networkComment": "Per-VM networking. 'off' unplugs the virtual NIC on every start, resume and pre-warm; anything else (default) leaves it on the host-only network. Single-player tests need no network at all, and no cable is the strongest guarantee a run can never reach Battle.net, whose session token is shared across all the clones. Applied at runtime via disconnectNamedDevice, not in the vmx: these are live snapshots, so the adapter's connected state is restored from the saved memory state and ethernet0.startConnected does not decide it.",
   "_baseComment": "TrainGameTest is the clone PARENT and mint base -- NOT a test target. Running tests here would interfere with cloning, so it is deliberately absent from 'vms' and the runner refuses to target it.",
   "base": {
     "vmx": "C:\\VMs\\TrainGameTest\\TrainGameTest.vmx",
@@ -18,12 +19,14 @@
       "vmx": "C:\\VMs\\Brenner\\Brenner.vmx",
       "vncPort": 5901,
       "ui": "fullscreen",
+      "network": "off",
       "ready": true
     },
     "boof": {
       "vmx": "C:\\VMs\\Boof\\Boof.vmx",
       "vncPort": 5902,
       "ui": "fullscreen",
+      "network": "off",
       "ready": true
     },
     "dougie": {
