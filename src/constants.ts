@@ -27,7 +27,7 @@ export const BUILD_TRACK_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
 export const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
 export const FILL_ABILITY_ID = FourCC(Abilities.UndefinedNeutralHostile);
 export const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
-export const DASH_ABILITY_ID = FourCC('A000'); // Channel-based dash, authored in the editor
+export const DASH_ABILITY_ID = FourCC(Abilities.Flare);
 // Wand of Negation repurposed as the Hero Reroll cast (its native purge is
 // irrelevant — the target is replaced the moment the spell lands)
 export const REROLL_ABILITY_ID = FourCC(Abilities.ItemIllusions);
