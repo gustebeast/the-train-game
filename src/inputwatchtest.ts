@@ -83,6 +83,11 @@ function run(t: TestReporter): void {
   // If the peasant is ever deselected, the later right-click never reached it
   // and leg 3 was never queued at all — a driver artifact, not a game rule.
   let deselectedAtT = -1;
+  // Sample the CURRENT order every half second: if the peasant is stuck rather
+  // than idle, this shows which order it is sitting on and never finishing.
+  const ordSeq: number[] = [];
+  let ordN = 0;
+  let nextOrdSample = 0;
 
   const sampler = Timer.create();
   sampler.start(SAMPLE, true, t.guard(() => {
@@ -93,6 +98,11 @@ function run(t: TestReporter): void {
     const rel = x - ax;
     const moving = dx > EPS || dx < -EPS;
     if (deselectedAtT < 0 && !IsUnitSelected(h, Players[0].handle)) deselectedAtT = elapsed;
+    if (elapsed >= nextOrdSample && ordN < 18) {
+      ordSeq[ordN] = GetUnitCurrentOrder(h);
+      ordN = ordN + 1;
+      nextOrdSample = elapsed + 0.5;
+    }
 
     if (tFirstMove < 0 && dx > EPS) tFirstMove = elapsed;
     if (tFirstMove > 0 && tReverse < 0) {
@@ -115,6 +125,7 @@ function run(t: TestReporter): void {
     if (elapsed >= WATCH) {
       sampler.destroy();
       const d = getDashDebug();
+      for (let i = 0; i < ordN; i++) t.report('ord@' + I2S(i)! , ordSeq[i]);
       t.report('deselectedAtT', deselectedAtT);
       t.report('stillSelected', IsUnitSelected(h, Players[0].handle) ? 1 : 0);
       t.report('stopsIssued', stopN);
