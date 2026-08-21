@@ -104,7 +104,13 @@ function Vnc-DblClick($conn, [int]$x, [int]$y){
   #
   # ~220ms press-to-press is a comfortable 3+ frames apart while staying far
   # under Windows' 500ms double-click threshold.
-  Vnc-Pointer $conn $x $y 0; Start-Sleep -Milliseconds 80
+  #
+  # The MOVE needs its own frame too, for the same reason. With only 80ms of
+  # settle the move and the first press could share a frame, so WC3 delivered
+  # that press at the PREVIOUS cursor position and only the second one landed on
+  # the target — a double-click arriving as a single click. The tell is a folder
+  # row that ends up highlighted but never opens.
+  Vnc-Pointer $conn $x $y 0; Start-Sleep -Milliseconds 200
   Vnc-Pointer $conn $x $y 1; Start-Sleep -Milliseconds 40; Vnc-Pointer $conn $x $y 0
   Start-Sleep -Milliseconds 180
   Vnc-Pointer $conn $x $y 1; Start-Sleep -Milliseconds 40; Vnc-Pointer $conn $x $y 0
