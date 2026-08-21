@@ -1,4 +1,9 @@
 compiletime(({ objectData, constants }) => {
+  // The dash: a Channel copy authored in the world editor, so it has no entry
+  // in the generated constants and is referenced by rawcode. Keep in step with
+  // DASH_ABILITY_ID in constants.ts.
+  const DASH_ABILITY = 'A000';
+
   const trackTypes: { [key: string]: string } = {
     EN: constants.units.ArcaneTower,
     ES: constants.units.CannonTower,
@@ -87,7 +92,7 @@ compiletime(({ objectData, constants }) => {
   // and couldn't path empty tile corridors at all.
   peasant.collisionSize = 32;
   peasant.structuresBuilt = '';
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral, constants.abilities.Flare].join(',');
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral, DASH_ABILITY].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
@@ -103,38 +108,53 @@ compiletime(({ objectData, constants }) => {
   peasant.animationCastPoint = 0;
   peasant.animationCastBackswing = 0;
 
-  // Dash spell: Flare, repurposed as an instant point-target dash.
+  type ChannelAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { targetType: number; options: number; followThroughTime: number; artDuration: number };
+
+  // Dash spell: A000, a Channel copy authored in the world editor.
   //
-  // NOT Channel (the A000 ability authored in the editor): Channel is a
-  // CHANNELLING spell, and starting a channel makes WC3 discard whatever the
-  // player shift-queued behind it. Measured with the spell reduced to a
-  // complete no-op — no trigger code at all — the leg queued after the cast
-  // still never ran. Flare keeps the queue, at the cost of a slightly longer
-  // tail after the cast (0.24s vs 0.06s), which is the trade we want.
-  const dash = objectData.abilities.get(constants.abilities.Flare)!;
+  // It has to be a SECOND Channel rather than the stock one, because stock
+  // Channel (ANcl) is already the give/take spell.
+  //
+  // Channel over Flare: the ability is only ever a way to turn a click into a
+  // walk -- nothing happens when it goes off -- so the only thing that matters
+  // is how fast it completes once the peasant arrives, which is when the queue
+  // moves on. Flare has a hard 0.80s between cast and effect that no exposed
+  // field trims (measured in game with castingTime, cast point, cast backswing
+  // and every duration already reading 0). Channel's followThroughTime and
+  // artDuration are real fields and are set to 0 below, so it resolves at once.
+  //
+  // Its base order is 'flare' (set in the editor), which is why the trigger
+  // code still watches that order id.
+  const dash = objectData.abilities.get(DASH_ABILITY)! as ChannelAbility;
   dash.heroAbility = false;
   dash.levels = 1;
+  dash.targetType = 2; // point target
+  dash.options = 1; // visible on the command card
+  // NOT 0. Channel reads a follow-through of 0 as "channel until something
+  // interrupts you", so the spell never ends, the order never completes, and
+  // everything queued behind the dash waits forever (seen in game: the effect
+  // fired but FINISH and ENDCAST never did). The smallest non-zero value ends
+  // it on the next frame, which is what "instant" has to mean here.
+  dash.followThroughTime = 0.01;
+  dash.artDuration = 0;
   // A DELIBERATELY TINY cast range is what turns the cast into a walk. Order a
-  // spell at a point out of range and WC3 walks the caster there itself -- an
-  // engine approach move, which respects the order queue perfectly and finishes
-  // the way any move finishes. That is strictly better than appending our own
-  // move behind the cast, which the engine would sometimes never complete and
-  // which then blocked everything queued behind it.
+  // spell at a point outside its range and WC3 walks the caster there itself --
+  // an engine approach move, which respects the order queue perfectly and
+  // finishes the way any move finishes. That is strictly better than appending
+  // our own move behind the cast, which the engine would sometimes never
+  // complete, blocking everything queued behind it.
   //
   // Not 0: the caster has to actually get within range for the spell to fire,
   // and a point it cannot stand exactly on (rock edge, unit in the way) would
   // leave it approaching forever. Half a tile of slack is invisible in play.
   dash.castRange = 64;
-  // Alleria's Flare ships with a tech requirement, which greys the button out
-  // and makes the cast order get rejected outright.
-  dash.requirements = '';
   dash.castingTime = 0;
   // No cast animation: the spell animation is part of what the unit sits
   // through before the queue advances.
   dash.animationNames = '';
   dash.tooltipNormal = 'Dash';
   dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
-  dash.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNEvasion.blp';
+  dash.iconNormal = 'ReplaceableTextures\CommandButtons\BTNEvasion.blp';
   dash.hotkeyNormal = 'E';
   // Row 0 of the command card is the stock Move/Stop/Hold/Attack row; an
   // ability placed there is hidden behind them.
@@ -152,7 +172,6 @@ compiletime(({ objectData, constants }) => {
   buildTrack.hotkeyNormal = 'D';
 
   // Give/Take spell (Channel — unit or point target)
-  type ChannelAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { targetType: number; options: number };
   const giveTake = objectData.abilities.get(constants.abilities.Channel)! as ChannelAbility;
   giveTake.heroAbility = false;
   giveTake.levels = 1;
@@ -211,13 +230,6 @@ compiletime(({ objectData, constants }) => {
       { id: 'Ncl1', variableType: 2, dataPointer: 1, value: 0 }, // followThroughTime
       { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
       { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
-    ],
-    Afla: [ // Flare (the dash) — no cost, no cooldown, no reveal
-      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
-      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
-      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
-      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
-      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
     Afod: [ // FingerOfDeath neutral hostile (bridge spell)
       { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
