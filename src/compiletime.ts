@@ -323,6 +323,38 @@ compiletime(({ objectData, constants }) => {
         fsMod.writeFileSync(outDir + '/war3mapSkin.w3q', bytes);
       }
     }
+    // GUARD: every item the map customises must be one creeps never drop.
+    //
+    // The map identifies its items by rawcode alone -- shop.ts reads "a unit
+    // picked up this rawcode" as a purchase wherever it happened, and items.ts
+    // reads another as the peasant's axe -- so a customised rawcode that is
+    // also in WC3's random drop pool means a creep corpse hands out a free
+    // upgrade or a free tool. Measured before the rawcodes were moved: 90 of
+    // 1080 rolls came back as one of the map's own items.
+    //
+    // Customising an item is exactly what puts it in this table, so there is no
+    // list to keep in sync: base a new custom item on a droppable rawcode and
+    // the BUILD fails here, naming the offender. Miscellaneous, Campaign and
+    // Purchasable items ship with the flag false and are safe; Permanent and
+    // PowerUp ones generally are not. Re-base the item rather than editing the
+    // drop tables -- the loot ecology is not ours to change.
+    for (const tag of ['w3t', 'w3tSkin']) {
+      const itemTable = (result as any)[tag];
+      if (itemTable == null) continue;
+      for (const sub of [itemTable.originalTable, itemTable.customTable]) {
+        if (sub == null) continue;
+        for (const obj of sub.objects) {
+          const base = objectData.items.get(obj.oldId);
+          if (base != null && base.includeAsRandomChoice) {
+            throw new Error(
+              'Custom item "' + base.name + '" (' + obj.oldId + ') is in the random drop pool, ' +
+              'so a creep could drop it. The map matches items by rawcode, so that would be a ' +
+              'free upgrade or tool off a corpse. Re-base it on an item creeps never drop ' +
+              '(Miscellaneous, Campaign or Purchasable).');
+          }
+        }
+      }
+    }
     return result;
   };
 
@@ -630,6 +662,14 @@ compiletime(({ objectData, constants }) => {
   unsummonHeroes.buffs = '';
   unsummonHeroes.effect = '';
 
+  // NOTE on item rawcodes: everything the map repurposes must be an item creeps
+  // never drop. Camps roll drops with ChooseRandomItemEx, whose pool is every
+  // item flagged "Include As Random Choice" -- and the map matches its items by
+  // rawcode alone, so a rolled one becomes a free shop upgrade or a free tool
+  // off a corpse (measured: 90 of 1080 rolls, before these four moved).
+  // Miscellaneous, Campaign and Purchasable items carry that flag false and are
+  // safe; Permanent ones generally do not. Pick from the safe classes.
+  //
   // Shop: based on the melee MARKETPLACE (nmrk), the one unit whose
   // dynamically added stock (AddItemToStock) natively displays — Blizzard's
   // own rotating-stock flow targets it. Stock is added at runtime in
@@ -693,11 +733,11 @@ compiletime(({ objectData, constants }) => {
   shadyDealer.collisionSize = 32;
   shadyDealer.sightRadiusDay = 400;
   shadyDealer.sightRadiusNight = 400;
-  shadyDealer.itemsSold = [constants.items.MedallionOfCourage, constants.items.PeriaptOfVitality].join(',');
+  shadyDealer.itemsSold = [constants.items.Shimmerweed, constants.items.SkeletalArtifact].join(',');
   shadyDealer.itemsMade = '';
 
-  // Critterpocalypse challenge (MedallionOfCourage — purchased from the Shady Dealer)
-  const critterpocalypse = objectData.items.get(constants.items.MedallionOfCourage)!;
+  // Critterpocalypse challenge (Shimmerweed — purchased from the Shady Dealer)
+  const critterpocalypse = objectData.items.get(constants.items.Shimmerweed)!;
   critterpocalypse.name = 'Critterpocalypse';
   critterpocalypse.tooltipBasic = critterpocalypse.name;
   critterpocalypse.description = 'Every grass tile spawns a critter next round. Beat the round to earn 2 bonus gold.';
@@ -714,8 +754,8 @@ compiletime(({ objectData, constants }) => {
   critterpocalypse.classification = 'PowerUp';
   critterpocalypse.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSheep.blp';
 
-  // Tough Creep Camp challenge (PeriaptOfVitality — purchased from the Shady Dealer)
-  const toughCamp = objectData.items.get(constants.items.PeriaptOfVitality)!;
+  // Tough Creep Camp challenge (SkeletalArtifact — purchased from the Shady Dealer)
+  const toughCamp = objectData.items.get(constants.items.SkeletalArtifact)!;
   toughCamp.name = 'Tough Creep Camp';
   toughCamp.tooltipBasic = toughCamp.name;
   toughCamp.description = "Next round's creep camp hits far harder. Defeat it to earn 2 bonus gold.";
@@ -732,9 +772,9 @@ compiletime(({ objectData, constants }) => {
   toughCamp.classification = 'PowerUp';
   toughCamp.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGrunt.blp';
 
-  // Restore Lost HP (ManualOfHealth — purchased from shop). Replaces Flame
+  // Restore Lost HP (HeartOfAszune — purchased from shop). Replaces Flame
   // Resistance on the shelf whenever the train is below its starting max HP.
-  const restoreHp = objectData.items.get(constants.items.ManualOfHealth)!;
+  const restoreHp = objectData.items.get(constants.items.HeartOfAszune)!;
   restoreHp.name = 'Repair Train';
   restoreHp.tooltipBasic = restoreHp.name;
   restoreHp.description = 'Repairs the fire damage, restoring the train to 100 health. Health upgrades bought before the fire are not restored.';
@@ -859,55 +899,8 @@ compiletime(({ objectData, constants }) => {
   mercContract.classification = 'PowerUp';
   mercContract.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMedalionOfCourage.blp';
 
-  // Reroll Mercenary (HoodOfCunning — purchased from shop, repeatable)
-  const mercReroll = objectData.items.get(constants.items.HoodOfCunning)!;
-  mercReroll.name = 'Reroll Mercenary';
-  mercReroll.tooltipBasic = mercReroll.name;
-  mercReroll.description = 'Replaces your mercenary (dead or alive) with a new random creep. Carried items transfer to the new mercenary.';
-  mercReroll.tooltipExtended = mercReroll.description;
-  mercReroll.goldCost = 1;
-  mercReroll.stockMaximum = 10;
-  mercReroll.stockReplenishInterval = 3600;
-  mercReroll.stockInitialAfterStartDelay = 10;
-  mercReroll.useAutomaticallyWhenAcquired = true;
-  mercReroll.activelyUsed = false;
-  mercReroll.canBeDropped = false;
-  mercReroll.perishable = true;
-  mercReroll.abilities = '';
-  mercReroll.classification = 'PowerUp';
-  mercReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHoodOfCunning.blp';
-
-  // Mercenary inventory: a rolled mercenary is a plain creep type, and WC3 only
-  // grants working inventory slots for an inventory ability present on the unit
-  // at CREATION time — UnitAddAbility at runtime shows the ability but yields 0
-  // slots (verified in-game). So bake InventoryHero (the same ability the
-  // peasant carries tools with) onto every Lordaeron Summer creep type, the pool
-  // rollMercType draws mercenaries from. Enemy camp copies get an (unused) empty
-  // inventory too — harmless. Keep this list in sync with
-  // CREEP_CAMPS['Lordaeron Summer'].
-  //
-  // Death-drop is NOT prevented in object data: this is stock AInv, which drops
-  // items on death. mercenary.ts strips them in the death trigger instead, so
-  // that strip is the only thing preventing a dead merc's items from hitting
-  // the ground. Giving the merc an inventory ability with dropItemsOnDeath=0
-  // would make it robust rather than order-dependent, but AInv is shared with
-  // the train, peasant and crate, so it cannot simply be reconfigured here.
-  const mercCreepTypes = [
-    'nfsh', 'nftb', 'nftk', 'nftr', 'nftt', 'ngna', 'ngnb', 'ngno', 'ngns',
-    'ngnv', 'ngnw', 'ngrk', 'ngst', 'nkob', 'nkog', 'nkot', 'nmfs', 'nmrl',
-    'nmrm', 'nmrr', 'nogl', 'nogm', 'nogr', 'nomg', 'nrdr', 'nsc2', 'nsc3',
-    'nscb', 'ntrg', 'ntrh', 'ntrs', 'ntrt', 'nwzg',
-  ];
-  for (const creepId of mercCreepTypes) {
-    const creep = objectData.units.get(creepId);
-    if (creep == null) continue;
-    const existing = (creep.normal as unknown as string) ?? '';
-    if (existing.indexOf(constants.abilities.InventoryHero) !== -1) continue;
-    creep.normal = (existing !== '' ? existing + ',' : '') + constants.abilities.InventoryHero;
-  }
-
-  // Summon Heroes upgrade (PendantOfEnergy — purchased from shop, one-time)
-  const summonUpgrade = objectData.items.get(constants.items.PendantOfEnergy)!;
+  // Summon Heroes upgrade (HornOfCenarius — purchased from shop, one-time)
+  const summonUpgrade = objectData.items.get(constants.items.HornOfCenarius)!;
   summonUpgrade.name = 'Summon Heroes Upgrade';
   summonUpgrade.tooltipBasic = summonUpgrade.name;
   summonUpgrade.description = 'Unlocks the Summon Heroes ability, allowing heroes to be summoned at creep camps. One-time purchase, kept across rounds.';
@@ -946,41 +939,6 @@ compiletime(({ objectData, constants }) => {
   heroReroll.abilities = constants.abilities.ItemIllusions;
   heroReroll.classification = 'Charged';
   heroReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
-
-  // Keep every repurposed item out of the random drop tables.
-  //
-  // The map reuses stock rawcodes for its own items, and matches on rawcode
-  // alone: shop.ts turns "a unit picked up Mogrin's Report" into a Mercenary
-  // Contract purchase no matter WHERE that happened, and items.ts reads
-  // Sturdy War Axe as the peasant's axe. Creep camps drop random permanents via
-  // ChooseRandomItemEx, whose pool is every item with "Include As Random
-  // Choice" set -- which these all ship with. A camp rolling one would hand out
-  // a free upgrade, or a tool, from a corpse.
-  //
-  // Clearing the flag removes them from that pool at the source, which beats
-  // guarding each consumer: there is one list here rather than a proximity
-  // check in shop.ts plus another rule in items.ts. (compiletime.ts already
-  // does the same reasoning for the attachment abilities, which were chosen so
-  // creep-drop items never reference them.)
-  const repurposedItems = [
-    // shop stock
-    constants.items.AncientFigurine, constants.items.BracerOfAgility,
-    constants.items.DruidPouch, constants.items.JadeRing,
-    constants.items.LionsRing, constants.items.PendantOfEnergy,
-    constants.items.MogrinsReport, constants.items.HoodOfCunning,
-    constants.items.MedallionOfCourage, constants.items.PeriaptOfVitality,
-    // hero reroll
-    constants.items.VoodooDoll,
-    // peasant tools and train resources
-    constants.items.SturdyWarAxe, constants.items.RustyMiningPick,
-    constants.items.IronwoodBranch, constants.items.GemFragment,
-    constants.items.MechanicalCritter, constants.items.EmptyVial,
-    constants.items.FullVial,
-  ];
-  for (const itemId of repurposedItems) {
-    const repurposed = objectData.items.get(itemId);
-    if (repurposed != null) repurposed.includeAsRandomChoice = false;
-  }
 
   // Scale down all hero types to match peasant size
   const heroTypes: string[] = [
