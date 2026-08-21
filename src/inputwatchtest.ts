@@ -80,6 +80,9 @@ function run(t: TestReporter): void {
   let tResumeRight = -1;  // rightward movement again after the dash
   let stallStart = -1;
   let stallAfterDash = 0;
+  // If the peasant is ever deselected, the later right-click never reached it
+  // and leg 3 was never queued at all — a driver artifact, not a game rule.
+  let deselectedAtT = -1;
 
   const sampler = Timer.create();
   sampler.start(SAMPLE, true, t.guard(() => {
@@ -89,6 +92,7 @@ function run(t: TestReporter): void {
     lastX = x;
     const rel = x - ax;
     const moving = dx > EPS || dx < -EPS;
+    if (deselectedAtT < 0 && !IsUnitSelected(h, Players[0].handle)) deselectedAtT = elapsed;
 
     if (tFirstMove < 0 && dx > EPS) tFirstMove = elapsed;
     if (tFirstMove > 0 && tReverse < 0) {
@@ -111,6 +115,8 @@ function run(t: TestReporter): void {
     if (elapsed >= WATCH) {
       sampler.destroy();
       const d = getDashDebug();
+      t.report('deselectedAtT', deselectedAtT);
+      t.report('stillSelected', IsUnitSelected(h, Players[0].handle) ? 1 : 0);
       t.report('stopsIssued', stopN);
       for (let i = 0; i < stopN; i++) t.report('stopAtT' + I2S(i)!, stopT[i]);
       t.report('orderEvents', evN);
