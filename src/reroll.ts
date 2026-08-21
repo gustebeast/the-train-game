@@ -3,6 +3,7 @@ import { gameState, syncState } from './state';
 import { REROLL_ITEM_ID, REROLL_ABILITY_ID } from './constants';
 import { rerollLobbyHero } from './heroes';
 import { rerollLobbyMerc } from './mercenary';
+import { nextFrame, forEachUnitInWorld } from './util';
 
 const REROLL_COST = 1;
 
@@ -56,6 +57,17 @@ export function initReroll(): void {
 
     // One item for both: try the heroes, then the mercenary standing with them.
     if (rerollLobbyHero(target) || rerollLobbyMerc(target)) {
+      // The cast is based on Wand of Illusion purely because it is an item
+      // ability that always accepts a friendly unit -- Purge, the obvious
+      // choice, refuses a target with nothing to dispel. Its actual effect is
+      // unwanted: it leaves a duplicate of the unit we just replaced, holding
+      // a copy of the gear. The illusion is created after this handler runs,
+      // so sweep on the next frame. Nothing else in the map makes illusions.
+      nextFrame(() => {
+        forEachUnitInWorld(u => {
+          if (IsUnitIllusion(u)) RemoveUnit(u);
+        });
+      });
       const sfx = AddSpecialEffect(TOME_EFFECT, x, y);
       if (sfx != null) DestroyEffect(sfx);
     } else {

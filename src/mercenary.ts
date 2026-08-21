@@ -3,6 +3,7 @@ import { Abilities } from '@objectdata/abilities';
 import { registerSaveSegment, parseFields } from './save';
 import { getHumanPlayers, getInventoryItemIds, forEachInventoryItem } from './util';
 import { getNeutralPassive } from './teams';
+import { markRandomOutcomeTaken } from './randomOutcome';
 import { CREEP_CAMPS } from './creep_camps';
 
 /** Hero-style inventory (the same ability the peasant carries tools with). It
@@ -278,6 +279,19 @@ export function releaseMercUnit(): void {
 // Lobby display + reroll
 // ---------------------------------------------------------------------------
 
+/** Read a unit's inventory into the persistent merc kit. */
+function snapshotMercItems2(u: Unit): void {
+  const items: number[] = [];
+  for (let slot = 0; slot < 6; slot++) {
+    const it = UnitItemInSlot(u.handle, slot);
+    if (it != null) {
+      const id = GetItemTypeId(it);
+      if (id !== 0) items.push(id);
+    }
+  }
+  mercItems = items;
+}
+
 /** Neutral display copy of the merc, shown in the lobby beside last round's
  *  heroes so the one Reroll item can target it too. Rebuilt each lobby (the
  *  terrain cleanup removes the unit). */
@@ -292,6 +306,11 @@ export function spawnLobbyMerc(x: number, y: number): void {
   const u = Unit.create(getNeutralPassive(), mercTypeId, x, y, 270);
   if (u == null) return;
   u.invulnerable = true;
+  // Show the gear it is carrying, so the lobby says what a reroll would keep.
+  for (const itemId of mercItems) {
+    const it = CreateItem(itemId, u.x, u.y);
+    if (it != null) UnitAddItem(u.handle, it);
+  }
   lobbyMerc = u;
 }
 
@@ -302,6 +321,10 @@ export function rerollLobbyMerc(unitHandle: unit): boolean {
   if (lobbyMerc == null || lobbyMerc.handle !== unitHandle) return false;
   const x = lobbyMerc.x;
   const y = lobbyMerc.y;
+  // Keep whatever it is holding: the display unit is about to be destroyed,
+  // so read the gear off it rather than trusting the stored list.
+  snapshotMercItems2(lobbyMerc);
+  markRandomOutcomeTaken();
   mercTypeId = rollMercType();
   RemoveUnit(lobbyMerc.handle);
   lobbyMerc = null;
