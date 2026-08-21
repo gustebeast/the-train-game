@@ -120,11 +120,33 @@ function Get-TestVm {
 
 <#
 .SYNOPSIS
-  Revert the VM to its test snapshot and power it on.
+  Mean brightness (0-255) of a rectangle in a PNG. Used to read coarse UI state
+  off a screenshot without OCR -- "is this list full or empty", not "what does
+  it say".
 .DESCRIPTION
-  The snapshot is a live one parked on WC3's Create Game screen, so this both
-  resets state and skips the ~60s of launching and navigating WC3.
+  Samples every 8th pixel: GetPixel is slow, this runs between menu clicks, and
+  a mean over several hundred samples is far more precision than a full/empty
+  decision needs. Thresholds against it should be MEASURED from real
+  screenshots of both states and left with a wide margin -- a guessed threshold
+  here produced a false positive that cost hours.
 #>
+function Get-ImageRegionBrightness {
+  [CmdletBinding()]
+  param([Parameter(Mandatory)][string]$Path, [int]$X, [int]$Y, [int]$W, [int]$H)
+  Add-Type -AssemblyName System.Drawing
+  $bmp = [System.Drawing.Bitmap]::FromFile($Path)
+  try {
+    $sum = 0.0; $n = 0
+    for ($yy = $Y; $yy -lt [Math]::Min($Y + $H, $bmp.Height); $yy += 8) {
+      for ($xx = $X; $xx -lt [Math]::Min($X + $W, $bmp.Width); $xx += 8) {
+        $p = $bmp.GetPixel($xx, $yy); $sum += ($p.R + $p.G + $p.B) / 3.0; $n++
+      }
+    }
+    if ($n -eq 0) { return 0 }
+    return [math]::Round($sum / $n, 2)
+  } finally { $bmp.Dispose() }
+}
+
 function Set-TestVmHostOnly {
   [CmdletBinding()]
   param([Parameter(Mandatory)][string]$Vmx)
@@ -138,12 +160,36 @@ function Set-TestVmHostOnly {
   # the snapshot's hardware config, so a clone minted while on NAT comes back as
   # NAT every single time and no one-off vmx edit survives. Brenner and Boof
   # were both found sitting on NAT this way.
+  # VMware still holds the vmx for a moment after a revert, so reading or writing
+  # it here can throw IOException. That is transient -- retry rather than kill
+  # the run over it -- but do NOT swallow it: silently skipping this check is
+  # exactly how brenner and boof sat on NAT unnoticed in the first place.
   if (-not (Test-Path $Vmx)) { return }
-  $txt = [IO.File]::ReadAllText($Vmx)
-  $fixed = [regex]::Replace($txt, 'ethernet0\.connectionType\s*=\s*"[^"]*"', 'ethernet0.connectionType = "hostonly"')
-  if ($fixed -ne $txt) { [IO.File]::WriteAllText($Vmx, $fixed) }
+  $lastErr = $null
+  foreach ($attempt in 1..8) {
+    try {
+      $txt = [IO.File]::ReadAllText($Vmx)
+      $fixed = [regex]::Replace($txt, 'ethernet0\.connectionType\s*=\s*"[^"]*"', 'ethernet0.connectionType = "hostonly"')
+      if ($fixed -eq $txt) { return }          # already host-only, nothing to write
+      [IO.File]::WriteAllText($Vmx, $fixed)
+      return
+    } catch {
+      $lastErr = $_
+      Start-Sleep -Milliseconds 400
+    }
+  }
+  throw ("Could not enforce host-only networking on $Vmx after 8 attempts -- refusing to " +
+         "start a VM whose network mode is unverified, because a guest that reaches " +
+         "Battle.net churns the session token shared by every clone. Last error: $lastErr")
 }
 
+<#
+.SYNOPSIS
+  Revert the VM to its test snapshot and power it on.
+.DESCRIPTION
+  The snapshot is a live one parked on WC3's Create Game screen, so this both
+  resets state and skips the ~60s of launching and navigating WC3.
+#>
 function Reset-TestVm {
   [CmdletBinding()]
   param([object]$Vm, [switch]$Gui)
@@ -343,8 +389,38 @@ function Start-TestVmMatch {
            "were captured at $expected. Either fix the guest resolution or re-capture " +
            "coordinates with Get-TestVmScreenshot.")
   }
-  Vnc-DblClick $Connection $ui.downloadFolder[0]  $ui.downloadFolder[1]
-  Start-Sleep -Milliseconds 800
+  # LOOK before navigating: row 1 of the map browser means different things in
+  # the two states the VMs are parked in, and the clones are NOT consistent.
+  #
+  #   murph  -- parked at the TOP level: row 1 is the "Download" folder
+  #   boof   -- parked INSIDE Download:  row 1 is "(up one level)"
+  #
+  # (downloadFolder and upOneLevel in vms.json are deliberately the same
+  # coordinate: it is one row, named twice.)
+  #
+  # Blind-clicking row 1 therefore enters Download on one VM and ESCAPES INTO
+  # THE STOCK BLIZZARD MAPS on another, where firstMapRow selects something like
+  # "Justice" and the run dies 45s later having never touched the uploaded map.
+  # It looked intermittent only because the click is sometimes swallowed by the
+  # list refresh that follows the upload -- a coin flip, not a rare event.
+  #
+  # A fixed click count cannot fix this: the states are one level apart, so any
+  # count that normalises one breaks the other. So decide from the screen. The
+  # two states are trivially separable well below the first rows -- inside
+  # Download the list has two entries and is empty beneath them, at the top
+  # level it is full of maps. Measured on real screens: ~5.5-6.1 inside
+  # Download, ~27.1-27.8 at the top level, hence the threshold of 15.
+  $shot = Join-Path $env:TEMP "trainvm-$($Vm.Name)-browser.png"
+  $probe = Vnc-Connect $Connection.port     # fresh connection: a reused one is sent only CHANGED regions
+  try { Vnc-Shot $probe $shot } finally { $probe.cli.Close() }
+  $listLit = Get-ImageRegionBrightness $shot 590 430 390 560
+  if ($listLit -gt 15) {
+    # Top level: row 1 is "Download", so enter it.
+    Vnc-DblClick $Connection $ui.downloadFolder[0] $ui.downloadFolder[1]
+    Start-Sleep -Milliseconds 1200
+  }
+  # else: already inside Download, and row 1 is "(up one level)" -- do not touch it.
+  Start-Sleep -Milliseconds 300
   Vnc-Click    $Connection $ui.firstMapRow[0]     $ui.firstMapRow[1]
   Start-Sleep -Milliseconds 500
   Vnc-Click    $Connection $ui.createButton[0]    $ui.createButton[1]
@@ -503,7 +579,28 @@ function Test-TestHarness {
   # 6. Built map exists, and is NEWER than the newest source file. A stale build
   #    is the classic false green: the test passes against the previous map.
   if (-not $Map) { $Map = Join-Path $script:RepoRoot 'dist\bin\TheTrainGame.w3x' }
+  # Give a just-finished build a moment to become visible.
+  #
+  # build.ts writes the archive with writeFileSync BEFORE it logs "Finished!",
+  # so the build is genuinely complete -- but on this Sync-hosted path the file
+  # is not visible to the next process for a few seconds (antivirus or
+  # filesystem lag). `npm run build` immediately followed by a test therefore
+  # fails with "no map" against a map that exists. Waiting for it to appear AND
+  # stop changing size fixes the race without hiding a real missing build: if
+  # there is genuinely no map, this costs one wasted second and still fails.
+  if (-not (Test-Path $Map)) {
+    $settleDeadline = (Get-Date).AddSeconds(20)
+    while ((Get-Date) -lt $settleDeadline -and -not (Test-Path $Map)) { Start-Sleep -Milliseconds 500 }
+  }
   if (Test-Path $Map) {
+    # A file that is still growing is a build mid-flight, not a finished one.
+    $lastLen = -1
+    foreach ($i in 1..20) {
+      $len = (Get-Item $Map).Length
+      if ($len -eq $lastLen -and $len -gt 0) { break }
+      $lastLen = $len
+      Start-Sleep -Milliseconds 250
+    }
     $mapTime = (Get-Item $Map).LastWriteTime
     $srcDir = Join-Path $script:RepoRoot 'src'
     $newestSrc = Get-ChildItem $srcDir -Recurse -File -Include *.ts -ErrorAction SilentlyContinue |
@@ -629,7 +726,7 @@ function Use-TestVm {
       & $log 'start match'
       Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
       if (-not (Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $log)) {
-        throw "Map never became ready within ${ReadyTimeoutSec}s. Check the screenshot: if it shows the ENTER PLAYER NAME dialog with an empty box, the name keystrokes were dropped and the menu never reached the lobby (harness bug, not your test). Otherwise the map threw during init or initTestKit() is not called in main.ts."
+        throw "Map never became ready within ${ReadyTimeoutSec}s. Check the screenshot. ENTER PLAYER NAME with an EMPTY box: the name keystrokes were dropped (harness bug, not your test). A map list of Blizzard maps (Justice, Korea, Road to Stratholme): the browser was already inside Download, so the first double-click escaped UPWARDS and the uploaded map was never selected -- revert the VM and re-run. Otherwise the map threw during init, or initTestKit() is not called in main.ts."
       }
     }
     & $Body $vmInfo $conn
@@ -695,7 +792,7 @@ function Invoke-MapTest {
     Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
     $ready = Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $Say
     if (-not $ready) {
-      $result.FailureReason = "Map never became ready within ${ReadyTimeoutSec}s. Check the screenshot: if it shows the ENTER PLAYER NAME dialog with an empty box, the name keystrokes were dropped and the menu never reached the lobby (harness bug, not your test). Otherwise the map threw during init or initTestKit() is not called in main.ts. See $($result.Screenshot)."
+      $result.FailureReason = "Map never became ready within ${ReadyTimeoutSec}s. Check the screenshot. ENTER PLAYER NAME with an EMPTY box: the name keystrokes were dropped (harness bug, not your test). A map list of Blizzard maps (Justice, Korea, Road to Stratholme): the browser was already inside Download, so the first double-click escaped UPWARDS and the uploaded map was never selected -- revert the VM and re-run. Otherwise the map threw during init, or initTestKit() is not called in main.ts. See $($result.Screenshot)."
       Get-TestVmScreenshot $vmInfo -Path $result.Screenshot -Connection $conn | Out-Null
       $result.DurationSeconds = [math]::Round($sw.Elapsed.TotalSeconds,1)
       return [pscustomobject]$result
@@ -868,4 +965,4 @@ Export-ModuleMember -Function Invoke-MapTest, Use-TestVm, Test-TestHarness, Get-
   Stop-TestVm, Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile,
   Get-TestVmScreenshot, Send-TestVmChat, Start-TestVmMatch, Start-ManualSession,
   Start-PrewarmVm, Get-PrewarmState, Reset-OrResumeTestVm, Wait-TestVmReady,
-  Complete-TestVm, Set-TestVmHostOnly
+  Complete-TestVm, Set-TestVmHostOnly, Get-ImageRegionBrightness
