@@ -47,7 +47,14 @@ const OTS_DISTANCE = 450;
  *  against clouds. Just under 360 gives the shallow looking-slightly-down pitch
  *  a chase camera wants. */
 const OTS_ANGLE_OF_ATTACK = 348;
-const OTS_HEIGHT_OFFSET = 150;
+/** Height of the point the camera centres on, above the peasant's feet.
+ *
+ *  This is what decides where the unit sits in frame, and it works the opposite
+ *  way round to the intuition: the target point IS the centre of the screen, so
+ *  RAISING it pushes the unit DOWN the frame. 150 left the peasant almost on the
+ *  bottom edge. 50 puts its head on the centre line -- lower than the model's
+ *  actual head height, because the camera also looks slightly down. */
+const OTS_HEIGHT_OFFSET = 50;
 /** The camera is re-aimed on the shared 0.5s global tick.
  *
  *  Two different interpolation times do the work, and the difference is the
