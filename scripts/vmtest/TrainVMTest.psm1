@@ -203,6 +203,37 @@ function Disconnect-TestVmNic {
 # revert+suspend runs during the agent's build/edit time. A state file tracks
 # it: 'warming' while in flight, 'warm' once suspended and ready. See prewarm.ps1.
 function Get-PrewarmStateFile($Vm) { Join-Path $env:TEMP "trainvm-prewarm-$($Vm.Name).state" }
+function Get-PrewarmPidFile($Vm) { Join-Path $env:TEMP "trainvm-prewarm-$($Vm.Name).pid" }
+
+<#
+.SYNOPSIS
+  Block until no pre-warm process is touching this VM.
+.DESCRIPTION
+  The state file says what the pre-warm INTENDS; it does not say whether the
+  process is still running. Those came apart badly: a run takes the VM and
+  deletes the marker, but the detached prewarm.ps1 keeps going and reverts the
+  snapshot underneath a live test -- the VNC connection dies with "connection
+  aborted by the software in your host machine" and WC3 is left sitting on
+  whatever stock map the reverted menu had selected.
+  So gate on the PROCESS, not the marker. Nothing may touch a VM while its
+  pre-warm is alive.
+#>
+function Wait-PrewarmExit {
+  [CmdletBinding()]
+  param([object]$Vm, [int]$TimeoutSec = 120, [scriptblock]$Log)
+  $pidFile = Get-PrewarmPidFile $Vm
+  if (-not (Test-Path $pidFile)) { return }
+  $prewarmPid = 0
+  [void][int]::TryParse((Get-Content $pidFile -Raw -ErrorAction SilentlyContinue).Trim(), [ref]$prewarmPid)
+  if ($prewarmPid -gt 0) {
+    $proc = Get-Process -Id $prewarmPid -ErrorAction SilentlyContinue
+    if ($null -ne $proc) {
+      if ($null -ne $Log) { & $Log 'waiting for the pre-warm process to finish with this VM' }
+      try { $proc.WaitForExit($TimeoutSec * 1000) | Out-Null } catch {}
+    }
+  }
+  Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+}
 function Get-PrewarmState($Vm) {
   $f = Get-PrewarmStateFile $Vm
   if (-not (Test-Path $f)) { return 'cold' }
@@ -233,11 +264,14 @@ function Start-PrewarmVm {
   param([object]$Vm)
   if ($null -eq $Vm) { $Vm = Get-TestVm }
   $script = Join-Path $PSScriptRoot 'prewarm.ps1'
-  Start-Process powershell -WindowStyle Hidden -ArgumentList @(
+  $proc = Start-Process powershell -WindowStyle Hidden -PassThru -ArgumentList @(
     '-NoProfile','-ExecutionPolicy','Bypass','-File', $script,
     '-Vmx', $Vm.Vmx, '-Snapshot', $Vm.Snapshot, '-StateFile', (Get-PrewarmStateFile $Vm),
     '-Network', $Vm.Network
-  ) | Out-Null
+  )
+  # Record who is doing it, so the next run can wait for this exact process
+  # rather than guessing from the state file. See Wait-PrewarmExit.
+  Set-Content (Get-PrewarmPidFile $Vm) $proc.Id -Encoding ascii
 }
 
 <#
@@ -381,6 +415,8 @@ function Reset-OrResumeTestVm {
   param([object]$Vm, [scriptblock]$Log = { param($m) Write-Host $m })
   if ($null -eq $Vm) { $Vm = Get-TestVm }
   $stateFile = Get-PrewarmStateFile $Vm
+  # Hard interlock: never touch a VM whose pre-warm process is still alive.
+  Wait-PrewarmExit $Vm -Log $Log
   if ((Get-PrewarmState $Vm) -eq 'warming') {
     & $Log 'waiting for background pre-warm to finish'
     $wd = (Get-Date).AddSeconds(60)
