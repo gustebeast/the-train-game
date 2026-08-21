@@ -23,8 +23,11 @@ const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 const m = new Model();
 m.load(new Uint8Array(fs.readFileSync(TARGET)));
 
-const roll = m.sequences.find((s) => s.name === 'Roll');
-if (roll == null) throw new Error('no "Roll" sequence — run transplant-roll-anim.js first');
+// The sequence is called "Walk Alternate" once roll-anim-to-alternate-walk.js
+// has re-tagged it; accept the pre-rename name too so this still works on a
+// freshly transplanted model.
+const roll = m.sequences.find((s) => s.name === 'Walk Alternate' || s.name === 'Roll');
+if (roll == null) throw new Error('no roll sequence — run transplant-roll-anim.js first');
 const rs = roll.interval[0];
 const re = roll.interval[1];
 

@@ -22,6 +22,9 @@ const SOURCE_MAP = 'C:/Users/gus/Downloads/ShootingGay_0.6_english.w3x';
 const SOURCE_MODEL = 'war3mapImported\\Villager255.mdx';
 const SOURCE_SEQ_NAME = 'Attack Morph - 19';
 const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
+// Named "Roll" here, then re-tagged to "Walk Alternate" by
+// roll-anim-to-alternate-walk.js -- run that next. The rename is what lets the
+// engine play it during movement instead of trigger code fighting the walk.
 const NEW_NAME = 'Roll';
 const NEW_START = 200000; // safely beyond the peasant's last keyframe (~193733)
 

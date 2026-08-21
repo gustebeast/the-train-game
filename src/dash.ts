@@ -28,7 +28,11 @@ import { DASH_ABILITY_ID, PEASANT_ID } from './constants';
 // trick.
 const DASH_SPEED = 522; // WC3's default max move speed (peasant base is ~190)
 const DASH_DURATION = 0.6; // seconds of boosted speed
-const DASH_ANIM_INDEX = 22; // 'Roll' — transplanted, scripts/transplant-roll-anim.js
+// The roll is the peasant's ALTERNATE WALK (scripts/roll-anim-to-alternate-walk.js),
+// so switching it on is a single property the engine reads while the unit
+// moves. Forcing the sequence directly instead -- SetUnitAnimationByIndex --
+// does not survive: a moving unit has its walk animation re-asserted by the
+// engine, which is why the dash used to show a speed change and no roll.
 
 interface DashState {
   timer: Timer;
@@ -61,7 +65,7 @@ function endDash(h: unit): void {
   dashing.delete(h);
   if (GetUnitTypeId(h) === 0) return; // unit removed mid-dash
   SetUnitMoveSpeed(h, s.baseSpeed);
-  SetUnitTimeScale(h, 1);
+  AddUnitAnimationProperties(h, 'alternate', false);
 }
 
 function startDash(h: unit): void {
@@ -72,8 +76,7 @@ function startDash(h: unit): void {
 
   dbg.started = dbg.started + 1;
   SetUnitMoveSpeed(h, DASH_SPEED);
-  SetUnitAnimationByIndex(h, DASH_ANIM_INDEX);
-  QueueUnitAnimation(h, 'stand');
+  AddUnitAnimationProperties(h, 'alternate', true);
 
   const timer = Timer.create();
   dashing.set(h, { timer, baseSpeed });

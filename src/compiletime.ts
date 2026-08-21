@@ -154,7 +154,7 @@ compiletime(({ objectData, constants }) => {
   dash.animationNames = '';
   dash.tooltipNormal = 'Dash';
   dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
-  dash.iconNormal = 'ReplaceableTextures\CommandButtons\BTNEvasion.blp';
+  dash.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNEvasion.blp';
   dash.hotkeyNormal = 'E';
   // Row 0 of the command card is the stock Move/Stop/Hold/Attack row; an
   // ability placed there is hidden behind them.
