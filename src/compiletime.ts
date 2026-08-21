@@ -112,12 +112,18 @@ compiletime(({ objectData, constants }) => {
   // which would drop the item the peasant is carrying.
   type ChannelAbil = NonNullable<ReturnType<typeof objectData.abilities.get>> & {
     followThroughTime: number; artDuration: number; disableOtherAbilities: number;
+    options: number;
   };
   const dash = objectData.abilities.get('A000')! as ChannelAbil;
   // Channel defaults matter here: 'Disable Other Abilities' is true by default,
   // which makes the engine REJECT the move order the dash issues (the peasant
   // turns and stands still), and a non-zero follow-through keeps the channel
   // running after an instant cast.
+  // Channel's Options flags decide whether the ability draws a button at all.
+  // A000 was authored with Options = None, so the peasant carried the ability
+  // (level 1, valid button slot at 2,1) but the command card showed nothing —
+  // give/take is the proof, it sets options = 1 and its button appears.
+  dash.options = 1;
   dash.disableOtherAbilities = 0;
   // Not zero: a channel with no window at all is skipped outright when it is
   // queued behind another order (measured: the cast never reached the trigger).

@@ -1,6 +1,7 @@
 import { Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { PEASANT_ID, DASH_ABILITY_ID } from './constants';
+import { Abilities } from '@objectdata/abilities';
 import { registerTest, TestReporter } from './testkit';
 
 // Asks the ENGINE what it thinks A000's command-card data is, bypassing the
@@ -30,13 +31,24 @@ function run(t: TestReporter): void {
   t.report('btnX', BlzGetAbilityIntegerField(ab, ABILITY_IF_BUTTON_POSITION_NORMAL_X));
   t.report('btnY', BlzGetAbilityIntegerField(ab, ABILITY_IF_BUTTON_POSITION_NORMAL_Y));
 
+  // CONTROL: read the same flag on give/take (Channel), a non-hero ability
+  // whose button demonstrably DOES show. If that also reads 1, the native is
+  // lying and the hero flag was a false lead.
+  const ctrl = BlzGetUnitAbility(p.handle, FourCC(Abilities.Channel));
+  t.report('ctrlHandle', ctrl != null ? 1 : 0);
+  if (ctrl != null) {
+    t.report('ctrlHeroAbility', BlzGetAbilityBooleanField(ctrl, ABILITY_BF_HERO_ABILITY) ? 1 : 0);
+    t.report('ctrlBtnX', BlzGetAbilityIntegerField(ctrl, ABILITY_IF_BUTTON_POSITION_NORMAL_X));
+    t.report('ctrlBtnY', BlzGetAbilityIntegerField(ctrl, ABILITY_IF_BUTTON_POSITION_NORMAL_Y));
+  }
+
   // Flags that can hide a button entirely even with a valid position:
   // a hero ability on a non-hero unit, or an item ability, shows nothing.
   t.report('heroAbility', BlzGetAbilityBooleanField(ab, ABILITY_BF_HERO_ABILITY) ? 1 : 0);
   t.report('itemAbility', BlzGetAbilityBooleanField(ab, ABILITY_BF_ITEM_ABILITY) ? 1 : 0);
   t.report('checkDeps', BlzGetAbilityBooleanField(ab, ABILITY_BF_CHECK_DEPENDENCIES) ? 1 : 0);
   // Clear them at runtime and see whether the button appears in the screenshot.
-  BlzSetAbilityBooleanField(ab, ABILITY_BF_HERO_ABILITY, false);
+  t.report('setHeroReturned', BlzSetAbilityBooleanField(ab, ABILITY_BF_HERO_ABILITY, false) ? 1 : 0);
   BlzSetAbilityBooleanField(ab, ABILITY_BF_ITEM_ABILITY, false);
   BlzSetAbilityBooleanField(ab, ABILITY_BF_CHECK_DEPENDENCIES, false);
   t.report('heroAfter', BlzGetAbilityBooleanField(ab, ABILITY_BF_HERO_ABILITY) ? 1 : 0);
