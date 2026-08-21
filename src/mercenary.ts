@@ -2,6 +2,7 @@ import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { registerSaveSegment, parseFields } from './save';
 import { getHumanPlayers, getInventoryItemIds, forEachInventoryItem } from './util';
+import { getNeutralPassive } from './teams';
 import { CREEP_CAMPS } from './creep_camps';
 
 /** Hero-style inventory (the same ability the peasant carries tools with). It
@@ -169,50 +170,35 @@ function rollMercType(): number {
 // Purchases
 // ---------------------------------------------------------------------------
 
-/** Whether the Mercenary Contract upgrade is owned (also unlocks L2 camps). */
+/** Whether the Mercenary Contract upgrade has ever been bought. */
 export function isMercUpgradeBought(): boolean {
   return upgradeBought;
 }
 
-/** Buy the Mercenary Contract: unlock level 2 camps and roll the first merc.
- *  Returns false if already owned. */
+/** Whether a LIVING mercenary is under contract. This -- not the raw purchase
+ *  flag -- is what gates the perks: a merc that dies takes its level 2 camps
+ *  with it, and the contract goes back on sale so buying again revives it. */
+export function hasActiveMerc(): boolean {
+  return upgradeBought && !mercDead;
+}
+
+/** Whether the merc is dead and awaiting a re-purchase. */
+export function isMercDead(): boolean {
+  return upgradeBought && mercDead;
+}
+
+/** Buy the Mercenary Contract. First purchase hires a merc; buying again after
+ *  one died revives it as a FRESH random creep for the same price, and the
+ *  items it was carrying come back with it (death does not lose them --
+ *  they were snapshotted off the corpse). Returns false if the current merc is
+ *  still alive, in which case there is nothing to buy. */
 export function buyMercContract(): boolean {
-  if (upgradeBought) return false;
+  if (hasActiveMerc()) return false;
   upgradeBought = true;
   mercTypeId = rollMercType();
   mercDead = false;
-  mercItems = [];
-  return true;
-}
-
-/** Reroll the mercenary (dead or alive): new random type, items carry over.
- *  If the old merc is on the field it is replaced in place; if it was dead
- *  and heroes are currently summoned (spawnNow), the new one spawns at the
- *  buyer's position. Returns false if the contract isn't owned. */
-export function rerollMerc(buyerX: number, buyerY: number, spawnNow: boolean): boolean {
-  if (!upgradeBought) return false;
-
-  let replaceAt: { x: number; y: number; owner: MapPlayer } | null = null;
-  if (mercUnit != null && GetUnitTypeId(mercUnit.handle) !== 0) {
-    snapshotMercItems();
-    replaceAt = { x: mercUnit.x, y: mercUnit.y, owner: mercUnit.owner };
-    RemoveUnit(mercUnit.handle); // remove, not kill — rerolling isn't a death
-    clearMercDeathTrigger();     // no death event will fire for a removed unit
-    mercUnit = null;
-  }
-
-  mercTypeId = rollMercType();
-  mercDead = false;
-
-  if (replaceAt != null) {
-    spawnMercUnit(replaceAt.owner, replaceAt.x, replaceAt.y);
-  } else if (spawnNow) {
-    const owner = pickMercController();
-    if (owner != null) {
-      spawnMercUnit(owner, buyerX, buyerY);
-      stampControl(owner.id);
-    }
-  }
+  // mercItems is deliberately NOT cleared: on a first purchase it is already
+  // empty, and on a revive it is the dead merc's kit being handed back.
   return true;
 }
 
@@ -286,4 +272,39 @@ export function releaseMercUnit(): void {
   clearMercDeathTrigger();
   mercUnit = null;
   currentHeroOwnerIds = [];
+}
+
+// ---------------------------------------------------------------------------
+// Lobby display + reroll
+// ---------------------------------------------------------------------------
+
+/** Neutral display copy of the merc, shown in the lobby beside last round's
+ *  heroes so the one Reroll item can target it too. Rebuilt each lobby (the
+ *  terrain cleanup removes the unit). */
+let lobbyMerc: Unit | null = null;
+
+/** Stand the merc in the lobby, next to the heroes. No-op when no merc is
+ *  under contract -- a dead one is not shown, because there is nothing to
+ *  reroll until the contract is bought again. */
+export function spawnLobbyMerc(x: number, y: number): void {
+  lobbyMerc = null;
+  if (!hasActiveMerc() || mercTypeId === 0) return;
+  const u = Unit.create(getNeutralPassive(), mercTypeId, x, y, 270);
+  if (u == null) return;
+  u.invulnerable = true;
+  lobbyMerc = u;
+}
+
+/** Reroll the lobby merc: a new random creep type, keeping the items it
+ *  carries. Returns false if unitHandle is not the lobby merc, so the caller
+ *  can fall through to other reroll targets. */
+export function rerollLobbyMerc(unitHandle: unit): boolean {
+  if (lobbyMerc == null || lobbyMerc.handle !== unitHandle) return false;
+  const x = lobbyMerc.x;
+  const y = lobbyMerc.y;
+  mercTypeId = rollMercType();
+  RemoveUnit(lobbyMerc.handle);
+  lobbyMerc = null;
+  spawnLobbyMerc(x, y);
+  return true;
 }

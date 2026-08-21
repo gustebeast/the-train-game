@@ -12,6 +12,7 @@ import {
 } from '../heroes';
 import { startDPSTest } from '../creeps';
 import { loadCrateForRound, loadCrateForLobby } from '../items';
+import { spawnLobbyMerc } from '../mercenary';
 
 setVictoryCallback(() => loadLobby());
 setAwardVictoryCallback(() => awardVictory());
@@ -66,7 +67,9 @@ export function loadLobby(): void {
   const spawned = spawnTerrain(generateLobby());
   if (spawned.engine != null && spawned.wagon != null) initLobbyTrain(spawned.engine, spawned.wagon);
   loadCrateForLobby();
-  // Last round's summoned heroes stand south of the peasants for rerolling
-  spawnLobbyHeroes([gridToWorld({ x: -1, y: -2 }), gridToWorld({ x: 1, y: -2 })]);
+  // Last round's summoned heroes stand in the south-east corner, with the
+  // mercenary alongside them so the one Reroll item can target either.
+  spawnLobbyHeroes([gridToWorld({ x: 2, y: -3 }), gridToWorld({ x: 3, y: -3 })]);
+  spawnLobbyMerc(gridToWorld({ x: 3, y: -2 }).x, gridToWorld({ x: 3, y: -2 }).y);
   startDPSTest();
 }
