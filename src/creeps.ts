@@ -4,7 +4,8 @@ import { hasActiveMerc } from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
 import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
 import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
-import { isToughCamp, payToughCampBonus } from './challenges';
+import { isChallengeArmed, completeChallenge } from './challenges';
+import { CH_TOUGH_CAMP } from './challengeList';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { TRACK_SIZE } from './track/constants';
 
@@ -242,7 +243,7 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
     for (const h of heroes) heroDPS += getDPS(h.handle);
   }
   const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
-  const dpsAdvantage = isToughCamp() ? TOUGH_CAMP_DPS_ADVANTAGE : CREEP_DPS_ADVANTAGE;
+  const dpsAdvantage = isChallengeArmed(CH_TOUGH_CAMP) ? TOUGH_CAMP_DPS_ADVANTAGE : CREEP_DPS_ADVANTAGE;
   return {
     dpsScale: effectiveCreepDPS > 0 ? (heroDPS * dpsAdvantage) / effectiveCreepDPS : 1,
     ehpScale: creepEHP > 0 ? heroEHP / creepEHP : 1,
@@ -320,7 +321,7 @@ export function scaleCreepStats(heroes: Unit[]): void {
         // Check if all creeps are dead — grant Unsummon Heroes to peasants
         if (spawnedCreeps.every(c => GetUnitState(c.unit.handle, UNIT_STATE_LIFE) <= 0)) {
           grantUnsummonToAllPeasants();
-          payToughCampBonus();
+          completeChallenge(CH_TOUGH_CAMP);
         }
       });
     }
