@@ -13,33 +13,15 @@ import { getHumanPlayers } from './util';
  */
 
 /*
- * NOT YET IMPLEMENTED -- three more challenge ideas, with what I found about
- * whether each is doable. All three look feasible; they were left out of this
- * pass to keep it reviewable, not because they are blocked.
+ * IMPLEMENTED SINCE, for the record: night blindness, the hidden UI and the
+ * over-the-shoulder camera are all in (see daynight.ts and challengeEffects.ts).
  *
- * 1. NIGHT BLINDNESS -- at night, see only what your own units see.
- *    Feasible, including the "fully black" version. A FOG_OF_WAR_MASKED
- *    modifier over the whole map blacks it out while unit sight still punches
- *    through, and a FOG_OF_WAR_VISIBLE modifier kept alive and toggled with
- *    FogModifierStart/Stop restores daytime vision -- so the day state does not
- *    have to be reconstructed, just re-enabled. Suggested split, per the
- *    original idea: night always drops allied vision
- *    (SetPlayerAllianceStateVisionBJ false), and the challenge adds the
- *    full black-out on top.
- *
- * 2. NO UI -- hide the minimap, inventory and command bar for a round.
- *    Feasible: BlzHideOriginFrames(true) hides the whole default console in one
- *    call. Worth checking what it does to click targeting before shipping,
- *    since the command bar is also how abilities are cast -- the dash would
- *    have to stay usable by hotkey.
- *
- * 3. OVER-THE-SHOULDER CAMERA -- lock a third-person camera behind the peasant.
- *    Feasible but the fiddliest of the three: SetCameraField for distance,
- *    angle of attack and rotation, re-applied on a tick to follow the unit.
- *    cameraLock.ts already owns camera state for this map, so it belongs there
- *    rather than in a challenge module, and it needs care around the round
- *    transitions that reset the camera.
+ * The one thing that did NOT hold: a fog modifier is not a harmless overlay.
+ * Masking the map WIPES what each player has explored, so simply lifting it at
+ * dawn left the map black instead of explored-grey. daynight.ts now samples the
+ * explored state before the blackout and re-flashes it afterwards.
  */
+
 
 // --- ids (persisted; never reuse or renumber) ------------------------------
 export const CH_CRITTERPOCALYPSE = 'crit';
@@ -49,6 +31,9 @@ export const CH_CURVED_15 = 'cur';
 export const CH_DASH = 'dsh';
 export const CH_SOLO_TOOLS = 'solo';
 export const CH_BRINK = 'brink';
+export const CH_NIGHT_BLACKOUT = 'dark';
+export const CH_NO_UI = 'noui';
+export const CH_SHOULDER_CAM = 'ots';
 
 const STRAIGHT_TARGET = 15;
 const CURVED_TARGET = 15;
@@ -129,6 +114,27 @@ defineChallenge({
   progress: () => I2S(brinkSeconds) + ' / ' + I2S(BRINK_SECONDS) + 's',
 });
 
+defineChallenge({
+  id: CH_NIGHT_BLACKOUT,
+  name: 'Blackout',
+  description: 'At night the whole map goes dark -- you see only what your own '
+    + 'units can see. Finish the round to win the wager.',
+});
+
+defineChallenge({
+  id: CH_NO_UI,
+  name: 'From Memory',
+  description: 'The interface is hidden for the round: no minimap, no command '
+    + 'card, no inventory. Hotkeys still work. Finish the round to win.',
+});
+
+defineChallenge({
+  id: CH_SHOULDER_CAM,
+  name: 'Over the Shoulder',
+  description: 'The camera drops in behind your peasant for the round. Finish '
+    + 'the round to win.',
+});
+
 // --- event hooks, called by the systems that see the events ---------------
 
 /** A track was laid, and its shape is now known. `curved` is a 90-degree turn.
@@ -181,7 +187,9 @@ export function noteFinalTrackPlaced(): void {
   if (isChallengeArmed(CH_SOLO_TOOLS) && !soloToolsBroken) {
     completeChallenge(CH_SOLO_TOOLS);
   }
-  if (isChallengeArmed(CH_CRITTERPOCALYPSE)) {
-    completeChallenge(CH_CRITTERPOCALYPSE);
+  // "Survive the round" challenges: nothing to count, the win condition is
+  // simply reaching the end of the line with the handicap on.
+  for (const id of [CH_CRITTERPOCALYPSE, CH_NIGHT_BLACKOUT, CH_NO_UI, CH_SHOULDER_CAM]) {
+    if (isChallengeArmed(id)) completeChallenge(id);
   }
 }

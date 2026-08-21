@@ -2,6 +2,7 @@ import { Unit } from 'w3ts';
 import { setVictoryTriggered } from './track/state';
 import { extinguish, getTrain, getTrackWagon } from './train';
 import { clearChallenges } from './challenges';
+import { cancelNightForVictory } from './daynight';
 import { gameState, syncGold } from './state';
 import { saveToFile } from './save';
 import { rollCreepCamp } from './creeps';
@@ -13,6 +14,9 @@ const GOLD_PER_ROUND = 1;
  *  for its final run but does NOT award round rewards yet. */
 export function triggerVictory(lastTrack: Unit): void {
   setVictoryTriggered();
+  // The round is decided: no night should fall now, and if it is already night
+  // the victory lap should not be run in the dark.
+  cancelNightForVictory();
   lastTrack.invulnerable = true;
   extinguish();
   const train = getTrain();
