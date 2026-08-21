@@ -1,20 +1,25 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import { DASH_ABILITY_ID, PEASANT_ID } from './constants';
+import { nextFrame } from './util';
 
-// Dash = a short, sharp movement-speed boost that reuses WC3's own pathing.
+// Dash = a normal move at boosted speed, so WC3's own pathing handles all
+// collision (including the moving train, which hand-rolled collision could not
+// reproduce).
 //
-// Everything else was tried and rejected. Moving the unit by hand (SetUnitX/Y)
-// needs hand-rolled collision that can't reproduce the engine's dynamics —
-// especially against the moving train — and SetUnitPosition collides but
-// interrupts the unit's current order. Driving it with our own move order works
-// for pathing but replaces the player's order queue, so a shift-queued
-// move -> dash -> move loses the last move.
+// The trick is turning a CAST at a point into a WALK to that point without
+// destroying what the player queued behind it. IssuePointOrder replaces the
+// whole queue, and BlzQueue* appends to the end — neither lands in the right
+// slot. But an order fires its event when it is ISSUED, not when it runs, so at
+// the moment the player shift-clicks the dash the queue ends with the dash and
+// nothing after it yet. Appending a move there puts it immediately behind the
+// dash; anything the player shift-clicks next queues up after it. Same
+// substitution give/take does to a queued channel order.
 //
-// So the dash issues no order of its own when the player already has one
-// queued: it just makes the next movement fast, and the engine does the rest.
-// Only when nothing is queued (a bare dash on an idle peasant) does it send the
-// unit at the cast point itself — safe there precisely because the queue is
-// empty. No 'stop' is ever issued, so the queue advances with no delay.
+//   move right  ->  dash (cast)  ->  [our move to the cast point]  ->  move right
+//                      speed boost covers this leg, so it reads as a dash
+//
+// A bare dash with nothing queued works by the same path: the appended move is
+// simply the only thing behind the cast.
 const DASH_SPEED = 522; // WC3's default max move speed (peasant base is ~190)
 const DASH_DURATION = 0.6; // seconds of boosted speed
 const BARE_DASH_GRACE = 0.12; // s to wait before deciding the queue is empty
@@ -52,9 +57,8 @@ function endDash(h: unit): void {
   SetUnitTimeScale(h, 1);
 }
 
-function startDash(u: Unit, targetX: number, targetY: number): void {
+function startDash(u: Unit): void {
   const h = u.handle;
-  dbg.tx = targetX; dbg.ty = targetY; dbg.ord = -1; dbg.issued = 0;
 
   // Re-dashing: keep the original speed, don't capture the boosted one.
   const existing = dashing.get(h);
@@ -68,45 +72,35 @@ function startDash(u: Unit, targetX: number, targetY: number): void {
   const timer = Timer.create();
   dashing.set(h, { timer, baseSpeed });
   timer.start(DASH_DURATION, false, () => endDash(h));
-
-  // Channel is a CHANNELLING spell: its order stays current until something
-  // interrupts it. A queued order does that by itself (which is why a
-  // shift-queued move runs straight after the dash, and why we must not touch
-  // it). With an empty queue nothing interrupts, so the peasant would just
-  // stand there mid-channel — the "turned around and did nothing" case.
-  //
-  // That difference is the discriminator: if the channel is STILL running a
-  // beat after the cast, the queue was empty, and only then do we end it and
-  // supply the dash's own destination.
-  const dashOrder = OrderId('flare');
-  const poll = Timer.create();
-  let waited = 0;
-  poll.start(0.02, true, () => {
-    waited = waited + 0.02;
-    if (GetUnitTypeId(h) === 0) { poll.destroy(); return; }
-    const ord = GetUnitCurrentOrder(h);
-    dbg.ord = ord;
-    if (ord !== dashOrder) { poll.destroy(); return; } // something queued — leave it
-    if (waited < BARE_DASH_GRACE) return;              // still deciding
-    poll.destroy();
-    // Nothing was queued: end the channel and dash to the cast point. The stop
-    // is safe precisely because there is no queue to discard.
-    IssueImmediateOrder(h, 'stop');
-    Timer.create().start(0.02, false, () => {
-      if (GetUnitTypeId(h) === 0) return;
-      dbg.issued = IssuePointOrder(h, 'move', targetX, targetY) ? 1 : 2;
-    });
-  });
 }
 
-/** Init the dash: cast trigger on CHANNEL for keypress-instant response. */
 export function initDash(): void {
-  const t = Trigger.create();
-  t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_CHANNEL);
-  t.addAction(() => {
+  // Issue time: put a move to the cast point directly behind the dash, before
+  // the player has queued anything after it.
+  const issued = Trigger.create();
+  issued.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
+  issued.addAction(() => {
+    if (GetIssuedOrderId() !== OrderId('flare')) return;
+    const u = Unit.fromEvent();
+    if (u == null || u.typeId !== PEASANT_ID) return;
+    const h = u.handle;
+    const x = GetOrderPointX();
+    const y = GetOrderPointY();
+    dbg.tx = x; dbg.ty = y; dbg.issued = 1;
+    // A frame later, so the dash order is committed to the queue first —
+    // queueing from inside its own order event lands in the wrong place and
+    // swallowed whatever the player queued next. give/take defers its
+    // substitution the same way.
+    nextFrame(() => BlzQueuePointOrderById(h, OrderId('move'), x, y));
+  });
+
+  // Cast time: the boost, which covers the move queued above.
+  const cast = Trigger.create();
+  cast.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_CHANNEL);
+  cast.addAction(() => {
     if (GetSpellAbilityId() !== DASH_ABILITY_ID) return;
     const u = Unit.fromEvent();
     if (u == null || u.typeId !== PEASANT_ID) return;
-    startDash(u, GetSpellTargetX(), GetSpellTargetY());
+    startDash(u);
   });
 }
