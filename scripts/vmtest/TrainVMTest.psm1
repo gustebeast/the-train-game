@@ -444,16 +444,32 @@ function Start-TestVmMatch {
   # Download the list has two entries and is empty beneath them, at the top
   # level it is full of maps. Measured on real screens: ~5.5-6.1 inside
   # Download, ~27.1-27.8 at the top level, hence the threshold of 15.
+  # ...and CONFIRM it arrived, because the click is not reliably delivered.
+  #
+  # The map upload immediately before this makes WC3 rebuild the list, and a
+  # double-click landing during that rebuild is silently swallowed. Checking the
+  # state once and clicking blind therefore still fails: the browser stays at
+  # the top level, firstMapRow picks a Blizzard map, and the run dies 45s later.
+  #
+  # This is not a retry papering over a flaky step -- it is a closed loop on an
+  # observable, and it stops the moment the browser is where it must be. If it
+  # never gets there, the run says so immediately instead of burning the ready
+  # timeout on a map it was never going to load.
   $shot = Join-Path $env:TEMP "trainvm-$($Vm.Name)-browser.png"
-  $probe = Vnc-Connect $Connection.port     # fresh connection: a reused one is sent only CHANGED regions
-  try { Vnc-Shot $probe $shot } finally { $probe.cli.Close() }
-  $listLit = Get-ImageRegionBrightness $shot 590 430 390 560
-  if ($listLit -gt 15) {
-    # Top level: row 1 is "Download", so enter it.
+  $inDownload = $false
+  foreach ($attempt in 1..5) {
+    $probe = Vnc-Connect $Connection.port   # fresh connection: a reused one is sent only CHANGED regions
+    try { Vnc-Shot $probe $shot } finally { $probe.cli.Close() }
+    if ((Get-ImageRegionBrightness $shot 590 430 390 560) -le 15) { $inDownload = $true; break }
+    # Top level: row 1 is the "Download" folder, so enter it and look again.
     Vnc-DblClick $Connection $ui.downloadFolder[0] $ui.downloadFolder[1]
     Start-Sleep -Milliseconds 1200
   }
-  # else: already inside Download, and row 1 is "(up one level)" -- do not touch it.
+  if (-not $inDownload) {
+    throw ("$($Vm.Name): the map browser would not enter the Download folder after 5 attempts " +
+           "(it is still showing the full stock map list). Selecting a map now would run one of " +
+           "Blizzard's, not the built map. Screenshot: $shot")
+  }
   Start-Sleep -Milliseconds 300
   Vnc-Click    $Connection $ui.firstMapRow[0]     $ui.firstMapRow[1]
   Start-Sleep -Milliseconds 500
