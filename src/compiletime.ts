@@ -114,7 +114,17 @@ compiletime(({ objectData, constants }) => {
   const dash = objectData.abilities.get(constants.abilities.Flare)!;
   dash.heroAbility = false;
   dash.levels = 1;
-  dash.castRange = 99999;
+  // A DELIBERATELY TINY cast range is what turns the cast into a walk. Order a
+  // spell at a point out of range and WC3 walks the caster there itself -- an
+  // engine approach move, which respects the order queue perfectly and finishes
+  // the way any move finishes. That is strictly better than appending our own
+  // move behind the cast, which the engine would sometimes never complete and
+  // which then blocked everything queued behind it.
+  //
+  // Not 0: the caster has to actually get within range for the spell to fire,
+  // and a point it cannot stand exactly on (rock edge, unit in the way) would
+  // leave it approaching forever. Half a tile of slack is invisible in play.
+  dash.castRange = 64;
   // Alleria's Flare ships with a tech requirement, which greys the button out
   // and makes the cast order get rejected outright.
   dash.requirements = '';

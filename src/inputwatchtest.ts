@@ -59,14 +59,20 @@ function run(t: TestReporter): void {
     }
   }));
 
+  // Point-order events for OUR peasant only. evCur records the unit's CURRENT
+  // order at the instant each event arrives: that is what says whether a queued
+  // order re-announces itself when it starts executing (current == issued) or
+  // only when the player clicks (current == something else).
   let evN = 0;
   const evOrd: number[] = [];
+  const evCur: number[] = [];
   const evT: number[] = [];
   const spy = Trigger.create();
-  spy.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
+  TriggerRegisterUnitEvent(spy.handle, p.handle, EVENT_UNIT_ISSUED_POINT_ORDER);
   spy.addAction(t.guard(() => {
-    if (evN >= 6) return;
+    if (evN >= 8) return;
     evOrd[evN] = GetIssuedOrderId();
+    evCur[evN] = GetUnitCurrentOrder(h);
     evT[evN] = elapsed;
     evN = evN + 1;
   }));
@@ -83,6 +89,11 @@ function run(t: TestReporter): void {
   // If the peasant is ever deselected, the later right-click never reached it
   // and leg 3 was never queued at all — a driver artifact, not a game rule.
   let deselectedAtT = -1;
+  // Oscillation detector: after the dash, a peasant that keeps flipping
+  // direction is being pulled between two pending order flags ("patrolling")
+  // rather than completing the queue.
+  let reversalsAfterDash = 0;
+  let lastDir = 0;
   // Sample the CURRENT order every half second: if the peasant is stuck rather
   // than idle, this shows which order it is sitting on and never finishing.
   const ordSeq: number[] = [];
@@ -109,6 +120,11 @@ function run(t: TestReporter): void {
       if (rel > maxRight) maxRight = rel;
       if (dx < -EPS) tReverse = elapsed;         // started dashing back
     }
+    if (tReverse > 0 && moving) {
+      const dir = dx > 0 ? 1 : -1;
+      if (lastDir !== 0 && dir !== lastDir) reversalsAfterDash = reversalsAfterDash + 1;
+      lastDir = dir;
+    }
     if (tReverse > 0) {
       if (rel < minAfterMax) minAfterMax = rel;
       if (tResumeRight < 0 && dx > EPS) tResumeRight = elapsed;
@@ -126,17 +142,24 @@ function run(t: TestReporter): void {
       sampler.destroy();
       const d = getDashDebug();
       for (let i = 0; i < ordN; i++) t.report('ord@' + I2S(i)! , ordSeq[i]);
+      t.report('reversalsAfterDash', reversalsAfterDash);
+      t.report('patrolling', reversalsAfterDash > 2 ? 1 : 0);
       t.report('deselectedAtT', deselectedAtT);
       t.report('stillSelected', IsUnitSelected(h, Players[0].handle) ? 1 : 0);
       t.report('stopsIssued', stopN);
       for (let i = 0; i < stopN; i++) t.report('stopAtT' + I2S(i)!, stopT[i]);
+      t.report('flareOrderId', OrderId('flare'));
       t.report('orderEvents', evN);
       for (let i = 0; i < evN; i++) {
         t.report('ev' + I2S(i)! + 'Ord', evOrd[i]);
+        t.report('ev' + I2S(i)! + 'Cur', evCur[i]);
         t.report('ev' + I2S(i)! + 'AtT', evT[i]);
       }
       t.report('dashFired', d[0] > -99999 ? 1 : 0);
-      t.report('dashIssuedMove', d[3]);
+      t.report('flareEvents', d[2]);
+      t.report('flareAtQueueTime', d[3]);
+      t.report('flareAtExecTime', d[4]);
+      t.report('dashesStarted', d[5]);
       t.report('tFirstMove', tFirstMove);
       t.report('tReverse', tReverse);
       t.report('tResumeRight', tResumeRight);

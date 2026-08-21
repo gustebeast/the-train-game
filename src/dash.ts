@@ -1,29 +1,33 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import { DASH_ABILITY_ID, PEASANT_ID } from './constants';
-import { nextFrame } from './util';
 
 // Dash = a normal move at boosted speed, so WC3's own pathing handles all
 // collision (including the moving train, which hand-rolled collision could not
 // reproduce).
 //
-// The trick is turning a CAST at a point into a WALK to that point without
-// destroying what the player queued behind it. IssuePointOrder replaces the
-// whole queue, and BlzQueue* appends to the end — neither lands in the right
-// slot. But an order fires its event when it is ISSUED, not when it runs, so at
-// the moment the player shift-clicks the dash the queue ends with the dash and
-// nothing after it yet. Appending a move there puts it immediately behind the
-// dash; anything the player shift-clicks next queues up after it. Same
-// substitution give/take does to a queued channel order.
+// The cast is turned into a walk by the OBJECT DATA, not by trigger code: the
+// ability's cast range is tiny (see compiletime.ts), so ordering it at a distant
+// point makes the engine walk the caster there first. That approach move is the
+// engine's own, so it sits in the order queue correctly, completes the way any
+// move completes, and lets whatever the player queued behind it run. Appending
+// our own move behind the cast -- the previous approach -- could leave an order
+// the engine never finished, which stalled the rest of the queue forever.
 //
-//   move right  ->  dash (cast)  ->  [our move to the cast point]  ->  move right
-//                      speed boost covers this leg, so it reads as a dash
+//   move right  ->  dash (cast)  ->  move right
+//                   `-- engine walks to the point, then the spell fires
 //
-// A bare dash with nothing queued works by the same path: the appended move is
-// simply the only thing behind the cast.
-const DASH_DISTANCE = 300; // how far a dash travels, regardless of click range
+// All that is left for code is to start the speed boost at the moment that walk
+// BEGINS rather than when the spell finally goes off, so casting far away reads
+// as "dash off now, then walk the rest of the way" instead of "stroll over
+// there, then twitch".
+//
+// Finding that moment needs no polling: WC3 fires the order event a second time
+// when a queued order becomes the current one. At click time the dash is still
+// waiting behind other orders and the unit's current order is something else; at
+// execution time the current order IS the dash. That comparison is the whole
+// trick.
 const DASH_SPEED = 522; // WC3's default max move speed (peasant base is ~190)
 const DASH_DURATION = 0.6; // seconds of boosted speed
-const BARE_DASH_GRACE = 0.12; // s to wait before deciding the queue is empty
 const DASH_ANIM_INDEX = 22; // 'Roll' — transplanted, scripts/transplant-roll-anim.js
 
 interface DashState {
@@ -36,9 +40,11 @@ const dashing = new Map<unit, DashState>();
 
 // Diagnostics, read through a function: TSTL importers snapshot a mutable
 // `export let`, so an exported variable would always read its initial value.
-const dbg = { tx: -99999, ty: -99999, ord: -1, issued: 0 };
+// events = flare order events seen, atQueue/atExec = how many of those arrived
+// with the dash still queued vs already current.
+const dbg = { tx: -99999, ty: -99999, events: 0, atQueue: 0, atExec: 0, started: 0 };
 export function getDashDebug(): number[] {
-  return [dbg.tx, dbg.ty, dbg.ord, dbg.issued];
+  return [dbg.tx, dbg.ty, dbg.events, dbg.atQueue, dbg.atExec, dbg.started];
 }
 
 /** True while the unit is mid-dash. */
@@ -58,14 +64,13 @@ function endDash(h: unit): void {
   SetUnitTimeScale(h, 1);
 }
 
-function startDash(u: Unit): void {
-  const h = u.handle;
-
+function startDash(h: unit): void {
   // Re-dashing: keep the original speed, don't capture the boosted one.
   const existing = dashing.get(h);
   const baseSpeed = existing != null ? existing.baseSpeed : GetUnitMoveSpeed(h);
   if (existing != null) existing.timer.destroy();
 
+  dbg.started = dbg.started + 1;
   SetUnitMoveSpeed(h, DASH_SPEED);
   SetUnitAnimationByIndex(h, DASH_ANIM_INDEX);
   QueueUnitAnimation(h, 'stand');
@@ -76,40 +81,34 @@ function startDash(u: Unit): void {
 }
 
 export function initDash(): void {
-  // Issue time: put a move to the cast point directly behind the dash, before
-  // the player has queued anything after it.
+  const flare = OrderId('flare');
+
   const issued = Trigger.create();
   issued.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
   issued.addAction(() => {
-    if (GetIssuedOrderId() !== OrderId('flare')) return;
+    if (GetIssuedOrderId() !== flare) return;
     const u = Unit.fromEvent();
     if (u == null || u.typeId !== PEASANT_ID) return;
     const h = u.handle;
-    // Clamp to a fixed dash length instead of walking to wherever the player
-    // clicked. The cast range is effectively unlimited, so the raw point can be
-    // far away or unreachable — and a move order that can never be completed
-    // leaves the peasant standing on it forever, blocking everything queued
-    // behind it (both order flags stay up and nothing advances).
-    const px = GetOrderPointX();
-    const py = GetOrderPointY();
-    const ang = Atan2(py - GetUnitY(h), px - GetUnitX(h));
-    const x = GetUnitX(h) + DASH_DISTANCE * Cos(ang);
-    const y = GetUnitY(h) + DASH_DISTANCE * Sin(ang);
-    dbg.tx = x; dbg.ty = y; dbg.issued = 1;
-    // A frame later, so the dash order is committed to the queue first —
-    // queueing from inside its own order event lands in the wrong place and
-    // swallowed whatever the player queued next. give/take defers its
-    // substitution the same way.
-    nextFrame(() => BlzQueuePointOrderById(h, OrderId('move'), x, y));
+    dbg.tx = GetOrderPointX(); dbg.ty = GetOrderPointY();
+    dbg.events = dbg.events + 1;
+    // Still sitting in the queue behind something else: the event will come
+    // round again when the peasant actually starts heading for the point.
+    if (GetUnitCurrentOrder(h) !== flare) { dbg.atQueue = dbg.atQueue + 1; return; }
+    dbg.atExec = dbg.atExec + 1;
+    startDash(h);
   });
 
-  // Cast time: the boost, which covers the move queued above.
+  // Arriving ends the boost early: there is nothing left to dash across, and
+  // letting it run on would hand the next queued order a peasant still moving at
+  // dash speed. It deliberately does NOT start one -- the boost belongs to the
+  // walk, and by the time the spell goes off the walk is over.
   const cast = Trigger.create();
   cast.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_CHANNEL);
   cast.addAction(() => {
     if (GetSpellAbilityId() !== DASH_ABILITY_ID) return;
     const u = Unit.fromEvent();
     if (u == null || u.typeId !== PEASANT_ID) return;
-    startDash(u);
+    endDash(u.handle);
   });
 }

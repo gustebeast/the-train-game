@@ -31,8 +31,6 @@ import './burntest'; // burning train: production lock and wrecked end state
 import './shoptest'; // Repair Train purchase effect
 import './dashfieldstest'; // asks the engine about A000's button data
 import './inputwatchtest'; // observes a real VNC-driven input sequence
-import './baredashtest'; // throwaway: bare-dash diagnosis
-import './dashdelaytest'; // measures the dash -> next-order gap
 import { loadTerrain } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
