@@ -1,7 +1,7 @@
 import { Grid, GRID_MAX_X, gridToWorld } from './constants';
-import { generateTerrain, generateCheatTerrain, generateLobby } from './generate';
+import { generateTerrain, generateCheatTerrain, generateLobby, generateDefeatLobby } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
-import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback } from '../train';
+import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
 import { gameState } from '../state';
@@ -15,6 +15,7 @@ import { loadCrateForRound, loadCrateForLobby } from '../items';
 import { spawnLobbyMerc } from '../mercenary';
 
 setVictoryCallback(() => loadLobby());
+setDefeatCallback(() => loadDefeatLobby());
 setAwardVictoryCallback(() => awardVictory());
 registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round));
 registerReadyZone('revert', 'Resetting purchases', () => {
@@ -57,6 +58,20 @@ export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRI
 
 export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
   loadGameplay(generateCheatTerrain(exitX, exitY));
+}
+
+/** Load the defeat lobby: the lobby tileset, empty.
+ *
+ *  Intentionally spawns nothing else -- no train, shop, crate, heroes, merc or
+ *  ready circles. There is no way to start another round from here, which is
+ *  the point: the run is over. It also does NOT snapshot or save, so a defeat
+ *  cannot overwrite the lobby state a later session would load.
+ *
+ *  Contrast loadLobby(), which is the victory path and rebuilds everything. */
+export function loadDefeatLobby(): void {
+  playLobbyMusic();
+  SetTimeOfDay(12);
+  spawnTerrain(generateDefeatLobby());
 }
 
 export function loadLobby(): void {

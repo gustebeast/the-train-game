@@ -740,6 +740,25 @@ compiletime(({ objectData, constants }) => {
   toughCamp.classification = 'PowerUp';
   toughCamp.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGrunt.blp';
 
+  // Restore Lost HP (ManualOfHealth — purchased from shop). Replaces Flame
+  // Resistance on the shelf whenever the train is below its starting max HP.
+  const restoreHp = objectData.items.get(constants.items.ManualOfHealth)!;
+  restoreHp.name = 'Repair Train';
+  restoreHp.tooltipBasic = restoreHp.name;
+  restoreHp.description = 'Repairs the fire damage, restoring the train to 100 health. Health upgrades bought before the fire are not restored.';
+  restoreHp.tooltipExtended = restoreHp.description;
+  restoreHp.goldCost = 1;
+  restoreHp.stockMaximum = 1;
+  restoreHp.stockReplenishInterval = 3600;
+  restoreHp.stockInitialAfterStartDelay = 10;
+  restoreHp.useAutomaticallyWhenAcquired = true;
+  restoreHp.activelyUsed = false;
+  restoreHp.canBeDropped = false;
+  restoreHp.perishable = true;
+  restoreHp.abilities = '';
+  restoreHp.classification = 'PowerUp';
+  restoreHp.interfaceIcon = 'ReplaceableTextures\CommandButtons\BTNHealingSalve.blp';
+
   // Flame Resistance upgrade (AncientFigurine — purchased from shop)
   const flameResistance = objectData.items.get(constants.items.AncientFigurine)!;
   flameResistance.name = 'Flame Resistance';

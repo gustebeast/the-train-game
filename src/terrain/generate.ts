@@ -568,6 +568,24 @@ export function generateLobby(): Grid {
   return grid;
 }
 
+/** The lobby's tileset with nothing in it.
+ *
+ *  Same floor and water boundary as the victory lobby -- built from it, so the
+ *  two can never drift -- but stripped of every unit and building: no shop,
+ *  crates, ready circles, train or creep cage. Player spawns are kept, since
+ *  the point is to have somewhere to stand and walk after a defeat, and the
+ *  water border is kept because it is the map edge rather than scenery. */
+export function generateDefeatLobby(): Grid {
+  const grid = generateLobby();
+  for (const cell of grid.cells) {
+    if (cell.entity === Entity.NONE) continue;
+    const isBoundary = cell.entity === Entity.WATER || cell.entity === Entity.WATER_VISIBLE;
+    const isPlayerSpawn = cell.entity >= Entity.PLAYER_1 && cell.entity <= Entity.PLAYER_4;
+    if (!isBoundary && !isPlayerSpawn) cell.entity = Entity.NONE;
+  }
+  return grid;
+}
+
 // ============================================================
 // Main orchestrator
 // ============================================================

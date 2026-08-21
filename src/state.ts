@@ -15,6 +15,10 @@ export interface GameState {
   crateWoodCount: number;
 }
 
+/** The train's max HP at the start of a run. The Restore Lost HP item resets to
+ *  exactly this, so Flame Resistance upgrades bought earlier are not refunded. */
+export const TRAIN_INITIAL_MAX_HP = 100;
+
 const DEFAULT_STATE: GameState = {
   round: 0,
   gold: 0,
@@ -22,7 +26,7 @@ const DEFAULT_STATE: GameState = {
   trainTrackMaxStack: 3,
   peasantMaxStack: 3,
   crateMaxStack: 10,
-  trainMaxHP: 100,
+  trainMaxHP: TRAIN_INITIAL_MAX_HP,
   trainMaxMana: 100,
   trainSpeed: 6,
   crateTrackCount: 0,
