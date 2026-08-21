@@ -22,6 +22,7 @@ import { initGlobalTick } from './globalTick';
 import './challengeList'; // registers the challenge catalogue
 import { initChallengeWatch } from './challengeWatch';
 import { initChallengeUI } from './challengeUI';
+import { initChallengeEffects } from './challengeEffects';
 import { initCameraLock } from './cameraLock';
 import { initCargoVisuals } from './cargoVisuals';
 import { syncGold } from './state';
@@ -33,6 +34,7 @@ import './damagetest'; // registers the 'damage' test; add further test modules 
 import './burntest'; // burning train: production lock and wrecked end state
 import './shoptest'; // Repair Train purchase effect
 import './challengetest'; // challenge sequencing and payouts
+import './fogtest'; // blackout must give the map back at dawn
 import './dashfieldstest'; // asks the engine about A000's button data
 import './inputwatchtest'; // observes a real VNC-driven input sequence
 import { loadTerrain } from './terrain/load';
@@ -65,6 +67,7 @@ function tsMain() {
     initGlobalTick();
     initChallengeWatch();
     initChallengeUI();
+    initChallengeEffects();
     initMinimapIcons();
     initCameraLock();
     initCargoVisuals();
