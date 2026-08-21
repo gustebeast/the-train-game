@@ -1,12 +1,12 @@
 import { Trigger, Unit } from 'w3ts';
-import { gameState, syncState } from './state';
+import { gameState, syncState, TRAIN_INITIAL_MAX_HP } from './state';
 import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForLobby } from './items';
 import {
   SUMMON_UPGRADE_ITEM_ID, PEASANT_ID, REROLL_ITEM_ID,
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, MERC_CONTRACT_ID,
-  CRITTERPOCALYPSE_ID, TOUGH_CAMP_ID,
+  CRITTERPOCALYPSE_ID, TOUGH_CAMP_ID, RESTORE_HP_ID,
 } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
 import { hasActiveMerc, isMercDead, buyMercContract } from './mercenary';
@@ -24,11 +24,13 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [MERC_CONTRACT_ID, 1],
   [CRITTERPOCALYPSE_ID, 1],
   [TOUGH_CAMP_ID, 1],
+  [RESTORE_HP_ID, 1],
 ]);
 
-/** Repeatable upgrades every shop sells. */
+/** Repeatable upgrades every shop sells. Flame Resistance is NOT here: it is
+ *  stocked conditionally, because Repair Train replaces it while the train is
+ *  damaged (see stockShop). */
 const REPEATABLE_STOCK = [
-  FLAME_RESISTANCE_ID,
   TRACK_MANUFACTURING_ID,
   RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID,
@@ -51,6 +53,15 @@ export function stockShop(shop: Unit): void {
     if (GetUnitTypeId(shop.handle) === 0) return; // shop died/removed
     for (const itemId of REPEATABLE_STOCK) {
       AddItemToStock(shop.handle, itemId, 10, 10);
+    }
+    // Repair Train and Flame Resistance are alternatives, never both. Below the
+    // starting max HP the only sensible purchase is getting that HP back, and
+    // offering "+10 max HP" at the same time invites players to buy an upgrade
+    // that the repair would then throw away.
+    if (gameState.trainMaxHP < TRAIN_INITIAL_MAX_HP) {
+      AddItemToStock(shop.handle, RESTORE_HP_ID, 1, 1);
+    } else {
+      AddItemToStock(shop.handle, FLAME_RESISTANCE_ID, 10, 10);
     }
     if (!isSummonUpgradePurchased()) {
       AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
@@ -119,6 +130,17 @@ export function initShop(): void {
     if (itemTypeId === FLAME_RESISTANCE_ID) {
       gameState.trainMaxHP += 10;
       effectTargets = [getTrain()];
+    } else if (itemTypeId === RESTORE_HP_ID) {
+      // Back to the starting value, not to whatever it was before the fire:
+      // Flame Resistance upgrades bought earlier really are lost.
+      gameState.trainMaxHP = TRAIN_INITIAL_MAX_HP;
+      effectTargets = [getTrain()];
+      // The train is whole again, so the pair swaps back without waiting for
+      // the next lobby -- otherwise repairing would cost you the chance to
+      // upgrade this visit.
+      if (currentShop != null) {
+        AddItemToStock(currentShop.handle, FLAME_RESISTANCE_ID, 10, 10);
+      }
     } else if (itemTypeId === TRACK_MANUFACTURING_ID) {
       gameState.trainMaxMana -= 10;
       if (gameState.trainMaxMana < 10) gameState.trainMaxMana = 10;

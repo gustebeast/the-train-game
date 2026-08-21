@@ -27,6 +27,8 @@ import { log } from './debug';
 
 import { initTestKit } from './testkit';
 import './damagetest'; // registers the 'damage' test; add further test modules here
+import './burntest'; // burning train: production lock and wrecked end state
+import './shoptest'; // Repair Train purchase effect
 import './dashfieldstest'; // asks the engine about A000's button data
 import './inputwatchtest'; // observes a real VNC-driven input sequence
 import './baredashtest'; // throwaway: bare-dash diagnosis

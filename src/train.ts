@@ -26,6 +26,11 @@ let gameOver: boolean = false;
 let burning: boolean = false;
 let burnTimer: Timer | null = null;
 let burnEffects: effect[] = [];
+/** Max HP the fire leaves behind. At this point the train is wrecked: the decay
+ *  stops (so max HP never reaches 0 and kills it outright) and the burn becomes
+ *  permanent. */
+const TRAIN_WRECKED_MAX_HP = 1;
+let wrecked: boolean = false;
 
 /** Attach the full burning look to the engine. The automatic damage fire is
  *  disabled (the train is no longer classified Mechanical, see compiletime.ts)
@@ -52,12 +57,37 @@ export function isBurning(): boolean {
   return burning;
 }
 
+/** True once the fire has eaten all the train's max HP. The train stays alight
+ *  for the rest of the round and can never produce tracks again. */
+export function isWrecked(): boolean {
+  return wrecked;
+}
+
+/** The fire has consumed every point of max HP. Stop the decay and leave the
+ *  train burning for good.
+ *
+ *  Deliberately NOT an instant game over: the players lose track production,
+ *  not the run. If they already have enough tracks banked to reach the exit
+ *  they can still finish, which is the comeback this state exists to allow. */
+function wreckTrain(): void {
+  if (wrecked) return;
+  wrecked = true;
+  if (burnTimer != null) {
+    burnTimer.destroy();
+    burnTimer = null;
+  }
+  print('The train is wrecked! It can no longer produce tracks.');
+}
+
 export function stopGameplay(): void {
   setInGameplay(false);
 }
 
 export function extinguish(): void {
   if (!burning) return;
+  // A wrecked train cannot be put out. Its max HP is spent, so there is nothing
+  // for water to restore and production stays dead for the rest of the round.
+  if (wrecked) return;
   burning = false;
   clearBurnVisuals();
   if (burnTimer != null) {
@@ -215,9 +245,37 @@ export function initLobbyTrain(unit: Unit, wagon: Unit): void {
 
 let onVictory: (() => void) | null = null;
 let onAwardVictory: (() => void) | null = null;
+let onDefeat: (() => void) | null = null;
 
 export function setVictoryCallback(cb: () => void): void {
   onVictory = cb;
+}
+
+export function setDefeatCallback(cb: () => void): void {
+  onDefeat = cb;
+}
+
+/** End the run in defeat: stop gameplay and hand off to the defeat lobby.
+ *
+ *  The mirror of the victory path. Previously running out of track only printed
+ *  a message and left the round running with nothing left to do. Safe to call
+ *  more than once and from anywhere (the crash timer, a cheat command). */
+export function triggerDefeat(): void {
+  if (gameOver || !isInGameplay()) return;
+  gameOver = true;
+  crashDeadline = 0;
+  // Stop the fire before leaving, or its timer keeps eating max HP while the
+  // players stand in the defeat lobby.
+  burning = false;
+  wrecked = false;
+  clearBurnVisuals();
+  if (burnTimer != null) {
+    burnTimer.destroy();
+    burnTimer = null;
+  }
+  setInGameplay(false);
+  print('Defeat! The train ran out of track.');
+  if (onDefeat != null) onDefeat();
 }
 
 export function setAwardVictoryCallback(cb: () => void): void {
@@ -249,9 +307,14 @@ function initTrainUnit(unit: Unit): void {
     print('The train is on fire and is losing max HP!');
     burnTimer = createTimer();
     burnTimer.start(1, true, () => {
+      if (gameState.trainMaxHP <= TRAIN_WRECKED_MAX_HP) {
+        wreckTrain();
+        return;
+      }
       gameState.trainMaxHP -= 1;
       BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
       SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
+      if (gameState.trainMaxHP <= TRAIN_WRECKED_MAX_HP) wreckTrain();
     });
   });
 }
@@ -266,6 +329,7 @@ export function initTrain(unit: Unit, wagon: Unit) {
   crashDeadline = 0;
   gameOver = false;
   burning = false;
+  wrecked = false;
   clearBurnVisuals();
   if (burnTimer != null) {
     burnTimer.destroy();
@@ -318,9 +382,7 @@ export function initTrain(unit: Unit, wagon: Unit) {
     crashDeadline = os.clock() + crashDelay;
     startOneShot(crashDelay, () => {
       if (crashDeadline !== 0) {
-        print('Game over!');
-        crashDeadline = 0;
-        gameOver = true;
+        triggerDefeat();
         // deleteSave(); // Disabled for testing
       }
     });

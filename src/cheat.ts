@@ -4,7 +4,7 @@ import { loadCheatTerrain, loadLobby } from './terrain/load';
 import { TRACK_PIECE_ID, WOOD_ID, STONE_ID, PEASANT_ID, WATER_ID, TRAIN_ID } from './constants';
 import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants';
 import { loadFromFile } from './save';
-import { stopGameplay } from './train';
+import { stopGameplay, triggerDefeat } from './train';
 import { getNeutralPassive } from './teams';
 import { getHumanPlayers, getWorldBounds } from './util';
 
@@ -92,6 +92,12 @@ export function initCheat(): void {
     SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 1100, 0);
     IssuePointOrderById(p, OrderId('flare')!, GetUnitX(p) + 400, GetUnitY(p));
     print('dashnow: dashing east');
+  });
+
+  // Drive the defeat path without having to actually run the train out of
+  // track, which otherwise takes a whole round to reach.
+  onChatCommand('-testdefeat', () => {
+    triggerDefeat();
   });
 
   onChatCommand('-load', () => {
