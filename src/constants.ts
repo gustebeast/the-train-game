@@ -37,7 +37,7 @@ export const REROLL_ABILITY_ID = FourCC(Abilities.ItemIllusions);
 export const SUMMON_TECH_ID = FourCC(Upgrades.MagicSentry);
 
 // Items
-export const SUMMON_UPGRADE_ITEM_ID = FourCC(Items.PendantOfEnergy);
+export const SUMMON_UPGRADE_ITEM_ID = FourCC(Items.HornOfCenarius);
 export const AXE_ID = FourCC(Items.SturdyWarAxe);
 export const PICKAXE_ID = FourCC(Items.RustyMiningPick);
 export const WOOD_ID = FourCC(Items.IronwoodBranch);
@@ -50,20 +50,22 @@ export const REROLL_ITEM_ID = FourCC(Items.VoodooDoll);
 // Shop stock. These are consumed the instant they are acquired (shop.ts turns
 // the pickup into the upgrade), so they are never really "held" by anyone --
 // which is why the holding rules let every unit accept them.
+//
+// Every rawcode here must be one creeps never drop: the map identifies its
+// items by rawcode alone, so an item that can come off a corpse is a free
+// upgrade. Miscellaneous/Campaign/Purchasable items are safe (WC3 ships them
+// with "Include As Random Choice" false); Permanent ones usually are not.
 export const FLAME_RESISTANCE_ID = FourCC(Items.AncientFigurine);
 export const TRACK_MANUFACTURING_ID = FourCC(Items.BracerOfAgility);
 export const RESOURCE_CAPACITY_ID = FourCC(Items.DruidPouch);
 export const TRACK_CAPACITY_ID = FourCC(Items.JadeRing);
 export const CRATE_CAPACITY_ID = FourCC(Items.LionsRing);
 export const MERC_CONTRACT_ID = FourCC(Items.MogrinsReport);
-/** Retired: the Hero Reroll item now rerolls mercenaries too, so the shop no
- *  longer sells a separate one. Kept so the object data still has an owner. */
-export const MERC_REROLL_ID = FourCC(Items.HoodOfCunning);
 /** Repairs the fire damage: resets max HP to its starting value. Sold only
  *  while the train is below that, and never alongside Flame Resistance. */
-export const RESTORE_HP_ID = FourCC(Items.ManualOfHealth);
-export const CRITTERPOCALYPSE_ID = FourCC(Items.MedallionOfCourage);
-export const TOUGH_CAMP_ID = FourCC(Items.PeriaptOfVitality);
+export const RESTORE_HP_ID = FourCC(Items.HeartOfAszune);
+export const CRITTERPOCALYPSE_ID = FourCC(Items.Shimmerweed);
+export const TOUGH_CAMP_ID = FourCC(Items.SkeletalArtifact);
 
 /** Everything the shop sells that is consumed on acquisition. */
 export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = [
