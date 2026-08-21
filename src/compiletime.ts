@@ -936,6 +936,41 @@ compiletime(({ objectData, constants }) => {
   heroReroll.classification = 'Charged';
   heroReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
 
+  // Keep every repurposed item out of the random drop tables.
+  //
+  // The map reuses stock rawcodes for its own items, and matches on rawcode
+  // alone: shop.ts turns "a unit picked up Mogrin's Report" into a Mercenary
+  // Contract purchase no matter WHERE that happened, and items.ts reads
+  // Sturdy War Axe as the peasant's axe. Creep camps drop random permanents via
+  // ChooseRandomItemEx, whose pool is every item with "Include As Random
+  // Choice" set -- which these all ship with. A camp rolling one would hand out
+  // a free upgrade, or a tool, from a corpse.
+  //
+  // Clearing the flag removes them from that pool at the source, which beats
+  // guarding each consumer: there is one list here rather than a proximity
+  // check in shop.ts plus another rule in items.ts. (compiletime.ts already
+  // does the same reasoning for the attachment abilities, which were chosen so
+  // creep-drop items never reference them.)
+  const repurposedItems = [
+    // shop stock
+    constants.items.AncientFigurine, constants.items.BracerOfAgility,
+    constants.items.DruidPouch, constants.items.JadeRing,
+    constants.items.LionsRing, constants.items.PendantOfEnergy,
+    constants.items.MogrinsReport, constants.items.HoodOfCunning,
+    constants.items.MedallionOfCourage, constants.items.PeriaptOfVitality,
+    // hero reroll
+    constants.items.VoodooDoll,
+    // peasant tools and train resources
+    constants.items.SturdyWarAxe, constants.items.RustyMiningPick,
+    constants.items.IronwoodBranch, constants.items.GemFragment,
+    constants.items.MechanicalCritter, constants.items.EmptyVial,
+    constants.items.FullVial,
+  ];
+  for (const itemId of repurposedItems) {
+    const repurposed = objectData.items.get(itemId);
+    if (repurposed != null) repurposed.includeAsRandomChoice = false;
+  }
+
   // Scale down all hero types to match peasant size
   const heroTypes: string[] = [
     // Human
