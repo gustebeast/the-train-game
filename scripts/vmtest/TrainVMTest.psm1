@@ -850,8 +850,47 @@ function Invoke-MapTest {
       return [pscustomobject]$result
     }
 
-    & $Say "running -test $Test"
-    Send-TestVmChat $conn "-test $Test"
+    # Skip the chat command when the map starts the test itself.
+    #
+    # initTestKit('<name>') runs the test off the map's own readiness timer, and
+    # publishes 'autorun=<name>' in the ready marker to say so. Typing over VNC
+    # is the slowest and least reliable step in a run -- WC3 samples the
+    # keyboard once per render frame, so fast input transposes characters -- and
+    # when the map has already started the test the command buys nothing. The
+    # re-entrancy guard in startTest would ignore it anyway; this just stops
+    # paying for it.
+    $readyRaw = Get-TestVmResultFile $vmInfo -Name 'test_ready.txt' -Destination (Join-Path $OutDir 'test_ready.txt')
+
+    # Is this even the map we just uploaded?
+    #
+    # The ready marker lists the tests the RUNNING map registered, so if the
+    # requested one is absent the guest is running a different build. That is
+    # not hypothetical: parking a clone inside the Download folder made WC3
+    # reload the map cached in its snapshot, and a full run passed against a
+    # days-old binary whose marker still advertised tests deleted from the
+    # source. A green result from the wrong map is the worst thing this harness
+    # can produce, so it is checked rather than assumed.
+    if ($readyRaw -and $readyRaw -notmatch ('"' + [regex]::Escape($Test) + '"')) {
+        $registered = ([regex]::Matches($readyRaw, 'Preload\(\s*"([^"]+)"\s*\)') | ForEach-Object { $_.Groups[1].Value }) -join ', '
+        throw ("The running map does not register '$Test' -- it is not the map you just built. " +
+               "It registered: $registered. This usually means the guest loaded a stale map " +
+               "(check the map browser navigation) rather than the uploaded one.")
+    }
+
+    $autoRun = $null
+    if ($readyRaw -and $readyRaw -match 'autorun=([A-Za-z0-9_]+)') { $autoRun = $matches[1] }
+    if ($autoRun -eq $Test) {
+      & $Say "$Test started itself (autoRun) -- no chat command needed"
+    } elseif ($null -ne $autoRun) {
+      # Mismatch is worth saying out loud: the map is running a DIFFERENT test
+      # from the one asked for, so the results below would be the wrong test's.
+      throw ("The map auto-runs '$autoRun' but this run asked for '$Test'. Build with " +
+             "initTestKit('$Test') or run with -Test $autoRun -- otherwise the results " +
+             "would be from the wrong test.")
+    } else {
+      & $Say "running -test $Test"
+      Send-TestVmChat $conn "-test $Test"
+    }
 
     # Results are rewritten after every measurement, so existence alone can
     # catch a half-written file -- wait for the trailing 'done' line.

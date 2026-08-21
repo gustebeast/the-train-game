@@ -206,6 +206,13 @@ export function initTestKit(autoRun?: string): void {
   for (const test of tests) {
     names.push(test.name);
   }
+  // Tell the runner the map starts its own test, so it does not type a chat
+  // command the map does not need. Typing over VNC is the slowest and least
+  // reliable step in a run, and with autoRun set it is pure waste: the test has
+  // already begun by the time the command could land.
+  if (autoRun != null) {
+    names.push('autorun=' + autoRun);
+  }
   Timer.create().start(0.5, false, () => {
     writeFile(READY_FILE, names);
     // Same reason this marker is on a timer: init runs while the game is still

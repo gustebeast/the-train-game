@@ -255,7 +255,29 @@ try {
            "start from the wrong menu. See $rootShot")
   }
 
-  # 9. Park INSIDE the Download folder, not above it.
+  # 9. PARK ABOVE THE DOWNLOAD FOLDER. Do not "fix" this by parking inside it.
+  #
+  # Parking inside looks better -- it would spare the runner a double-click that
+  # is unreliable over VNC at 15fps -- and it was tried on murph on 2026-08-21.
+  # It silently ran the WRONG MAP.
+  #
+  # A snapshot-restored WC3 keeps knowledge of the map files that existed when
+  # the snapshot was taken (the same quirk that makes it reject a map which
+  # OVERWRITES a name it already knew). Parked inside Download with a map
+  # selected, the runner's firstMapRow click re-selects that STALE list entry
+  # and WC3 loads the mint-time map from its own cache -- even though the runner
+  # has deleted the whole Download directory and uploaded a fresh one. The proof
+  # was a run whose ready marker advertised tests that had been deleted from the
+  # source days earlier.
+  #
+  # Entering the folder from ABOVE is what forces a fresh directory read, so the
+  # double-click is not incidental: it is the step that makes the run use the
+  # map you just built. A flaky click that fails loudly beats a reliable one
+  # that quietly tests the wrong binary.
+  #
+  # The block below is kept, disabled, so the next person reads this before
+  # rediscovering it the expensive way.
+  if ($false) {
   #
   # Row 1 of the map browser is "Download" at the top level and "(up one level)"
   # inside it, so where a VM is parked decides what the runner's first click
@@ -309,6 +331,14 @@ try {
   Vnc-Click $c $ui.firstMapRow[0] $ui.firstMapRow[1]
   Start-Sleep -Seconds 2
   Shot $c 'parked-inside-download'
+  }
+
+  # Leave the Download folder EMPTY. A file left here becomes a stale entry in
+  # the snapshot's in-memory map list, which is the failure described above.
+  $dl = "C:\Users\$($cfg.guestUser)\Documents\Warcraft III\Maps\Download"
+  & $vmrun @guest deleteDirectoryInGuest $vmx $dl 2>$null | Out-Null
+  & $vmrun @guest createDirectoryInGuest $vmx $dl | Out-Null
+  Shot $c 'parked-above-download'
 }
 finally { $c.cli.Close() }
 
@@ -341,5 +371,6 @@ $sw=[Diagnostics.Stopwatch]::StartNew()
 Write-Host ("  done in {0}s" -f [math]::Round($sw.Elapsed.TotalSeconds,0))
 & $vmrun listSnapshots $vmx
 Write-Host "Now set ready:true for '$Vm' in vms.json and validate with run-test.ps1 -Vm $Vm."
-Write-Host "Parked INSIDE the Download folder with the map selected. Every clone must be"
-Write-Host "minted this way: the runner assumes it and does not enter the folder itself."
+Write-Host "Parked ABOVE the Download folder, which is left EMPTY. The runner enters the"
+Write-Host "folder itself, and that is what makes it read the map you actually built --"
+Write-Host "see the long comment in this script before changing it."
