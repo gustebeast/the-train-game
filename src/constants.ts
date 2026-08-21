@@ -66,12 +66,14 @@ export const MERC_CONTRACT_ID = FourCC(Items.MogrinsReport);
 /** Repairs the fire damage: resets max HP to its starting value. Sold only
  *  while the train is below that, and never alongside Flame Resistance. */
 export const RESTORE_HP_ID = FourCC(Items.HeartOfAszune);
-export const CRITTERPOCALYPSE_ID = FourCC(Items.Shimmerweed);
-export const TOUGH_CAMP_ID = FourCC(Items.SkeletalArtifact);
+/** The Shady Deal: one shelf slot that sells whichever challenge the seeded
+ *  sequence is up to. Which one that is comes from challenges.ts, so this
+ *  item's name and tooltip are deliberately generic. */
+export const CHALLENGE_ITEM_ID = FourCC(Items.Shimmerweed);
 
 /** Everything the shop sells that is consumed on acquisition. */
 export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = [
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, SUMMON_UPGRADE_ITEM_ID,
-  MERC_CONTRACT_ID, CRITTERPOCALYPSE_ID, TOUGH_CAMP_ID, RESTORE_HP_ID,
+  MERC_CONTRACT_ID, CHALLENGE_ITEM_ID, RESTORE_HP_ID,
 ];

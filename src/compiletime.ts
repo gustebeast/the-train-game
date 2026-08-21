@@ -755,14 +755,18 @@ compiletime(({ objectData, constants }) => {
   shadyDealer.collisionSize = 32;
   shadyDealer.sightRadiusDay = 400;
   shadyDealer.sightRadiusNight = 400;
-  shadyDealer.itemsSold = [constants.items.Shimmerweed, constants.items.SkeletalArtifact].join(',');
+  shadyDealer.itemsSold = constants.items.Shimmerweed;
   shadyDealer.itemsMade = '';
 
-  // Critterpocalypse challenge (Shimmerweed — purchased from the Shady Dealer)
+  // The Shady Deal (Shimmerweed — the Shady Dealer's one slot).
+  //
+  // Deliberately generic: WHICH challenge this sells is decided at runtime from
+  // the seeded sequence in challenges.ts, and object-data text is fixed at
+  // build time, so the specific challenge is announced on purchase instead.
   const critterpocalypse = objectData.items.get(constants.items.Shimmerweed)!;
-  critterpocalypse.name = 'Critterpocalypse';
+  critterpocalypse.name = 'Shady Deal';
   critterpocalypse.tooltipBasic = critterpocalypse.name;
-  critterpocalypse.description = 'Every grass tile spawns a critter next round. Beat the round to earn 2 bonus gold.';
+  critterpocalypse.description = "Take the dealer's challenge for this round. Complete it to earn 2 gold.";
   critterpocalypse.tooltipExtended = critterpocalypse.description;
   critterpocalypse.goldCost = 1;
   critterpocalypse.stockMaximum = 1;
@@ -776,7 +780,10 @@ compiletime(({ objectData, constants }) => {
   critterpocalypse.classification = 'PowerUp';
   critterpocalypse.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSheep.blp';
 
-  // Tough Creep Camp challenge (SkeletalArtifact — purchased from the Shady Dealer)
+  // Retired: the Shady Dealer now has a single slot (see Shady Deal above) and
+  // Tough Creep Camp is one of the challenges it can sell. Object data kept so
+  // the item id still resolves.
+  // Tough Creep Camp challenge (SkeletalArtifact)
   const toughCamp = objectData.items.get(constants.items.SkeletalArtifact)!;
   toughCamp.name = 'Tough Creep Camp';
   toughCamp.tooltipBasic = toughCamp.name;

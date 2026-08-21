@@ -1,5 +1,6 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import { DASH_ABILITY_ID, PEASANT_ID } from './constants';
+import { noteDash } from './challengeList';
 
 // Dash = a normal move at boosted speed, so WC3's own pathing handles all
 // collision (including the moving train, which hand-rolled collision could not
@@ -109,6 +110,7 @@ export function initDash(): void {
     if (GetSpellAbilityId() !== DASH_ABILITY_ID) return;
     const u = Unit.fromEvent();
     if (u == null || u.typeId !== PEASANT_ID) return;
+    noteDash();
     endDash(u.handle);
   });
 }

@@ -149,6 +149,14 @@ function moveToNext() {
   issueCarOrders();
 }
 
+/** How many laid tracks remain ahead of the train. 0 means the next arrival
+ *  crashes it. Used by the "Living Dangerously" challenge to tell how close to
+ *  the end of the line the train is running. */
+export function getTracksRemaining(): number {
+  const remaining = placedTracks.length - 1 - targetIdx;
+  return remaining > 0 ? remaining : 0;
+}
+
 export function getTrainTarget(): Unit | undefined {
   return placedTracks[targetIdx];
 }

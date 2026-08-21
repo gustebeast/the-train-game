@@ -3,7 +3,8 @@ import {
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, GRID_W, GRID_H,
   idx, idxToCoords, inBounds, isReserved,
 } from './constants';
-import { isCritterpocalypse } from '../challenges';
+import { isChallengeArmed } from '../challenges';
+import { CH_CRITTERPOCALYPSE } from '../challengeList';
 
 
 // --- Grid creation ---
@@ -658,7 +659,7 @@ export function generateTerrain(difficulty: number, exitX = GRID_MAX_X): Grid {
   placeEntities(grid);
   placeCreepCamp(grid);
   // Critterpocalypse: every eligible grass tile instead of the default count
-  placeCritters(grid, isCritterpocalypse() ? GRID_W * GRID_H : CRITTER_COUNT);
+  placeCritters(grid, isChallengeArmed(CH_CRITTERPOCALYPSE) ? GRID_W * GRID_H : CRITTER_COUNT);
   return grid;
 }
 
@@ -667,6 +668,6 @@ export function generateCheatTerrain(exitX = GRID_MAX_X, exitY = 0): Grid {
   generatePath(grid, exitX, exitY);
   placeEntities(grid);
   placeCreepCamp(grid, GRID_MIN_X + 4, SPAWN.minY - 2);
-  placeCritters(grid, isCritterpocalypse() ? GRID_W * GRID_H : CRITTER_COUNT);
+  placeCritters(grid, isChallengeArmed(CH_CRITTERPOCALYPSE) ? GRID_W * GRID_H : CRITTER_COUNT);
   return grid;
 }

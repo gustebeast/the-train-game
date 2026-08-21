@@ -19,6 +19,9 @@ import { initMinimapIcons } from './minimapIcons';
 import { initPlayerLeave } from './playerLeave';
 import { initDash } from './dash';
 import { initGlobalTick } from './globalTick';
+import './challengeList'; // registers the challenge catalogue
+import { initChallengeWatch } from './challengeWatch';
+import { initChallengeUI } from './challengeUI';
 import { initCameraLock } from './cameraLock';
 import { initCargoVisuals } from './cargoVisuals';
 import { syncGold } from './state';
@@ -29,6 +32,7 @@ import { initTestKit } from './testkit';
 import './damagetest'; // registers the 'damage' test; add further test modules here
 import './burntest'; // burning train: production lock and wrecked end state
 import './shoptest'; // Repair Train purchase effect
+import './challengetest'; // challenge sequencing and payouts
 import './dashfieldstest'; // asks the engine about A000's button data
 import './inputwatchtest'; // observes a real VNC-driven input sequence
 import { loadTerrain } from './terrain/load';
@@ -59,6 +63,8 @@ function tsMain() {
     initReroll();
     initHeroes();
     initGlobalTick();
+    initChallengeWatch();
+    initChallengeUI();
     initMinimapIcons();
     initCameraLock();
     initCargoVisuals();

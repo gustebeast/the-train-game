@@ -12,6 +12,8 @@ import {
 } from '../heroes';
 import { startDPSTest } from '../creeps';
 import { loadCrateForRound, loadCrateForLobby } from '../items';
+import { resetChallengeProgress } from '../challengeList';
+import { hideChallengeUI } from '../challengeUI';
 import { spawnLobbyMerc } from '../mercenary';
 import { resetRandomOutcome } from '../randomOutcome';
 
@@ -43,6 +45,9 @@ function stopLobbyMusic(): void {
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
 function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   stopLobbyMusic();
+  // Counters are per round, so a challenge bought now starts from zero rather
+  // than inheriting whatever last round left behind.
+  resetChallengeProgress();
   clearLastSummoned(); // this round's summon (if any) re-records it
   if (!hasHeroes()) initRandomHeroes();
   const spawned = spawnTerrain(grid, skipCleanup);
@@ -70,12 +75,15 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
  *
  *  Contrast loadLobby(), which is the victory path and rebuilds everything. */
 export function loadDefeatLobby(): void {
+  hideChallengeUI();
   playLobbyMusic();
   SetTimeOfDay(12);
   spawnTerrain(generateDefeatLobby());
 }
 
 export function loadLobby(): void {
+  // No round in progress, so no challenge overlay.
+  hideChallengeUI();
   resetRandomOutcome();
   saveLobbySnapshot();
   saveHeroLobbySnapshot();

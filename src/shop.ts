@@ -6,13 +6,13 @@ import {
   SUMMON_UPGRADE_ITEM_ID, PEASANT_ID, REROLL_ITEM_ID,
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, MERC_CONTRACT_ID,
-  CRITTERPOCALYPSE_ID, TOUGH_CAMP_ID, RESTORE_HP_ID,
+  CHALLENGE_ITEM_ID, RESTORE_HP_ID,
 } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
 import { hasActiveMerc, isMercDead, buyMercContract } from './mercenary';
 import { areHeroesSpawned, getSpawnedHeroes, hadSummonLastRound } from './heroes';
 import { forEachUnitInWorld, nextFrame } from './util';
-import { armCritterpocalypse, armToughCamp } from './challenges';
+import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges';
 import { markRandomOutcomeTaken } from './randomOutcome';
 
 const ITEM_COSTS: Map<number, number> = new Map([
@@ -23,8 +23,7 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [CRATE_CAPACITY_ID, 1],
   [SUMMON_UPGRADE_ITEM_ID, 1],
   [MERC_CONTRACT_ID, 1],
-  [CRITTERPOCALYPSE_ID, 1],
-  [TOUGH_CAMP_ID, 1],
+  [CHALLENGE_ITEM_ID, CHALLENGE_COST],
   [RESTORE_HP_ID, 1],
 ]);
 
@@ -63,6 +62,11 @@ export function stockShop(shop: Unit): void {
       AddItemToStock(shop.handle, RESTORE_HP_ID, 1, 1);
     } else {
       AddItemToStock(shop.handle, FLAME_RESISTANCE_ID, 10, 10);
+    }
+    // The Shady Deal: always on the shelf, always one, whatever the sequence
+    // says is next.
+    if (getOfferedChallenge() != null) {
+      AddItemToStock(shop.handle, CHALLENGE_ITEM_ID, 1, 1);
     }
     if (!isSummonUpgradePurchased()) {
       AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
@@ -186,14 +190,15 @@ export function initShop(): void {
         : 'Mercenary Contract purchased: level 2 creep camps unlocked; a mercenary will join your next hero summon.');
       const contractBuyer = Unit.fromHandle(GetTriggerUnit());
       if (contractBuyer != null) effectTargets = [contractBuyer];
-    } else if (itemTypeId === CRITTERPOCALYPSE_ID) {
-      armCritterpocalypse();
-      print('Critterpocalypse armed! Every grass tile spawns a critter next round — win it for 2 bonus gold.');
-      const buyer = Unit.fromEvent();
-      if (buyer != null) effectTargets = [buyer];
-    } else if (itemTypeId === TOUGH_CAMP_ID) {
-      armToughCamp();
-      print("Tough Creep Camp armed! Next round's camp hits far harder — defeat it for 2 bonus gold.");
+    } else if (itemTypeId === CHALLENGE_ITEM_ID) {
+      // One item sells whatever the dealer is currently offering; which one
+      // that is comes from the seeded sequence, not from the shelf.
+      const offered = getOfferedChallenge();
+      if (offered != null) {
+        armChallenge(offered.id);
+        print('|cffffcc00' + offered.name + '|r armed! ' + offered.description
+          + ' Pays 2 gold.');
+      }
       const buyer = Unit.fromEvent();
       if (buyer != null) effectTargets = [buyer];
     }
