@@ -209,7 +209,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         case Entity.START_CIRCLE: {
           const startCircle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
           BlzSetUnitName(startCircle.handle, 'Next Round');
-          initReadyZone(world.x, world.y, 'start');
+          initReadyZone(world.x, world.y, 'start', startCircle);
           break;
         }
 
@@ -217,7 +217,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           const revertCircle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
           BlzSetUnitName(revertCircle.handle, 'Reset Purchases');
           SetUnitVertexColor(revertCircle.handle, 255, 180, 180, 255);
-          initReadyZone(world.x, world.y, 'revert');
+          initReadyZone(world.x, world.y, 'revert', revertCircle);
           break;
         }
 

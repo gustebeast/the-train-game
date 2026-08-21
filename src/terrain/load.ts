@@ -13,6 +13,7 @@ import {
 import { startDPSTest } from '../creeps';
 import { loadCrateForRound, loadCrateForLobby } from '../items';
 import { spawnLobbyMerc } from '../mercenary';
+import { resetRandomOutcome } from '../randomOutcome';
 
 setVictoryCallback(() => loadLobby());
 setDefeatCallback(() => loadDefeatLobby());
@@ -75,6 +76,7 @@ export function loadDefeatLobby(): void {
 }
 
 export function loadLobby(): void {
+  resetRandomOutcome();
   saveLobbySnapshot();
   saveHeroLobbySnapshot();
   playLobbyMusic();

@@ -13,6 +13,9 @@ interface ZoneConfig {
 
 interface ActiveZone {
   config: ZoneConfig;
+  /** The circle of power this zone sits on, so removing the zone removes the
+   *  thing the player can see and walk onto. */
+  marker: Unit | null;
   rect: Rectangle;
   region: Region;
   enterTrigger: Trigger;
@@ -69,7 +72,7 @@ export function registerReadyZone(id: string, message: string, callback: () => v
 }
 
 /** Create a ready zone centered at (cx, cy) for the given registered zone id. */
-export function initReadyZone(cx: number, cy: number, id: string): void {
+export function initReadyZone(cx: number, cy: number, id: string, marker: Unit | null = null): void {
   const config = zoneConfigs.get(id);
   if (config == null) return;
 
@@ -82,6 +85,7 @@ export function initReadyZone(cx: number, cy: number, id: string): void {
 
   const zone: ActiveZone = {
     config,
+    marker,
     rect,
     region,
     enterTrigger: Trigger.create(),
@@ -126,6 +130,23 @@ export function initReadyZone(cx: number, cy: number, id: string): void {
       }
     });
   }
+}
+
+/** Remove one ready zone for good: its triggers, its region, and the circle
+ *  the player walks onto. Used to retire the Reset Purchases circle once a
+ *  random outcome has been taken, so a roll cannot be undone and re-rolled. */
+export function removeReadyZone(id: string): void {
+  const zone = activeZones.get(id);
+  if (zone == null) return;
+  cancelCountdown(zone);
+  zone.enterTrigger.destroy();
+  zone.leaveTrigger.destroy();
+  zone.region.destroy();
+  zone.rect.destroy();
+  if (zone.marker != null && GetUnitTypeId(zone.marker.handle) !== 0) {
+    RemoveUnit(zone.marker.handle);
+  }
+  activeZones.delete(id);
 }
 
 /** Destroy all ready zones and triggers. */

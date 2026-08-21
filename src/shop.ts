@@ -13,6 +13,7 @@ import { hasActiveMerc, isMercDead, buyMercContract } from './mercenary';
 import { areHeroesSpawned, getSpawnedHeroes, hadSummonLastRound } from './heroes';
 import { forEachUnitInWorld, nextFrame } from './util';
 import { armCritterpocalypse, armToughCamp } from './challenges';
+import { markRandomOutcomeTaken } from './randomOutcome';
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],
@@ -174,6 +175,8 @@ export function initShop(): void {
     } else if (itemTypeId === MERC_CONTRACT_ID) {
       const wasRevive = isMercDead();
       buyMercContract();
+      // The creep type is rolled right here, so the gamble is already taken.
+      markRandomOutcomeTaken();
       // Sold out until this one dies, at which point stockShop offers it again.
       if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
         RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_ID);

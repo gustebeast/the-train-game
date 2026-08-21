@@ -940,6 +940,35 @@ compiletime(({ objectData, constants }) => {
   heroReroll.classification = 'Charged';
   heroReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
 
+  // Mercenary inventory: a rolled mercenary is a plain creep type, and WC3 only
+  // grants working inventory slots for an inventory ability present on the unit
+  // at CREATION time — UnitAddAbility at runtime shows the ability but yields 0
+  // slots (verified in-game). So bake InventoryHero (the same ability the
+  // peasant carries tools with) onto every Lordaeron Summer creep type, the pool
+  // rollMercType draws mercenaries from. Enemy camp copies get an (unused) empty
+  // inventory too — harmless. Keep this list in sync with
+  // CREEP_CAMPS['Lordaeron Summer'].
+  //
+  // Death-drop is NOT prevented in object data: this is stock AInv, which drops
+  // items on death. mercenary.ts strips them in the death trigger instead, so
+  // that strip is the only thing preventing a dead merc's items from hitting
+  // the ground. Giving the merc an inventory ability with dropItemsOnDeath=0
+  // would make it robust rather than order-dependent, but AInv is shared with
+  // the train, peasant and crate, so it cannot simply be reconfigured here.
+  const mercCreepTypes = [
+    'nfsh', 'nftb', 'nftk', 'nftr', 'nftt', 'ngna', 'ngnb', 'ngno', 'ngns',
+    'ngnv', 'ngnw', 'ngrk', 'ngst', 'nkob', 'nkog', 'nkot', 'nmfs', 'nmrl',
+    'nmrm', 'nmrr', 'nogl', 'nogm', 'nogr', 'nomg', 'nrdr', 'nsc2', 'nsc3',
+    'nscb', 'ntrg', 'ntrh', 'ntrs', 'ntrt', 'nwzg',
+  ];
+  for (const creepId of mercCreepTypes) {
+    const creep = objectData.units.get(creepId);
+    if (creep == null) continue;
+    const existing = (creep.normal as unknown as string) ?? '';
+    if (existing.indexOf(constants.abilities.InventoryHero) !== -1) continue;
+    creep.normal = (existing !== '' ? existing + ',' : '') + constants.abilities.InventoryHero;
+  }
+
   // Scale down all hero types to match peasant size
   const heroTypes: string[] = [
     // Human

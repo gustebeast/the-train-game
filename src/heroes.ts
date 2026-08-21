@@ -3,6 +3,7 @@ import { Units } from '@objectdata/units';
 import { isInGameplay } from './state';
 import { registerSaveSegment, parseFields } from './save';
 import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants';
+import { markRandomOutcomeTaken } from './randomOutcome';
 import { getNeutralPassive } from './teams';
 import { getHumanPlayers, nextFrame, forEachUnitInWorld, getInventoryItemIds } from './util';
 import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
@@ -587,6 +588,18 @@ export function rerollLobbyHero(unitHandle: unit): boolean {
   if (candidates.length === 0) return false;
 
   const data = allHeroes[entry.dataIdx];
+  markRandomOutcomeTaken();
+
+  // Items follow the hero. The replacement is rebuilt from HeroData, so
+  // anything picked up onto the LOBBY unit has to be written back first --
+  // otherwise the swap silently drops whatever the player just handed over.
+  const carried: number[] = [];
+  for (let slot = 0; slot < 6; slot++) {
+    const it = entry.unit.getItemInSlot(slot);
+    if (it != null) carried.push(it.typeId);
+  }
+  data.items = carried;
+
   data.typeId = candidates[GetRandomInt(0, candidates.length - 1)];
   data.skills = {};
 
