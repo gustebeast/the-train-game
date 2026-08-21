@@ -28,6 +28,9 @@ function run(t: TestReporter): void {
     p.destroy(); t.done(); return;
   }
   t.report('gotAbilityHandle', 1);
+  // Cast range is a per-level field; if it did not serialise the peasant walks
+  // into range before casting instead of dashing from where it stands.
+  t.report('castRange', BlzGetAbilityRealLevelField(ab, ABILITY_RLF_CAST_RANGE, 0));
   t.report('btnX', BlzGetAbilityIntegerField(ab, ABILITY_IF_BUTTON_POSITION_NORMAL_X));
   t.report('btnY', BlzGetAbilityIntegerField(ab, ABILITY_IF_BUTTON_POSITION_NORMAL_Y));
 
