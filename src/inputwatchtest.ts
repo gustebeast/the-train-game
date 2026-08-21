@@ -1,4 +1,4 @@
-import { Timer, Unit } from 'w3ts';
+import { Timer, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { PEASANT_ID, DASH_ABILITY_ID } from './constants';
 import { getDashDebug } from './dash';
@@ -41,6 +41,23 @@ function run(t: TestReporter): void {
   PanCameraToTimed(ax, ay, 0);
   SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 2600, 0);
 
+  // KEY PROBE: do shift-queued orders fire their event at ISSUE time (all at
+  // once, when the player clicks) or only as each one executes? If at issue
+  // time, the dash can record what the player queued behind it — which is what
+  // it would need in order to replace itself with a move and then put the
+  // player's remaining orders back.
+  let evN = 0;
+  const evOrd: number[] = [];
+  const evT: number[] = [];
+  const spy = Trigger.create();
+  spy.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
+  spy.addAction(t.guard(() => {
+    if (evN >= 6) return;
+    evOrd[evN] = GetIssuedOrderId();
+    evT[evN] = elapsed;
+    evN = evN + 1;
+  }));
+
   let elapsed = 0;
   let lastX = GetUnitX(h);
   let maxRight = 0;      // furthest right before any reversal
@@ -81,6 +98,11 @@ function run(t: TestReporter): void {
     if (elapsed >= WATCH) {
       sampler.destroy();
       const d = getDashDebug();
+      t.report('orderEvents', evN);
+      for (let i = 0; i < evN; i++) {
+        t.report('ev' + I2S(i)! + 'Ord', evOrd[i]);
+        t.report('ev' + I2S(i)! + 'AtT', evT[i]);
+      }
       t.report('dashFired', d[0] > -99999 ? 1 : 0);
       t.report('dashIssuedMove', d[3]);
       t.report('tFirstMove', tFirstMove);
