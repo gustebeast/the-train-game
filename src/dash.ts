@@ -20,6 +20,7 @@ import { nextFrame } from './util';
 //
 // A bare dash with nothing queued works by the same path: the appended move is
 // simply the only thing behind the cast.
+const DASH_DISTANCE = 300; // how far a dash travels, regardless of click range
 const DASH_SPEED = 522; // WC3's default max move speed (peasant base is ~190)
 const DASH_DURATION = 0.6; // seconds of boosted speed
 const BARE_DASH_GRACE = 0.12; // s to wait before deciding the queue is empty
@@ -84,8 +85,16 @@ export function initDash(): void {
     const u = Unit.fromEvent();
     if (u == null || u.typeId !== PEASANT_ID) return;
     const h = u.handle;
-    const x = GetOrderPointX();
-    const y = GetOrderPointY();
+    // Clamp to a fixed dash length instead of walking to wherever the player
+    // clicked. The cast range is effectively unlimited, so the raw point can be
+    // far away or unreachable — and a move order that can never be completed
+    // leaves the peasant standing on it forever, blocking everything queued
+    // behind it (both order flags stay up and nothing advances).
+    const px = GetOrderPointX();
+    const py = GetOrderPointY();
+    const ang = Atan2(py - GetUnitY(h), px - GetUnitX(h));
+    const x = GetUnitX(h) + DASH_DISTANCE * Cos(ang);
+    const y = GetUnitY(h) + DASH_DISTANCE * Sin(ang);
     dbg.tx = x; dbg.ty = y; dbg.issued = 1;
     // A frame later, so the dash order is committed to the queue first —
     // queueing from inside its own order event lands in the wrong place and
