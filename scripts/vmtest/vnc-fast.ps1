@@ -92,9 +92,21 @@ function Vnc-Click($conn, [int]$x, [int]$y){
   Vnc-Pointer $conn $x $y 0; Start-Sleep -Milliseconds 80
 }
 function Vnc-DblClick($conn, [int]$x, [int]$y){
+  # The two clicks must land on DIFFERENT rendered frames.
+  #
+  # WC3 samples the mouse once per frame and the guests are capped at 15 fps
+  # (guestMaxFps in vms.json), so a frame is ~66ms. The gap here used to be
+  # ~100ms press-to-press, which is only 1.5 frames: depending on where the
+  # clicks fell relative to a frame boundary both could be consumed by the SAME
+  # frame and register as a single click. The symptom was a double-click that
+  # highlighted a folder without opening it -- intermittently, which is what
+  # made it look like a swallowed click rather than a timing bug.
+  #
+  # ~220ms press-to-press is a comfortable 3+ frames apart while staying far
+  # under Windows' 500ms double-click threshold.
   Vnc-Pointer $conn $x $y 0; Start-Sleep -Milliseconds 80
   Vnc-Pointer $conn $x $y 1; Start-Sleep -Milliseconds 40; Vnc-Pointer $conn $x $y 0
-  Start-Sleep -Milliseconds 60
+  Start-Sleep -Milliseconds 180
   Vnc-Pointer $conn $x $y 1; Start-Sleep -Milliseconds 40; Vnc-Pointer $conn $x $y 0
   Start-Sleep -Milliseconds 80
 }
