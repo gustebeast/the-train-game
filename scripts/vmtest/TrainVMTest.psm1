@@ -110,6 +110,11 @@ function Get-TestVm {
     GuestUser     = $script:Config.guestUser
     GuestPassword = $script:Config.guestPassword
     GuestHome     = "C:\Users\$($script:Config.guestUser)"
+    # 'off' unplugs the virtual NIC on every start; anything else leaves it on
+    # the host-only network. Single-player tests need no network at all, and a
+    # guest with no cable cannot reach Battle.net even if some future change
+    # puts it back on a routable network by accident.
+    Network       = if ($entry.PSObject.Properties.Name -contains 'network') { $entry.network } else { 'hostonly' }
   }
 }
 
@@ -120,6 +125,25 @@ function Get-TestVm {
   The snapshot is a live one parked on WC3's Create Game screen, so this both
   resets state and skips the ~60s of launching and navigating WC3.
 #>
+function Set-TestVmHostOnly {
+  [CmdletBinding()]
+  param([Parameter(Mandatory)][string]$Vmx)
+  # Force host-only networking, every start, no exceptions.
+  #
+  # A guest that can reach the internet can reach Battle.net, and going online
+  # churns the single-use session token shared across all the clones. Host-only
+  # makes that impossible by construction rather than by convention.
+  #
+  # This has to run AFTER the revert and BEFORE the start: reverting restores
+  # the snapshot's hardware config, so a clone minted while on NAT comes back as
+  # NAT every single time and no one-off vmx edit survives. Brenner and Boof
+  # were both found sitting on NAT this way.
+  if (-not (Test-Path $Vmx)) { return }
+  $txt = [IO.File]::ReadAllText($Vmx)
+  $fixed = [regex]::Replace($txt, 'ethernet0\.connectionType\s*=\s*"[^"]*"', 'ethernet0.connectionType = "hostonly"')
+  if ($fixed -ne $txt) { [IO.File]::WriteAllText($Vmx, $fixed) }
+}
+
 function Reset-TestVm {
   [CmdletBinding()]
   param([object]$Vm, [switch]$Gui)
@@ -129,6 +153,7 @@ function Reset-TestVm {
   # and play. Either way the guest's built-in VNC server stays available.
   $startArg = if ($Gui) { 'gui' } else { 'nogui' }
   & $script:VmRun revertToSnapshot $Vm.Vmx $Vm.Snapshot 2>&1 | Out-Null
+  Set-TestVmHostOnly -Vmx $Vm.Vmx
   $out = & $script:VmRun start $Vm.Vmx $startArg 2>&1
   if ($LASTEXITCODE -ne 0) {
     # Known failure mode: a previous run died mid-restore and left a stale
@@ -146,6 +171,29 @@ function Reset-TestVm {
   # disconnected, but a revert re-attaches the device (sound.startConnected), so
   # without this the host hears WC3's menu music whenever a test runs.
   & $script:VmRun -T ws disconnectNamedDevice $Vm.Vmx sound 2>&1 | Out-Null
+  Disconnect-TestVmNic $Vm
+}
+
+<#
+.SYNOPSIS
+  Unplug the virtual NIC on VMs configured with network = 'off'.
+.DESCRIPTION
+  Same reasoning as the sound device above, and the same reason it is done at
+  RUNTIME rather than in the vmx: these are live snapshots, so the adapter's
+  connected state is part of the saved memory state and comes back however it
+  was when the snapshot was minted -- ethernet0.startConnected in the vmx does
+  not decide it. Only disconnectNamedDevice reliably does.
+
+  Single-player tests need no network at all, so the safest configuration is no
+  cable. It also removes the last path to Battle.net, whose session token is
+  shared across every clone and consumed by the first one that gets online.
+#>
+function Disconnect-TestVmNic {
+  [CmdletBinding()]
+  param([object]$Vm)
+  if ($null -eq $Vm) { $Vm = Get-TestVm }
+  if ($Vm.Network -ne 'off') { return }
+  & $script:VmRun -T ws disconnectNamedDevice $Vm.Vmx ethernet0 2>&1 | Out-Null
 }
 
 # --- Pre-warming ----------------------------------------------------------
@@ -187,7 +235,8 @@ function Start-PrewarmVm {
   $script = Join-Path $PSScriptRoot 'prewarm.ps1'
   Start-Process powershell -WindowStyle Hidden -ArgumentList @(
     '-NoProfile','-ExecutionPolicy','Bypass','-File', $script,
-    '-Vmx', $Vm.Vmx, '-Snapshot', $Vm.Snapshot, '-StateFile', (Get-PrewarmStateFile $Vm)
+    '-Vmx', $Vm.Vmx, '-Snapshot', $Vm.Snapshot, '-StateFile', (Get-PrewarmStateFile $Vm),
+    '-Network', $Vm.Network
   ) | Out-Null
 }
 
@@ -300,9 +349,20 @@ function Start-TestVmMatch {
   Start-Sleep -Milliseconds 500
   Vnc-Click    $Connection $ui.createButton[0]    $ui.createButton[1]
   Start-Sleep -Milliseconds 1500
-  Vnc-Click    $Connection $ui.nameField[0]       $ui.nameField[1]
+
+  # ENTER PLAYER NAME is the step that strands runs. The guest profile has no
+  # saved name, so CREATE always raises this dialog, and CONFIRM on an EMPTY
+  # field is a no-op -- the run then burns its whole timeout with the correct
+  # map selected and an empty name box. The lost step is the typing: the field
+  # needs a moment to take focus after the dialog animates in, and WC3 samples
+  # the keyboard once per render frame. Hence the settle delay before typing.
+  # Deliberately NOT retried -- a retry would just hide it coming back.
+  Vnc-Click $Connection $ui.nameField[0] $ui.nameField[1]
+  Start-Sleep -Milliseconds 400
   Vnc-TypeSmart $Connection $PlayerName
-  Vnc-Click    $Connection $ui.confirmButton[0]   $ui.confirmButton[1]
+  Start-Sleep -Milliseconds 300
+  Vnc-Click $Connection $ui.confirmButton[0] $ui.confirmButton[1]
+
   Start-Sleep -Seconds 3
   Vnc-Click    $Connection $ui.startGameButton[0] $ui.startGameButton[1]
 }
@@ -333,6 +393,10 @@ function Reset-OrResumeTestVm {
     & $Log "resuming pre-warmed $($Vm.Name) (skipped reset)"
     Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
     & $script:VmRun -T ws start $Vm.Vmx nogui 2>&1 | Out-Null   # resume from suspend
+    # The resume path skips Reset-TestVm entirely, so it has to unplug the NIC
+    # itself; a suspended VM comes back with whatever devices it was suspended
+    # holding.
+    Disconnect-TestVmNic $Vm
   } else {
     & $Log "reset $($Vm.Name) -> $($Vm.Snapshot)"
     Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
@@ -543,7 +607,7 @@ function Use-TestVm {
     [string]$Vm,
     [string]$Map,
     [string]$PlayerName = 'agent',
-    [int]$ReadyTimeoutSec = 90,
+    [int]$ReadyTimeoutSec = 45,
     [switch]$NoMap,
     [switch]$NoPrewarm,
     [switch]$Quiet
@@ -565,7 +629,7 @@ function Use-TestVm {
       & $log 'start match'
       Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
       if (-not (Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $log)) {
-        throw "Map never became ready within ${ReadyTimeoutSec}s. Is initTestKit() called in main.ts?"
+        throw "Map never became ready within ${ReadyTimeoutSec}s. Check the screenshot: if it shows the ENTER PLAYER NAME dialog with an empty box, the name keystrokes were dropped and the menu never reached the lobby (harness bug, not your test). Otherwise the map threw during init or initTestKit() is not called in main.ts."
       }
     }
     & $Body $vmInfo $conn
@@ -599,7 +663,7 @@ function Invoke-MapTest {
     [string]$Vm,
     [string]$Map,
     [string]$PlayerName = 'agent',
-    [int]$ReadyTimeoutSec = 90,
+    [int]$ReadyTimeoutSec = 45,
     [int]$TestTimeoutSec = 120,
     [string]$OutDir,
     [switch]$Quiet,
@@ -631,7 +695,7 @@ function Invoke-MapTest {
     Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
     $ready = Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $Say
     if (-not $ready) {
-      $result.FailureReason = "Map never became ready within ${ReadyTimeoutSec}s. Is initTestKit() called in main.ts? See $($result.Screenshot)."
+      $result.FailureReason = "Map never became ready within ${ReadyTimeoutSec}s. Check the screenshot: if it shows the ENTER PLAYER NAME dialog with an empty box, the name keystrokes were dropped and the menu never reached the lobby (harness bug, not your test). Otherwise the map threw during init or initTestKit() is not called in main.ts. See $($result.Screenshot)."
       Get-TestVmScreenshot $vmInfo -Path $result.Screenshot -Connection $conn | Out-Null
       $result.DurationSeconds = [math]::Round($sw.Elapsed.TotalSeconds,1)
       return [pscustomobject]$result
@@ -804,4 +868,4 @@ Export-ModuleMember -Function Invoke-MapTest, Use-TestVm, Test-TestHarness, Get-
   Stop-TestVm, Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile,
   Get-TestVmScreenshot, Send-TestVmChat, Start-TestVmMatch, Start-ManualSession,
   Start-PrewarmVm, Get-PrewarmState, Reset-OrResumeTestVm, Wait-TestVmReady,
-  Complete-TestVm
+  Complete-TestVm, Set-TestVmHostOnly

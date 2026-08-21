@@ -11,12 +11,37 @@ param(
   [Parameter(Mandatory)][string]$Vm,
   [string]$OutDir,
   [switch]$DriveOnly,
-  [switch]$SkipBoot
+  [switch]$SkipBoot,
+  # Baked into the guest profile so test runs never see ENTER PLAYER NAME.
+  # Must match Start-TestVmMatch's default, which is what a run would type.
+  [string]$PlayerName = 'agent'
 )
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'TrainVMTest.psm1') -Force
 . (Join-Path $PSScriptRoot 'vnc-fast.ps1')
 $vmrun = 'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+
+# Percentage of sampled pixels in a region that are lit. WC3's menus are dark,
+# so thresholds here are calibrated against real screens rather than guessed:
+#
+#   ENTER PLAYER NAME dialog   ~1% lit   (the modal dims the whole screen)
+#   single-player lobby title  ~26%      (bright yellow heading)
+#
+function Get-RegionBrightness([string]$png, [int]$x1, [int]$y1, [int]$x2, [int]$y2) {
+  Add-Type -AssemblyName System.Drawing
+  $bmp = [System.Drawing.Bitmap]::FromFile($png)
+  try {
+    $lit = 0; $n = 0
+    for ($y = $y1; $y -lt [Math]::Min($y2, $bmp.Height); $y += 6) {
+      for ($x = $x1; $x -lt [Math]::Min($x2, $bmp.Width); $x += 6) {
+        $px = $bmp.GetPixel($x, $y); $n++
+        if (($px.R + $px.G + $px.B) -gt 200) { $lit++ }
+      }
+    }
+    if ($n -eq 0) { return 0 }
+    return [math]::Round(100.0 * $lit / $n, 1)
+  } finally { $bmp.Dispose() }
+}
 
 # Resolve straight from the registry, bypassing the ready:false guard (that
 # guard is exactly what this script clears).
@@ -83,6 +108,11 @@ if (-not $SkipBoot) {
     if ($after -ne $hostName) { throw "Hostname is '$after', expected '$hostName' -- LAN peer resolution would break." }
     Write-Host "  hostname now $after"
   }
+
+  # mDNS otherwise hands WC3 an IPv6 address for a peer and the join goes
+  # nowhere. IPv4-only keeps discovery and connection on the same family.
+  Write-Host '  disabling IPv6 on the guest adapter'
+  & $vmrun @guest runProgramInGuest $vmx $ps '-Command' 'Disable-NetAdapterBinding -Name * -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue' 2>&1 | Out-Null
 }
 
 $c = Vnc-Connect $port
@@ -131,6 +161,82 @@ try {
   Start-Sleep -Seconds 6
   Shot $c 'create-game-root'
   Write-Host "At Create Game root (should be ABOVE the Download folder)."
+
+  # 8. Bake the player name into the guest profile.
+  #
+  # A fresh profile has none, so WC3 raises ENTER PLAYER NAME on every CREATE.
+  # Typing it during a test run is the single flakiest step in the harness --
+  # WC3 samples the keyboard once per render frame and the field needs a moment
+  # to take focus, so a dropped keystroke leaves an empty box and burns the run.
+  # Setting it once here removes the dialog from the hot path entirely: the
+  # tests get faster AND deterministic, instead of paying a retry to hide it.
+  #
+  # Slow and repeated is fine HERE -- minting is a one-off. What must not happen
+  # is shipping a snapshot that still prompts, so this verifies and throws.
+  Write-Host "Baking player name '$PlayerName' into the profile..."
+  #
+  # A fresh profile has no name, so WC3 raises ENTER PLAYER NAME on every
+  # CREATE. Typing it during a test run is the flakiest step in the harness --
+  # WC3 samples the keyboard once per render frame and the field needs a moment
+  # to take focus, so one dropped keystroke leaves an empty box and burns the
+  # run. Setting it once here removes the dialog from the hot path entirely:
+  # tests get faster AND deterministic, with no retry hiding anything.
+  #
+  # The name lives only in WC3's memory -- it is in no file and no registry key
+  # -- which is why it has to be baked into a LIVE snapshot.
+  #
+  # Keep the click count minimal. Every extra navigation step is a chance to
+  # derail, and BACK is especially unforgiving: at the main menu that same
+  # coordinate is EXIT, so one back-click too many quits WC3 and the snapshot
+  # captures the Windows desktop instead of the game.
+  Vnc-Click $c $ui.createButton[0] $ui.createButton[1];   Start-Sleep -Seconds 4
+  Shot $c 'name-dialog'
+  Vnc-Click $c $ui.nameField[0] $ui.nameField[1];         Start-Sleep -Seconds 1
+  Vnc-TypeSmart $c $PlayerName;                           Start-Sleep -Seconds 1
+  Vnc-Click $c $ui.confirmButton[0] $ui.confirmButton[1]; Start-Sleep -Seconds 6
+  Shot $c 'after-name'
+
+  # Reaching the lobby IS the proof the name was accepted: with an empty or
+  # unconfirmed name WC3 keeps the dialog up and never gets here. The lobby is
+  # identified by its bright title bar ("SINGLE-PLAYER CUSTOM LOBBY"), which the
+  # dimmed modal does not have.
+  # Capture on a FRESH connection. Vnc-Shot paints a new blank bitmap and fills
+  # only the rectangles the server sends; a connection that has already received
+  # a frame gets sent just the CHANGED region, so a second capture on the same
+  # connection comes back nearly black. That is not a torn frame -- it is the
+  # protocol working as designed, and it reads identically to "screen is dark".
+  # A new client always gets a full frame.
+  $lobbyShot = Join-Path $OutDir 'verify-lobby.png'
+  $vc = Vnc-Connect $port
+  try { Vnc-Shot $vc $lobbyShot } finally { $vc.cli.Close() }
+  $titleLit = Get-RegionBrightness $lobbyShot 90 140 760 200
+  Write-Host ("  lobby title region: {0}% lit" -f $titleLit)
+  if ($titleLit -lt 10) {
+    throw ("After confirming the name we are not in the lobby, so the name was " +
+           "not accepted. Minting now would leave every test run flaky. See $OutDir")
+  }
+
+  # BACK from the lobby lands on the SINGLE PLAYER menu (Campaign / Custom
+  # Campaign / Custom Games / Load), NOT the map list -- so re-enter Custom
+  # Games to park where the runner expects. Getting this wrong is quiet and
+  # nasty: the snapshot looks fine, then every run's first click lands on
+  # "Custom Campaign" and the map never loads.
+  Vnc-Click $c $ui.backButton[0] $ui.backButton[1];          Start-Sleep -Seconds 5
+  Vnc-Click $c $ui.menuCustomGames[0] $ui.menuCustomGames[1]; Start-Sleep -Seconds 6
+  Shot $c 'final-position'
+
+  # Confirm we really are on the Create Game screen before freezing. Its
+  # "CREATE GAME" heading lights the title region (~15%); the Single Player
+  # menu has no heading there and reads 0%.
+  $rootShot = Join-Path $OutDir 'verify-root.png'
+  $rc = Vnc-Connect $port
+  try { Vnc-Shot $rc $rootShot } finally { $rc.cli.Close() }
+  $rootLit = Get-RegionBrightness $rootShot 90 140 760 200
+  Write-Host ("  create-game heading: {0}% lit" -f $rootLit)
+  if ($rootLit -lt 8) {
+    throw ("Not parked on the Create Game screen, so every test run would " +
+           "start from the wrong menu. See $rootShot")
+  }
 }
 finally { $c.cli.Close() }
 
@@ -140,6 +246,16 @@ if ($DriveOnly) {
 }
 # Silence host audio before freezing: WC3 has already initialised its device,
 # so disconnecting it now is safe and the snapshot stays quiet on every revert.
+# A snapshot is only worth taking if WC3 is still up. It is easy to lose it --
+# BACK at the main menu is EXIT -- and a snapshot of the Windows desktop looks
+# fine until every test mysteriously times out waiting for a map.
+$procs = & $vmrun @guest listProcessesInGuest $vmx 2>&1
+if ("$procs" -notmatch 'Warcraft III\.exe') {
+  throw ("Warcraft III is not running, so there is nothing worth snapshotting " +
+         "(a stray BACK at the main menu quits the game). Inspect $OutDir.")
+}
+Write-Host '  WC3 still running -- safe to snapshot'
+
 Write-Host "Disconnecting sound..."
 & $vmrun -T ws disconnectNamedDevice $vmx sound 2>&1 | Out-Null
 
