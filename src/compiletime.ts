@@ -246,13 +246,18 @@ compiletime(({ objectData, constants }) => {
       { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
       { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
-    Aihn: [ // UnitInventoryHuman (mercenary inventory): hero-like item use, no drop on death
-      { id: 'inv1', variableType: 0, dataPointer: 1, value: 6 }, // itemCapacity
-      { id: 'inv2', variableType: 0, dataPointer: 2, value: 0 }, // dropItemsOnDeath = false
-      { id: 'inv3', variableType: 0, dataPointer: 3, value: 1 }, // canUseItems
-      { id: 'inv4', variableType: 0, dataPointer: 4, value: 1 }, // canGetItems
-      { id: 'inv5', variableType: 0, dataPointer: 5, value: 1 }, // canDropItems
-    ],
+    // NOTE: there was an Aihn (UnitInventoryHuman) block here configuring
+    // "mercenary inventory, no drop on death". It was dead: no unit anywhere
+    // carries Aihn. The mercenary is given AInv (InventoryHero) instead -- see
+    // the mercCreepTypes loop below and MERC_INVENTORY_ABILITY_ID in
+    // mercenary.ts -- so none of that config ever reached the game.
+    //
+    // Consequence, which is why this note is here rather than a silent
+    // deletion: the merc carries STOCK AInv, and stock hero inventory DOES drop
+    // its items on death. Nothing in object data prevents it. The only thing
+    // stopping a dead merc's items hitting the ground is the strip in
+    // mercenary.ts's death trigger, so that code is load-bearing, not a
+    // belt-and-braces backstop.
   };
   const originalSave = objectData.save.bind(objectData);
   objectData.save = () => {
@@ -861,9 +866,15 @@ compiletime(({ objectData, constants }) => {
   // slots (verified in-game). So bake InventoryHero (the same ability the
   // peasant carries tools with) onto every Lordaeron Summer creep type, the pool
   // rollMercType draws mercenaries from. Enemy camp copies get an (unused) empty
-  // inventory too — harmless. Death-drop is prevented in code (mercenary.ts
-  // removes items on death after snapshotting), so no ability-level drop config
-  // is needed. Keep this list in sync with CREEP_CAMPS['Lordaeron Summer'].
+  // inventory too — harmless. Keep this list in sync with
+  // CREEP_CAMPS['Lordaeron Summer'].
+  //
+  // Death-drop is NOT prevented in object data: this is stock AInv, which drops
+  // items on death. mercenary.ts strips them in the death trigger instead, so
+  // that strip is the only thing preventing a dead merc's items from hitting
+  // the ground. Giving the merc an inventory ability with dropItemsOnDeath=0
+  // would make it robust rather than order-dependent, but AInv is shared with
+  // the train, peasant and crate, so it cannot simply be reconfigured here.
   const mercCreepTypes = [
     'nfsh', 'nftb', 'nftk', 'nftr', 'nftt', 'ngna', 'ngnb', 'ngno', 'ngns',
     'ngnv', 'ngnw', 'ngrk', 'ngst', 'nkob', 'nkog', 'nkot', 'nmfs', 'nmrl',

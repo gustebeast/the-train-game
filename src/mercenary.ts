@@ -8,8 +8,13 @@ import { CREEP_CAMPS } from './creep_camps';
  *  is BAKED onto every merc-able creep type in object data (see compiletime.ts):
  *  WC3 only creates working inventory slots for an inventory ability the unit
  *  has at creation time, so adding one at runtime yields 0 slots. This runtime
- *  add is therefore a harmless no-op backstop. Items are stripped on death
- *  before they can drop (snapshotMercItems keeps them for a later reroll). */
+ *  add is therefore a harmless no-op backstop.
+ *
+ *  This is STOCK AInv, which drops its items on death — no object-data change
+ *  suppresses that (an Aihn block that claimed to was dead config; see
+ *  compiletime.ts). The death trigger's strip is therefore the only thing
+ *  keeping a dead merc's items off the ground, and it depends on running before
+ *  the engine's drop. */
 const MERC_INVENTORY_ABILITY_ID = FourCC(Abilities.InventoryHero);
 
 /** Must match the tileset used by rollCreepCamp in creeps.ts. */
@@ -37,6 +42,21 @@ let mercItems: number[] = [];
 
 /** The live mercenary unit while heroes are summoned, or null. */
 let mercUnit: Unit | null = null;
+
+/** Death trigger for the live mercenary, or null.
+ *
+ *  Held at module scope because the merc is usually REMOVED rather than killed
+ *  — a reroll removes it, and the round reset sweeps it — and a removed unit
+ *  fires no death event, so a trigger created per spawn and destroyed only in
+ *  its own action leaks one trigger per spawn, every round. */
+let mercDeathTrig: Trigger | null = null;
+
+/** Destroy the live merc's death trigger, if any. Safe to call repeatedly. */
+function clearMercDeathTrigger(): void {
+  if (mercDeathTrig == null) return;
+  DestroyTrigger(mercDeathTrig.handle);
+  mercDeathTrig = null;
+}
 
 /** Player ids owning each spawned hero this summon (duplicates = 2 heroes). */
 let currentHeroOwnerIds: number[] = [];
@@ -177,6 +197,7 @@ export function rerollMerc(buyerX: number, buyerY: number, spawnNow: boolean): b
     snapshotMercItems();
     replaceAt = { x: mercUnit.x, y: mercUnit.y, owner: mercUnit.owner };
     RemoveUnit(mercUnit.handle); // remove, not kill — rerolling isn't a death
+    clearMercDeathTrigger();     // no death event will fire for a removed unit
     mercUnit = null;
   }
 
@@ -216,7 +237,11 @@ function spawnMercUnit(owner: MapPlayer, x: number, y: number): void {
 
   // Death is permanent: snapshot items (they don't drop — the merc inventory
   // has drop-on-death off) and never respawn until a reroll.
+  // Replace any trigger left over from a previous spawn before making a new
+  // one, so a reroll or a round reset cannot strand it.
+  clearMercDeathTrigger();
   const deathTrig = Trigger.create();
+  mercDeathTrig = deathTrig;
   TriggerRegisterUnitEvent(deathTrig.handle, u.handle, EVENT_UNIT_DEATH);
   deathTrig.addAction(() => {
     if (mercUnit != null && mercUnit.handle === GetTriggerUnit()) {
@@ -228,6 +253,9 @@ function spawnMercUnit(owner: MapPlayer, x: number, y: number): void {
       mercDead = true;
       mercUnit = null;
     }
+    // Clear the module reference as well as the handle, or the next spawn's
+    // clearMercDeathTrigger would destroy this same handle a second time.
+    if (mercDeathTrig === deathTrig) { mercDeathTrig = null; }
     DestroyTrigger(deathTrig.handle);
   });
 }
@@ -253,6 +281,9 @@ export function releaseMercUnit(): void {
   if (mercUnit != null && GetUnitTypeId(mercUnit.handle) !== 0) {
     snapshotMercItems();
   }
+  // The caller removes the unit, which fires no death event, so the trigger has
+  // to go here or it outlives every round.
+  clearMercDeathTrigger();
   mercUnit = null;
   currentHeroOwnerIds = [];
 }

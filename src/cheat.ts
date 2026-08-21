@@ -8,10 +8,20 @@ import { stopGameplay } from './train';
 import { getNeutralPassive } from './teams';
 import { getHumanPlayers, getWorldBounds } from './util';
 
+/** True once the map has been revealed, so repeat calls are no-ops. */
+let mapRevealed = false;
+
 /** Reveal the whole map to all human players for the rest of the session.
  *  An active VISIBLE fog modifier outrides the masked-fog reset that runs on
- *  every terrain respawn, so the reveal survives round transitions. */
+ *  every terrain respawn, so the reveal survives round transitions.
+ *
+ *  Guarded because more than one cheat command calls this and each call used to
+ *  create a fresh modifier per player without destroying the last, so typing
+ *  -cheatmode (or -rolltest) repeatedly stacked leaked fog modifiers. One
+ *  permanent modifier per player is all the reveal needs. */
 function revealWholeMap(): void {
+  if (mapRevealed) return;
+  mapRevealed = true;
   for (const p of getHumanPlayers()) {
     const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_VISIBLE, getWorldBounds(), true, false);
     if (fog != null) FogModifierStart(fog);
