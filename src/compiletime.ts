@@ -133,16 +133,12 @@ compiletime(({ objectData, constants }) => {
   // an empty queue does not — the 'turns around and does nothing' case).
   dash.durationNormal = 0.1;
   dash.durationHero = 0.1;
-  dash.tooltipNormal = 'Dash';
-  dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
-  dash.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNEvasion.blp';
-  dash.hotkeyNormal = 'E';
-  // Row 0 is the stock Move/Stop/Hold/Attack row, so an ability placed there is
-  // hidden behind them — that is why the Dash button was missing from the card
-  // even though the peasant had the ability. Row 1 holds the custom abilities
-  // (give/take sits at its left), so put the dash beside them.
-  dash.buttonPositionNormalX = 2;
-  dash.buttonPositionNormalY = 1;
+  // Icon, hotkey, tooltip and button position are deliberately NOT set here.
+  // They are authored on A000 in the World Editor and land in war3mapSkin.w3a;
+  // setting them again from code would just overwrite the chosen icon. Row 0 of
+  // the command card is the stock Move/Stop/Hold/Attack row, so the button sits
+  // in row 1 (X=2, Y=1) — placing it in row 0 hides it behind those commands,
+  // which is why the peasant had the ability but no button for a while.
   dash.caster = '';
   dash.target = '';
   dash.effect = '';

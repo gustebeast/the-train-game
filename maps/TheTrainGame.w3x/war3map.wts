@@ -54,3 +54,9 @@ STRING 12
 Roll
 }
 
+STRING 13
+// Abilities: A000 (Roll), Hotkey (Hotkey - Normal)
+{
+E
+}
+
