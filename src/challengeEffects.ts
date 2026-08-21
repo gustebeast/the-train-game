@@ -1,4 +1,5 @@
-import { Timer, Unit } from 'w3ts';
+import { Unit } from 'w3ts';
+import { onGlobalTick } from './globalTick';
 import { isInGameplay } from './state';
 import { isChallengeArmed } from './challenges';
 import { CH_NO_UI, CH_SHOULDER_CAM } from './challengeList';
@@ -44,17 +45,22 @@ const OTS_DISTANCE = 900;
  *  a chase camera wants. */
 const OTS_ANGLE_OF_ATTACK = 348;
 const OTS_HEIGHT_OFFSET = 150;
-/** The chase camera runs on its own fast timer rather than the 0.5s global
- *  tick. Half a second between updates is far too coarse for a camera that is
- *  meant to sit behind a moving unit: the follow lurches, and a player who
- *  scrolls or wheels away keeps the stolen view until the next tick. */
-const OTS_INTERVAL = 0.03;
-/** Interpolation time handed to the camera calls. Roughly a few frames: long
- *  enough to smooth the motion, short enough that it never trails the unit. */
-const OTS_SMOOTHING = 0.10;
+/** The camera is re-aimed on the shared 0.5s global tick.
+ *
+ *  Two different interpolation times do the work, and the difference is the
+ *  whole trick:
+ *
+ *  - POSITION and rotation are panned over roughly a full tick, so the camera
+ *    is always still gliding toward where the peasant was last seen. Motion
+ *    stays continuous despite the coarse update rate; it just trails slightly.
+ *  - DISTANCE is slammed back with no interpolation. Nothing to smooth over
+ *    means a scroll-wheel nudge is yanked straight back, which is unpleasant
+ *    enough to stop anyone zooming out of the handicap -- the jerkiness IS the
+ *    deterrent, so it is deliberate rather than something to tune away. */
+const OTS_FOLLOW_TIME = 0.5;
+const OTS_SNAP = 0;
 
 let otsActive = false;
-let otsTimer: Timer | null = null;
 
 /** The unit the camera should sit behind for a player: their first peasant. */
 function chaseTargetFor(playerHandle: player): Unit | null {
@@ -83,12 +89,13 @@ function updateShoulderCam(): void {
     const target = chaseTargetFor(p.handle);
     if (target == null) continue;
     const h = p.handle;
-    SetCameraFieldForPlayer(h, CAMERA_FIELD_TARGET_DISTANCE, OTS_DISTANCE, OTS_SMOOTHING);
-    SetCameraFieldForPlayer(h, CAMERA_FIELD_ANGLE_OF_ATTACK, OTS_ANGLE_OF_ATTACK, OTS_SMOOTHING);
-    SetCameraFieldForPlayer(h, CAMERA_FIELD_ZOFFSET, OTS_HEIGHT_OFFSET, OTS_SMOOTHING);
-    // Sit behind the unit: the camera looks along the way the unit faces.
-    SetCameraFieldForPlayer(h, CAMERA_FIELD_ROTATION, target.facing, OTS_SMOOTHING);
-    PanCameraToTimedForPlayer(h, target.x, target.y, OTS_SMOOTHING);
+    // Snap: fights the scroll wheel on purpose.
+    SetCameraFieldForPlayer(h, CAMERA_FIELD_TARGET_DISTANCE, OTS_DISTANCE, OTS_SNAP);
+    SetCameraFieldForPlayer(h, CAMERA_FIELD_ANGLE_OF_ATTACK, OTS_ANGLE_OF_ATTACK, OTS_SNAP);
+    SetCameraFieldForPlayer(h, CAMERA_FIELD_ZOFFSET, OTS_HEIGHT_OFFSET, OTS_SNAP);
+    // Glide: keeps the follow continuous between ticks.
+    SetCameraFieldForPlayer(h, CAMERA_FIELD_ROTATION, target.facing, OTS_FOLLOW_TIME);
+    PanCameraToTimedForPlayer(h, target.x, target.y, OTS_FOLLOW_TIME);
   }
 }
 
@@ -124,20 +131,7 @@ export function setShoulderCam(active: boolean): void {
     // it, so give it a sky for as long as it is running and take it away again
     // afterwards -- this is a per-mode fix, not a change to how the game looks.
     SetSkyModel('Environment\Sky\LordaeronSummerSky\LordaeronSummerSky.mdl');
-    if (otsTimer == null) {
-      // A raw Timer, not timers.ts createTimer: the camera must survive the
-      // round-transition destroyAllTimers() that clears gameplay timers.
-      otsTimer = Timer.create();
-      otsTimer.start(OTS_INTERVAL, true, () => {
-        if (otsActive && isInGameplay()) updateShoulderCam();
-      });
-    }
     return;
-  }
-  if (otsTimer != null) {
-    otsTimer.pause();
-    otsTimer.destroy();
-    otsTimer = null;
   }
   SetSkyModel('');
   resetCamera();
@@ -165,6 +159,8 @@ export function clearChallengeEffects(): void {
 }
 
 export function initChallengeEffects(): void {
-  // Nothing periodic to register here any more: the chase camera runs its own
-  // fast timer, started only while it is active.
+  onGlobalTick(() => {
+    if (!isInGameplay()) return;
+    if (otsActive) updateShoulderCam();
+  });
 }
