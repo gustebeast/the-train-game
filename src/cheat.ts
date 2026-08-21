@@ -5,6 +5,7 @@ import { TRACK_PIECE_ID, WOOD_ID, STONE_ID, PEASANT_ID, WATER_ID, TRAIN_ID } fro
 import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants';
 import { loadFromFile } from './save';
 import { stopGameplay, triggerDefeat } from './train';
+import { toggleShoulderCam } from './challengeEffects';
 import { getNeutralPassive } from './teams';
 import { getHumanPlayers, getWorldBounds } from './util';
 
@@ -92,6 +93,15 @@ export function initCheat(): void {
     SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 1100, 0);
     IssuePointOrderById(p, OrderId('flare')!, GetUnitX(p) + 400, GetUnitY(p));
     print('dashnow: dashing east');
+  });
+
+  // Try the Over the Shoulder view without buying the challenge. Toggles, so
+  // the same command gets you back out.
+  onChatCommand('-thirdperson', () => {
+    const on = toggleShoulderCam();
+    print(on
+      ? 'Third-person camera ON — locked behind your peasant. -thirdperson again to exit.'
+      : 'Third-person camera OFF.');
   });
 
   // Drive the defeat path without having to actually run the train out of
