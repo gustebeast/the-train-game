@@ -36,7 +36,10 @@ function setUiHidden(hidden: boolean): void {
 // --- over-the-shoulder camera ---------------------------------------------
 
 /** Chase-camera geometry. Low and close, looking slightly down at the unit. */
-const OTS_DISTANCE = 900;
+/** Close enough that the peasant reads as the subject of the shot rather than a
+ *  figure in a landscape -- roughly double its on-screen size versus the first
+ *  pass at 900. */
+const OTS_DISTANCE = 450;
 /** Camera pitch, in WC3's angle-of-attack scale where the game's own default is
  *  304 -- steeply top-down. Larger values flatten it toward the horizon, and
  *  going PAST 360 tips it upward: an early attempt at "25 degrees above the
