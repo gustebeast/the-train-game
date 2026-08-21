@@ -2,6 +2,7 @@ import { Trigger } from 'w3ts';
 import { gameState, syncState } from './state';
 import { REROLL_ITEM_ID, REROLL_ABILITY_ID } from './constants';
 import { rerollLobbyHero } from './heroes';
+import { rerollLobbyMerc } from './mercenary';
 
 const REROLL_COST = 1;
 
@@ -53,7 +54,8 @@ export function initReroll(): void {
     const x = GetUnitX(target);
     const y = GetUnitY(target);
 
-    if (rerollLobbyHero(target)) {
+    // One item for both: try the heroes, then the mercenary standing with them.
+    if (rerollLobbyHero(target) || rerollLobbyMerc(target)) {
       const sfx = AddSpecialEffect(TOME_EFFECT, x, y);
       if (sfx != null) DestroyEffect(sfx);
     } else {
