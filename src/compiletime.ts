@@ -87,7 +87,7 @@ compiletime(({ objectData, constants }) => {
   // and couldn't path empty tile corridors at all.
   peasant.collisionSize = 32;
   peasant.structuresBuilt = '';
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral, 'A000'].join(',');
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral, constants.abilities.Flare].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
@@ -103,48 +103,33 @@ compiletime(({ objectData, constants }) => {
   peasant.animationCastPoint = 0;
   peasant.animationCastBackswing = 0;
 
-  // Dash spell: A000, a Channel-based ability authored in the World Editor
-  // (base order 'flare', Follow Through Time 0, Art Duration 0). Channel is the
-  // only base whose follow-through can be zeroed, and that leftover cast time
-  // is what stalls the order queued behind the dash — measured 0.24s on Flare
-  // even with cast point/backswing zeroed, versus 0.06s here. Its own base
-  // order keeps a dash from being mistaken for give/take's 'channel' order,
-  // which would drop the item the peasant is carrying.
-  type ChannelAbil = NonNullable<ReturnType<typeof objectData.abilities.get>> & {
-    followThroughTime: number; artDuration: number; disableOtherAbilities: number;
-    options: number;
-  };
-  const dash = objectData.abilities.get('A000')! as ChannelAbil;
-  // Channel defaults matter here: 'Disable Other Abilities' is true by default,
-  // which makes the engine REJECT the move order the dash issues (the peasant
-  // turns and stands still), and a non-zero follow-through keeps the channel
-  // running after an instant cast.
-  // Channel's Options flags decide whether the ability draws a button at all.
-  // A000 was authored with Options = None, so the peasant carried the ability
-  // (level 1, valid button slot at 2,1) but the command card showed nothing —
-  // give/take is the proof, it sets options = 1 and its button appears.
-  dash.options = 1;
-  dash.disableOtherAbilities = 0;
-  // Not zero: a channel with no window at all is skipped outright when it is
-  // queued behind another order (measured: the cast never reached the trigger).
-  // 0.1s is the smallest window that still fires.
-  dash.followThroughTime = 0.1;
-  dash.artDuration = 0;
+  // Dash spell: Flare, repurposed as an instant point-target dash.
+  //
+  // NOT Channel (the A000 ability authored in the editor): Channel is a
+  // CHANNELLING spell, and starting a channel makes WC3 discard whatever the
+  // player shift-queued behind it. Measured with the spell reduced to a
+  // complete no-op — no trigger code at all — the leg queued after the cast
+  // still never ran. Flare keeps the queue, at the cost of a slightly longer
+  // tail after the cast (0.24s vs 0.06s), which is the trade we want.
+  const dash = objectData.abilities.get(constants.abilities.Flare)!;
   dash.heroAbility = false;
   dash.levels = 1;
   dash.castRange = 99999;
+  // Alleria's Flare ships with a tech requirement, which greys the button out
+  // and makes the cast order get rejected outright.
   dash.requirements = '';
-  // Channel keeps channelling for its Duration; leave it non-zero and the
-  // peasant stands mid-cast until something interrupts (a queued order does,
-  // an empty queue does not — the 'turns around and does nothing' case).
-  dash.durationNormal = 0.1;
-  dash.durationHero = 0.1;
-  // Icon, hotkey, tooltip and button position are deliberately NOT set here.
-  // They are authored on A000 in the World Editor and land in war3mapSkin.w3a;
-  // setting them again from code would just overwrite the chosen icon. Row 0 of
-  // the command card is the stock Move/Stop/Hold/Attack row, so the button sits
-  // in row 1 (X=2, Y=1) — placing it in row 0 hides it behind those commands,
-  // which is why the peasant had the ability but no button for a while.
+  dash.castingTime = 0;
+  // No cast animation: the spell animation is part of what the unit sits
+  // through before the queue advances.
+  dash.animationNames = '';
+  dash.tooltipNormal = 'Dash';
+  dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
+  dash.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNEvasion.blp';
+  dash.hotkeyNormal = 'E';
+  // Row 0 of the command card is the stock Move/Stop/Hold/Attack row; an
+  // ability placed there is hidden behind them.
+  dash.buttonPositionNormalX = 2;
+  dash.buttonPositionNormalY = 1;
   dash.caster = '';
   dash.target = '';
   dash.effect = '';
@@ -216,6 +201,13 @@ compiletime(({ objectData, constants }) => {
       { id: 'Ncl1', variableType: 2, dataPointer: 1, value: 0 }, // followThroughTime
       { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
       { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
+    ],
+    Afla: [ // Flare (the dash) — no cost, no cooldown, no reveal
+      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
+      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
+      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
+      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
+      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
     ],
     Afod: [ // FingerOfDeath neutral hostile (bridge spell)
       { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost

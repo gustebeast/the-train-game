@@ -46,6 +46,19 @@ function run(t: TestReporter): void {
   // time, the dash can record what the player queued behind it — which is what
   // it would need in order to replace itself with a move and then put the
   // player's remaining orders back.
+  // Does anything STOP our peasant mid-sequence? rejectOrder (harvest.ts and
+  // friends) issues an immediate 'stop', which discards the whole queue — that
+  // would truncate the run without the engine being at fault.
+  let stopN = 0;
+  const stopT: number[] = [];
+  const stopSpy = Trigger.create();
+  TriggerRegisterUnitEvent(stopSpy.handle, p.handle, EVENT_UNIT_ISSUED_ORDER);
+  stopSpy.addAction(t.guard(() => {
+    if (GetIssuedOrderId() === OrderId('stop') && stopN < 4) {
+      stopT[stopN] = elapsed; stopN = stopN + 1;
+    }
+  }));
+
   let evN = 0;
   const evOrd: number[] = [];
   const evT: number[] = [];
@@ -98,6 +111,8 @@ function run(t: TestReporter): void {
     if (elapsed >= WATCH) {
       sampler.destroy();
       const d = getDashDebug();
+      t.report('stopsIssued', stopN);
+      for (let i = 0; i < stopN; i++) t.report('stopAtT' + I2S(i)!, stopT[i]);
       t.report('orderEvents', evN);
       for (let i = 0; i < evN; i++) {
         t.report('ev' + I2S(i)! + 'Ord', evOrd[i]);
