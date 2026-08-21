@@ -33,6 +33,17 @@ function run(t: TestReporter): void {
   SetUnitX(p.handle, ax); SetUnitY(p.handle, ay);
   const h = p.handle;
   t.report('hasDashAbility', GetUnitAbilityLevel(h, DASH_ABILITY_ID));
+  // Which field is holding the 0.8s between cast and effect? Ask the engine
+  // rather than guessing at object data that may not have applied.
+  t.report('unitCastPoint', BlzGetUnitRealField(h, UNIT_RF_CAST_POINT));
+  t.report('unitCastBackswing', BlzGetUnitRealField(h, UNIT_RF_CAST_BACK_SWING));
+  const ab = BlzGetUnitAbility(h, DASH_ABILITY_ID);
+  if (ab != null) {
+    t.report('abCastingTime', BlzGetAbilityRealLevelField(ab, ABILITY_RLF_CASTING_TIME, 0));
+    t.report('abDurationNormal', BlzGetAbilityRealLevelField(ab, ABILITY_RLF_DURATION_NORMAL, 0));
+    t.report('abCooldown', BlzGetAbilityRealLevelField(ab, ABILITY_RLF_COOLDOWN, 0));
+    t.report('abCastRange', BlzGetAbilityRealLevelField(ab, ABILITY_RLF_CAST_RANGE, 0));
+  }
 
   // Pre-select for the local player so the VNC driver only has to click the
   // ground and press the hotkey — no unit-picking pixel hunt.
@@ -77,6 +88,18 @@ function run(t: TestReporter): void {
     evN = evN + 1;
   }));
 
+  // Where does the pause on arrival go? Time every spell phase plus the moment
+  // leftward movement actually stops, so the spell's own tail can be told apart
+  // from the peasant decelerating and turning round for the next leg.
+  const ph = { channel: -1, cast: -1, effect: -1, finish: -1, endcast: -1 };
+  function phase(ev: unitevent, set: (v: number) => void): void {
+    const tr = Trigger.create();
+    TriggerRegisterUnitEvent(tr.handle, p.handle, ev);
+    tr.addAction(t.guard(() => {
+      if (GetSpellAbilityId() === DASH_ABILITY_ID) set(elapsed);
+    }));
+  }
+
   let elapsed = 0;
   let lastX = GetUnitX(h);
   let maxRight = 0;      // furthest right before any reversal
@@ -85,6 +108,7 @@ function run(t: TestReporter): void {
   let tReverse = -1;      // first leftward movement (the dash)
   let tResumeRight = -1;  // rightward movement again after the dash
   let stallStart = -1;
+  let tLastLeftMove = -1; // last frame the peasant was still travelling left
   let stallAfterDash = 0;
   // If the peasant is ever deselected, the later right-click never reached it
   // and leg 3 was never queued at all — a driver artifact, not a game rule.
@@ -99,6 +123,12 @@ function run(t: TestReporter): void {
   const ordSeq: number[] = [];
   let ordN = 0;
   let nextOrdSample = 0;
+
+  phase(EVENT_UNIT_SPELL_CHANNEL, v => { if (ph.channel < 0) ph.channel = v; });
+  phase(EVENT_UNIT_SPELL_CAST, v => { if (ph.cast < 0) ph.cast = v; });
+  phase(EVENT_UNIT_SPELL_EFFECT, v => { if (ph.effect < 0) ph.effect = v; });
+  phase(EVENT_UNIT_SPELL_FINISH, v => { if (ph.finish < 0) ph.finish = v; });
+  phase(EVENT_UNIT_SPELL_ENDCAST, v => { if (ph.endcast < 0) ph.endcast = v; });
 
   const sampler = Timer.create();
   sampler.start(SAMPLE, true, t.guard(() => {
@@ -126,6 +156,7 @@ function run(t: TestReporter): void {
       lastDir = dir;
     }
     if (tReverse > 0) {
+      if (dx < -EPS) tLastLeftMove = elapsed;
       if (rel < minAfterMax) minAfterMax = rel;
       if (tResumeRight < 0 && dx > EPS) tResumeRight = elapsed;
       // dead time between the dash and the queued move taking over
@@ -167,6 +198,15 @@ function run(t: TestReporter): void {
       t.report('dashedBackTo', minAfterMax === 99999 ? -9999 : minAfterMax);
       t.report('dashBackDistance', minAfterMax === 99999 ? -1 : maxRight - minAfterMax);
       t.report('stallAfterDash', stallAfterDash);
+      t.report('tLastLeftMove', tLastLeftMove);
+      t.report('tSpellChannel', ph.channel);
+      t.report('tSpellCast', ph.cast);
+      t.report('tSpellEffect', ph.effect);
+      t.report('tSpellFinish', ph.finish);
+      t.report('tSpellEndcast', ph.endcast);
+      // arrival -> spell done, and spell done -> next leg actually moving
+      t.report('gapArrivalToEndcast', ph.endcast > 0 && tLastLeftMove > 0 ? ph.endcast - tLastLeftMove : -1);
+      t.report('gapEndcastToNextLeg', ph.endcast > 0 && tResumeRight > 0 ? tResumeRight - ph.endcast : -1);
       t.report('finalRel', GetUnitX(h) - ax);
       t.report('queueCompleted', tResumeRight > 0 ? 1 : 0);
       p.destroy();
