@@ -63,11 +63,6 @@ export function stockShop(shop: Unit): void {
     } else {
       AddItemToStock(shop.handle, FLAME_RESISTANCE_ID, 10, 10);
     }
-    // The Shady Deal: always on the shelf, always one, whatever the sequence
-    // says is next.
-    if (getOfferedChallenge() != null) {
-      AddItemToStock(shop.handle, CHALLENGE_ITEM_ID, 1, 1);
-    }
     if (!isSummonUpgradePurchased()) {
       AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
     }
