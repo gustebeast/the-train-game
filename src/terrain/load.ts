@@ -38,22 +38,58 @@ const DEFEAT_MUSIC = 'war3mapImported\\Purgatory.mp3';
 function playLobbyMusic(): void {
   StopMusic(false);
   ClearMapMusic();
+  stopDefeatMusic(); // it is on a sound handle, so StopMusic will not stop it
   PlayMusic(LOBBY_MUSIC);
 }
 
-/** Start the looping defeat-lobby track. Loops natively like the lobby one.
- *  ClearMapMusic matters here: without it the map's own music list can come
- *  back over the top when the engine picks the next track. */
+/** The defeat track, played on a SOUND handle rather than the music channel.
+ *
+ *  Why not PlayMusic: the music channel loops by restarting the file, and an
+ *  MP3 cannot loop seamlessly. Every MP3 carries encoder delay at the start and
+ *  padding at the end (~1000+ samples), and gapless playback depends on the
+ *  decoder honouring LAME's tags, which WC3 does not. The result is an audible
+ *  click or gap at the loop point no matter how cleanly the audio is authored.
+ *
+ *  A sound handle loops internally (the `looping` flag below) and, unlike the
+ *  single music stream, handles mix -- so if a click still remains this can be
+ *  extended to two handles crossfading over a silent lead-in.
+ *
+ *  THE REAL FIX IS THE FORMAT. Export this as WAV and the encoder padding does
+ *  not exist, so the loop is sample-exact. Point DEFEAT_MUSIC at the .wav,
+ *  import it, and nothing else here has to change.
+ *
+ *  One consequence worth knowing: sound handles follow the game's SOUND volume
+ *  slider, not MUSIC. A player who has turned music down will still hear this.
+ */
+let defeatSound: sound | null = null;
+
 function playDefeatMusic(): void {
+  // Silence the music channel so the two do not stack.
   StopMusic(false);
   ClearMapMusic();
-  PlayMusic(DEFEAT_MUSIC);
+  if (defeatSound == null) {
+    // looping = true; is3D = false so it plays at full volume everywhere.
+    defeatSound = CreateSound(DEFEAT_MUSIC, true, false, false, 10, 10, '') ?? null;
+    if (defeatSound != null) SetSoundVolume(defeatSound, 127);
+  }
+  if (defeatSound != null) StartSound(defeatSound);
 }
 
-/** Stop the lobby track when leaving the lobby (e.g. a round starts). */
+/** Stop the defeat track. Safe to call when it was never started. */
+function stopDefeatMusic(): void {
+  if (defeatSound != null) StopSound(defeatSound, false, false);
+}
+
+/** Stop the lobby track when leaving the lobby (e.g. a round starts).
+ *
+ *  Also stops the defeat track: it plays on a sound handle, which StopMusic
+ *  does not touch, so without this it would keep playing underneath whatever
+ *  comes next. Reaching a round from defeat needs a save load, but that path
+ *  exists (-load), and a stuck loop is a nasty thing to debug later. */
 function stopLobbyMusic(): void {
   StopMusic(false);
   ClearMapMusic();
+  stopDefeatMusic();
 }
 
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
