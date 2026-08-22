@@ -13,6 +13,15 @@ export interface GameState {
   crateTrackCount: number;
   crateStoneCount: number;
   crateWoodCount: number;
+  /** Seed for outcomes that must survive a reload identically (see rng.ts).
+   *  0 means "not yet minted" -- saves written before seeding existed. */
+  randomSeed: number;
+  /** How many seeded draws this run has taken. Saved with the seed so a
+   *  restored save resumes at the same point in the sequence. */
+  randomDraws: number;
+  /** Position in the shared hero-reroll queue. One queue for all heroes: which
+   *  hero you reroll does not change which hero comes next. */
+  heroQueuePos: number;
 }
 
 /** The train's max HP at the start of a run. The Restore Lost HP item resets to
@@ -32,6 +41,9 @@ const DEFAULT_STATE: GameState = {
   crateTrackCount: 0,
   crateStoneCount: 0,
   crateWoodCount: 0,
+  randomSeed: 0,
+  randomDraws: 0,
+  heroQueuePos: 0,
 };
 
 /** The single source of truth for persistent game state. */

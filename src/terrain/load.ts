@@ -18,6 +18,8 @@ import { applyChallengeEffects, clearChallengeEffects } from '../challengeEffect
 import { startDayNightForRound, stopDayNight } from '../daynight';
 import { spawnLobbyMerc } from '../mercenary';
 import { resetRandomOutcome } from '../randomOutcome';
+import { deriveSeed } from '../rng';
+import { advanceChallengeOffer } from '../challenges';
 
 setVictoryCallback(() => loadLobby());
 setDefeatCallback(() => loadDefeatLobby());
@@ -62,7 +64,18 @@ function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   return spawned;
 }
 
+/** Stream id for map generation (see rng.deriveSeed). */
+const TERRAIN_STREAM = 2;
+
 export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRID_MAX_X): SpawnedTrain {
+  // Map generation is hundreds of draws deep (corridors, blobs, tree and rock
+  // scatter, camp placement), so rather than thread a seeded RNG through all of
+  // generate.ts, point WC3's own generator at a reproducible starting point
+  // first. Same save and same round therefore lay out the same map, which is
+  // what stops a player rerolling the terrain by reloading.
+  //
+  // Keyed on the round as well as the seed, so consecutive rounds differ.
+  SetRandomSeed(deriveSeed(TERRAIN_STREAM) + difficulty);
   return loadGameplay(generateTerrain(difficulty, exitX), skipCleanup);
 }
 

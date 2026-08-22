@@ -1,5 +1,6 @@
 import { gameState, syncGold } from './state';
 import { registerSaveSegment, parseFields } from './save';
+import { deriveSeed } from './rng';
 
 /**
  * Shady Dealer challenges — optional wagers bought in the lobby for 1 gold
@@ -56,8 +57,21 @@ function findDef(id: string): ChallengeDef | null {
 
 /** The challenge bought and not yet resolved, or null. Only one at a time. */
 let armedId: string | null = null;
-/** Ids already bought, so the dealer works through the list before repeating. */
-let purchased: string[] = [];
+/** Ids already OFFERED this lap, so the dealer works through the whole list
+ *  before repeating. Offered, not bought: gating on purchases meant one
+ *  challenge the player never wants to buy would sit on the shelf forever and
+ *  block everything behind it. */
+let seen: string[] = [];
+
+/** The challenge currently on the shelf. Held rather than recomputed, so
+ *  asking twice in a lobby visit does not burn through the rotation. */
+let offeredId: string | null = null;
+
+/** How many times the player has been offered every challenge and come back
+ *  round. Folded into the shuffle so each pass through the list is a DIFFERENT
+ *  order -- otherwise the dealer would replay the same sequence forever -- while
+ *  staying a pure function of the save, so a reload still reproduces it. */
+let cycles = 0;
 /** Fixed per save, so the offer sequence is reproducible. 0 = not yet chosen. */
 let seed = 0;
 
@@ -71,7 +85,6 @@ export function getArmedChallenge(): ChallengeDef | null {
 
 export function armChallenge(id: string): void {
   armedId = id;
-  if (!purchased.includes(id)) purchased.push(id);
 }
 
 /** Disarm without paying. Segment reset, and how a lost wager is spent at the
@@ -92,6 +105,9 @@ export function completeChallenge(id: string): void {
     + '! +' + I2S(CHALLENGE_BONUS) + ' bonus gold.');
 }
 
+/** Stream id for the challenge order (see rng.deriveSeed). */
+const CHALLENGE_STREAM = 1;
+
 // --- seeded offer ---------------------------------------------------------
 
 /** Deterministic order over the registered ids.
@@ -99,10 +115,18 @@ export function completeChallenge(id: string): void {
  *  A Fisher-Yates shuffle driven by a small LCG rather than GetRandomInt: the
  *  order has to be identical every time a given save is loaded, and the game's
  *  RNG is neither seedable from here nor safe to disturb (other systems draw
- *  from it, and doing so would desync a multiplayer game). */
+ *  from it, and doing so would desync a multiplayer game).
+ *
+ *  Challenges do NOT repeat within a lap -- `seen` is the history that
+ *  enforces that -- which is the opposite of the hero reroll, where repeats are
+ *  fine as long as it is not a hero you already have. */
 function shuffledIds(): string[] {
   const ids = defs.map(d => d.id);
-  let state = seed !== 0 ? seed : 1;
+  // A large odd multiplier rather than a bare +1: adjacent seeds fed straight
+  // into an LCG can open with similar values, and "the next lap looks a lot
+  // like the last" is the thing this is meant to avoid.
+  let state = (seed !== 0 ? seed : 1) + cycles * 2654435761;
+  state = state % 4294967296;
   for (let i = ids.length - 1; i > 0; i--) {
     // Numerical Recipes LCG constants, kept inside 32 bits.
     state = (1664525 * state + 1013904223) % 4294967296;
@@ -114,23 +138,35 @@ function shuffledIds(): string[] {
   return ids;
 }
 
-/** The challenge currently for sale, or null if none are registered.
+/** Put the next challenge on the shelf. Called once per lobby visit.
  *
- *  First unbought id in the seeded order. When everything has been bought the
- *  history clears and the sequence starts over, so the dealer never runs dry. */
+ *  Takes the first id of the lap not yet OFFERED, and marks it offered there
+ *  and then -- so declining it still moves the rotation on. When the lap is
+ *  done the history clears and the cycle count bumps, which reshuffles the
+ *  order for the next pass (see shuffledIds), so the dealer never runs dry and
+ *  never replays the same sequence. */
+export function advanceChallengeOffer(): void {
+  if (defs.length === 0) { offeredId = null; return; }
+  if (seed === 0) seed = deriveSeed(CHALLENGE_STREAM);
+
+  let order = shuffledIds();
+  let next = order.find(id => !seen.includes(id));
+  if (next == null) {
+    seen = [];
+    cycles += 1;
+    order = shuffledIds();
+    next = order[0];
+  }
+  offeredId = next;
+  seen.push(next);
+}
+
+/** The challenge currently for sale, or null if none are registered. */
 export function getOfferedChallenge(): ChallengeDef | null {
   if (defs.length === 0) return null;
-  if (seed === 0) seed = GetRandomInt(1, 2147483646);
-  const order = shuffledIds();
-  for (const id of order) {
-    if (!purchased.includes(id)) {
-      const def = findDef(id);
-      if (def != null) return def;
-    }
-  }
-  // Every challenge bought: wrap around rather than leaving the shelf empty.
-  purchased = [];
-  return findDef(order[0]);
+  // A save from before offers were tracked, or a fresh run: put one out now.
+  if (offeredId == null) advanceChallengeOffer();
+  return offeredId == null ? null : findDef(offeredId);
 }
 
 // --- save -----------------------------------------------------------------
@@ -138,8 +174,10 @@ export function getOfferedChallenge(): ChallengeDef | null {
 /** "s=<seed>;a=<armedId>;p=<id,id,...>" */
 function encodeChallenges(): string {
   const parts: string[] = ['s=' + tostring(seed)];
+  if (cycles > 0) parts.push('n=' + tostring(cycles));
   if (armedId != null) parts.push('a=' + armedId);
-  if (purchased.length > 0) parts.push('p=' + table.concat(purchased, ','));
+  if (offeredId != null) parts.push('o=' + offeredId);
+  if (seen.length > 0) parts.push('p=' + table.concat(seen, ','));
   return table.concat(parts, ';');
 }
 
@@ -147,13 +185,17 @@ function decodeChallenges(raw: string): void {
   const fields = parseFields(raw);
   const s = fields['s'];
   if (s != null) seed = tonumber(s) ?? 0;
+  const n = fields['n'];
+  if (n != null) cycles = tonumber(n) ?? 0;
   const a = fields['a'];
   if (a != null && a !== '') armedId = a;
+  const o = fields['o'];
+  if (o != null && o !== '') offeredId = o;
   const p = fields['p'];
   if (p != null && p !== '') {
-    purchased = [];
+    seen = [];
     for (const [id] of string.gmatch(p, '([^,]+)')) {
-      purchased.push(id as string);
+      seen.push(id as string);
     }
   }
   // Legacy saves used "c=1"/"t=1" for the two original challenges.
@@ -165,8 +207,10 @@ function decodeChallenges(raw: string): void {
  *  fresh sequence, while a loaded save keeps the one it was created with. */
 function resetChallenges(): void {
   armedId = null;
-  purchased = [];
+  seen = [];
+  offeredId = null;
   seed = 0;
+  cycles = 0;
 }
 
 registerSaveSegment('ch', encodeChallenges, decodeChallenges, resetChallenges);

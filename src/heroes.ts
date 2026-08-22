@@ -4,6 +4,8 @@ import { isInGameplay } from './state';
 import { registerSaveSegment, parseFields } from './save';
 import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants';
 import { markRandomOutcomeTaken } from './randomOutcome';
+import { seededValueAt } from './rng';
+import { gameState } from './state';
 import { getNeutralPassive } from './teams';
 import { getHumanPlayers, nextFrame, forEachUnitInWorld, getInventoryItemIds } from './util';
 import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
@@ -579,6 +581,35 @@ export function spawnLobbyHeroes(positions: Array<{ x: number; y: number }>): vo
  *  XP, items and tome bonuses (skills are hero-specific and reset), and
  *  replace the lobby unit in place. Returns false if unitHandle is not a
  *  lobby hero or no candidate types remain. */
+/** Next hero off the shared reroll queue.
+ *
+ *  ONE queue for the whole lobby, not a fresh roll per hero: rerolling your
+ *  other hero hands you the same hero the first one would have got. The queue
+ *  is the seeded stream (rng.ts) walked from a saved cursor, so it is identical
+ *  every time a given save is loaded -- reloading to fish for a better result
+ *  gets you the same one back.
+ *
+ *  `candidates` excludes every type currently in the pool of four, including
+ *  the hero being replaced, so the exclusion set does not depend on which hero
+ *  was targeted -- which is what makes both rerolls agree. */
+function nextQueuedHeroType(candidates: number[]): number {
+  if (candidates.length === 0) return 0;
+  // Bounded: each step either lands on a candidate or skips a type already in
+  // play, and there are only so many hero types.
+  for (let step = 0; step < 256; step++) {
+    const pos = gameState.heroQueuePos + step;
+    const pick = HERO_POOL[seededValueAt(pos) % HERO_POOL.length];
+    const id = FourCC(pick);
+    if (candidates.includes(id)) {
+      gameState.heroQueuePos = pos + 1;
+      return id;
+    }
+  }
+  // Stream never offered an eligible type; fall back so a reroll still resolves.
+  gameState.heroQueuePos += 1;
+  return candidates[0];
+}
+
 export function rerollLobbyHero(unitHandle: unit): boolean {
   const entry = lobbyHeroes.find(e => e.unit.handle === unitHandle);
   if (entry == null) return false;
@@ -600,7 +631,7 @@ export function rerollLobbyHero(unitHandle: unit): boolean {
   }
   data.items = carried;
 
-  data.typeId = candidates[GetRandomInt(0, candidates.length - 1)];
+  data.typeId = nextQueuedHeroType(candidates);
   data.skills = {};
 
   const x = entry.unit.x;
