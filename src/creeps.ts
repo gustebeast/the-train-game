@@ -8,6 +8,7 @@ import { isChallengeArmed, completeChallenge } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { TRACK_SIZE } from './track/constants';
+import { seededInt } from './rng';
 
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
@@ -96,7 +97,7 @@ export function rollCreepCamp(): void {
     if (camps[i].level <= maxLevel) allowed.push(i);
   }
   if (allowed.length === 0) return;
-  campState = { tileset, campIndex: allowed[GetRandomInt(0, allowed.length - 1)] };
+  campState = { tileset, campIndex: allowed[seededInt(0, allowed.length - 1)] };
 }
 
 /** Get the selected camp, or null if none selected. */

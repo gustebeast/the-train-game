@@ -4,6 +4,7 @@ import { registerSaveSegment, parseFields } from './save';
 import { getHumanPlayers, getInventoryItemIds, forEachInventoryItem } from './util';
 import { getNeutralPassive } from './teams';
 import { markRandomOutcomeTaken } from './randomOutcome';
+import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creep_camps';
 
 /** Hero-style inventory (the same ability the peasant carries tools with). It
@@ -164,7 +165,7 @@ function rollMercType(): number {
     }
   }
   if (pool.length === 0) return 0;
-  return FourCC(pool[GetRandomInt(0, pool.length - 1)]);
+  return FourCC(pool[seededInt(0, pool.length - 1)]);
 }
 
 // ---------------------------------------------------------------------------

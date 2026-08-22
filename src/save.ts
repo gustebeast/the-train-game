@@ -18,6 +18,9 @@ const KEY_TO_SHORT: Record<string, string> = {
   crateTrackCount: 'ct',
   crateStoneCount: 'cn',
   crateWoodCount: 'cw',
+  randomSeed: 'rs',
+  randomDraws: 'rd',
+  heroQueuePos: 'hq',
 };
 
 /** Reverse mapping: short key → full property name. */
