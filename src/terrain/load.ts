@@ -32,12 +32,22 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 });
 
 const LOBBY_MUSIC = 'war3mapImported\\InGameLobby.mp3';
+const DEFEAT_MUSIC = 'war3mapImported\\Purgatory.mp3';
 
 /** Start the looping lobby track. The music channel loops it natively — no re-trigger needed. */
 function playLobbyMusic(): void {
   StopMusic(false);
   ClearMapMusic();
   PlayMusic(LOBBY_MUSIC);
+}
+
+/** Start the looping defeat-lobby track. Loops natively like the lobby one.
+ *  ClearMapMusic matters here: without it the map's own music list can come
+ *  back over the top when the engine picks the next track. */
+function playDefeatMusic(): void {
+  StopMusic(false);
+  ClearMapMusic();
+  PlayMusic(DEFEAT_MUSIC);
 }
 
 /** Stop the lobby track when leaving the lobby (e.g. a round starts). */
@@ -95,7 +105,7 @@ export function loadDefeatLobby(): void {
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
-  playLobbyMusic();
+  playDefeatMusic();
   SetTimeOfDay(12);
   spawnTerrain(generateDefeatLobby());
 }
