@@ -149,6 +149,7 @@ compiletime(({ objectData, constants }) => {
   // leave it approaching forever. Half a tile of slack is invisible in play.
   dash.castRange = 64;
   dash.castingTime = 0;
+  dash.cooldown = 4;
   // No cast animation: the spell animation is part of what the unit sits
   // through before the queue advances.
   dash.animationNames = '';
