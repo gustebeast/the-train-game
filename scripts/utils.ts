@@ -87,6 +87,53 @@ function updateTSConfig(mapFolder: string) {
 }
 
 /**
+ * Empty ./dist, tolerating files another process is holding open.
+ *
+ * `fs.removeSync('./dist')` throws EPERM when anything on the machine has a
+ * file in there open -- an indexer or a sync client picking up an imported
+ * asset is enough (observed repeatedly on war3mapImported/InGameLobby.mp3).
+ * That failure was worse than it sounds: removeSync deletes depth-first, so by
+ * the time it hit the locked file it had already removed dist/bin, and the
+ * build then aborted. The visible symptom was the built map "disappearing" with
+ * no build in sight, which is exactly how it was misdiagnosed for a day.
+ *
+ * So: retry briefly in case the holder lets go, then delete everything that CAN
+ * be deleted and carry on. Leaving a locked file behind is safe -- the very
+ * next step copies the map folder over the top -- and a build that completes
+ * beats a build that destroys its own output and stops.
+ */
+function cleanDist(): void {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      fs.removeSync("./dist");
+      return;
+    } catch (e) {
+      if (attempt === 2) break;
+      execSync('powershell -NoProfile -Command "Start-Sleep -Milliseconds 700"', { stdio: 'ignore' });
+    }
+  }
+  // Still held. Remove what we can, and say what is stuck rather than failing.
+  const stuck: string[] = [];
+  const sweep = (dir: string): void => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir)) {
+      const full = `${dir}/${entry}`;
+      if (fs.statSync(full).isDirectory()) {
+        sweep(full);
+        try { fs.rmdirSync(full); } catch { stuck.push(full); }
+      } else {
+        try { fs.unlinkSync(full); } catch { stuck.push(full); }
+      }
+    }
+  };
+  sweep("./dist");
+  logger.warn(
+    `dist could not be fully cleaned -- ${stuck.length} item(s) are open in another ` +
+    `process (e.g. ${stuck[0] ?? "unknown"}). Continuing; the map folder is copied over the top.`
+  );
+}
+
+/**
  *
  */
 export function compileMap(config: IProjectConfig) {
@@ -96,10 +143,19 @@ export function compileMap(config: IProjectConfig) {
   }
 
   logger.info("Cleaning dist directory...");
-  fs.removeSync("./dist");
+  cleanDist();
 
   logger.info(`Building "${config.mapFolder}"...`);
-  fs.copySync(`./maps/${config.mapFolder}`, `./dist/${config.mapFolder}`);
+  // overwrite:false because cleanDist has just removed everything it was
+  // allowed to. Whatever survived is a file some other process is holding open,
+  // and it was copied from this same source folder on an earlier build, so the
+  // copy already on disk is the one we would be writing. Overwriting it throws
+  // EBUSY and kills the build; skipping it costs nothing.
+  //
+  // The gap this leaves is narrow and worth knowing: if an asset changed in
+  // source WHILE a process held the old copy open, dist keeps the stale one.
+  // The warning from cleanDist names the file when that can happen.
+  fs.copySync(`./maps/${config.mapFolder}`, `./dist/${config.mapFolder}`, { overwrite: false });
 
   // Lock race selection in the dist copy without touching the source file
   const distMapLua = `./dist/${config.mapFolder}/war3map.lua`;
