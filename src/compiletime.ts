@@ -724,12 +724,15 @@ compiletime(({ objectData, constants }) => {
   // A peasant (non-hero) carries and casts the reroll item, so the item's
   // ability must not be hero-only or the peasant can't activate it.
   rerollCast.heroAbility = false;
-  rerollCast.tooltipNormal = 'Reroll Hero';
-  rerollCast.tooltipNormalExtended = 'Replace a lobby hero with a random new hero. XP and items carry over.';
+  rerollCast.tooltipNormal = 'Reroll';
+  rerollCast.tooltipNormalExtended = 'Replace a lobby hero, or your mercenary, with a random new one. XP and items carry over.';
   rerollCast.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
   // Must include the friendly/own-player flags: the target is one of YOUR OWN
   // lobby heroes, and without them the hero is not a legal target at all.
-  rerollCast.targetsAllowed = 'alive,allies,friend,hero,invulnerable,neutral,player,vulnerable';
+  // NONHERO matters as much as hero: the mercenary is a plain creep, and a
+  // list with only 'hero' on it makes the merc an illegal target, so the
+  // cursor refuses it however the code behind is wired.
+  rerollCast.targetsAllowed = 'alive,allies,friend,hero,nonhero,invulnerable,neutral,player,vulnerable';
   rerollCast.castRange = 500;
   rerollCast.caster = '';
   rerollCast.target = '';
@@ -950,9 +953,9 @@ compiletime(({ objectData, constants }) => {
   // powerup: the buyer carries it, can pawn it back for a refund, and casts
   // it on a lobby hero to reroll them (reroll.ts)
   const heroReroll = objectData.items.get(constants.items.VoodooDoll)!;
-  heroReroll.name = 'Hero Reroll';
+  heroReroll.name = 'Reroll';
   heroReroll.tooltipBasic = heroReroll.name;
-  heroReroll.description = 'Use on a lobby hero to replace it with a random new hero. XP and items carry over. Sell back to the shop for a full refund.';
+  heroReroll.description = 'Use on a lobby hero or your mercenary to replace it with a random new one. XP and items carry over. Sell back to the shop for a full refund.';
   heroReroll.tooltipExtended = heroReroll.description;
   heroReroll.goldCost = 1;
   heroReroll.stockMaximum = 10;
