@@ -1,5 +1,5 @@
 import { Timer } from 'w3ts';
-import { getArmedChallenge } from './challenges';
+import { getArmedChallenge, ChallengeDef, CHALLENGE_COST } from './challenges';
 
 /**
  * The armed challenge's overlay.
@@ -21,6 +21,7 @@ let board: multiboard | null = null;
 let refresh: Timer | null = null;
 /** Last text drawn, so an unchanged board is left alone. */
 let lastTitle = '';
+let lastName = '';
 let lastProgress = '';
 
 /** Take the board off screen WITHOUT destroying it.
@@ -41,6 +42,7 @@ let lastProgress = '';
 function hideBoard(): void {
   if (board != null) MultiboardDisplay(board, false);
   lastTitle = '';
+  lastName = '';
   lastProgress = '';
 }
 
@@ -76,17 +78,49 @@ function widthFor(name: string, progress: string): number {
   return wanted > MIN_WIDTH ? wanted : MIN_WIDTH;
 }
 
+/** A challenge being previewed rather than played: the dealer's current offer,
+ *  shown while a player has him selected. */
+let preview: ChallengeDef | null = null;
+
+/** Put the dealer's offer in the corner. Cleared by clearChallengePreview.
+ *
+ *  Reuses the overlay rather than adding a second panel, so the thing that
+ *  describes a challenge is in the same place whether you are considering it or
+ *  running it -- and the row that will track your progress is already visible,
+ *  showing the goal it is going to count toward.
+ *
+ *  Caveat worth knowing: a multiboard belongs to the game, not to a player, so
+ *  one player inspecting the dealer puts the preview on everybody's screen.
+ *  There is no per-player multiboard to switch to. */
+export function showChallengePreview(def: ChallengeDef): void {
+  preview = def;
+  draw();
+}
+
+export function clearChallengePreview(): void {
+  if (preview == null) return;
+  preview = null;
+  draw();
+}
+
 function draw(): void {
-  const def = getArmedChallenge();
+  // An armed challenge outranks a preview: what you are actually playing
+  // matters more than what is on the shelf. In practice they never collide --
+  // the dealer only exists in the lobby, where nothing is armed.
+  const armed = getArmedChallenge();
+  const def = armed != null ? armed : preview;
   if (def == null) {
-    // Nothing armed: nothing on screen, rather than an empty board taking up
-    // the corner for the whole round.
+    // Nothing armed and nothing being inspected: nothing on screen, rather
+    // than an empty board taking up the corner.
     hideBoard();
     return;
   }
+  const previewing = armed == null;
+  const title = previewing ? 'Shady Deal - ' + I2S(CHALLENGE_COST) + ' gold' : 'Challenge';
 
   const progress = def.progress != null ? def.progress() : '';
-  if (board != null && def.name === lastTitle && progress === lastProgress) return;
+  if (board != null && title === lastTitle && def.name === lastName
+      && progress === lastProgress) return;
 
   const rows = progress !== '' ? 2 : 1;
   let created = false;
@@ -99,7 +133,7 @@ function draw(): void {
   }
   const b = board;
   MultiboardSetRowCount(b, rows);
-  MultiboardSetTitleText(b, 'Challenge');
+  MultiboardSetTitleText(b, title);
   const width = widthFor(def.name, progress);
   setRow(0, '|cffffcc00' + def.name + '|r', width);
   if (progress !== '') setRow(1, progress, width);
@@ -114,7 +148,8 @@ function draw(): void {
   MultiboardDisplay(b, true);
   if (created) MultiboardMinimize(b, false);
 
-  lastTitle = def.name;
+  lastTitle = title;
+  lastName = def.name;
   lastProgress = progress;
 }
 

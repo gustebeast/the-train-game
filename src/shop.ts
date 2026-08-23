@@ -16,9 +16,11 @@ import {
   canBuyMercContract, canBuySecondContract,
 } from './mercenary';
 import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
-import { forEachUnitInWorld, nextFrame } from './util';
+import { forEachUnitInWorld, nextFrame, getHumanPlayers } from './util';
 import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges';
 import { markRandomOutcomeTaken } from './randomOutcome';
+import { onGlobalTick } from './globalTick';
+import { showChallengePreview, clearChallengePreview } from './challengeUI';
 import { refreshLobbyRoster, hasLobbyRerollTargets } from './lobbyRoster';
 
 const ITEM_COSTS: Map<number, number> = new Map([
@@ -246,38 +248,60 @@ export function initShop(): void {
   });
 }
 
-/** Tell a player what the dealer is selling, when they click on him.
+/** The dealer standing in the current lobby, if there is one. */
+let dealerUnit: Unit | null = null;
+
+/** Remember this lobby's dealer, so the overlay can tell when he is selected. */
+export function registerDealer(dealer: Unit): void {
+  dealerUnit = dealer;
+}
+
+/** True while any player has the dealer selected. */
+function dealerIsSelected(): boolean {
+  const d = dealerUnit;
+  if (d == null || GetUnitTypeId(d.handle) === 0) return false;
+  for (const p of getHumanPlayers()) {
+    if (IsUnitSelected(d.handle, p.handle)) return true;
+  }
+  return false;
+}
+
+/** Show the dealer's current offer in the challenge overlay while he is
+ *  selected.
  *
- *  The obvious place is the item's own tooltip in the shop, and that is the one
- *  place it cannot go: a shop button is drawn from the item TYPE's object data,
- *  which is baked at build time, and the tooltip natives (BlzSetItemTooltip and
- *  friends) only take an item INSTANCE -- something on the ground or in an
- *  inventory, which stock is not. Selling the challenge through ten item types,
- *  one per challenge, would give a real tooltip; it would also duplicate every
- *  name and description between compiletime.ts and challengeList.ts, since the
- *  compiletime block is evaluated standalone and cannot import the catalogue.
+ *  The obvious place would be the item's own tooltip in the shop, and that is
+ *  the one place it cannot go: a shop button is drawn from the item TYPE's
+ *  object data, which is baked at build time, and the tooltip natives
+ *  (BlzSetItemTooltip and friends) only take an item INSTANCE -- something on
+ *  the ground or in an inventory, which stock is not.
  *
- *  So selection is the trigger. Clicking the dealer is already the gesture for
- *  "what have you got?", it is deliberate rather than unbidden -- which an
- *  on-entering-the-lobby announcement was not -- and it leaves the dealer
- *  simply called Shady Dealer.
+ *  Selection is the trigger because clicking the dealer is already the gesture
+ *  for "what have you got?". Earlier attempts said it in chat -- on entering
+ *  the lobby, which was noise, then on selection, which needed a cooldown to
+ *  survive a stray double-click. A panel needs neither: re-selecting redraws
+ *  the same thing, and it goes away when you look away.
  *
- *  Shown to the SELECTING player only. print() would put one player's question
- *  on everybody's screen. */
+ *  Shown on the SELECTED event so it appears the instant you click, but taken
+ *  down by asking the engine who is selected rather than by trusting the
+ *  DESELECTED event -- which was measured not firing when clicking away from
+ *  the dealer, leaving the panel stuck up. Asking cannot miss an edge. */
 export function initDealerOffer(): void {
-  const trigger = Trigger.create();
+  const dealerType = FourCC(Units.TombOfRelics);
+
+  const selected = Trigger.create();
   Players.forEach(p => {
-    TriggerRegisterPlayerUnitEvent(trigger.handle, p.handle, EVENT_PLAYER_UNIT_SELECTED, undefined);
+    TriggerRegisterPlayerUnitEvent(selected.handle, p.handle, EVENT_PLAYER_UNIT_SELECTED, undefined);
   });
-  trigger.addAction(() => {
+  selected.addAction(() => {
     const u = GetTriggerUnit();
-    if (u == null || GetUnitTypeId(u) !== FourCC(Units.TombOfRelics)) return;
+    if (u == null || GetUnitTypeId(u) !== dealerType) return;
     const offered = getOfferedChallenge();
-    if (offered == null) return;
-    const who = GetTriggerPlayer();
-    if (who == null) return;
-    DisplayTimedTextToPlayer(who, 0, 0, 12,
-      "Today's deal: |cffffcc00" + offered.name + "|r for "
-      + I2S(CHALLENGE_COST) + " gold. " + offered.description);
+    if (offered != null) showChallengePreview(offered);
+  });
+
+  onGlobalTick(() => {
+    if (!dealerIsSelected()) clearChallengePreview();
   });
 }
+
+
