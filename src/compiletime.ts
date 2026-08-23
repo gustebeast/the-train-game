@@ -1,4 +1,47 @@
 compiletime(({ objectData, constants }) => {
+  /** Everything visible is drawn at peasant scale. Shared by the blanket
+   *  loop below and the hero block near the end of this file. */
+  const UNIT_SCALE = 0.6;
+
+  // Everything in the world is peasant-sized unless we say otherwise.
+  //
+  // The heroes are scaled to 0.6 to match the peasant (see the hero block near
+  // the end of this file), which left every creep, mercenary and summoned unit
+  // towering over them. Rather than enumerate what to shrink, shrink EVERYTHING
+  // and let the units we author ourselves set their own scale further down --
+  // this loop runs first, so every later assignment simply overrides it.
+  //
+  // Blanket rather than a list, because a list cannot be kept honest here. A
+  // summoned unit is a unit TYPE, so scaling the type covers every instance
+  // however it came to exist: a lava spawn splitting in two, a Black Arrow kill
+  // raising a dark minion, a beetle clawing out of a corpse. Catching those at
+  // runtime would mean catching every creation path instead, and deriving the
+  // list from ability data demonstrably misses some -- carrion beetles and
+  // clockwerk goblins appear in no ability's unit list, and both come from
+  // heroes in our own pool.
+  //
+  // KEEP holds the units that must stay at their authored size AND have no
+  // explicit scale later: the peasant, which is the yardstick everything else
+  // is matched against; the ambient critters, already small; and the circle of
+  // power, whose footprint has to keep reading as the ready zone that the
+  // trigger radius actually covers.
+  const KEEP: string[] = [
+    constants.units.Peasant,
+    constants.units.Rabbit, constants.units.Stag, constants.units.Sheep,
+    constants.units.Pig, constants.units.Chicken, constants.units.Raccoon,
+    constants.units.CircleOfPower,
+  ];
+  const alreadyScaled: Record<string, boolean> = {};
+  for (const unitId of Object.values(constants.units) as string[]) {
+    // constants.units aliases several names onto one rawcode; visit each once.
+    if (alreadyScaled[unitId] === true) continue;
+    alreadyScaled[unitId] = true;
+    if (KEEP.indexOf(unitId as never) !== -1) continue;
+    const anyUnit = objectData.units.get(unitId as never);
+    if (anyUnit == null) continue;
+    anyUnit.scalingValueundefined = UNIT_SCALE;
+  }
+
   // The dash: a Channel copy authored in the world editor, so it has no entry
   // in the generated constants and is referenced by rawcode. Keep in step with
   // DASH_ABILITY_ID in constants.ts.
@@ -1055,7 +1098,7 @@ compiletime(({ objectData, constants }) => {
 
   for (const heroType of heroTypes) {
     const hero = objectData.units.get(heroType)!;
-    hero.scalingValueundefined = 0.6;
+    hero.scalingValueundefined = UNIT_SCALE;
     hero.selectionScale = 1;
     hero.collisionSize = 32; // match peasants: one unit blocks a 1-tile corridor
     hero.pathingMap = '';
