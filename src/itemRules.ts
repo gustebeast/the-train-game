@@ -93,8 +93,11 @@ export function canHold(holder: Unit, itemTypeId: number): string | null {
     return (isResourceItem(itemTypeId) || isToolItem(itemTypeId) || isPeasantUtility(itemTypeId))
       ? null : "Peasants can't carry hero items!";
   }
-  if (isHeroUnit(holder)) {
-    return isHeroItem(itemTypeId) ? null : "Heroes can't carry that!";
-  }
-  return null;
+  // Everything else fights alongside the heroes -- the mercenaries above all --
+  // so it lives by the hero rules. Defaulting the other way (unrestricted) let
+  // a mercenary be handed the Reroll, or a peasant's bucket, purely because it
+  // is a creep rather than a UNIT_TYPE_HERO.
+  return isHeroItem(itemTypeId)
+    ? null
+    : (isHeroUnit(holder) ? "Heroes can't carry that!" : "Mercenaries can't carry that!");
 }
