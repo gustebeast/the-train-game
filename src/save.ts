@@ -178,6 +178,18 @@ export function revertToInterRoundLobbySnapshot(): boolean {
   return true;
 }
 
+/** What this session has written, by slot.
+ *
+ *  Re-reading a save file the same session that wrote it does NOT come back
+ *  changed -- measured in game: a slot marked defeated was still offered, and
+ *  still read as undefeated, immediately afterwards. Preloader does not pick up
+ *  a file it has already read this session.
+ *
+ *  That is precisely the flow that matters: lose a run, restart, and the
+ *  chooser must not still be offering the save you just lost. So writes are
+ *  remembered here and laid over what the disk says. */
+const writtenThisSession = new Map<number, SaveSlotInfo>();
+
 /** Read what a slot advertises WITHOUT applying any of it: the chooser has to
  *  describe every save on offer, and loading each one to read it would trample
  *  the session. Returns null for an empty or unreadable slot. */
@@ -208,7 +220,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
     heroTypeIds,
   };
   FlushGameCache(gc);
-  return info;
+  return writtenThisSession.get(slot) ?? info;
 }
 
 /** Every save that exists, newest first. Defeated saves are included only when
@@ -217,7 +229,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
 export function listSaves(includeDefeated = false): SaveSlotInfo[] {
   const found: SaveSlotInfo[] = [];
   for (let slot = LEGACY_SLOT; slot <= SLOT_COUNT; slot++) {
-    const info = readSlotInfo(slot);
+    const info = readSlotInfo(slot) ?? writtenThisSession.get(slot) ?? null;
     if (info == null) continue;
     if (info.defeated && !includeDefeated) continue;
     found.push(info);
@@ -273,6 +285,16 @@ function writeSlot(slot: number, defeated: boolean): void {
   preloadStore(cacheFile, KEY_SEQ, I2S(highestSeq + 1)!);
   if (defeated) preloadStore(cacheFile, KEY_DEFEATED, DEFEATED_YES);
   PreloadGenEnd(slotSaveFile(slot));
+
+  const heroTypeIds: number[] = [];
+  for (let i = 0; i < extraKeys.length; i++) {
+    if (extraKeys[i] !== 'h' + I2S(heroTypeIds.length + 1)!) continue;
+    const typeId = tonumber(parseFields(extraEncoders[i]())['t'] ?? '');
+    heroTypeIds.push(typeId ?? 0);
+  }
+  writtenThisSession.set(slot, {
+    slot, seq: highestSeq + 1, round: gameState.round, defeated, heroTypeIds,
+  });
 }
 
 /** Write current gameState + extra segments to the session's save slot. */
@@ -298,6 +320,8 @@ export function markCurrentSaveDefeated(): void {
  *  point, loading a save and immediately starting a new game cannot write over
  *  the save that was loaded. */
 export function resetToNewRun(): void {
+  // Deliberately NOT clearing writtenThisSession: what is on disk is on disk,
+  // and a new run must still see the saves the session has already written.
   for (const reset of extraResets) {
     if (reset != null) reset();
   }

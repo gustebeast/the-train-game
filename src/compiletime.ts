@@ -150,6 +150,10 @@ compiletime(({ objectData, constants }) => {
   // 400 — the dash was only reaching 2.1x base, which barely reads on screen.
   // 522 is WC3's gameplay-constant ceiling.
   peasant.speedMaximum = 522;
+  // The engine clamps SetUnitMoveSpeed to this, and the stock minimum is 150 --
+  // so asking for 0 left the start-lobby dancers walking around at 150
+  // (measured in game). 1 is the same trick the train already uses.
+  peasant.speedMinimum = 1;
   peasant.animationCastPoint = 0;
   peasant.animationCastBackswing = 0;
 
