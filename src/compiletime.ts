@@ -734,7 +734,7 @@ compiletime(({ objectData, constants }) => {
   // ability must not be hero-only or the peasant can't activate it.
   rerollCast.heroAbility = false;
   rerollCast.tooltipNormal = 'Reroll';
-  rerollCast.tooltipNormalExtended = 'Replace a lobby hero, or your mercenary, with a random new one. XP and items carry over.';
+  rerollCast.tooltipNormalExtended = 'Replace a lobby hero or mercenary with a random new one. XP and items carry over.';
   rerollCast.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
   // Must include the friendly/own-player flags: the target is one of YOUR OWN
   // lobby heroes, and without them the hero is not a legal target at all.
@@ -925,11 +925,12 @@ compiletime(({ objectData, constants }) => {
   crateCapacity.classification = 'PowerUp';
   crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMonsterLure.blp';
 
-  // Mercenary Contract (MogrinsReport — purchased from shop, one per game)
+  // Mercenary Contract (MogrinsReport — purchased from shop; back on sale whenever
+  // no mercenary is alive, so it doubles as the replacement hire)
   const mercContract = objectData.items.get(constants.items.MogrinsReport)!;
   mercContract.name = 'Mercenary Contract';
   mercContract.tooltipBasic = mercContract.name;
-  mercContract.description = 'Unlocks level 2 creep camps and recruits a random mercenary creep that joins your heroes whenever they are summoned. If the mercenary dies it is gone for good (reroll to replace it). One purchase per game.';
+  mercContract.description = 'Unlocks level 2 creep camps and recruits a random mercenary creep that joins your heroes whenever they are summoned. If it dies you lose the level 2 camps and this goes back on the shelf: buying again hires a fresh mercenary, carrying the gear the last one held.';
   mercContract.tooltipExtended = mercContract.description;
   mercContract.goldCost = 1;
   mercContract.stockMaximum = 1;
@@ -991,7 +992,7 @@ compiletime(({ objectData, constants }) => {
   const heroReroll = objectData.items.get(constants.items.VoodooDoll)!;
   heroReroll.name = 'Reroll';
   heroReroll.tooltipBasic = heroReroll.name;
-  heroReroll.description = 'Use on a lobby hero or your mercenary to replace it with a random new one. XP and items carry over. Sell back to the shop for a full refund.';
+  heroReroll.description = 'Use on a lobby hero or mercenary to replace it with a random new one. XP and items carry over. Sell back to the shop for a full refund.';
   heroReroll.tooltipExtended = heroReroll.description;
   heroReroll.goldCost = 1;
   heroReroll.stockMaximum = 10;
