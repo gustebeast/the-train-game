@@ -5,7 +5,7 @@ import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictor
 import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
 import { gameState } from '../state';
-import { revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
+import { markCurrentSaveDefeated, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
   hasHeroes, initRandomHeroes,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
@@ -155,6 +155,10 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
  *
  *  Contrast loadInterRoundLobby(), which is the victory path and rebuilds everything. */
 export function loadDefeatLobby(): void {
+  // The run is over: mark its save so the chooser stops offering it. Marked,
+  // not deleted -- see markCurrentSaveDefeated. A session that never claimed a
+  // slot (tutorial, cheat run) marks nothing.
+  markCurrentSaveDefeated();
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
