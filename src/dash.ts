@@ -29,12 +29,16 @@ import { noteDash } from './challengeList';
 // trick.
 const DASH_SPEED = 522; // WC3's default max move speed (peasant base is ~190)
 const DASH_DURATION = 0.6; // seconds of boosted speed
-// Started by hand at the moment the boost does, because the engine would
-// otherwise start it when the spell fires -- and the spell fires on ARRIVAL.
-// Dash somewhere distant and the whole boost would run before any cooldown
-// began, so a second dash could be cast the instant the first one started
-// moving. The ability's own cooldown is 0 (compiletime.ts) so the arrival
-// no-op cannot restart what is already ticking.
+// Timed from the moment the boost starts, because the engine would otherwise
+// start it when the spell FIRES -- and this spell fires on arrival. Dash
+// somewhere distant and the whole boost ran before any cooldown began, so a
+// second dash could be cast the instant the first one set off.
+//
+// It is tracked by a timer rather than handed to the engine up front: putting
+// the ability on cooldown while its own order is executing makes WC3 cancel the
+// cast, which reads in game as the dash issuing a stop. The engine is told only
+// once the cast is over. The ability's own cooldown is 0 (compiletime.ts), so
+// the arrival no-op cannot start a second one on top.
 const DASH_COOLDOWN = 4.0;
 // The roll is the peasant's ALTERNATE WALK (scripts/roll-anim-to-alternate-walk.js),
 // so switching it on is a single property the engine reads while the unit
@@ -55,11 +59,27 @@ const dashing = new Map<unit, DashState>();
  *  with DashState. Their only job is to remember how much cooldown is left. */
 const cooldowns = new Map<unit, Timer>();
 
-/** Put the dash on cooldown from RIGHT NOW. */
+/** Seconds of cooldown still owed, 0 if the dash is ready. */
+function cooldownLeft(h: unit): number {
+  const timer = cooldowns.get(h);
+  if (timer == null) return 0;
+  const left = timer.remaining;
+  return left > 0 ? left : 0;
+}
+
+/** Begin the cooldown, WITHOUT telling the engine yet.
+ *
+ *  Telling it here breaks the dash outright: the boost starts at the moment the
+ *  ability's own order begins executing, and putting that ability on cooldown
+ *  mid-order makes WC3 cancel the cast -- the peasant stops dead, never reaches
+ *  the point, and the order never completes. (That is also what the earlier
+ *  "the peasant never arrives" test results were, misread as bad terrain.)
+ *
+ *  So the timer is the source of truth while the dash is in flight, and the
+ *  engine is told only once the dash is over -- see endCooldownDisplay. */
 function startCooldown(h: unit): void {
   const previous = cooldowns.get(h);
   if (previous != null) previous.destroy();
-  BlzStartUnitAbilityCooldown(h, DASH_ABILITY_ID, DASH_COOLDOWN);
   const timer = Timer.create();
   cooldowns.set(h, timer);
   timer.start(DASH_COOLDOWN, false, () => {
@@ -68,15 +88,12 @@ function startCooldown(h: unit): void {
   });
 }
 
-/** Re-assert whatever cooldown is still owed. Casting an ability whose own
- *  cooldown is 0 is the engine setting a 0-second cooldown, which would wipe
- *  the one already running -- and the dash's cast lands on ARRIVAL, right in
- *  the middle of it. Reapplying the remainder is a no-op if the engine left it
- *  alone, and repairs it if it did not. */
-function restoreCooldown(h: unit): void {
-  const timer = cooldowns.get(h);
-  if (timer == null) return;
-  const left = timer.remaining;
+/** Hand the remaining cooldown to the engine now that the cast is finished, so
+ *  the command card shows it and the ability is genuinely uncastable for the
+ *  rest of it. Safe here precisely because the order it would have cancelled
+ *  has already completed. */
+function endCooldownDisplay(h: unit): void {
+  const left = cooldownLeft(h);
   if (left > 0.05) BlzStartUnitAbilityCooldown(h, DASH_ABILITY_ID, left);
 }
 
@@ -107,6 +124,11 @@ function endDash(h: unit): void {
 }
 
 function startDash(h: unit): void {
+  // On cooldown: let the order run as an ordinary walk rather than refusing it.
+  // Blocking the order is what cancels the cast and strands the queue, so the
+  // cooldown withholds the BOOST instead -- which is the thing being limited.
+  if (cooldownLeft(h) > 0) return;
+
   // Re-dashing: keep the original speed, don't capture the boosted one.
   const existing = dashing.get(h);
   const baseSpeed = existing != null ? existing.baseSpeed : GetUnitMoveSpeed(h);
@@ -153,6 +175,6 @@ export function initDash(): void {
     if (u == null || u.typeId !== PEASANT_ID) return;
     noteDash();
     endDash(u.handle);
-    restoreCooldown(u.handle);
+    endCooldownDisplay(u.handle);
   });
 }
