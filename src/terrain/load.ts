@@ -39,8 +39,8 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 // The masters live outside the repo with the other bounces, in
 // Documents/Music/Bounces/TheTrainGame. Re-encode from there rather than from
 // these files -- the difference between one lossy generation and two.
-const LOBBY_MUSIC = 'war3mapImported\\InterRoundLobbyAdpcm.wav';
-const DEFEAT_MUSIC = 'war3mapImported\\PurgatoryAdpcm.wav';
+const LOBBY_MUSIC = 'war3mapImported\\InterRoundLobby.wav';
+const DEFEAT_MUSIC = 'war3mapImported\\Purgatory.wav';
 
 /** Start a seamless looping track on a SOUND handle, reusing the handle so a
  *  re-entry does not stack a second copy. Returns the handle to store.
