@@ -13,10 +13,11 @@ import {
   isMercDead, buyMercContract, buySecondContract,
   canBuyMercContract, canBuySecondContract,
 } from './mercenary';
-import { areHeroesSpawned, getSpawnedHeroes, hadSummonLastRound } from './heroes';
+import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
 import { forEachUnitInWorld, nextFrame } from './util';
 import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges';
 import { markRandomOutcomeTaken } from './randomOutcome';
+import { refreshLobbyRoster, hasLobbyRerollTargets } from './lobbyRoster';
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],
@@ -79,11 +80,23 @@ export function stockShop(shop: Unit): void {
     } else if (canBuySecondContract()) {
       AddItemToStock(shop.handle, MERC_CONTRACT_2_ID, 1, 1);
     }
-    // Rerolls only make sense when last round's heroes stand in the lobby
-    if (hadSummonLastRound()) {
+    // Rerolls only make sense when there is someone standing here to reroll
+    if (hasLobbyRerollTargets()) {
       AddItemToStock(shop.handle, REROLL_ITEM_ID, 10, 10);
     }
   });
+}
+
+/** Put whoever a purchase just added into the lobby, and make sure the Reroll
+ *  item is on the shelf for them. Both contracts and Summon Heroes change who
+ *  is standing in the corner, and the shop is a lobby fixture, so the display
+ *  can catch up immediately instead of waiting for the next lobby load. */
+function addRosterToLobby(): void {
+  refreshLobbyRoster();
+  if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0
+      && hasLobbyRerollTargets()) {
+    AddItemToStock(currentShop.handle, REROLL_ITEM_ID, 10, 10);
+  }
 }
 
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
@@ -182,6 +195,9 @@ export function initShop(): void {
         }
       });
       effectTargets = targets;
+      // The roster is yours from this moment, so show it rather than making the
+      // player finish a round to find out who they bought.
+      addRosterToLobby();
       print('Summon Heroes unlocked!');
     } else if (itemTypeId === MERC_CONTRACT_ID) {
       const wasRevive = isMercDead();
@@ -192,6 +208,7 @@ export function initShop(): void {
       if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
         RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_ID);
       }
+      addRosterToLobby();
       print(wasRevive
         ? 'Mercenary Contract renewed: a fresh mercenary takes the job, carrying the gear the last one was holding. Level 2 creep camps are back.'
         : 'Mercenary Contract purchased: level 2 creep camps unlocked; a mercenary will join your next hero summon.');
@@ -204,6 +221,7 @@ export function initShop(): void {
       if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
         RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_2_ID);
       }
+      addRosterToLobby();
       print('Second Contract signed: a second mercenary joins you, and level 3 creep camps open up.');
       const secondBuyer = Unit.fromHandle(GetTriggerUnit());
       if (secondBuyer != null) effectTargets = [secondBuyer];

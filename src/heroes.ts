@@ -7,6 +7,7 @@ import { markRandomOutcomeTaken } from './randomOutcome';
 import { seededValueAt } from './rng';
 import { gameState } from './state';
 import { getNeutralPassive } from './teams';
+import { isSummonUpgradePurchased } from './summonUpgrade';
 import { getHumanPlayers, nextFrame, forEachUnitInWorld, getInventoryItemIds } from './util';
 import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
 
@@ -155,37 +156,6 @@ registerSaveSegment('ci',
     chosenFromSave = false;
   },
 );
-
-// ---------------------------------------------------------------------------
-// Last summoned heroes — shown in the lobby for rerolling
-// ---------------------------------------------------------------------------
-
-/** Indices into allHeroes of the heroes summoned in the most recent round.
- *  Empty if Summon Heroes wasn't used. Cleared at round start (load.ts). */
-let lastSummonedIndices: number[] = [];
-
-registerSaveSegment('ls',
-  () => lastSummonedIndices.join(','),
-  (raw) => {
-    const loaded: number[] = [];
-    for (const [val] of string.gmatch(raw, '([^,]+)')) {
-      const idx = tonumber(val);
-      if (idx != null && idx >= 0 && idx < 4) loaded.push(idx);
-    }
-    lastSummonedIndices = loaded;
-  },
-  () => { lastSummonedIndices = []; },
-);
-
-/** Forget the previous round's summons. Called when a new round starts. */
-export function clearLastSummoned(): void {
-  lastSummonedIndices = [];
-}
-
-/** Whether heroes were summoned in the previous round (drives lobby display + reroll stock). */
-export function hadSummonLastRound(): boolean {
-  return lastSummonedIndices.length > 0;
-}
 
 // ---------------------------------------------------------------------------
 // Hero player control — which players control heroes vs peasants
@@ -556,24 +526,41 @@ export function areHeroesSpawned(): boolean {
 // Lobby hero display + reroll
 // ---------------------------------------------------------------------------
 
-/** Neutral display copies of last round's summoned heroes, lobby only.
- *  (Terrain cleanup removes the units; the list is rebuilt each lobby.) */
+/** Neutral display copies of the hero roster, lobby only.
+ *  (Terrain cleanup removes the units; clearLobbyHeroes drops the handles.) */
 let lobbyHeroes: Array<{ unit: Unit; dataIdx: number }> = [];
 
-/** Spawn last round's summoned heroes as neutral lobby units, one per
- *  position (extras stack on the last position). No-op if Summon Heroes
- *  wasn't used last round. */
-export function spawnLobbyHeroes(positions: Array<{ x: number; y: number }>): void {
+/** Forget the display units without touching the world. Pairs with the terrain
+ *  sweep, which has already removed them. */
+export function clearLobbyHeroes(): void {
   lobbyHeroes = [];
+}
+
+/** Stand the hero roster in the lobby, hero i on positions[i].
+ *
+ *  ALL FOUR are shown, not just the two that fought last round. The other two
+ *  are equally yours -- equally rerollable, equally able to hold gear -- and
+ *  showing only the pair that happened to be summoned made the lobby
+ *  misrepresent the roster. Nothing shows before Summon Heroes is bought,
+ *  because until then there is no roster to speak of.
+ *
+ *  Additive: it fills in whoever is missing and leaves standing heroes alone.
+ *  That is what makes it safe to call mid-lobby after a purchase. A rebuild
+ *  would recreate each hero from HeroData and silently drop anything a player
+ *  had handed the display unit since the lobby opened. */
+export function syncLobbyHeroes(positions: Array<{ x: number; y: number }>): void {
+  if (!isSummonUpgradePurchased()) return;
   const owner = getNeutralPassive();
-  lastSummonedIndices.forEach((dataIdx, i) => {
-    const pos = positions[math.min(i, positions.length - 1)];
+  for (let dataIdx = 0; dataIdx < allHeroes.length; dataIdx++) {
+    if (allHeroes[dataIdx].typeId === 0) continue;
+    if (lobbyHeroes.some(e => e.dataIdx === dataIdx)) continue;
+    const pos = positions[math.min(dataIdx, positions.length - 1)];
     const hero = spawnHeroUnit(dataIdx, owner, pos.x, pos.y);
     if (hero != null) {
       hero.invulnerable = true;
       lobbyHeroes.push({ unit: hero, dataIdx });
     }
-  });
+  }
 }
 
 /** Reroll the lobby hero represented by unitHandle: swap its slot in
@@ -696,8 +683,6 @@ export function initHeroes(): void {
 
     UnitRemoveAbility(caster.handle, SUMMON_ABILITY_ID);
     transferPeasantsAndSpawnHeroes(caster.x, caster.y);
-    // Remember for the next lobby's hero display/reroll
-    lastSummonedIndices = [chosenIndices[0], chosenIndices[1]];
   });
 
   // Unsummon Heroes spell trigger
