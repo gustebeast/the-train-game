@@ -1,4 +1,6 @@
 import { Trigger, Unit } from 'w3ts';
+import { Players } from 'w3ts/globals';
+import { Units } from '@objectdata/units';
 import { gameState, syncState, TRAIN_INITIAL_MAX_HP } from './state';
 import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForLobby } from './items';
@@ -244,7 +246,7 @@ export function initShop(): void {
   });
 }
 
-/** Put this lobby's offer where a player will actually read it.
+/** Tell a player what the dealer is selling, when they click on him.
  *
  *  The obvious place is the item's own tooltip in the shop, and that is the one
  *  place it cannot go: a shop button is drawn from the item TYPE's object data,
@@ -255,17 +257,27 @@ export function initShop(): void {
  *  name and description between compiletime.ts and challengeList.ts, since the
  *  compiletime block is evaluated standalone and cannot import the catalogue.
  *
- *  So the dealer's NAME carries it, which fills the portrait panel the moment
- *  you select it to buy. Just the challenge name: the panel truncates at about
- *  26 characters, so "Shady Dealer - Tough Creep Camp" came out as "Shady
- *  Dealer - Tough Creep ...". The shop button below it still reads "Shady
- *  Deal", so nothing is lost by dropping the prefix.
+ *  So selection is the trigger. Clicking the dealer is already the gesture for
+ *  "what have you got?", it is deliberate rather than unbidden -- which an
+ *  on-entering-the-lobby announcement was not -- and it leaves the dealer
+ *  simply called Shady Dealer.
  *
- *  Deliberately NOT announced in chat on entering the lobby. Finding out what
- *  is on offer should be something you go and do, not something that arrives
- *  unbidden over every other message while you are busy elsewhere. */
-export function showDealerOffer(dealer: Unit): void {
-  const offered = getOfferedChallenge();
-  if (offered == null) return;
-  BlzSetUnitName(dealer.handle, offered.name);
+ *  Shown to the SELECTING player only. print() would put one player's question
+ *  on everybody's screen. */
+export function initDealerOffer(): void {
+  const trigger = Trigger.create();
+  Players.forEach(p => {
+    TriggerRegisterPlayerUnitEvent(trigger.handle, p.handle, EVENT_PLAYER_UNIT_SELECTED, undefined);
+  });
+  trigger.addAction(() => {
+    const u = GetTriggerUnit();
+    if (u == null || GetUnitTypeId(u) !== FourCC(Units.TombOfRelics)) return;
+    const offered = getOfferedChallenge();
+    if (offered == null) return;
+    const who = GetTriggerPlayer();
+    if (who == null) return;
+    DisplayTimedTextToPlayer(who, 0, 0, 12,
+      "Today's deal: |cffffcc00" + offered.name + "|r for "
+      + I2S(CHALLENGE_COST) + " gold. " + offered.description);
+  });
 }
