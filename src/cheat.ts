@@ -6,6 +6,8 @@ import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants
 import { loadFromFile } from './save';
 import { stopGameplay, triggerDefeat } from './train';
 import { toggleShoulderCam } from './challengeEffects';
+import { getChallengeDefs, armChallenge, clearChallenges } from './challenges';
+import { applyTrackShapes } from './challengeList';
 import { getNeutralPassive } from './teams';
 import { getHumanPlayers, getWorldBounds } from './util';
 
@@ -102,6 +104,22 @@ export function initCheat(): void {
     print(on
       ? 'Third-person camera ON — locked behind your peasant. -thirdperson again to exit.'
       : 'Third-person camera OFF.');
+  });
+
+  // Step through the challenge catalogue, arming each in turn, so the overlay
+  // can be looked at in every state it can be in without buying ten wagers and
+  // playing ten rounds. Each press also stamps a part-finished track count, so
+  // the progress row shows a real "7 / 15" rather than sitting at zero.
+  let uiIndex = -1;
+  onChatCommand('-uichallenge', () => {
+    const all = getChallengeDefs();
+    if (all.length === 0) { print('uichallenge: nothing registered'); return; }
+    uiIndex = (uiIndex + 1) % all.length;
+    const def = all[uiIndex];
+    clearChallenges();
+    armChallenge(def.id);
+    applyTrackShapes({ straightRun: 7, curved: 3 });
+    print('uichallenge ' + I2S(uiIndex + 1) + '/' + I2S(all.length) + ': ' + def.name);
   });
 
   // Drive the defeat path without having to actually run the train out of

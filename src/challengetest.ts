@@ -106,6 +106,20 @@ function runTrackShapeTest(t: TestReporter): void {
   expect(t, 'stairsCurved', stairs.curved, 9);
   expect(t, 'stairsStraightRun', stairs.straightRun, 0);
 
+  // A serpentine: two rows of four, weaving between them.
+  //
+  //    . 2 . 4 . 6 . 8      laid E N E S E N E, so every interior piece turns
+  //    1 . 3 . 5 . 7 .
+  //
+  // Worth its own case because SPATIALLY this looks like two straight rows of
+  // four, and anything that judged a piece by its neighbours on the map rather
+  // than by its neighbours ALONG THE LINE would read those rows as straight
+  // runs. The line is walked in placement order, so all six interior pieces
+  // come out as corners and the straight run is zero.
+  const serpentine = computeTrackShapes(line('ENESENE'), 0);
+  expect(t, 'serpentineCurved', serpentine.curved, 6);
+  expect(t, 'serpentineStraightRun', serpentine.straightRun, 0);
+
   // Both axes must read as straight, not just east-west.
   const northward = computeTrackShapes(line(repeat('N', 6)), 0);
   expect(t, 'northStraightRun', northward.straightRun, 5);

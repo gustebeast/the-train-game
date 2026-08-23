@@ -55,18 +55,30 @@ function draw(): void {
   if (board != null && def.name === lastTitle && progress === lastProgress) return;
 
   const rows = progress !== '' ? 2 : 1;
+  let created = false;
   if (board == null) {
-    const created = CreateMultiboard();
-    if (created == null) return;
-    board = created;
+    const made = CreateMultiboard();
+    if (made == null) return;
+    board = made;
+    created = true;
     MultiboardSetColumnCount(board, 1);
-    MultiboardDisplay(board, true);
   }
   const b = board;
   MultiboardSetRowCount(b, rows);
   MultiboardSetTitleText(b, 'Challenge');
   setRow(0, '|cffffcc00' + def.name + '|r');
   if (progress !== '') setRow(1, progress);
+
+  // Show it only after the rows exist. Displaying an empty board and filling it
+  // afterwards is what the first version did, and the engine sized the corner
+  // from the board as it was AT THAT MOMENT: the first challenge of the session
+  // rendered a row too narrow for its own name, overflowing off the right edge
+  // of the screen with no border. Every later challenge looked right, because
+  // by then the board had been laid out once with real content -- which is why
+  // this only ever showed up on the very first draw, and why the early-return
+  // above made it stick: a challenge with no progress line never redraws, so
+  // the broken layout stayed for the whole round.
+  if (created) MultiboardDisplay(b, true);
 
   lastTitle = def.name;
   lastProgress = progress;
