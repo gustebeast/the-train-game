@@ -116,10 +116,11 @@ onAllHeroesDead(() => removeSpawnedCreeps());
  *
  *  Every pick is recorded in `encountered` whether or not the camp is beaten,
  *  so the rotation works through what is available before repeating anything.
- *  Unlocking a level changes the pool rather than resetting it: clear all the
- *  level 1 camps, hire a mercenary, and level 2 camps are the only eligible
- *  ones left until they have been seen as well. When nothing eligible remains
- *  the list clears and the rotation starts over.
+ *  Unlocking a level ADDS to the pool, it does not replace it: level 1 camps
+ *  you have not met yet stay eligible alongside the new level 2 ones, and only
+ *  meeting a camp takes it out. Meet ALL the level 1 camps first and level 2 is
+ *  simply what is left. When nothing eligible remains the whole list clears
+ *  together and the rotation starts over.
  *
  *  campIndex always indexes the full camp list, so saves stay stable. */
 export function rollCreepCamp(): void {
