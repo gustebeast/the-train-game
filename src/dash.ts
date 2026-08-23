@@ -34,11 +34,12 @@ const DASH_DURATION = 0.6; // seconds of boosted speed
 // somewhere distant and the whole boost ran before any cooldown began, so a
 // second dash could be cast the instant the first one set off.
 //
-// It is tracked by a timer rather than handed to the engine up front: putting
-// the ability on cooldown while its own order is executing makes WC3 cancel the
-// cast, which reads in game as the dash issuing a stop. The engine is told only
-// once the cast is over. The ability's own cooldown is 0 (compiletime.ts), so
-// the arrival no-op cannot start a second one on top.
+// It is a timer and nothing else -- the engine is never told. Putting the
+// ability on cooldown while its own order is executing makes WC3 cancel the
+// cast, which reads in game as the dash issuing a stop; and setting it after
+// the cast puts a command-card cooldown on screen at the moment the peasant
+// arrives, which is not what the rule means. The ability's own cooldown is 0
+// (compiletime.ts), so nothing in game ever shows one.
 const DASH_COOLDOWN = 4.0;
 // The roll is the peasant's ALTERNATE WALK (scripts/roll-anim-to-alternate-walk.js),
 // so switching it on is a single property the engine reads while the unit
@@ -67,16 +68,20 @@ function cooldownLeft(h: unit): number {
   return left > 0 ? left : 0;
 }
 
-/** Begin the cooldown, WITHOUT telling the engine yet.
+/** Begin the cooldown. The engine is never told about it at all.
  *
- *  Telling it here breaks the dash outright: the boost starts at the moment the
- *  ability's own order begins executing, and putting that ability on cooldown
- *  mid-order makes WC3 cancel the cast -- the peasant stops dead, never reaches
- *  the point, and the order never completes. (That is also what the earlier
- *  "the peasant never arrives" test results were, misread as bad terrain.)
+ *  Telling it mid-cast breaks the dash outright: the boost starts at the moment
+ *  the ability's own order begins executing, and putting that ability on
+ *  cooldown mid-order makes WC3 cancel the cast -- the peasant stops dead,
+ *  never reaches the point, and the order never completes.
  *
- *  So the timer is the source of truth while the dash is in flight, and the
- *  engine is told only once the dash is over -- see endCooldownDisplay. */
+ *  Telling it after the cast is no better: the cast lands when the peasant
+ *  ARRIVES, so a command-card cooldown would appear at the end of the dash, out
+ *  of step with the rule it represents.
+ *
+ *  So this timer is the whole cooldown. Nothing about it is visible: the dash
+ *  stays castable throughout and simply gives no boost until the timer runs
+ *  out. */
 function startCooldown(h: unit): void {
   const previous = cooldowns.get(h);
   if (previous != null) previous.destroy();
@@ -86,15 +91,6 @@ function startCooldown(h: unit): void {
     const t = cooldowns.get(h);
     if (t != null) { t.destroy(); cooldowns.delete(h); }
   });
-}
-
-/** Hand the remaining cooldown to the engine now that the cast is finished, so
- *  the command card shows it and the ability is genuinely uncastable for the
- *  rest of it. Safe here precisely because the order it would have cancelled
- *  has already completed. */
-function endCooldownDisplay(h: unit): void {
-  const left = cooldownLeft(h);
-  if (left > 0.05) BlzStartUnitAbilityCooldown(h, DASH_ABILITY_ID, left);
 }
 
 // Diagnostics, read through a function: TSTL importers snapshot a mutable
@@ -175,6 +171,5 @@ export function initDash(): void {
     if (u == null || u.typeId !== PEASANT_ID) return;
     noteDash();
     endDash(u.handle);
-    endCooldownDisplay(u.handle);
   });
 }
