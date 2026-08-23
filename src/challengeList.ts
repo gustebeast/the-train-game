@@ -78,33 +78,35 @@ defineChallenge({
   id: CH_CRITTERPOCALYPSE,
   name: 'Critterpocalypse',
   description: 'The next round swarms with critters. Finish the round to win the wager.',
+  progress: () => 'Finish the round',
 });
 
 defineChallenge({
   id: CH_TOUGH_CAMP,
   name: 'Tough Creep Camp',
   description: "Next round's creep camp hits far harder. Defeat every creep in it.",
+  progress: () => 'Defeat the creep camp',
 });
 
 defineChallenge({
   id: CH_STRAIGHT_15,
   name: 'Straight and Narrow',
   description: 'Lay ' + I2S(STRAIGHT_TARGET) + ' straight track pieces in an unbroken run.',
-  progress: () => I2S(straightRun) + ' / ' + I2S(STRAIGHT_TARGET),
+  progress: () => 'Straight in a row ' + I2S(straightRun) + ' / ' + I2S(STRAIGHT_TARGET),
 });
 
 defineChallenge({
   id: CH_CURVED_15,
   name: 'The Scenic Route',
   description: 'Lay ' + I2S(CURVED_TARGET) + ' curved track pieces this round.',
-  progress: () => I2S(curvedCount) + ' / ' + I2S(CURVED_TARGET),
+  progress: () => 'Curves laid ' + I2S(curvedCount) + ' / ' + I2S(CURVED_TARGET),
 });
 
 defineChallenge({
   id: CH_DASH,
   name: 'Marathon',
   description: 'Dash ' + I2S(DASHES_PER_PLAYER) + ' times per player this round.',
-  progress: () => I2S(dashCount) + ' / ' + I2S(dashTarget()),
+  progress: () => 'Dashes ' + I2S(dashCount) + ' / ' + I2S(dashTarget()),
 });
 
 defineChallenge({
@@ -112,7 +114,7 @@ defineChallenge({
   name: 'Union Rules',
   description: 'Only one peasant may carry each tool: no two may hold the same '
     + 'tool type at once. Paid out when the last track is laid.',
-  progress: () => (soloToolsBroken ? 'broken' : 'holding'),
+  progress: () => (soloToolsBroken ? 'Tool shared - failed' : 'No tool shared yet'),
 });
 
 defineChallenge({
@@ -120,7 +122,7 @@ defineChallenge({
   name: 'Living Dangerously',
   description: 'Keep the train within ' + I2S(BRINK_TRACKS) + ' tracks of the end '
     + 'of the line for ' + I2S(BRINK_SECONDS) + ' seconds.',
-  progress: () => I2S(brinkSeconds) + ' / ' + I2S(BRINK_SECONDS) + 's',
+  progress: () => 'Near the end ' + I2S(brinkSeconds) + ' / ' + I2S(BRINK_SECONDS) + 's',
 });
 
 defineChallenge({
@@ -128,6 +130,7 @@ defineChallenge({
   name: 'Blackout',
   description: 'At night the whole map goes dark -- you see only what your own '
     + 'units can see. Finish the round to win the wager.',
+  progress: () => 'Finish the round',
 });
 
 defineChallenge({
@@ -135,6 +138,7 @@ defineChallenge({
   name: 'From Memory',
   description: 'The interface is hidden for the round: no minimap, no command '
     + 'card, no inventory. Hotkeys still work. Finish the round to win.',
+  progress: () => 'Finish the round',
 });
 
 defineChallenge({
@@ -142,6 +146,7 @@ defineChallenge({
   name: 'Over the Shoulder',
   description: 'The camera drops in behind your peasant for the round. Finish '
     + 'the round to win.',
+  progress: () => 'Finish the round',
 });
 
 // --- event hooks, called by the systems that see the events ---------------

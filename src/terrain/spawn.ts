@@ -16,7 +16,7 @@ import { initReadyZone, cleanupReady } from '../ready';
 import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../creeps';
 import { resetHeroState } from '../heroes';
-import { stockShop } from '../shop';
+import { stockShop, showDealerOffer } from '../shop';
 import { destroyAllTimers } from '../timers';
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID, CRITTER_TYPE_IDS } from '../constants';
 import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
@@ -203,6 +203,9 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         case Entity.SHADY_DEALER: {
           const dealer = Unit.create(getNeutralPassive(), FourCC(Units.TombOfRelics), world.x, world.y, 270)!;
           dealer.invulnerable = true;
+          // Name the dealer after what it is selling, so the wager is not
+          // bought blind.
+          showDealerOffer(dealer);
           break;
         }
 

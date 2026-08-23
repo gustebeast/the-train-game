@@ -21,7 +21,14 @@ import { refreshLobbyRoster, resetLobbyRoster } from '../lobbyRoster';
 import { deriveSeed } from '../rng';
 import { advanceChallengeOffer } from '../challenges';
 
-setVictoryCallback(() => loadLobby());
+// Finishing a round is what counts as a new visit to the dealer, so that is
+// where the shelf rotates. NOT inside loadLobby: Reset Purchases goes back
+// through there too, and rewinding a purchase must leave the same wager on
+// sale rather than letting a player shop for a different one.
+setVictoryCallback(() => {
+  advanceChallengeOffer();
+  loadLobby();
+});
 setDefeatCallback(() => loadDefeatLobby());
 setAwardVictoryCallback(() => awardVictory());
 registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round));

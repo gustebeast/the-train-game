@@ -243,3 +243,31 @@ export function initShop(): void {
     RemoveItem(item);
   });
 }
+
+/** Put this lobby's offer where a player will actually read it.
+ *
+ *  The obvious place is the item's own tooltip in the shop, and that is the one
+ *  place it cannot go: a shop button is drawn from the item TYPE's object data,
+ *  which is baked at build time, and the tooltip natives (BlzSetItemTooltip and
+ *  friends) only take an item INSTANCE -- something on the ground or in an
+ *  inventory, which stock is not. Selling the challenge through ten item types,
+ *  one per challenge, would give a real tooltip; it would also duplicate every
+ *  name and description between compiletime.ts and challengeList.ts, since the
+ *  compiletime block is evaluated standalone and cannot import the catalogue.
+ *
+ *  Two channels instead, both verified in game:
+ *
+ *  - the dealer's NAME, which fills the portrait panel the moment you select it
+ *    to buy. Just the challenge name: the panel truncates at about 26
+ *    characters, so "Shady Dealer - Tough Creep Camp" came out as "Shady Dealer
+ *    - Tough Creep ...". The shop button below it still reads "Shady Deal", so
+ *    nothing is lost by dropping the prefix.
+ *  - a chat line on entering the lobby, which carries the full description and
+ *    can be read without walking over. */
+export function showDealerOffer(dealer: Unit): void {
+  const offered = getOfferedChallenge();
+  if (offered == null) return;
+  BlzSetUnitName(dealer.handle, offered.name);
+  print("The Shady Dealer is offering |cffffcc00" + offered.name + "|r for "
+    + I2S(CHALLENGE_COST) + " gold: " + offered.description);
+}
