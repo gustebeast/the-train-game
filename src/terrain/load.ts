@@ -32,12 +32,13 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 });
 
 const LOBBY_MUSIC = 'war3mapImported\\InGameLobby.mp3';
-// IMA ADPCM in a WAV container: 388KB against the MP3's 282KB, but with no
-// encoder delay or padding, so the loop point is sample-exact. Converted from
-// the 24-bit master, so it is also one lossy generation rather than two.
+// IMA ADPCM in a WAV container, 387KB. WC3 decodes it fine (verified in game).
+// Chosen over PCM because MPQ was measured to recover only ~5% on PCM, so the
+// master would have cost its full 2.3MB in the archive.
 //
-// If WC3 turns out not to decode ADPCM, fall back to PCM (32kHz mono is ~535KB)
-// -- the symptom would be silence in the defeat lobby, not a crash.
+// The master lives at assets/audio/Purgatory-master.wav, outside the map so it
+// is not packaged. Re-encode from there rather than from this file: it is the
+// difference between one lossy generation and two.
 const DEFEAT_MUSIC = 'war3mapImported\\PurgatoryAdpcm.wav';
 
 /** Start the looping lobby track. The music channel loops it natively — no re-trigger needed. */
@@ -48,24 +49,24 @@ function playLobbyMusic(): void {
   PlayMusic(LOBBY_MUSIC);
 }
 
-/** The defeat track, played on a SOUND handle rather than the music channel.
+/** The defeat track, played on a SOUND handle rather than through PlayMusic.
+ *  Verified in game: loops seamlessly and follows the music volume slider.
  *
- *  Why not PlayMusic: the music channel loops by restarting the file, and an
- *  MP3 cannot loop seamlessly. Every MP3 carries encoder delay at the start and
- *  padding at the end (~1000+ samples), and gapless playback depends on the
- *  decoder honouring LAME's tags, which WC3 does not. The result is an audible
- *  click or gap at the loop point no matter how cleanly the audio is authored.
+ *  Why not PlayMusic: it loops by restarting the file, and an MP3 cannot loop
+ *  seamlessly -- every MP3 carries encoder delay and end padding, and gapless
+ *  playback needs the decoder to honour LAME's tags, which WC3 does not. A
+ *  sound handle loops internally instead (the `looping` flag below).
  *
- *  A sound handle loops internally (the `looping` flag below) and, unlike the
- *  single music stream, handles mix -- so if a click still remains this can be
- *  extended to two handles crossfading over a silent lead-in.
+ *  Two things had to be true for this to work, and both are easy to undo by
+ *  accident:
  *
- *  THE REAL FIX IS THE FORMAT. Export this as WAV and the encoder padding does
- *  not exist, so the loop is sample-exact. Point DEFEAT_MUSIC at the .wav,
- *  import it, and nothing else here has to change.
- *
- *  One consequence worth knowing: sound handles follow the game's SOUND volume
- *  slider, not MUSIC. A player who has turned music down will still hear this.
+ *  1. The FILE must not carry padding either. ADPCM pads to whole blocks, so
+ *     the loop length is an exact multiple of 1017 samples (see the note on
+ *     PurgatoryAdpcm.wav's creation in git). Change the loop length off that
+ *     multiple and the click comes straight back.
+ *  2. The CHANNEL must be 7. A sound's volume group is derived from its
+ *     channel, and 7 is music -- without it the track ignores the music slider
+ *     and answers to sound effects instead.
  */
 let defeatSound: sound | null = null;
 
