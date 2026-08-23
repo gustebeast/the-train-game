@@ -1,11 +1,15 @@
 import { Grid, GRID_MAX_X } from './constants';
-import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby } from './generate';
+import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby, generateStartLobby } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
+import { Unit } from 'w3ts';
+import { PEASANT_ID } from '../constants';
+import { getHumanPlayers } from '../util';
+import { makeDancer, startDanceClock } from '../dance';
 import { awardVictory } from '../victory';
 import { gameState } from '../state';
-import { revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
+import { markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
   hasHeroes, initRandomHeroes,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
@@ -32,6 +36,16 @@ setVictoryCallback(() => {
 setDefeatCallback(() => loadDefeatLobby());
 setAwardVictoryCallback(() => awardVictory());
 registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round));
+registerReadyZone('newgame', 'Starting a new game', () => {
+  resetToNewRun();
+  loadTerrain(0);
+});
+registerReadyZone('restart', 'Returning to the start lobby', () => {
+  // The run is already marked defeated (loadDefeatLobby did that on the way
+  // in), so this only has to put the session back to how it boots.
+  resetToNewRun();
+  loadStartLobby();
+});
 registerReadyZone('revert', 'Resetting purchases', () => {
   revertToInterRoundLobbySnapshot();
   revertHeroesToInterRoundLobbySnapshot(); // undoes rerolls bought this inter-round lobby
@@ -155,12 +169,47 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
  *
  *  Contrast loadInterRoundLobby(), which is the victory path and rebuilds everything. */
 export function loadDefeatLobby(): void {
+  // The run is over: mark its save so the chooser stops offering it. Marked,
+  // not deleted -- see markCurrentSaveDefeated. A session that never claimed a
+  // slot (tutorial, cheat run) marks nothing.
+  markCurrentSaveDefeated();
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
   setMusic('defeat');
   SetTimeOfDay(12);
   spawnTerrain(generateDefeatLobby());
+}
+
+/** Beats per minute of the starting-lobby track. 0 means no song yet, so
+ *  dances play the moment they are cast rather than waiting for a beat. */
+const START_LOBBY_BPM = 0;
+
+/** The lobby the map boots into, and where a defeated run restarts to.
+ *
+ *  Deliberately spawns no train, shop or crate: nothing here is a game in
+ *  progress, and nothing written from here can reach a save. */
+export function loadStartLobby(): void {
+  hideChallengeUI();
+  clearChallengeEffects();
+  stopDayNight();
+  setMusic('interRound');
+  SetTimeOfDay(12);
+  spawnTerrain(generateStartLobby());
+  // Everyone but the host becomes a dancer: immobile, with the dance spells on
+  // the command card. 0 BPM until there is a lobby song to sync to, which makes
+  // each dance fire on the keypress instead of on the beat.
+  startDanceClock(START_LOBBY_BPM);
+  for (const player of getHumanPlayers()) {
+    if (player.id === 0) continue;
+    const group = CreateGroup()!;
+    GroupEnumUnitsOfPlayer(group, player.handle, undefined);
+    ForGroup(group, () => {
+      const u = Unit.fromHandle(GetEnumUnit());
+      if (u != null && u.typeId === PEASANT_ID) makeDancer(u);
+    });
+    DestroyGroup(group);
+  }
 }
 
 export function loadInterRoundLobby(): void {

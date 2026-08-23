@@ -1,8 +1,46 @@
-import { GameState, gameState, applyState } from './state';
+import { DEFAULT_STATE, GameState, gameState, applyState } from './state';
 
-const SAVE_FILE = 'TheTrainGame/save.txt';
-const CACHE_FILE = 'TheTrainGame/save.w3v';
+// One file per save slot, so several runs can be resumed independently: host a
+// game, quit in the inter-round lobby, host another, and both are still there.
+// Each slot gets its OWN game cache too -- a shared cache would hand back the
+// previous slot's values when reading the next one.
+const SLOT_COUNT = 8;
+/** The single save file this map used before slots existed. Still readable, so
+ *  an existing run is not stranded; never written to again. */
+const LEGACY_SLOT = 0;
 const CACHE_CAT = 's';
+
+function slotSaveFile(slot: number): string {
+  return slot === LEGACY_SLOT ? 'TheTrainGame/save.txt' : 'TheTrainGame/save' + I2S(slot)! + '.txt';
+}
+function slotCacheFile(slot: number): string {
+  return slot === LEGACY_SLOT ? 'TheTrainGame/save.w3v' : 'TheTrainGame/save' + I2S(slot)! + '.w3v';
+}
+
+/** Cache keys holding a slot's own bookkeeping rather than game state.
+ *  DEFEATED is spelled out, and stored on its own line rather than packed into
+ *  a record, so a save wrongly marked dead can be found and edited by hand --
+ *  the flag only HIDES a save from the chooser, and a glitched defeat should
+ *  not cost someone their run. */
+const KEY_SEQ = 'seq';
+const KEY_DEFEATED = 'DEFEATED';
+const DEFEATED_YES = 'yes';
+
+/** Which slot this session is playing, or 0 if it has not claimed one. */
+let currentSlot = 0;
+
+/** What a save can say about itself without being loaded. */
+export interface SaveSlotInfo {
+  slot: number;
+  /** Write order, higher is newer. WC3 has no clock that survives a session,
+   *  so recency is a counter carried inside the saves themselves. */
+  seq: number;
+  /** Highest completed round. */
+  round: number;
+  defeated: boolean;
+  /** Hero unit type ids, for the chooser to display. */
+  heroTypeIds: number[];
+}
 
 /** Short keys for core state encoding. */
 const KEY_TO_SHORT: Record<string, string> = {
@@ -63,8 +101,8 @@ function decodeRecord(raw: string, keyMap: Record<string, string>): Record<strin
 }
 
 /** Write a StoreString Preload line for a given cache key. */
-function preloadStore(cacheKey: string, encoded: string): void {
-  Preload('")\ncall StoreString(InitGameCache("' + CACHE_FILE + '"),"' + CACHE_CAT + '","' + cacheKey + '","' + encoded + '")\n//');
+function preloadStore(cacheFile: string, cacheKey: string, encoded: string): void {
+  Preload('")\ncall StoreString(InitGameCache("' + cacheFile + '"),"' + CACHE_CAT + '","' + cacheKey + '","' + encoded + '")\n//');
 }
 
 /** Extra data segments to save alongside core state. Populated by other modules. */
@@ -140,23 +178,154 @@ export function revertToInterRoundLobbySnapshot(): boolean {
   return true;
 }
 
-/** Write current gameState + extra segments to save file. */
-export function saveToFile(): void {
+/** Read what a slot advertises WITHOUT applying any of it: the chooser has to
+ *  describe every save on offer, and loading each one to read it would trample
+ *  the session. Returns null for an empty or unreadable slot. */
+function readSlotInfo(slot: number): SaveSlotInfo | null {
+  Preloader(slotSaveFile(slot));
+  const gc = InitGameCache(slotCacheFile(slot));
+  if (gc == null) return null;
+  const stored = (key: string) => GetStoredString(gc, CACHE_CAT, key) ?? '';
+  // Fall back to the legacy 'data' key, as loadFromSlot does.
+  let raw = stored('core');
+  if (raw === '') raw = stored('data');
+  if (raw === '') { FlushGameCache(gc); return null; }
+  const core = decodeRecord(raw, SHORT_TO_KEY);
+  if (core.round == null) { FlushGameCache(gc); return null; }
+
+  const heroTypeIds: number[] = [];
+  for (let i = 1; i <= 4; i++) {
+    const heroRaw = stored('h' + I2S(i)!);
+    if (heroRaw === '') continue;
+    const typeId = tonumber(parseFields(heroRaw)['t'] ?? '');
+    if (typeId != null && typeId !== 0) heroTypeIds.push(typeId);
+  }
+  const info: SaveSlotInfo = {
+    slot,
+    seq: tonumber(stored(KEY_SEQ)) ?? 0,
+    round: core.round,
+    defeated: stored(KEY_DEFEATED) === DEFEATED_YES,
+    heroTypeIds,
+  };
+  FlushGameCache(gc);
+  return info;
+}
+
+/** Every save that exists, newest first. Defeated saves are included only when
+ *  asked for: the chooser hides them, but marking one defeated must never be
+ *  the same as deleting it. */
+export function listSaves(includeDefeated = false): SaveSlotInfo[] {
+  const found: SaveSlotInfo[] = [];
+  for (let slot = LEGACY_SLOT; slot <= SLOT_COUNT; slot++) {
+    const info = readSlotInfo(slot);
+    if (info == null) continue;
+    if (info.defeated && !includeDefeated) continue;
+    found.push(info);
+  }
+  found.sort((a, b) => b.seq - a.seq);
+  return found;
+}
+
+/** The slot a new run should claim: a free one, else the oldest defeated one,
+ *  else the oldest of all. Never the legacy slot, which is read-only. */
+function allocateSlot(): number {
+  const used = listSaves(true);
+  for (let slot = 1; slot <= SLOT_COUNT; slot++) {
+    if (!used.some(info => info.slot === slot)) return slot;
+  }
+  const reusable = used.filter(info => info.slot !== LEGACY_SLOT);
+  const dead = reusable.filter(info => info.defeated);
+  const pool = dead.length > 0 ? dead : reusable;
+  let oldest = pool[0];
+  for (const info of pool) {
+    if (info.seq < oldest.seq) oldest = info;
+  }
+  return oldest.slot;
+}
+
+/** Begin a fresh run in its own slot, so it cannot overwrite an existing save.
+ *  Call before the first saveToFile of a new game. */
+export function claimNewSlot(): number {
+  currentSlot = allocateSlot();
+  return currentSlot;
+}
+
+/** The slot the session is playing, 0 if none claimed. */
+export function getCurrentSlot(): number {
+  return currentSlot;
+}
+
+/** Write the session's state into `slot`, stamping it as the newest save.
+ *  `defeated` hides it from the chooser without destroying it. */
+function writeSlot(slot: number, defeated: boolean): void {
+  const cacheFile = slotCacheFile(slot);
+  let highestSeq = 0;
+  for (const info of listSaves(true)) {
+    if (info.seq > highestSeq) highestSeq = info.seq;
+  }
   PreloadGenClear();
   PreloadGenStart();
-  preloadStore('core', encodeRecord(gameState as unknown as Record<string, number>, KEY_TO_SHORT));
+  preloadStore(cacheFile, 'core', encodeRecord(gameState as unknown as Record<string, number>, KEY_TO_SHORT));
   for (let i = 0; i < extraKeys.length; i++) {
     const encoded = extraEncoders[i]();
-    if (encoded !== '') preloadStore(extraKeys[i], encoded);
+    if (encoded !== '') preloadStore(cacheFile, extraKeys[i], encoded);
   }
-  PreloadGenEnd(SAVE_FILE);
+  preloadStore(cacheFile, KEY_SEQ, I2S(highestSeq + 1)!);
+  if (defeated) preloadStore(cacheFile, KEY_DEFEATED, DEFEATED_YES);
+  PreloadGenEnd(slotSaveFile(slot));
+}
+
+/** Write current gameState + extra segments to the session's save slot. */
+export function saveToFile(): void {
+  if (currentSlot === 0) claimNewSlot();
+  writeSlot(currentSlot, false);
   print('Game saved.');
 }
 
-/** Load gameState + extra segments from save file. Returns true if successful. */
+/** Mark the session's save as defeated: it stays on disk, and stops being
+ *  offered in the chooser. Does nothing if no slot was ever claimed, which is
+ *  what keeps a tutorial or a cheat session from marking anything. */
+export function markCurrentSaveDefeated(): void {
+  if (currentSlot === 0) return;
+  writeSlot(currentSlot, true);
+}
+
+/** Wipe the session back to a brand new run: every segment to its baseline,
+ *  core state to defaults, and no slot claimed.
+ *
+ *  No slot on purpose. A run only takes a slot when it first completes a
+ *  round, so quitting during round 1 leaves nothing behind -- and, more to the
+ *  point, loading a save and immediately starting a new game cannot write over
+ *  the save that was loaded. */
+export function resetToNewRun(): void {
+  for (const reset of extraResets) {
+    if (reset != null) reset();
+  }
+  applyState({ ...DEFAULT_STATE });
+  currentSlot = 0;
+}
+
+/** Load a specific slot into the session. On success the session adopts that
+ *  slot, so later saves write back to the same run -- except for the legacy
+ *  slot, which is left untouched as a backup and continues into a fresh slot. */
+export function loadFromSlot(slot: number): boolean {
+  const ok = readSlotInto(slot);
+  if (!ok) return false;
+  currentSlot = slot === LEGACY_SLOT ? allocateSlot() : slot;
+  return true;
+}
+
+/** Load the newest save that is not defeated. */
 export function loadFromFile(): boolean {
-  Preloader(SAVE_FILE);
-  const gc = InitGameCache(CACHE_FILE);
+  const saves = listSaves();
+  if (saves.length === 0) return false;
+  return loadFromSlot(saves[0].slot);
+}
+
+/** Load gameState + extra segments from a slot's file. Returns true if successful. */
+function readSlotInto(slot: number): boolean {
+  Preloader(slotSaveFile(slot));
+  const gc = InitGameCache(slotCacheFile(slot));
   if (gc == null) return false;
 
   // Load core state
@@ -183,9 +352,12 @@ export function loadFromFile(): boolean {
   return true;
 }
 
-/** Delete the save file by writing an empty preload file. */
-export function deleteSave(): void {
+/** Erase a slot by writing an empty preload file over it. Nothing calls this in
+ *  normal play -- defeat marks a save rather than removing it -- but it is the
+ *  only way to genuinely clear one. */
+export function deleteSave(slot: number = currentSlot): void {
+  if (slot === LEGACY_SLOT) return;
   PreloadGenClear();
   PreloadGenStart();
-  PreloadGenEnd(SAVE_FILE);
+  PreloadGenEnd(slotSaveFile(slot));
 }
