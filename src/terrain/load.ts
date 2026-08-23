@@ -1,11 +1,11 @@
 import { Grid, GRID_MAX_X } from './constants';
-import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby } from './generate';
+import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby, generateStartingLobby } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
 import { gameState } from '../state';
-import { markCurrentSaveDefeated, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
+import { markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
   hasHeroes, initRandomHeroes,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
@@ -32,6 +32,16 @@ setVictoryCallback(() => {
 setDefeatCallback(() => loadDefeatLobby());
 setAwardVictoryCallback(() => awardVictory());
 registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round));
+registerReadyZone('newgame', 'Starting a new game', () => {
+  resetToNewRun();
+  loadTerrain(0);
+});
+registerReadyZone('restart', 'Returning to the starting lobby', () => {
+  // The run is already marked defeated (loadDefeatLobby did that on the way
+  // in), so this only has to put the session back to how it boots.
+  resetToNewRun();
+  loadStartingLobby();
+});
 registerReadyZone('revert', 'Resetting purchases', () => {
   revertToInterRoundLobbySnapshot();
   revertHeroesToInterRoundLobbySnapshot(); // undoes rerolls bought this inter-round lobby
@@ -165,6 +175,19 @@ export function loadDefeatLobby(): void {
   setMusic('defeat');
   SetTimeOfDay(12);
   spawnTerrain(generateDefeatLobby());
+}
+
+/** The lobby the map boots into, and where a defeated run restarts to.
+ *
+ *  Deliberately spawns no train, shop or crate: nothing here is a game in
+ *  progress, and nothing written from here can reach a save. */
+export function loadStartingLobby(): void {
+  hideChallengeUI();
+  clearChallengeEffects();
+  stopDayNight();
+  setMusic('interRound');
+  SetTimeOfDay(12);
+  spawnTerrain(generateStartingLobby());
 }
 
 export function loadInterRoundLobby(): void {

@@ -584,6 +584,25 @@ export function generateDefeatLobby(): Grid {
     const isPlayerSpawn = cell.entity >= Entity.PLAYER_1 && cell.entity <= Entity.PLAYER_4;
     if (!isBoundary && !isPlayerSpawn) cell.entity = Entity.NONE;
   }
+  // The one thing you can do from here: give up on this run and go back to the
+  // starting lobby. Every player has to agree, the way Reset Purchases works,
+  // because it ends the run for all of them.
+  grid.cells[idx(0, -3)].entity = Entity.RESTART_CIRCLE;
+  return grid;
+}
+
+/** The lobby the map boots into, and the one a defeated run restarts to.
+ *
+ *  Only player 1 stands here: the choices on offer -- new run, tutorial, load a
+ *  save -- belong to the host, and the other players have nothing to decide
+ *  until a game is actually running. Built from the empty defeat-lobby shell so
+ *  the three lobbies cannot drift apart in floor or boundary. */
+export function generateStartingLobby(): Grid {
+  const grid = generateDefeatLobby();
+  for (const cell of grid.cells) {
+    if (cell.entity >= Entity.PLAYER_2 && cell.entity <= Entity.PLAYER_4) cell.entity = Entity.NONE;
+  }
+  grid.cells[idx(0, -3)].entity = Entity.NEW_GAME_CIRCLE;
   return grid;
 }
 

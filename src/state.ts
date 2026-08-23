@@ -28,7 +28,7 @@ export interface GameState {
  *  exactly this, so Flame Resistance upgrades bought earlier are not refunded. */
 export const TRAIN_INITIAL_MAX_HP = 100;
 
-const DEFAULT_STATE: GameState = {
+export const DEFAULT_STATE: GameState = {
   round: 0,
   gold: 0,
   trainCargoMaxStack: 3,

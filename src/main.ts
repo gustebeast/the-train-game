@@ -4,7 +4,6 @@ import './compiletime';
 import { initTeams } from './teams';
 import { initTrackBuildTrigger } from './track/build';
 import { initTrackDestroyTrigger } from './track/destroy';
-import { initTrain } from './train';
 import { initHarvest } from './harvest';
 import { initItems } from './items';
 import { initGiveTake } from './givetake';
@@ -37,7 +36,7 @@ import './challengetest'; // challenge sequencing and payouts
 import './fogtest'; // blackout must give the map back at dawn
 import './dashfieldstest'; // asks the engine about A000's button data
 import './inputwatchtest'; // observes a real VNC-driven input sequence
-import { loadTerrain } from './terrain/load';
+import { loadStartingLobby } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
 function tsMain() {
@@ -48,13 +47,15 @@ function tsMain() {
     // Pick a creep camp for the first round
     rollCreepCamp();
 
-    // Generate and spawn procedural terrain (includes crates, tracks, items, players)
-    const spawned = loadTerrain(0, true); // difficulty 0 for round 1, skip cleanup on first load
+    // Boot into the starting lobby rather than straight into round 1: the host
+    // chooses there whether to start a run, play the tutorial or load a save.
+    // No train exists yet, so nothing here may assume one -- initTrain runs
+    // when a round actually loads.
+    loadStartingLobby();
 
     initTeams();
     initTrackBuildTrigger();
     initTrackDestroyTrigger();
-    initTrain(spawned.engine!, spawned.wagon!);
     initItems();
     initGiveTake();
     initBridge();

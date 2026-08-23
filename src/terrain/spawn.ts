@@ -222,6 +222,21 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           break;
         }
 
+        case Entity.NEW_GAME_CIRCLE: {
+          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(circle.handle, 'New Game');
+          initReadyZone(world.x, world.y, 'newgame', circle);
+          break;
+        }
+
+        case Entity.RESTART_CIRCLE: {
+          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(circle.handle, 'Restart');
+          SetUnitVertexColor(circle.handle, 255, 180, 180, 255);
+          initReadyZone(world.x, world.y, 'restart', circle);
+          break;
+        }
+
         case Entity.CRITTER: {
           const critterType = CRITTER_TYPE_IDS[GetRandomInt(0, CRITTER_TYPE_IDS.length - 1)];
           Unit.create(getNeutralPassive(), critterType, world.x, world.y, GetRandomReal(0, 360));

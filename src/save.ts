@@ -1,4 +1,4 @@
-import { GameState, gameState, applyState } from './state';
+import { DEFAULT_STATE, GameState, gameState, applyState } from './state';
 
 // One file per save slot, so several runs can be resumed independently: host a
 // game, quit in the inter-round lobby, host another, and both are still there.
@@ -288,6 +288,21 @@ export function saveToFile(): void {
 export function markCurrentSaveDefeated(): void {
   if (currentSlot === 0) return;
   writeSlot(currentSlot, true);
+}
+
+/** Wipe the session back to a brand new run: every segment to its baseline,
+ *  core state to defaults, and no slot claimed.
+ *
+ *  No slot on purpose. A run only takes a slot when it first completes a
+ *  round, so quitting during round 1 leaves nothing behind -- and, more to the
+ *  point, loading a save and immediately starting a new game cannot write over
+ *  the save that was loaded. */
+export function resetToNewRun(): void {
+  for (const reset of extraResets) {
+    if (reset != null) reset();
+  }
+  applyState({ ...DEFAULT_STATE });
+  currentSlot = 0;
 }
 
 /** Load a specific slot into the session. On success the session adopts that
