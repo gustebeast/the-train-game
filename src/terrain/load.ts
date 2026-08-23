@@ -1,5 +1,5 @@
 import { Grid, GRID_MAX_X } from './constants';
-import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby, generateStartingLobby } from './generate';
+import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby, generateStartLobby } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
@@ -40,11 +40,11 @@ registerReadyZone('newgame', 'Starting a new game', () => {
   resetToNewRun();
   loadTerrain(0);
 });
-registerReadyZone('restart', 'Returning to the starting lobby', () => {
+registerReadyZone('restart', 'Returning to the start lobby', () => {
   // The run is already marked defeated (loadDefeatLobby did that on the way
   // in), so this only has to put the session back to how it boots.
   resetToNewRun();
-  loadStartingLobby();
+  loadStartLobby();
 });
 registerReadyZone('revert', 'Resetting purchases', () => {
   revertToInterRoundLobbySnapshot();
@@ -183,23 +183,23 @@ export function loadDefeatLobby(): void {
 
 /** Beats per minute of the starting-lobby track. 0 means no song yet, so
  *  dances play the moment they are cast rather than waiting for a beat. */
-const STARTING_LOBBY_BPM = 0;
+const START_LOBBY_BPM = 0;
 
 /** The lobby the map boots into, and where a defeated run restarts to.
  *
  *  Deliberately spawns no train, shop or crate: nothing here is a game in
  *  progress, and nothing written from here can reach a save. */
-export function loadStartingLobby(): void {
+export function loadStartLobby(): void {
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
   setMusic('interRound');
   SetTimeOfDay(12);
-  spawnTerrain(generateStartingLobby());
+  spawnTerrain(generateStartLobby());
   // Everyone but the host becomes a dancer: immobile, with the dance spells on
   // the command card. 0 BPM until there is a lobby song to sync to, which makes
   // each dance fire on the keypress instead of on the beat.
-  startDanceClock(STARTING_LOBBY_BPM);
+  startDanceClock(START_LOBBY_BPM);
   for (const player of getHumanPlayers()) {
     if (player.id === 0) continue;
     const group = CreateGroup()!;

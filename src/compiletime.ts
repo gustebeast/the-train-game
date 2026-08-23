@@ -221,7 +221,7 @@ compiletime(({ objectData, constants }) => {
   // editor, since abilities.copy() can mint them at build time.
   //
   // They exist for the players who are NOT the host: while player 1 picks what
-  // to do in the starting lobby, the others are parked as immobile peasants
+  // to do in the start lobby, the others are parked as immobile peasants
   // with these on their command card, so there is something to do.
   //
   // Each needs its OWN base order. Two abilities sharing one order id on the

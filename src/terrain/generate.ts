@@ -585,7 +585,7 @@ export function generateDefeatLobby(): Grid {
     if (!isBoundary && !isPlayerSpawn) cell.entity = Entity.NONE;
   }
   // The one thing you can do from here: give up on this run and go back to the
-  // starting lobby. Every player has to agree, the way Reset Purchases works,
+  // start lobby. Every player has to agree, the way Reset Purchases works,
   // because it ends the run for all of them.
   grid.cells[idx(0, -3)].entity = Entity.RESTART_CIRCLE;
   return grid;
@@ -597,7 +597,7 @@ export function generateDefeatLobby(): Grid {
  *  save -- belong to the host, and the other players have nothing to decide
  *  until a game is actually running. Built from the empty defeat-lobby shell so
  *  the three lobbies cannot drift apart in floor or boundary. */
-export function generateStartingLobby(): Grid {
+export function generateStartLobby(): Grid {
   const grid = generateDefeatLobby();
   // Players 2-4 move to the back row and stay there as dancers (see dance.ts).
   // They keep a spawn rather than losing one: the point is that they have

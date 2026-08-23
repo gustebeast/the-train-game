@@ -47,9 +47,9 @@ export enum Entity {
   TRACK_WITH_WAGON = 21,
   CRITTER = 22,
   SHADY_DEALER = 23,
-  /** Starting lobby: begin a brand new run. */
+  /** Start lobby: begin a brand new run. */
   NEW_GAME_CIRCLE = 24,
-  /** Defeat lobby: abandon the run and go back to the starting lobby. */
+  /** Defeat lobby: abandon the run and go back to the start lobby. */
   RESTART_CIRCLE = 25,
 }
 

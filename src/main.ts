@@ -37,7 +37,7 @@ import './challengetest'; // challenge sequencing and payouts
 import './fogtest'; // blackout must give the map back at dawn
 import './dashfieldstest'; // asks the engine about A000's button data
 import './inputwatchtest'; // observes a real VNC-driven input sequence
-import { loadStartingLobby } from './terrain/load';
+import { loadStartLobby } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
 function tsMain() {
@@ -48,11 +48,11 @@ function tsMain() {
     // Pick a creep camp for the first round
     rollCreepCamp();
 
-    // Boot into the starting lobby rather than straight into round 1: the host
+    // Boot into the start lobby rather than straight into round 1: the host
     // chooses there whether to start a run, play the tutorial or load a save.
     // No train exists yet, so nothing here may assume one -- initTrain runs
     // when a round actually loads.
-    loadStartingLobby();
+    loadStartLobby();
 
     initTeams();
     initTrackBuildTrigger();

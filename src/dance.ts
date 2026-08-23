@@ -3,7 +3,7 @@ import { DANCE_ABILITY_IDS, PEASANT_ID } from './constants';
 
 // Something for the other players to do while the host picks what to play.
 //
-// In the starting lobby players 2-4 stand at the back as immobile peasants
+// In the start lobby players 2-4 stand at the back as immobile peasants
 // carrying these spells, each of which plays a different animation. Purely
 // cosmetic: nothing here touches game state, and the lobby writes no save.
 //

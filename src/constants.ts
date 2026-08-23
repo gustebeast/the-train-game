@@ -30,7 +30,7 @@ export const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
 // A000: a Channel copy authored in the world editor (no generated constant).
 // Keep in step with DASH_ABILITY in compiletime.ts.
 export const DASH_ABILITY_ID = FourCC('A000');
-// Dance spells for the idle players in the starting lobby. Minted in
+// Dance spells for the idle players in the start lobby. Minted in
 // compiletime.ts as Channel copies -- keep the two lists in step.
 export const DANCE_ABILITY_IDS: ReadonlyArray<number> = [
   FourCC('A001'), FourCC('A002'), FourCC('A003'), FourCC('A004'),
