@@ -29,6 +29,13 @@ import { noteDash } from './challengeList';
 // trick.
 const DASH_SPEED = 522; // WC3's default max move speed (peasant base is ~190)
 const DASH_DURATION = 0.6; // seconds of boosted speed
+// Started by hand at the moment the boost does, because the engine would
+// otherwise start it when the spell fires -- and the spell fires on ARRIVAL.
+// Dash somewhere distant and the whole boost would run before any cooldown
+// began, so a second dash could be cast the instant the first one started
+// moving. The ability's own cooldown is 0 (compiletime.ts) so the arrival
+// no-op cannot restart what is already ticking.
+const DASH_COOLDOWN = 4.0;
 // The roll is the peasant's ALTERNATE WALK (scripts/roll-anim-to-alternate-walk.js),
 // so switching it on is a single property the engine reads while the unit
 // moves. Forcing the sequence directly instead -- SetUnitAnimationByIndex --
@@ -42,6 +49,36 @@ interface DashState {
 
 /** Peasants currently dashing, keyed by handle. */
 const dashing = new Map<unit, DashState>();
+
+/** Cooldown timers, keyed by handle. These outlive the dash itself: the boost
+ *  lasts under a second and the cooldown several, so they cannot share a timer
+ *  with DashState. Their only job is to remember how much cooldown is left. */
+const cooldowns = new Map<unit, Timer>();
+
+/** Put the dash on cooldown from RIGHT NOW. */
+function startCooldown(h: unit): void {
+  const previous = cooldowns.get(h);
+  if (previous != null) previous.destroy();
+  BlzStartUnitAbilityCooldown(h, DASH_ABILITY_ID, DASH_COOLDOWN);
+  const timer = Timer.create();
+  cooldowns.set(h, timer);
+  timer.start(DASH_COOLDOWN, false, () => {
+    const t = cooldowns.get(h);
+    if (t != null) { t.destroy(); cooldowns.delete(h); }
+  });
+}
+
+/** Re-assert whatever cooldown is still owed. Casting an ability whose own
+ *  cooldown is 0 is the engine setting a 0-second cooldown, which would wipe
+ *  the one already running -- and the dash's cast lands on ARRIVAL, right in
+ *  the middle of it. Reapplying the remainder is a no-op if the engine left it
+ *  alone, and repairs it if it did not. */
+function restoreCooldown(h: unit): void {
+  const timer = cooldowns.get(h);
+  if (timer == null) return;
+  const left = timer.remaining;
+  if (left > 0.05) BlzStartUnitAbilityCooldown(h, DASH_ABILITY_ID, left);
+}
 
 // Diagnostics, read through a function: TSTL importers snapshot a mutable
 // `export let`, so an exported variable would always read its initial value.
@@ -76,6 +113,7 @@ function startDash(h: unit): void {
   if (existing != null) existing.timer.destroy();
 
   dbg.started = dbg.started + 1;
+  startCooldown(h);
   SetUnitMoveSpeed(h, DASH_SPEED);
   AddUnitAnimationProperties(h, 'alternate', true);
 
@@ -115,5 +153,6 @@ export function initDash(): void {
     if (u == null || u.typeId !== PEASANT_ID) return;
     noteDash();
     endDash(u.handle);
+    restoreCooldown(u.handle);
   });
 }

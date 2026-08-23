@@ -149,7 +149,13 @@ compiletime(({ objectData, constants }) => {
   // leave it approaching forever. Half a tile of slack is invisible in play.
   dash.castRange = 64;
   dash.castingTime = 0;
-  dash.cooldown = 4;
+  // The cooldown is NOT set here -- dash.ts starts it by hand. The engine starts
+  // an ability's own cooldown when the spell FIRES, and this spell fires when
+  // the peasant arrives, not when it sets off, so a long dash would run its
+  // whole boost off cooldown and could be recast immediately. Leaving this at 0
+  // also stops the arrival no-op from starting a second cooldown on top of the
+  // one already running. See DASH_COOLDOWN in dash.ts.
+  dash.cooldown = 0;
   // No cast animation: the spell animation is part of what the unit sits
   // through before the queue advances.
   dash.animationNames = '';
