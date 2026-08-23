@@ -5,11 +5,14 @@ import { getCrateStart, loadCrateForLobby } from './items';
 import {
   SUMMON_UPGRADE_ITEM_ID, PEASANT_ID, REROLL_ITEM_ID,
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
-  TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, MERC_CONTRACT_ID,
+  TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, MERC_CONTRACT_ID, MERC_CONTRACT_2_ID,
   CHALLENGE_ITEM_ID, RESTORE_HP_ID,
 } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
-import { hasActiveMerc, isMercDead, buyMercContract } from './mercenary';
+import {
+  isMercDead, buyMercContract, buySecondContract,
+  canBuyMercContract, canBuySecondContract,
+} from './mercenary';
 import { areHeroesSpawned, getSpawnedHeroes, hadSummonLastRound } from './heroes';
 import { forEachUnitInWorld, nextFrame } from './util';
 import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges';
@@ -23,6 +26,7 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [CRATE_CAPACITY_ID, 1],
   [SUMMON_UPGRADE_ITEM_ID, 1],
   [MERC_CONTRACT_ID, 1],
+  [MERC_CONTRACT_2_ID, 1],
   [CHALLENGE_ITEM_ID, CHALLENGE_COST],
   [RESTORE_HP_ID, 1],
 ]);
@@ -66,10 +70,14 @@ export function stockShop(shop: Unit): void {
     if (!isSummonUpgradePurchased()) {
       AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
     }
-    // On sale whenever there is no living merc -- that is the first hire AND
-    // the revive after one dies.
-    if (!hasActiveMerc()) {
+    // The two contracts are steps on a ladder, so exactly one is ever on the
+    // shelf: none alive offers the first, one alive offers the second, two
+    // alive offers neither. A death drops you a rung and puts that rung's
+    // contract back up.
+    if (canBuyMercContract()) {
       AddItemToStock(shop.handle, MERC_CONTRACT_ID, 1, 1);
+    } else if (canBuySecondContract()) {
+      AddItemToStock(shop.handle, MERC_CONTRACT_2_ID, 1, 1);
     }
     // Rerolls only make sense when last round's heroes stand in the lobby
     if (hadSummonLastRound()) {
@@ -114,7 +122,11 @@ export function initShop(): void {
       RemoveItem(item);
       return;
     }
-    if (itemTypeId === MERC_CONTRACT_ID && hasActiveMerc()) {
+    if (itemTypeId === MERC_CONTRACT_ID && !canBuyMercContract()) {
+      RemoveItem(item);
+      return;
+    }
+    if (itemTypeId === MERC_CONTRACT_2_ID && !canBuySecondContract()) {
       RemoveItem(item);
       return;
     }
@@ -185,6 +197,16 @@ export function initShop(): void {
         : 'Mercenary Contract purchased: level 2 creep camps unlocked; a mercenary will join your next hero summon.');
       const contractBuyer = Unit.fromHandle(GetTriggerUnit());
       if (contractBuyer != null) effectTargets = [contractBuyer];
+    } else if (itemTypeId === MERC_CONTRACT_2_ID) {
+      buySecondContract();
+      // Its creep type is rolled here, so the gamble is already taken.
+      markRandomOutcomeTaken();
+      if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
+        RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_2_ID);
+      }
+      print('Second Contract signed: a second mercenary joins you, and level 3 creep camps open up.');
+      const secondBuyer = Unit.fromHandle(GetTriggerUnit());
+      if (secondBuyer != null) effectTargets = [secondBuyer];
     } else if (itemTypeId === CHALLENGE_ITEM_ID) {
       // One item sells whatever the dealer is currently offering; which one
       // that is comes from the seeded sequence, not from the shelf.

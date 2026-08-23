@@ -63,6 +63,7 @@ export const RESOURCE_CAPACITY_ID = FourCC(Items.DruidPouch);
 export const TRACK_CAPACITY_ID = FourCC(Items.JadeRing);
 export const CRATE_CAPACITY_ID = FourCC(Items.LionsRing);
 export const MERC_CONTRACT_ID = FourCC(Items.MogrinsReport);
+export const MERC_CONTRACT_2_ID = FourCC(Items.SkullOfGuldan);
 /** Repairs the fire damage: resets max HP to its starting value. Sold only
  *  while the train is below that, and never alongside Flame Resistance. */
 export const RESTORE_HP_ID = FourCC(Items.HeartOfAszune);
@@ -75,5 +76,5 @@ export const CHALLENGE_ITEM_ID = FourCC(Items.Shimmerweed);
 export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = [
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, SUMMON_UPGRADE_ITEM_ID,
-  MERC_CONTRACT_ID, CHALLENGE_ITEM_ID, RESTORE_HP_ID,
+  MERC_CONTRACT_ID, MERC_CONTRACT_2_ID, CHALLENGE_ITEM_ID, RESTORE_HP_ID,
 ];

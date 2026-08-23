@@ -27,42 +27,74 @@ const MERC_TILESET = 'Lordaeron Summer';
 // Persistent state (saved via the 'mm' segment)
 // ---------------------------------------------------------------------------
 
-/** Whether the Mercenary Contract shop upgrade has been purchased. */
-let upgradeBought = false;
+/**
+ * Mercenaries live in ORDERED SLOTS, at most two of them.
+ *
+ * Slot 0 is the one the Mercenary Contract hires and slot 1 the one the Second
+ * Contract hires, and each keeps its OWN kit. That ordering is what makes the
+ * item rule work: lose both and re-buying the first contract hands back slot
+ * 0's gear, while slot 1's waits for the second contract to be bought again.
+ *
+ * Everything else reads off how many are ALIVE. Camp level is living + 1 (none
+ * -> level 1, one -> level 2, both -> level 3), and a contract is on the shelf
+ * exactly when the slot below it is empty, so a death both drops the camp level
+ * and puts the matching contract back up for sale.
+ */
+interface MercSlot {
+  /** Unit type of this mercenary (0 = never rolled / slot empty). */
+  typeId: number;
+  /** True once it died; it stays dead until its contract is bought again. */
+  dead: boolean;
+  /** Item rawcodes this slot's mercenary carries, kept across death. */
+  items: number[];
+  /** The live unit while summoned, or null. */
+  unit: Unit | null;
+  /** Death trigger for the live unit, or null (see clearMercDeathTrigger). */
+  deathTrig: Trigger | null;
+}
 
-/** Unit type of the current mercenary (0 = none rolled yet). */
-let mercTypeId = 0;
+const MAX_MERCS = 2;
 
-/** True once the mercenary died — it never respawns until rerolled. */
-let mercDead = false;
+function emptySlot(): MercSlot {
+  return { typeId: 0, dead: false, items: [], unit: null, deathTrig: null };
+}
 
-/** Item rawcode IDs the mercenary carries (persist like hero items). */
-let mercItems: number[] = [];
+/** Slots in hire order. A slot with typeId 0 was never hired. */
+let slots: MercSlot[] = [emptySlot(), emptySlot()];
+
+/** Slots holding a mercenary that is hired and not dead. */
+function livingSlots(): MercSlot[] {
+  return slots.filter(sl => sl.typeId !== 0 && !sl.dead);
+}
+
+/** How many mercenaries are alive right now (0-2). */
+export function livingMercCount(): number {
+  return livingSlots().length;
+}
+
+/** Highest creep camp level unlocked: one per living mercenary, above the
+ *  level 1 baseline. Losing a mercenary really does cost you the camps. */
+export function mercCampLevel(): number {
+  return 1 + livingMercCount();
+}
 
 // ---------------------------------------------------------------------------
 // Per-fight state
 // ---------------------------------------------------------------------------
 
-/** The live mercenary unit while heroes are summoned, or null. */
-let mercUnit: Unit | null = null;
-
-/** Death trigger for the live mercenary, or null.
- *
- *  Held at module scope because the merc is usually REMOVED rather than killed
- *  — a reroll removes it, and the round reset sweeps it — and a removed unit
- *  fires no death event, so a trigger created per spawn and destroyed only in
- *  its own action leaks one trigger per spawn, every round. */
-let mercDeathTrig: Trigger | null = null;
-
-/** Destroy the live merc's death trigger, if any. Safe to call repeatedly. */
-function clearMercDeathTrigger(): void {
-  if (mercDeathTrig == null) return;
-  DestroyTrigger(mercDeathTrig.handle);
-  mercDeathTrig = null;
-}
-
 /** Player ids owning each spawned hero this summon (duplicates = 2 heroes). */
 let currentHeroOwnerIds: number[] = [];
+
+/** Destroy a slot's death trigger, if any. Safe to call repeatedly.
+ *
+ *  A mercenary is usually REMOVED rather than killed -- a reroll removes it and
+ *  the round reset sweeps it -- and a removed unit fires no death event, so a
+ *  trigger destroyed only in its own action would leak one per spawn. */
+function clearMercDeathTrigger(sl: MercSlot): void {
+  if (sl.deathTrig == null) return;
+  DestroyTrigger(sl.deathTrig.handle);
+  sl.deathTrig = null;
+}
 
 // ---------------------------------------------------------------------------
 // Control fairness — fewest heroes wins, ties go to least-recently-controlled
@@ -72,41 +104,51 @@ let controlSeq = 0;
 /** Last control-assignment sequence number per player index (hero or merc). */
 const lastControlled: number[] = [0, 0, 0, 0];
 
-// Save segment (registered after all state above so the closures capture the
-// declared locals — Lua closures can't reference locals declared later).
+// Save segment. One group of fields per slot, numbered: t1/d1/i1, t2/d2/i2.
+// Old saves wrote a single unnumbered mercenary (t/d/it) and read into slot 0.
 registerSaveSegment('mm',
   () => {
-    if (!upgradeBought) return '';
-    const parts: string[] = ['b=1', 't=' + tostring(mercTypeId), 'd=' + (mercDead ? '1' : '0')];
-    if (mercItems.length > 0) {
-      parts.push('it=' + mercItems.join(','));
+    const parts: string[] = [];
+    for (let i = 0; i < MAX_MERCS; i++) {
+      const sl = slots[i];
+      if (sl.typeId === 0) continue;
+      const n = tostring(i + 1);
+      parts.push('t' + n + '=' + tostring(sl.typeId));
+      parts.push('d' + n + '=' + (sl.dead ? '1' : '0'));
+      if (sl.items.length > 0) parts.push('i' + n + '=' + sl.items.join(','));
     }
     return table.concat(parts, ';');
   },
   (raw) => {
-    for (const [key, val] of pairs(parseFields(raw))) {
-      if (key === 'b') {
-        upgradeBought = val === '1';
-      } else if (key === 't') {
-        mercTypeId = tonumber(val) ?? 0;
-      } else if (key === 'd') {
-        mercDead = val === '1';
-      } else if (key === 'it') {
-        mercItems = [];
-        for (const [idStr] of string.gmatch(val, '([^,]+)')) {
-          const id = tonumber(idStr) ?? 0;
-          if (id !== 0) mercItems.push(id);
-        }
+    const readItems = (val: string): number[] => {
+      const out: number[] = [];
+      for (const [idStr] of string.gmatch(val, '([^,]+)')) {
+        const id = tonumber(idStr) ?? 0;
+        if (id !== 0) out.push(id);
       }
+      return out;
+    };
+    for (const [key, val] of pairs(parseFields(raw))) {
+      if (key === 't1' || key === 't') {
+        slots[0].typeId = tonumber(val) ?? 0;
+      } else if (key === 'd1' || key === 'd') {
+        slots[0].dead = val === '1';
+      } else if (key === 'i1' || key === 'it') {
+        slots[0].items = readItems(val as string);
+      } else if (key === 't2') {
+        slots[1].typeId = tonumber(val) ?? 0;
+      } else if (key === 'd2') {
+        slots[1].dead = val === '1';
+      } else if (key === 'i2') {
+        slots[1].items = readItems(val as string);
+      }
+      // 'b' (the old "contract bought" flag) is deliberately ignored: whether a
+      // mercenary exists is now simply whether its slot has a type.
     }
   },
-  // Reset-then-apply baseline: no contract, no merc, no items
+  // Reset-then-apply baseline: no contracts, no mercenaries, no kit
   () => {
-    upgradeBought = false;
-    mercTypeId = 0;
-    mercDead = false;
-    mercItems = [];
-    mercUnit = null;
+    slots = [emptySlot(), emptySlot()];
     currentHeroOwnerIds = [];
     controlSeq = 0;
     for (let i = 0; i < 4; i++) lastControlled[i] = 0;
@@ -120,7 +162,7 @@ function stampControl(playerId: number): void {
   }
 }
 
-/** Pick the mercenary's controller: fewest heroes this summon, ties broken by
+/** Pick a mercenary's controller: fewest heroes this summon, ties broken by
  *  who was assigned control (hero or merc) least recently. */
 function pickMercController(): MapPlayer | null {
   const humans = getHumanPlayers();
@@ -146,17 +188,17 @@ function pickMercController(): MapPlayer | null {
 // Rolling
 // ---------------------------------------------------------------------------
 
-/** Pick a random creep type from the available camps of the tileset (each
- *  unique type weighted equally). Includes level 2 camps — the Mercenary
- *  Contract that grants a merc also unlocks them — but not level 3 (red)
- *  camps, which never enter the rotation. */
-function rollMercType(): number {
+/** Every creep type drawn from, up to `maxLevel` camps, each type once.
+ *
+ *  Level tracks the contracts: the first mercenary opens level 2 camps and
+ *  draws from them, the second opens level 3 and draws from those too. */
+function mercPool(maxLevel: number): string[] {
   const camps = CREEP_CAMPS[MERC_TILESET];
-  if (camps == null) return 0;
+  if (camps == null) return [];
   const seen: Record<string, boolean> = {};
   const pool: string[] = [];
   for (const camp of camps) {
-    if (camp.level > 2) continue;
+    if (camp.level > maxLevel) continue;
     for (const creep of camp.creeps) {
       if (seen[creep.id] !== true) {
         seen[creep.id] = true;
@@ -164,6 +206,17 @@ function rollMercType(): number {
       }
     }
   }
+  return pool;
+}
+
+/** Roll a mercenary type, never one you already field.
+ *
+ *  Excluding the mercenaries in play is the same rule the hero pool uses -- a
+ *  reroll has to hand you something new -- and it stops the second contract
+ *  duplicating the first. Seeded (rng.ts), so a save always rolls the same. */
+function rollMercType(maxLevel: number): number {
+  const excluded = livingSlots().map(sl => sl.typeId);
+  const pool = mercPool(maxLevel).filter(id => !excluded.includes(FourCC(id)));
   if (pool.length === 0) return 0;
   return FourCC(pool[seededInt(0, pool.length - 1)]);
 }
@@ -172,107 +225,121 @@ function rollMercType(): number {
 // Purchases
 // ---------------------------------------------------------------------------
 
-/** Whether the Mercenary Contract upgrade has ever been bought. */
+/** Whether any mercenary has ever been hired. */
 export function isMercUpgradeBought(): boolean {
-  return upgradeBought;
+  return slots.some(sl => sl.typeId !== 0);
 }
 
-/** Whether a LIVING mercenary is under contract. This -- not the raw purchase
- *  flag -- is what gates the perks: a merc that dies takes its level 2 camps
- *  with it, and the contract goes back on sale so buying again revives it. */
+/** Whether at least one mercenary is alive. */
 export function hasActiveMerc(): boolean {
-  return upgradeBought && !mercDead;
+  return livingMercCount() > 0;
 }
 
-/** Whether the merc is dead and awaiting a re-purchase. */
+/** Whether a slot that once held a mercenary is empty because it died, so the
+ *  next purchase of that contract is a replacement rather than a first hire. */
 export function isMercDead(): boolean {
-  return upgradeBought && mercDead;
+  return slots.some(sl => sl.typeId !== 0 && sl.dead);
 }
 
-/** Buy the Mercenary Contract. First purchase hires a merc; buying again after
- *  one died revives it as a FRESH random creep for the same price, and the
- *  items it was carrying come back with it (death does not lose them --
- *  they were snapshotted off the corpse). Returns false if the current merc is
- *  still alive, in which case there is nothing to buy. */
-export function buyMercContract(): boolean {
-  if (hasActiveMerc()) return false;
-  upgradeBought = true;
-  mercTypeId = rollMercType();
-  mercDead = false;
-  // mercItems is deliberately NOT cleared: on a first purchase it is already
-  // empty, and on a revive it is the dead merc's kit being handed back.
+/** The Mercenary Contract is on the shelf whenever none are alive. */
+export function canBuyMercContract(): boolean {
+  return livingMercCount() === 0;
+}
+
+/** The Second Contract is on the shelf only with exactly one alive: it is the
+ *  step from one mercenary to two, and from level 2 camps to level 3. */
+export function canBuySecondContract(): boolean {
+  return livingMercCount() === 1;
+}
+
+/** Fill the lowest empty slot with a freshly rolled mercenary, handing back the
+ *  kit that slot was holding. Rolling fresh rather than resurrecting is the
+ *  point: buying again is a new hire, not the same creep back. */
+function hire(maxLevel: number): boolean {
+  const sl = slots.find(x => x.typeId === 0 || x.dead);
+  if (sl == null) return false;
+  const rolled = rollMercType(maxLevel);
+  if (rolled === 0) return false;
+  sl.typeId = rolled;
+  sl.dead = false;
+  // sl.items is deliberately NOT cleared: empty on a first hire, and on a
+  // replacement it is this slot's own kit coming back.
   return true;
+}
+
+/** Buy the Mercenary Contract: your first mercenary, and level 2 camps. */
+export function buyMercContract(): boolean {
+  if (!canBuyMercContract()) return false;
+  return hire(2);
+}
+
+/** Buy the Second Contract: a second mercenary, and level 3 (red) camps. The
+ *  roll excludes the mercenary you already have. */
+export function buySecondContract(): boolean {
+  if (!canBuySecondContract()) return false;
+  return hire(3);
 }
 
 // ---------------------------------------------------------------------------
 // Spawn / lifecycle
 // ---------------------------------------------------------------------------
 
-function snapshotMercItems(): void {
-  if (mercUnit == null) return;
-  mercItems = getInventoryItemIds(mercUnit.handle);
-}
-
-function spawnMercUnit(owner: MapPlayer, x: number, y: number): void {
-  const u = Unit.create(owner, mercTypeId, x, y, 270);
+function spawnMercUnit(sl: MercSlot, owner: MapPlayer, x: number, y: number): void {
+  const u = Unit.create(owner, sl.typeId, x, y, 270);
   if (u == null) return;
-  mercUnit = u;
+  sl.unit = u;
   UnitAddAbility(u.handle, MERC_INVENTORY_ABILITY_ID);
-  for (const itemId of mercItems) {
+  for (const itemId of sl.items) {
     UnitAddItem(u.handle, CreateItem(itemId, u.x, u.y)!);
   }
   PanCameraToTimedForPlayer(owner.handle, x, y, 0.5);
 
-  // Death is permanent: snapshot items (they don't drop — the merc inventory
-  // has drop-on-death off) and never respawn until a reroll.
-  // Replace any trigger left over from a previous spawn before making a new
-  // one, so a reroll or a round reset cannot strand it.
-  clearMercDeathTrigger();
+  // Death empties the slot until its contract is bought again. Snapshot the kit
+  // and strip it before the corpse can drop it, or the items would be both
+  // saved AND left on the ground as free loot.
+  clearMercDeathTrigger(sl);
   const deathTrig = Trigger.create();
-  mercDeathTrig = deathTrig;
+  sl.deathTrig = deathTrig;
   TriggerRegisterUnitEvent(deathTrig.handle, u.handle, EVENT_UNIT_DEATH);
   deathTrig.addAction(() => {
-    if (mercUnit != null && mercUnit.handle === GetTriggerUnit()) {
-      snapshotMercItems();
-      // Strip the items before the corpse drops them: they are saved in
-      // mercItems for a later reroll, so dropping them too would duplicate them
-      // as free loot on the ground.
-      forEachInventoryItem(mercUnit.handle, it => RemoveItem(it));
-      mercDead = true;
-      mercUnit = null;
+    if (sl.unit != null && sl.unit.handle === GetTriggerUnit()) {
+      sl.items = getInventoryItemIds(sl.unit.handle);
+      forEachInventoryItem(sl.unit.handle, it => RemoveItem(it));
+      sl.dead = true;
+      sl.unit = null;
     }
-    // Clear the module reference as well as the handle, or the next spawn's
-    // clearMercDeathTrigger would destroy this same handle a second time.
-    if (mercDeathTrig === deathTrig) { mercDeathTrig = null; }
+    if (sl.deathTrig === deathTrig) { sl.deathTrig = null; }
     DestroyTrigger(deathTrig.handle);
   });
 }
 
-/** Spawn the mercenary alongside the heroes. Called on Summon Heroes with the
- *  player ids owning each spawned hero (used for the fewest-heroes rule). */
+/** Spawn every living mercenary alongside the heroes. */
 export function spawnMercWithHeroes(x: number, y: number, heroOwnerIds: number[]): void {
   currentHeroOwnerIds = heroOwnerIds;
-  // Hero controllers count as "controlled a unit" this summon
   for (const id of heroOwnerIds) {
     stampControl(id);
   }
-  if (!upgradeBought || mercTypeId === 0 || mercDead) return;
-  const owner = pickMercController();
-  if (owner == null) return;
-  spawnMercUnit(owner, x, y);
-  stampControl(owner.id);
+  let i = 0;
+  for (const sl of livingSlots()) {
+    const owner = pickMercController();
+    if (owner == null) return;
+    // Fan them out so two mercenaries do not spawn on the same spot.
+    spawnMercUnit(sl, owner, x + i * 96, y);
+    stampControl(owner.id);
+    i += 1;
+  }
 }
 
-/** Snapshot the merc's items and drop the live-unit reference. Called before
- *  the unsummon sweep / round reset removes the unit itself. */
+/** Snapshot every mercenary's kit and drop the live-unit references. Called
+ *  before the unsummon sweep / round reset removes the units themselves. */
 export function releaseMercUnit(): void {
-  if (mercUnit != null && GetUnitTypeId(mercUnit.handle) !== 0) {
-    snapshotMercItems();
+  for (const sl of slots) {
+    if (sl.unit != null && GetUnitTypeId(sl.unit.handle) !== 0) {
+      sl.items = getInventoryItemIds(sl.unit.handle);
+    }
+    clearMercDeathTrigger(sl);
+    sl.unit = null;
   }
-  // The caller removes the unit, which fires no death event, so the trigger has
-  // to go here or it outlives every round.
-  clearMercDeathTrigger();
-  mercUnit = null;
   currentHeroOwnerIds = [];
 }
 
@@ -280,55 +347,54 @@ export function releaseMercUnit(): void {
 // Lobby display + reroll
 // ---------------------------------------------------------------------------
 
-/** Read a unit's inventory into the persistent merc kit. */
-function snapshotMercItems2(u: Unit): void {
-  const items: number[] = [];
-  for (let slot = 0; slot < 6; slot++) {
-    const it = UnitItemInSlot(u.handle, slot);
-    if (it != null) {
-      const id = GetItemTypeId(it);
-      if (id !== 0) items.push(id);
-    }
-  }
-  mercItems = items;
-}
+/** Neutral display copies, one per living mercenary, shown in the lobby beside
+ *  last round's heroes so the Reroll item can target them. */
+let lobbyMercs: Array<{ unit: Unit; slot: MercSlot }> = [];
 
-/** Neutral display copy of the merc, shown in the lobby beside last round's
- *  heroes so the one Reroll item can target it too. Rebuilt each lobby (the
- *  terrain cleanup removes the unit). */
-let lobbyMerc: Unit | null = null;
-
-/** Stand the merc in the lobby, next to the heroes. No-op when no merc is
- *  under contract -- a dead one is not shown, because there is nothing to
- *  reroll until the contract is bought again. */
+/** Stand the living mercenaries in the lobby, starting at (x, y). */
 export function spawnLobbyMerc(x: number, y: number): void {
-  lobbyMerc = null;
-  if (!hasActiveMerc() || mercTypeId === 0) return;
-  const u = Unit.create(getNeutralPassive(), mercTypeId, x, y, 270);
-  if (u == null) return;
-  u.invulnerable = true;
-  // Show the gear it is carrying, so the lobby says what a reroll would keep.
-  for (const itemId of mercItems) {
-    const it = CreateItem(itemId, u.x, u.y);
-    if (it != null) UnitAddItem(u.handle, it);
+  lobbyMercs = [];
+  let i = 0;
+  for (const sl of livingSlots()) {
+    const u = Unit.create(getNeutralPassive(), sl.typeId, x + i * 96, y, 270);
+    if (u != null) {
+      u.invulnerable = true;
+      // Show the kit, so the lobby says what a reroll would keep.
+      for (const itemId of sl.items) {
+        const it = CreateItem(itemId, u.x, u.y);
+        if (it != null) UnitAddItem(u.handle, it);
+      }
+      lobbyMercs.push({ unit: u, slot: sl });
+    }
+    i += 1;
   }
-  lobbyMerc = u;
 }
 
-/** Reroll the lobby merc: a new random creep type, keeping the items it
- *  carries. Returns false if unitHandle is not the lobby merc, so the caller
- *  can fall through to other reroll targets. */
+/** Reroll the lobby mercenary under `unitHandle`: a new type, keeping its kit.
+ *  Returns false if that unit is not a lobby mercenary, so the caller can fall
+ *  through to the hero reroll. */
 export function rerollLobbyMerc(unitHandle: unit): boolean {
-  if (lobbyMerc == null || lobbyMerc.handle !== unitHandle) return false;
-  const x = lobbyMerc.x;
-  const y = lobbyMerc.y;
-  // Keep whatever it is holding: the display unit is about to be destroyed,
-  // so read the gear off it rather than trusting the stored list.
-  snapshotMercItems2(lobbyMerc);
+  const entry = lobbyMercs.find(e => e.unit.handle === unitHandle);
+  if (entry == null) return false;
+  const x = entry.unit.x;
+  const y = entry.unit.y;
+  // Read the kit off the display unit rather than trusting the stored list --
+  // the player may have handed it something since the lobby was built.
+  entry.slot.items = getInventoryItemIds(entry.unit.handle);
   markRandomOutcomeTaken();
-  mercTypeId = rollMercType();
-  RemoveUnit(lobbyMerc.handle);
-  lobbyMerc = null;
-  spawnLobbyMerc(x, y);
+  // Excludes every mercenary in play, so a reroll is always something new.
+  const rolled = rollMercType(mercCampLevel());
+  if (rolled !== 0) entry.slot.typeId = rolled;
+  RemoveUnit(entry.unit.handle);
+
+  const replacement = Unit.create(getNeutralPassive(), entry.slot.typeId, x, y, 270);
+  if (replacement != null) {
+    replacement.invulnerable = true;
+    for (const itemId of entry.slot.items) {
+      const it = CreateItem(itemId, replacement.x, replacement.y);
+      if (it != null) UnitAddItem(replacement.handle, it);
+    }
+    entry.unit = replacement;
+  }
   return true;
 }
