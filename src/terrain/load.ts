@@ -76,7 +76,15 @@ function playDefeatMusic(): void {
   if (defeatSound == null) {
     // looping = true; is3D = false so it plays at full volume everywhere.
     defeatSound = CreateSound(DEFEAT_MUSIC, true, false, false, 10, 10, '') ?? null;
-    if (defeatSound != null) SetSoundVolume(defeatSound, 127);
+    if (defeatSound != null) {
+      // Put it on WC3's MUSIC channel (7) so it follows the music volume
+      // slider rather than sound effects. A sound's volume group is derived
+      // from its channel, and playing on a sound handle is what makes the loop
+      // seamless -- so this keeps the clean loop AND the right slider, rather
+      // than trading one for the other. Must be set before StartSound.
+      SetSoundChannel(defeatSound, 7);
+      SetSoundVolume(defeatSound, 127);
+    }
   }
   if (defeatSound != null) StartSound(defeatSound);
 }
