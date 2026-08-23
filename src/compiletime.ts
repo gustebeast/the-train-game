@@ -667,7 +667,8 @@ compiletime(({ objectData, constants }) => {
   summonHeroes.levels = 1;
   summonHeroes.tooltipNormal = 'Summon Heroes';
   summonHeroes.tooltipNormalExtended = 'Summon your heroes to fight alongside you.';
-  summonHeroes.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNSelectHeroOn.blp';
+  // Left at the base ability's own icon: BTNSelectHeroOn.blp is not a real
+  // file, so setting it here drew the Summon Heroes button as a '?' too.
   summonHeroes.hotkeyNormal = 'R';
   summonHeroes.buffs = '';
   summonHeroes.effect = '';
@@ -822,7 +823,10 @@ compiletime(({ objectData, constants }) => {
   restoreHp.perishable = true;
   restoreHp.abilities = '';
   restoreHp.classification = 'PowerUp';
-  restoreHp.interfaceIcon = 'ReplaceableTextures\CommandButtons\BTNHealingSalve.blp';
+  // Double backslashes matter here: with single ones the path collapses to
+  // ReplaceableTexturesCommandButtons... because \C and \B are not escape
+  // sequences, and the icon silently fails to load.
+  restoreHp.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHealingSalve.blp';
 
   // Flame Resistance upgrade (AncientFigurine — purchased from shop)
   const flameResistance = objectData.items.get(constants.items.AncientFigurine)!;
@@ -948,7 +952,8 @@ compiletime(({ objectData, constants }) => {
   summonUpgrade.perishable = true;
   summonUpgrade.abilities = '';
   summonUpgrade.classification = 'PowerUp';
-  summonUpgrade.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSelectHeroOn.blp';
+  // Left at the stock item's own icon (BTNHornOfCenarius.blp): the previous
+  // BTNSelectHeroOn.blp is not a real file, which the shop draws as a '?'.
 
   // Second Contract (SkullOfGuldan — purchased from shop, one per living pair).
   // A Campaign-class rawcode, like every other item the map repurposes, so
@@ -968,7 +973,10 @@ compiletime(({ objectData, constants }) => {
   secondContract.perishable = true;
   secondContract.abilities = '';
   secondContract.classification = 'PowerUp';
-  secondContract.interfaceIcon = 'ReplaceableTextures\CommandButtons\BTNSkullOfGuldan.blp';
+  // Icon deliberately NOT set: the stock item already has a valid one
+  // (BTNGuldanSkull.blp), and a BTN name guessed from the item's name --
+  // BTNSkullOfGuldan.blp -- does not exist, which the game draws as a green
+  // box. Only override this with a path read off real object data.
 
   // Hero Reroll (VoodooDoll — purchased from shop, kept in inventory, not a
   // powerup: the buyer carries it, can pawn it back for a refund, and casts
