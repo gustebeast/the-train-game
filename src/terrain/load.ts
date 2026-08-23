@@ -39,76 +39,71 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 // The masters live outside the repo with the other bounces, in
 // Documents/Music/Bounces/TheTrainGame. Re-encode from there rather than from
 // these files -- the difference between one lossy generation and two.
-const LOBBY_MUSIC = 'war3mapImported\\InterRoundLobby.wav';
-const DEFEAT_MUSIC = 'war3mapImported\\Purgatory.wav';
+const TRACK_FILES = {
+  lobby: 'war3mapImported\\InterRoundLobby.wav',
+  defeat: 'war3mapImported\\Purgatory.wav',
+};
 
-/** Start a seamless looping track on a SOUND handle, reusing the handle so a
- *  re-entry does not stack a second copy. Returns the handle to store.
+type MusicTrack = keyof typeof TRACK_FILES;
+
+/** Which track SHOULD be playing, or null for none. */
+let currentTrack: MusicTrack | null = null;
+const trackHandles: { [K in MusicTrack]: sound | null } = { lobby: null, defeat: null };
+
+/**
+ * Say which track should be playing. Declarative on purpose.
  *
- *  Why not PlayMusic: it loops by restarting the file, and it cannot do so
- *  seamlessly. Every MP3 carries encoder delay and end padding, and gapless
- *  playback needs the decoder to honour LAME's tags, which WC3 does not. A
- *  sound handle loops internally instead (the `looping` flag below).
+ * Callers state the desired end state rather than issuing stop/start pairs, so
+ * asking for the track that is ALREADY playing does nothing at all. That is
+ * what makes a whole class of bug impossible: "Resetting purchases" re-enters
+ * the lobby while the lobby track is already running, and the previous
+ * stop-then-start version left it silent, because it tore down a playing sound
+ * and could not reliably restart it in the same frame. Nothing here can produce
+ * silence unless silence was asked for.
  *
- *  Three things have to be true, and each is easy to undo by accident:
+ * Three conditions make the loops seamless, and each is easy to undo:
  *
- *  1. The FILE must not carry padding either. ADPCM pads to whole blocks, so
- *     each loop length is an exact multiple of 1017 samples. Re-encode off that
- *     multiple and the click comes straight back.
+ *  1. The FILE must not carry padding. ADPCM pads to whole blocks, so each loop
+ *     length is an exact multiple of 1017 samples. Re-encode off that multiple
+ *     and a click comes straight back.
  *  2. The CHANNEL must be 7. A sound's volume group is derived from its
- *     channel, and 7 is music -- without it the track ignores the music slider
+ *     channel, and 7 is music -- without it a track ignores the music slider
  *     and answers to sound effects instead.
- *  3. Only ONE may play at a time. StopMusic does not touch sound handles, so
- *     whoever starts one stops the other explicitly. */
-function startLoopingTrack(handle: sound | null, path: string): sound | null {
-  StopMusic(false);       // silence the music channel so nothing stacks
-  ClearMapMusic();
-  let s = handle;
-  if (s == null) {
-    // looping = true; is3D = false so it plays at full volume everywhere.
-    s = CreateSound(path, true, false, false, 10, 10, '') ?? null;
-    if (s != null) {
-      SetSoundChannel(s, 7);   // must be set before StartSound
-      SetSoundVolume(s, 127);
-    }
-  }
-  if (s != null) StartSound(s);
-  return s;
-}
-
-function stopTrack(handle: sound | null): void {
-  if (handle != null) StopSound(handle, false, false);
-}
-
-let lobbySound: sound | null = null;
-let defeatSound: sound | null = null;
-
-/** Start the looping inter-round lobby track. */
-function playLobbyMusic(): void {
-  stopTrack(defeatSound);
-  lobbySound = startLoopingTrack(lobbySound, LOBBY_MUSIC);
-}
-
-/** Start the looping defeat-lobby track. */
-function playDefeatMusic(): void {
-  stopTrack(lobbySound);
-  defeatSound = startLoopingTrack(defeatSound, DEFEAT_MUSIC);
-}
-
-/** Stop both lobby tracks when leaving a lobby (e.g. a round starts).
+ *  3. Only ONE track plays at a time, which is this function's job.
  *
- *  Both play on sound handles, which StopMusic does not touch, so without this
- *  one would keep playing underneath whatever comes next. */
-function stopLobbyMusic(): void {
+ * Why sound handles and not PlayMusic: the music channel loops by restarting
+ * the file and cannot do it seamlessly. A sound handle loops internally.
+ */
+function setMusic(track: MusicTrack | null): void {
+  if (track === currentTrack) return;   // already in the requested state
+
+  // Silence the music channel and every track handle, so nothing can stack or
+  // linger. StopMusic does not touch sound handles, hence both.
   StopMusic(false);
   ClearMapMusic();
-  stopTrack(lobbySound);
-  stopTrack(defeatSound);
+  for (const key of ['lobby', 'defeat'] as MusicTrack[]) {
+    const h = trackHandles[key];
+    if (h != null) StopSound(h, false, false);
+  }
+  currentTrack = track;
+  if (track == null) return;
+
+  let handle = trackHandles[track];
+  if (handle == null) {
+    // looping = true; is3D = false so it plays at full volume everywhere.
+    handle = CreateSound(TRACK_FILES[track], true, false, false, 10, 10, '') ?? null;
+    if (handle != null) {
+      SetSoundChannel(handle, 7);   // must be set before StartSound
+      SetSoundVolume(handle, 127);
+    }
+    trackHandles[track] = handle;
+  }
+  if (handle != null) StartSound(handle);
 }
 
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
 function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
-  stopLobbyMusic();
+  setMusic(null);
   applyChallengeEffects();
   startDayNightForRound();
   clearLastSummoned(); // this round's summon (if any) re-records it
@@ -157,7 +152,7 @@ export function loadDefeatLobby(): void {
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
-  playDefeatMusic();
+  setMusic('defeat');
   SetTimeOfDay(12);
   spawnTerrain(generateDefeatLobby());
 }
@@ -170,7 +165,7 @@ export function loadLobby(): void {
   resetRandomOutcome();
   saveLobbySnapshot();
   saveHeroLobbySnapshot();
-  playLobbyMusic();
+  setMusic('lobby');
   SetTimeOfDay(12);
   const spawned = spawnTerrain(generateLobby());
   if (spawned.engine != null && spawned.wagon != null) initLobbyTrain(spawned.engine, spawned.wagon);
