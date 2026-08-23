@@ -10,9 +10,9 @@ import { isSummonUpgradePurchased } from './summonUpgrade';
  * reads on screen (north up):
  *
  *     .  .  .  .
- *     .  .  .  M     <- second mercenary
- *     .  .  .  M     <- first mercenary
- *     H  H  H  H     <- the four heroes
+ *     .  .  M  M     <- the mercenaries
+ *     .  .  H  H
+ *     .  .  H  H     <- the four heroes, in reading order
  *
  * Tucked into the corner deliberately: it keeps the roster clear of the shop,
  * the dealer and the two ready circles in the middle, so nothing you walk
@@ -23,11 +23,12 @@ import { isSummonUpgradePurchased } from './summonUpgrade';
  * -- including across a reroll, which replaces the unit where it stands.
  */
 const HERO_SPOTS = [
-  { x: 1, y: -4 }, { x: 2, y: -4 }, { x: 3, y: -4 }, { x: 4, y: -4 },
+  { x: 3, y: -3 }, { x: 4, y: -3 },
+  { x: 3, y: -4 }, { x: 4, y: -4 },
 ].map(p => gridToWorld(p));
 
 const MERC_SPOTS = [
-  { x: 4, y: -3 }, { x: 4, y: -2 },
+  { x: 3, y: -2 }, { x: 4, y: -2 },
 ].map(p => gridToWorld(p));
 
 /** Forget the display units. Call after the terrain sweep has removed them,
