@@ -599,9 +599,15 @@ export function generateDefeatLobby(): Grid {
  *  the three lobbies cannot drift apart in floor or boundary. */
 export function generateStartingLobby(): Grid {
   const grid = generateDefeatLobby();
+  // Players 2-4 move to the back row and stay there as dancers (see dance.ts).
+  // They keep a spawn rather than losing one: the point is that they have
+  // something to do while the host decides, not that they are absent.
   for (const cell of grid.cells) {
     if (cell.entity >= Entity.PLAYER_2 && cell.entity <= Entity.PLAYER_4) cell.entity = Entity.NONE;
   }
+  grid.cells[idx(-2, 3)].entity = Entity.PLAYER_2;
+  grid.cells[idx(0, 3)].entity = Entity.PLAYER_3;
+  grid.cells[idx(2, 3)].entity = Entity.PLAYER_4;
   grid.cells[idx(0, -3)].entity = Entity.NEW_GAME_CIRCLE;
   return grid;
 }

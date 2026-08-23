@@ -3,6 +3,10 @@ import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generat
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
+import { Unit } from 'w3ts';
+import { PEASANT_ID } from '../constants';
+import { getHumanPlayers } from '../util';
+import { makeDancer, startDanceClock } from '../dance';
 import { awardVictory } from '../victory';
 import { gameState } from '../state';
 import { markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
@@ -177,6 +181,10 @@ export function loadDefeatLobby(): void {
   spawnTerrain(generateDefeatLobby());
 }
 
+/** Beats per minute of the starting-lobby track. 0 means no song yet, so
+ *  dances play the moment they are cast rather than waiting for a beat. */
+const STARTING_LOBBY_BPM = 0;
+
 /** The lobby the map boots into, and where a defeated run restarts to.
  *
  *  Deliberately spawns no train, shop or crate: nothing here is a game in
@@ -188,6 +196,20 @@ export function loadStartingLobby(): void {
   setMusic('interRound');
   SetTimeOfDay(12);
   spawnTerrain(generateStartingLobby());
+  // Everyone but the host becomes a dancer: immobile, with the dance spells on
+  // the command card. 0 BPM until there is a lobby song to sync to, which makes
+  // each dance fire on the keypress instead of on the beat.
+  startDanceClock(STARTING_LOBBY_BPM);
+  for (const player of getHumanPlayers()) {
+    if (player.id === 0) continue;
+    const group = CreateGroup()!;
+    GroupEnumUnitsOfPlayer(group, player.handle, undefined);
+    ForGroup(group, () => {
+      const u = Unit.fromHandle(GetEnumUnit());
+      if (u != null && u.typeId === PEASANT_ID) makeDancer(u);
+    });
+    DestroyGroup(group);
+  }
 }
 
 export function loadInterRoundLobby(): void {

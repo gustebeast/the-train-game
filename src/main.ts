@@ -17,6 +17,7 @@ import { initHeroes } from './heroes';
 import { initMinimapIcons } from './minimapIcons';
 import { initPlayerLeave } from './playerLeave';
 import { initDash } from './dash';
+import { initDance } from './dance';
 import { initGlobalTick } from './globalTick';
 import './challengeList'; // registers the challenge catalogue
 import { initChallengeWatch } from './challengeWatch';
@@ -75,6 +76,7 @@ function tsMain() {
     initCargoVisuals();
     initPlayerLeave();
     initDash();
+    initDance();
     // Last: writes the ready marker the VM test runner polls for, so it only
     // appears once every other system has initialised without throwing.
     initTestKit();

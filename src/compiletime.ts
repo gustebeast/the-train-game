@@ -46,6 +46,8 @@ compiletime(({ objectData, constants }) => {
   // in the generated constants and is referenced by rawcode. Keep in step with
   // DASH_ABILITY_ID in constants.ts.
   const DASH_ABILITY = 'A000';
+  // Keep in step with DANCE_ABILITY_IDS in constants.ts.
+  const DANCE_IDS = ['A001', 'A002', 'A003', 'A004'];
 
   const trackTypes: { [key: string]: string } = {
     EN: constants.units.ArcaneTower,
@@ -151,7 +153,7 @@ compiletime(({ objectData, constants }) => {
   peasant.animationCastPoint = 0;
   peasant.animationCastBackswing = 0;
 
-  type ChannelAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { targetType: number; options: number; followThroughTime: number; artDuration: number };
+  type ChannelAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { targetType: number; options: number; followThroughTime: number; artDuration: number; baseOrderIDundefined: string };
 
   // Dash spell: A000, a Channel copy authored in the world editor.
   //
@@ -214,6 +216,41 @@ compiletime(({ objectData, constants }) => {
   dash.caster = '';
   dash.target = '';
   dash.effect = '';
+
+  // Dance spells: copies of Channel minted here rather than authored in the
+  // editor, since abilities.copy() can mint them at build time.
+  //
+  // They exist for the players who are NOT the host: while player 1 picks what
+  // to do in the starting lobby, the others are parked as immobile peasants
+  // with these on their command card, so there is something to do.
+  //
+  // Each needs its OWN base order. Two abilities sharing one order id on the
+  // same unit collide on the command card, and the order is also how a cast is
+  // told apart before the spell event resolves.
+  const DANCE_ORDERS = ['battleroar', 'berserk', 'howlofterror', 'thunderclap'];
+  for (let i = 0; i < DANCE_IDS.length; i++) {
+    const dance = objectData.abilities.copy(constants.abilities.Channel, DANCE_IDS[i]) as ChannelAbility | undefined;
+    if (dance == null) continue;
+    dance.heroAbility = false;
+    dance.levels = 1;
+    dance.targetType = 0; // instant, no target to pick
+    dance.options = 1; // visible on the command card
+    dance.followThroughTime = 0.01; // 0 means "channel forever" -- see the dash
+    dance.artDuration = 0;
+    dance.castingTime = 0;
+    dance.cooldown = 0;
+    dance.animationNames = '';
+    dance.baseOrderIDundefined = DANCE_ORDERS[i];
+    dance.tooltipNormal = 'Dance ' + String(i + 1);
+    dance.tooltipNormalExtended = 'Bust a move.';
+    dance.iconNormal = 'ReplaceableTextures\CommandButtons\BTNBrilliance.blp';
+    dance.hotkeyNormal = String(i + 1);
+    dance.buttonPositionNormalX = i;
+    dance.buttonPositionNormalY = 1;
+    dance.caster = '';
+    dance.target = '';
+    dance.effect = '';
+  }
 
   // Build track spell (BuildTinyFarm — repurposed for one-click track placement)
   const buildTrack = objectData.abilities.get(constants.abilities.BuildTinyFarm)!;
