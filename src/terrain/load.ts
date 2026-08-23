@@ -31,81 +31,79 @@ registerReadyZone('revert', 'Resetting purchases', () => {
   loadLobby();
 });
 
-const LOBBY_MUSIC = 'war3mapImported\\InGameLobby.mp3';
-// IMA ADPCM in a WAV container, 387KB. WC3 decodes it fine (verified in game).
-// Chosen over PCM because MPQ was measured to recover only ~5% on PCM, so the
-// master would have cost its full 2.3MB in the archive.
+// Both lobby tracks: IMA ADPCM in a WAV container, on a sound handle.
+// WC3 decodes ADPCM fine (verified in game). Chosen over PCM because MPQ was
+// measured to recover only ~5% on PCM, so a 24-bit master would cost its full
+// size in the archive.
 //
-// The 24-bit master is kept outside the repo, with the other bounces:
-//   Documents/Music/Bounces/TheTrainGame/DefeatLobby.wav
-// Re-encode from there rather than from this file -- the difference between one
-// lossy generation and two. Loop length must stay a multiple of 1017 samples.
+// The masters live outside the repo with the other bounces, in
+// Documents/Music/Bounces/TheTrainGame. Re-encode from there rather than from
+// these files -- the difference between one lossy generation and two.
+const LOBBY_MUSIC = 'war3mapImported\\InterRoundLobbyAdpcm.wav';
 const DEFEAT_MUSIC = 'war3mapImported\\PurgatoryAdpcm.wav';
 
-/** Start the looping lobby track. The music channel loops it natively — no re-trigger needed. */
-function playLobbyMusic(): void {
-  StopMusic(false);
-  ClearMapMusic();
-  stopDefeatMusic(); // it is on a sound handle, so StopMusic will not stop it
-  PlayMusic(LOBBY_MUSIC);
-}
-
-/** The defeat track, played on a SOUND handle rather than through PlayMusic.
- *  Verified in game: loops seamlessly and follows the music volume slider.
+/** Start a seamless looping track on a SOUND handle, reusing the handle so a
+ *  re-entry does not stack a second copy. Returns the handle to store.
  *
- *  Why not PlayMusic: it loops by restarting the file, and an MP3 cannot loop
- *  seamlessly -- every MP3 carries encoder delay and end padding, and gapless
+ *  Why not PlayMusic: it loops by restarting the file, and it cannot do so
+ *  seamlessly. Every MP3 carries encoder delay and end padding, and gapless
  *  playback needs the decoder to honour LAME's tags, which WC3 does not. A
  *  sound handle loops internally instead (the `looping` flag below).
  *
- *  Two things had to be true for this to work, and both are easy to undo by
- *  accident:
+ *  Three things have to be true, and each is easy to undo by accident:
  *
  *  1. The FILE must not carry padding either. ADPCM pads to whole blocks, so
- *     the loop length is an exact multiple of 1017 samples (see the note on
- *     PurgatoryAdpcm.wav's creation in git). Change the loop length off that
+ *     each loop length is an exact multiple of 1017 samples. Re-encode off that
  *     multiple and the click comes straight back.
  *  2. The CHANNEL must be 7. A sound's volume group is derived from its
  *     channel, and 7 is music -- without it the track ignores the music slider
  *     and answers to sound effects instead.
- */
-let defeatSound: sound | null = null;
-
-function playDefeatMusic(): void {
-  // Silence the music channel so the two do not stack.
-  StopMusic(false);
+ *  3. Only ONE may play at a time. StopMusic does not touch sound handles, so
+ *     whoever starts one stops the other explicitly. */
+function startLoopingTrack(handle: sound | null, path: string): sound | null {
+  StopMusic(false);       // silence the music channel so nothing stacks
   ClearMapMusic();
-  if (defeatSound == null) {
+  let s = handle;
+  if (s == null) {
     // looping = true; is3D = false so it plays at full volume everywhere.
-    defeatSound = CreateSound(DEFEAT_MUSIC, true, false, false, 10, 10, '') ?? null;
-    if (defeatSound != null) {
-      // Put it on WC3's MUSIC channel (7) so it follows the music volume
-      // slider rather than sound effects. A sound's volume group is derived
-      // from its channel, and playing on a sound handle is what makes the loop
-      // seamless -- so this keeps the clean loop AND the right slider, rather
-      // than trading one for the other. Must be set before StartSound.
-      SetSoundChannel(defeatSound, 7);
-      SetSoundVolume(defeatSound, 127);
+    s = CreateSound(path, true, false, false, 10, 10, '') ?? null;
+    if (s != null) {
+      SetSoundChannel(s, 7);   // must be set before StartSound
+      SetSoundVolume(s, 127);
     }
   }
-  if (defeatSound != null) StartSound(defeatSound);
+  if (s != null) StartSound(s);
+  return s;
 }
 
-/** Stop the defeat track. Safe to call when it was never started. */
-function stopDefeatMusic(): void {
-  if (defeatSound != null) StopSound(defeatSound, false, false);
+function stopTrack(handle: sound | null): void {
+  if (handle != null) StopSound(handle, false, false);
 }
 
-/** Stop the lobby track when leaving the lobby (e.g. a round starts).
+let lobbySound: sound | null = null;
+let defeatSound: sound | null = null;
+
+/** Start the looping inter-round lobby track. */
+function playLobbyMusic(): void {
+  stopTrack(defeatSound);
+  lobbySound = startLoopingTrack(lobbySound, LOBBY_MUSIC);
+}
+
+/** Start the looping defeat-lobby track. */
+function playDefeatMusic(): void {
+  stopTrack(lobbySound);
+  defeatSound = startLoopingTrack(defeatSound, DEFEAT_MUSIC);
+}
+
+/** Stop both lobby tracks when leaving a lobby (e.g. a round starts).
  *
- *  Also stops the defeat track: it plays on a sound handle, which StopMusic
- *  does not touch, so without this it would keep playing underneath whatever
- *  comes next. Reaching a round from defeat needs a save load, but that path
- *  exists (-load), and a stuck loop is a nasty thing to debug later. */
+ *  Both play on sound handles, which StopMusic does not touch, so without this
+ *  one would keep playing underneath whatever comes next. */
 function stopLobbyMusic(): void {
   StopMusic(false);
   ClearMapMusic();
-  stopDefeatMusic();
+  stopTrack(lobbySound);
+  stopTrack(defeatSound);
 }
 
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
