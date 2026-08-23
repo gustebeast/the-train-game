@@ -255,19 +255,17 @@ export function initShop(): void {
  *  name and description between compiletime.ts and challengeList.ts, since the
  *  compiletime block is evaluated standalone and cannot import the catalogue.
  *
- *  Two channels instead, both verified in game:
+ *  So the dealer's NAME carries it, which fills the portrait panel the moment
+ *  you select it to buy. Just the challenge name: the panel truncates at about
+ *  26 characters, so "Shady Dealer - Tough Creep Camp" came out as "Shady
+ *  Dealer - Tough Creep ...". The shop button below it still reads "Shady
+ *  Deal", so nothing is lost by dropping the prefix.
  *
- *  - the dealer's NAME, which fills the portrait panel the moment you select it
- *    to buy. Just the challenge name: the panel truncates at about 26
- *    characters, so "Shady Dealer - Tough Creep Camp" came out as "Shady Dealer
- *    - Tough Creep ...". The shop button below it still reads "Shady Deal", so
- *    nothing is lost by dropping the prefix.
- *  - a chat line on entering the lobby, which carries the full description and
- *    can be read without walking over. */
+ *  Deliberately NOT announced in chat on entering the lobby. Finding out what
+ *  is on offer should be something you go and do, not something that arrives
+ *  unbidden over every other message while you are busy elsewhere. */
 export function showDealerOffer(dealer: Unit): void {
   const offered = getOfferedChallenge();
   if (offered == null) return;
   BlzSetUnitName(dealer.handle, offered.name);
-  print("The Shady Dealer is offering |cffffcc00" + offered.name + "|r for "
-    + I2S(CHALLENGE_COST) + " gold: " + offered.description);
 }
