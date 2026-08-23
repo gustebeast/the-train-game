@@ -348,25 +348,39 @@ export function releaseMercUnit(): void {
 // ---------------------------------------------------------------------------
 
 /** Neutral display copies, one per living mercenary, shown in the lobby beside
- *  last round's heroes so the Reroll item can target them. */
-let lobbyMercs: Array<{ unit: Unit; slot: MercSlot }> = [];
+ *  the heroes so the Reroll item can target them.
+ *
+ *  Keyed by slot INDEX, not by slot object: the save reset swaps in fresh slot
+ *  objects, so an identity reference would go stale on load. */
+let lobbyMercs: Array<{ unit: Unit; slotIndex: number }> = [];
 
-/** Stand the living mercenaries in the lobby, starting at (x, y). */
-export function spawnLobbyMerc(x: number, y: number): void {
+/** Forget the display units without touching the world. Pairs with the terrain
+ *  sweep, which has already removed them. */
+export function clearLobbyMercs(): void {
   lobbyMercs = [];
-  let i = 0;
-  for (const sl of livingSlots()) {
-    const u = Unit.create(getNeutralPassive(), sl.typeId, x + i * 96, y, 270);
-    if (u != null) {
-      u.invulnerable = true;
-      // Show the kit, so the lobby says what a reroll would keep.
-      for (const itemId of sl.items) {
-        const it = CreateItem(itemId, u.x, u.y);
-        if (it != null) UnitAddItem(u.handle, it);
-      }
-      lobbyMercs.push({ unit: u, slot: sl });
+}
+
+/** Stand the living mercenaries in the lobby, contract slot i on positions[i].
+ *
+ *  Additive, so buying a contract can call this to put the new hire on the
+ *  floor at once rather than leaving the player to wonder what they bought
+ *  until the next lobby. Mercenaries already standing are left alone, kit and
+ *  all. */
+export function syncLobbyMercs(positions: Array<{ x: number; y: number }>): void {
+  for (let i = 0; i < slots.length; i++) {
+    const sl = slots[i];
+    if (sl.typeId === 0 || sl.dead) continue;
+    if (lobbyMercs.some(e => e.slotIndex === i)) continue;
+    const pos = positions[math.min(i, positions.length - 1)];
+    const u = Unit.create(getNeutralPassive(), sl.typeId, pos.x, pos.y, 270);
+    if (u == null) continue;
+    u.invulnerable = true;
+    // Show the kit, so the lobby says what a reroll would keep.
+    for (const itemId of sl.items) {
+      const it = CreateItem(itemId, u.x, u.y);
+      if (it != null) UnitAddItem(u.handle, it);
     }
-    i += 1;
+    lobbyMercs.push({ unit: u, slotIndex: i });
   }
 }
 
@@ -376,21 +390,23 @@ export function spawnLobbyMerc(x: number, y: number): void {
 export function rerollLobbyMerc(unitHandle: unit): boolean {
   const entry = lobbyMercs.find(e => e.unit.handle === unitHandle);
   if (entry == null) return false;
+  const slot = slots[entry.slotIndex];
+  if (slot == null) return false;
   const x = entry.unit.x;
   const y = entry.unit.y;
   // Read the kit off the display unit rather than trusting the stored list --
   // the player may have handed it something since the lobby was built.
-  entry.slot.items = getInventoryItemIds(entry.unit.handle);
+  slot.items = getInventoryItemIds(entry.unit.handle);
   markRandomOutcomeTaken();
   // Excludes every mercenary in play, so a reroll is always something new.
   const rolled = rollMercType(mercCampLevel());
-  if (rolled !== 0) entry.slot.typeId = rolled;
+  if (rolled !== 0) slot.typeId = rolled;
   RemoveUnit(entry.unit.handle);
 
-  const replacement = Unit.create(getNeutralPassive(), entry.slot.typeId, x, y, 270);
+  const replacement = Unit.create(getNeutralPassive(), slot.typeId, x, y, 270);
   if (replacement != null) {
     replacement.invulnerable = true;
-    for (const itemId of entry.slot.items) {
+    for (const itemId of slot.items) {
       const it = CreateItem(itemId, replacement.x, replacement.y);
       if (it != null) UnitAddItem(replacement.handle, it);
     }

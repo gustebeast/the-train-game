@@ -1,4 +1,4 @@
-import { Grid, GRID_MAX_X, gridToWorld } from './constants';
+import { Grid, GRID_MAX_X } from './constants';
 import { generateTerrain, generateCheatTerrain, generateLobby, generateDefeatLobby } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
@@ -7,7 +7,7 @@ import { awardVictory } from '../victory';
 import { gameState } from '../state';
 import { revertToLobbySnapshot, saveLobbySnapshot } from '../save';
 import {
-  hasHeroes, initRandomHeroes, spawnLobbyHeroes, clearLastSummoned,
+  hasHeroes, initRandomHeroes,
   saveHeroLobbySnapshot, revertHeroesToLobbySnapshot,
 } from '../heroes';
 import { startDPSTest } from '../creeps';
@@ -16,8 +16,8 @@ import { resetChallengeProgress } from '../challengeList';
 import { hideChallengeUI } from '../challengeUI';
 import { applyChallengeEffects, clearChallengeEffects } from '../challengeEffects';
 import { startDayNightForRound, stopDayNight } from '../daynight';
-import { spawnLobbyMerc } from '../mercenary';
 import { resetRandomOutcome } from '../randomOutcome';
+import { refreshLobbyRoster, resetLobbyRoster } from '../lobbyRoster';
 import { deriveSeed } from '../rng';
 import { advanceChallengeOffer } from '../challenges';
 
@@ -106,7 +106,6 @@ function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   setMusic(null);
   applyChallengeEffects();
   startDayNightForRound();
-  clearLastSummoned(); // this round's summon (if any) re-records it
   if (!hasHeroes()) initRandomHeroes();
   const spawned = spawnTerrain(grid, skipCleanup);
   // Counters are per round, so a challenge bought now starts from zero rather
@@ -170,9 +169,10 @@ export function loadLobby(): void {
   const spawned = spawnTerrain(generateLobby());
   if (spawned.engine != null && spawned.wagon != null) initLobbyTrain(spawned.engine, spawned.wagon);
   loadCrateForLobby();
-  // Last round's summoned heroes stand in the south-east corner, with the
-  // mercenary alongside them so the one Reroll item can target either.
-  spawnLobbyHeroes([gridToWorld({ x: 2, y: -3 }), gridToWorld({ x: 3, y: -3 })]);
-  spawnLobbyMerc(gridToWorld({ x: 3, y: -2 }).x, gridToWorld({ x: 3, y: -2 }).y);
+  // Heroes and mercenaries stand together in the south-east corner, so the one
+  // Reroll item can target either. Reset first: spawnTerrain has just removed
+  // the previous lobby's display units, and their handles must not be reused.
+  resetLobbyRoster();
+  refreshLobbyRoster();
   startDPSTest();
 }
