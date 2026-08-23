@@ -12,7 +12,7 @@ import { initCheat } from './cheat';
 import { initBridge } from './bridge';
 import { initFill } from './fill';
 import { initWaterTrain } from './water';
-import { initShop } from './shop';
+import { initShop, initDealerOffer } from './shop';
 import { initReroll } from './reroll';
 import { initHeroes } from './heroes';
 import { initMinimapIcons } from './minimapIcons';
@@ -62,6 +62,7 @@ function tsMain() {
     initWaterTrain();
     initCheat();
     initShop();
+    initDealerOffer();
     initReroll();
     initHeroes();
     initGlobalTick();
