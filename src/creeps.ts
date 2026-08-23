@@ -44,6 +44,17 @@ interface CreepCampState {
 
 let campState: CreepCampState | null = null;
 
+/** Camp indices already ENCOUNTERED this lap, so the same camp does not come
+ *  back until everything currently available has been seen.
+ *
+ *  Encountered, not defeated: a camp counts the moment it is picked, win or
+ *  lose, so a camp you keep failing does not sit in front of you forever.
+ *  Unlocking a level therefore changes what you meet -- clear every level 1
+ *  camp, buy the Mercenary Contract, and only level 2 camps remain eligible
+ *  until those have been seen too. When nothing is left the list clears and
+ *  the whole rotation starts again. */
+let encountered: number[] = [];
+
 /** The cage destructable spawned for this round. */
 let cageDestructable: Destructable | null = null;
 
@@ -57,7 +68,9 @@ let cageTrigger: Trigger | null = null;
 /** Encode as "t=tileset;i=index". */
 function encodeCamp(): string {
   if (campState == null) return '';
-  return 't=' + campState.tileset + ';i=' + tostring(campState.campIndex);
+  const parts = ['t=' + campState.tileset, 'i=' + tostring(campState.campIndex)];
+  if (encountered.length > 0) parts.push('e=' + encountered.join(','));
+  return table.concat(parts, ';');
 }
 
 /** Decode "t=tileset;i=index". */
@@ -67,6 +80,13 @@ function decodeCamp(raw: string): void {
   for (const [key, val] of pairs(parseFields(raw))) {
     if (key === 't') tileset = val;
     else if (key === 'i') campIndex = tonumber(val) ?? 0;
+    else if (key === 'e') {
+      encountered = [];
+      for (const [idxStr] of string.gmatch(val, '([^,]+)')) {
+        const idx = tonumber(idxStr);
+        if (idx != null) encountered.push(idx);
+      }
+    }
   }
   if (tileset !== '') {
     campState = { tileset, campIndex };
@@ -74,7 +94,16 @@ function decodeCamp(raw: string): void {
 }
 
 // Reset re-rolls the camp — the new-game baseline is a fresh random pick
-registerSaveSegment('cc', encodeCamp, decodeCamp, () => rollCreepCamp());
+/** Start the camp rotation over: nothing has been met, so every unlocked camp
+ *  is eligible again. Used by the new-game/reset baseline. */
+export function clearCampRotation(): void {
+  encountered = [];
+}
+
+registerSaveSegment('cc', encodeCamp, decodeCamp, () => {
+  clearCampRotation();
+  rollCreepCamp();
+});
 onHeroesSpawned((heroes) => scaleCreepStats(heroes));
 onAllHeroesDead(() => removeSpawnedCreeps());
 
@@ -82,24 +111,41 @@ onAllHeroesDead(() => removeSpawnedCreeps());
 // Camp selection
 // ---------------------------------------------------------------------------
 
-/** Pick a random creep camp and store in state. Hardcoded to Lordaeron Summer for now.
- *  Only level 1 (green) camps roll until the Mercenary Contract unlocks
- *  level 2 (orange); level 3 (red) camps never roll.
- *  (campIndex always indexes the full camp list so saves stay stable.) */
+/** Pick the next creep camp: a seeded draw from the camps you have unlocked
+ *  and NOT yet met.
+ *
+ *  Every pick is recorded in `encountered` whether or not the camp is beaten,
+ *  so the rotation works through what is available before repeating anything.
+ *  Unlocking a level changes the pool rather than resetting it: clear all the
+ *  level 1 camps, hire a mercenary, and level 2 camps are the only eligible
+ *  ones left until they have been seen as well. When nothing eligible remains
+ *  the list clears and the rotation starts over.
+ *
+ *  campIndex always indexes the full camp list, so saves stay stable. */
 export function rollCreepCamp(): void {
   const tileset = 'Lordaeron Summer';
   const camps = CREEP_CAMPS[tileset];
   if (camps == null || camps.length === 0) return;
-  // A dead merc takes its level 2 camps with it until the contract is re-bought.
   // One camp level per living mercenary: none -> 1, one -> 2, both -> 3.
   // Losing one really does close its camps again.
   const maxLevel = mercCampLevel();
-  const allowed: number[] = [];
+
+  const unlocked: number[] = [];
   for (let i = 0; i < camps.length; i++) {
-    if (camps[i].level <= maxLevel) allowed.push(i);
+    if (camps[i].level <= maxLevel) unlocked.push(i);
   }
-  if (allowed.length === 0) return;
-  campState = { tileset, campIndex: allowed[seededInt(0, allowed.length - 1)] };
+  if (unlocked.length === 0) return;
+
+  let fresh = unlocked.filter(i => !encountered.includes(i));
+  if (fresh.length === 0) {
+    // Everything unlocked has been met: start a new lap over the same pool.
+    encountered = [];
+    fresh = unlocked;
+  }
+
+  const chosen = fresh[seededInt(0, fresh.length - 1)];
+  encountered.push(chosen);
+  campState = { tileset, campIndex: chosen };
 }
 
 /** Get the selected camp, or null if none selected. */
