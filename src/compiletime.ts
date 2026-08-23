@@ -950,6 +950,26 @@ compiletime(({ objectData, constants }) => {
   summonUpgrade.classification = 'PowerUp';
   summonUpgrade.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSelectHeroOn.blp';
 
+  // Second Contract (SkullOfGuldan — purchased from shop, one per living pair).
+  // A Campaign-class rawcode, like every other item the map repurposes, so
+  // creeps can never drop it (the build guard above enforces that).
+  const secondContract = objectData.items.get(constants.items.SkullOfGuldan)!;
+  secondContract.name = 'Second Contract';
+  secondContract.tooltipBasic = secondContract.name;
+  secondContract.description = 'Hires a SECOND mercenary and unlocks level 3 (red) creep camps. Only on sale while exactly one mercenary is alive. If either dies you lose the level 3 camps and this goes back on the shelf.';
+  secondContract.tooltipExtended = secondContract.description;
+  secondContract.goldCost = 1;
+  secondContract.stockMaximum = 1;
+  secondContract.stockReplenishInterval = 3600;
+  secondContract.stockInitialAfterStartDelay = 10;
+  secondContract.useAutomaticallyWhenAcquired = true;
+  secondContract.activelyUsed = false;
+  secondContract.canBeDropped = false;
+  secondContract.perishable = true;
+  secondContract.abilities = '';
+  secondContract.classification = 'PowerUp';
+  secondContract.interfaceIcon = 'ReplaceableTextures\CommandButtons\BTNSkullOfGuldan.blp';
+
   // Hero Reroll (VoodooDoll — purchased from shop, kept in inventory, not a
   // powerup: the buyer carries it, can pawn it back for a refund, and casts
   // it on a lobby hero to reroll them (reroll.ts)

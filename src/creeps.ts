@@ -1,6 +1,6 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
-import { hasActiveMerc } from './mercenary';
+import { mercCampLevel } from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
 import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
 import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
@@ -91,7 +91,9 @@ export function rollCreepCamp(): void {
   const camps = CREEP_CAMPS[tileset];
   if (camps == null || camps.length === 0) return;
   // A dead merc takes its level 2 camps with it until the contract is re-bought.
-  const maxLevel = hasActiveMerc() ? 2 : 1;
+  // One camp level per living mercenary: none -> 1, one -> 2, both -> 3.
+  // Losing one really does close its camps again.
+  const maxLevel = mercCampLevel();
   const allowed: number[] = [];
   for (let i = 0; i < camps.length; i++) {
     if (camps[i].level <= maxLevel) allowed.push(i);
