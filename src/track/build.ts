@@ -10,7 +10,7 @@ import { findItemByType, updateBuildAbility } from '../items';
 import { TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID } from '../constants';
 import { onTrackPlaced } from '../train';
 import { triggerVictory } from '../victory';
-import { noteTrackShape, noteFinalTrackPlaced } from '../challengeList';
+import { recountTrackShapes, noteFinalTrackPlaced } from '../challengeList';
 
 function getDirection(from: Unit, to: Unit): Direction {
   const dx = to.x - from.x;
@@ -64,9 +64,6 @@ function onTrackBuilt() {
     // Update track1's skin now that we know both its neighbors
     const orientationKey1 = toOrientationKey(dirFromTrack1ToTrack0, dirToTrack2);
     const type1 = SKINS[orientationKey1] ?? SKINS.EW;
-    // track1's shape is only decided now, once it has a neighbour on both
-    // sides: EW/NS run straight through, anything else is a 90-degree turn.
-    noteTrackShape(orientationKey1 !== 'EW' && orientationKey1 !== 'NS');
     reskinTrack(track1, type1);
     track1.invulnerable = true;
 
@@ -75,6 +72,10 @@ function onTrackBuilt() {
     const type0 = SKINS[orientationKey0] ?? SKINS.EW;
     const newTrack = replaceTrack(track0, type0, snapX, snapY);
     placedTracks.push(newTrack);
+    // The line has changed shape: the piece before this one has just gained its
+    // second neighbour, so its shape is now decided. Re-measure the whole line
+    // rather than crediting that one piece -- see computeTrackShapes.
+    recountTrackShapes();
     onTrackPlaced();
     const victoryTile = getVictoryTile();
     if (snapX === victoryTile.x && snapY === victoryTile.y) {

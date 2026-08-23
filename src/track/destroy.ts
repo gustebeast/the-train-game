@@ -2,6 +2,7 @@ import { Item, Unit, Trigger } from 'w3ts';
 import { TRACK_UNIT_TYPES } from './constants';
 import { placedTracks, removeTrack } from './state';
 import { getTrainTarget } from '../train';
+import { recountTrackShapes } from '../challengeList';
 import { TRACK_PIECE_ID } from '../constants';
 
 function onTrackDestroyed() {
@@ -19,6 +20,9 @@ function onTrackDestroyed() {
   const x = dying.x;
   const y = dying.y;
   removeTrack(dying);
+  // The line just got shorter, so any wager measured against it has to be
+  // re-measured: a destroyed piece must not keep paying for its own shape.
+  recountTrackShapes();
   dying.destroy();
   const dropped = Item.create(TRACK_PIECE_ID, x, y);
   if (dropped != null) dropped.charges = 1;
