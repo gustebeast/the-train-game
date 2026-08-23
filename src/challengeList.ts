@@ -1,5 +1,7 @@
 import { defineChallenge, completeChallenge, isChallengeArmed } from './challenges';
 import { getHumanPlayers } from './util';
+import { placedTracks } from './track/state';
+import { TRACK_SIZE } from './track/constants';
 
 /**
  * The challenge catalogue: definitions plus the counters they display.
@@ -43,15 +45,22 @@ const BRINK_SECONDS = 10;
 export const BRINK_TRACKS = 2;
 
 // --- per-round counters ---------------------------------------------------
-let straightRun = 0;      // current unbroken run, not a total
+/** Derived from the line itself by recountTrackShapes -- never incremented.
+ *  See computeTrackShapes for why. */
+let straightRun = 0;      // longest unbroken run, not a total
 let curvedCount = 0;
+/** How many pieces the map laid before the players got to build. Anything below
+ *  this index is scenery and must not count toward a wager. */
+let trackBaseline = 0;
+
 let dashCount = 0;
 let brinkSeconds = 0;
 let soloToolsBroken = false;
 
-/** Clear every counter. Called when a round starts, so progress never leaks
- *  from one round into the next. */
+/** Clear every counter. Called when a round starts -- AFTER the terrain has
+ *  spawned, because the starting tracks have to exist to be measured. */
 export function resetChallengeProgress(): void {
+  trackBaseline = placedTracks.length;
   straightRun = 0;
   curvedCount = 0;
   dashCount = 0;
@@ -137,22 +146,76 @@ defineChallenge({
 
 // --- event hooks, called by the systems that see the events ---------------
 
-/** A track was laid, and its shape is now known. `curved` is a 90-degree turn.
+/** A point on the line. Exported for the test, which builds lines by hand. */
+export interface TrackPoint { x: number; y: number; }
+
+export interface TrackShapes { straightRun: number; curved: number; }
+
+/** Positions are grid-snapped to TRACK_SIZE, so a quarter-tile slack is more
+ *  than enough to absorb float error while never spanning two tiles. */
+const AXIS_TOLERANCE = TRACK_SIZE * 0.25;
+
+/** Measure the shape of a whole line of track.
  *
- *  The straight challenge wants an UNBROKEN run, so a curve resets it to zero
- *  rather than merely not counting. */
-export function noteTrackShape(curved: boolean): void {
-  if (curved) {
-    straightRun = 0;
-    if (isChallengeArmed(CH_CURVED_15)) {
-      curvedCount += 1;
-      if (curvedCount >= CURVED_TARGET) completeChallenge(CH_CURVED_15);
+ *  Counted by re-reading the line rather than by incrementing as pieces are
+ *  laid, because a piece is not permanent: it can be destroyed, dropped back as
+ *  an item and rebuilt. An incremental counter credits every one of those
+ *  rebuilds, so destroying and re-laying a single straight piece fifteen times
+ *  used to win "Straight and Narrow" outright. A measurement of the line as it
+ *  actually stands cannot be farmed that way -- and it also cannot drift, which
+ *  is the deeper reason to prefer it.
+ *
+ *  A piece's shape is only defined once it has a neighbour on BOTH sides, so
+ *  the two ends of the line are never counted. Everything below `baseline` is
+ *  the map's own starting track and is skipped.
+ *
+ *  Straight means the two neighbours sit on a common axis through the piece --
+ *  both due east/west of it, or both due north/south. Anything else is a
+ *  90-degree turn. */
+export function computeTrackShapes(points: TrackPoint[], baseline: number): TrackShapes {
+  let curved = 0;
+  let longest = 0;
+  let run = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    if (i < baseline) continue;
+    const prev = points[i - 1];
+    const next = points[i + 1];
+    const straight = Math.abs(prev.x - next.x) < AXIS_TOLERANCE
+                  || Math.abs(prev.y - next.y) < AXIS_TOLERANCE;
+    if (straight) {
+      run += 1;
+      if (run > longest) longest = run;
+    } else {
+      curved += 1;
+      run = 0; // the run has to be unbroken
     }
-    return;
   }
-  straightRun += 1;
+  return { straightRun: longest, curved };
+}
+
+/** Re-measure the line and settle any wager that the new measurement wins.
+ *
+ *  Called whenever the line changes -- a piece laid OR a piece destroyed -- so
+ *  the counters always describe the track that exists right now. */
+export function recountTrackShapes(): void {
+  const points: TrackPoint[] = [];
+  for (const t of placedTracks) points.push({ x: t.x, y: t.y });
+  applyTrackShapes(computeTrackShapes(points, trackBaseline));
+}
+
+/** Adopt a measurement as the current progress and pay out anything it wins.
+ *
+ *  Split from recountTrackShapes so the test can drive a measured line straight
+ *  into the payout rules without needing real track units on the map. */
+export function applyTrackShapes(shapes: TrackShapes): void {
+  straightRun = shapes.straightRun;
+  curvedCount = shapes.curved;
+
   if (isChallengeArmed(CH_STRAIGHT_15) && straightRun >= STRAIGHT_TARGET) {
     completeChallenge(CH_STRAIGHT_15);
+  }
+  if (isChallengeArmed(CH_CURVED_15) && curvedCount >= CURVED_TARGET) {
+    completeChallenge(CH_CURVED_15);
   }
 }
 

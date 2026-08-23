@@ -109,14 +109,16 @@ function stopLobbyMusic(): void {
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
 function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   stopLobbyMusic();
-  // Counters are per round, so a challenge bought now starts from zero rather
-  // than inheriting whatever last round left behind.
-  resetChallengeProgress();
   applyChallengeEffects();
   startDayNightForRound();
   clearLastSummoned(); // this round's summon (if any) re-records it
   if (!hasHeroes()) initRandomHeroes();
   const spawned = spawnTerrain(grid, skipCleanup);
+  // Counters are per round, so a challenge bought now starts from zero rather
+  // than inheriting whatever last round left behind. After the spawn, not
+  // before: the track challenges measure the line, so they need this round's
+  // starting track already down to know where the players' own work begins.
+  resetChallengeProgress();
   if (spawned.engine != null && spawned.wagon != null && !skipCleanup) {
     initTrain(spawned.engine, spawned.wagon);
     loadCrateForRound();
