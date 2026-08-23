@@ -32,7 +32,13 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 });
 
 const LOBBY_MUSIC = 'war3mapImported\\InGameLobby.mp3';
-const DEFEAT_MUSIC = 'war3mapImported\\Purgatory.mp3';
+// IMA ADPCM in a WAV container: 388KB against the MP3's 282KB, but with no
+// encoder delay or padding, so the loop point is sample-exact. Converted from
+// the 24-bit master, so it is also one lossy generation rather than two.
+//
+// If WC3 turns out not to decode ADPCM, fall back to PCM (32kHz mono is ~535KB)
+// -- the symptom would be silence in the defeat lobby, not a crash.
+const DEFEAT_MUSIC = 'war3mapImported\\PurgatoryAdpcm.wav';
 
 /** Start the looping lobby track. The music channel loops it natively — no re-trigger needed. */
 function playLobbyMusic(): void {
