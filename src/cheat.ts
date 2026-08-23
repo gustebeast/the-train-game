@@ -1,6 +1,6 @@
 import { Destructable, Item, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
-import { loadCheatTerrain, loadLobby } from './terrain/load';
+import { loadCheatTerrain, loadInterRoundLobby } from './terrain/load';
 import { TRACK_PIECE_ID, WOOD_ID, STONE_ID, PEASANT_ID, WATER_ID, TRAIN_ID } from './constants';
 import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants';
 import { loadFromFile } from './save';
@@ -125,7 +125,7 @@ export function initCheat(): void {
   });
 
   // Disarm, which is what Reset Purchases does. Pairs with -uichallenge to
-  // walk the buy -> reset -> buy again cycle that a real lobby visit produces,
+  // walk the buy -> reset -> buy again cycle that a real inter-round lobby visit produces,
   // since that is the path where the overlay used to come back wrong.
   onChatCommand('-uiclear', () => {
     clearChallenges();
@@ -138,19 +138,19 @@ export function initCheat(): void {
     triggerDefeat();
   });
 
-  // Jump to the lobby, for looking at the shop and the dealer without playing
+  // Jump to the inter-round lobby, for looking at the shop and the dealer without playing
   // a round to get there.
   onChatCommand('-lobby', () => {
     stopGameplay();
     advanceChallengeOffer();
-    loadLobby();
+    loadInterRoundLobby();
   });
 
   onChatCommand('-load', () => {
     if (loadFromFile()) {
-      print('Save loaded. Entering lobby...');
+      print('Save loaded. Entering inter-round lobby...');
       stopGameplay();
-      loadLobby();
+      loadInterRoundLobby();
     } else {
       print('No save file found.');
     }

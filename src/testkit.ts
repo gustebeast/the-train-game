@@ -1,5 +1,5 @@
 import { Timer, Trigger } from 'w3ts';
-import { loadLobby } from './terrain/load';
+import { loadInterRoundLobby } from './terrain/load';
 import { stopGameplay } from './train';
 import { Players } from 'w3ts/globals';
 
@@ -45,14 +45,14 @@ function writeFile(path: string, lines: string[]): void {
 }
 
 /** Put the map in the LOBBY, the way the -load cheat does but without needing a
- *  save file. Lobby-only features (the shop, hero display, the Hero Reroll)
+ *  save file. Features that exist only in the inter-round lobby (the shop, hero display, the Hero Reroll)
  *  cannot be exercised from the gameplay area, and every test that needs them
  *  would otherwise hand-roll the same two calls. Call it first in such a test;
- *  the lobby finishes building on the following frames, so do your setup from
+ *  the inter-round lobby finishes building on the following frames, so do your setup from
  *  `t.after(...)` rather than inline. */
-export function enterLobby(): void {
+export function enterInterRoundLobby(): void {
   stopGameplay();
-  loadLobby();
+  loadInterRoundLobby();
 }
 
 export interface TestReporter {

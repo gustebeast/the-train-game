@@ -6,7 +6,7 @@ import { gameState } from './state';
  *
  * WC3's GetRandomInt is fresh every session, so `-load`, reroll, dislike it,
  * `-load` again gave a different hero each time -- the Reset Purchases circle
- * cannot close that hole, because loading a save bypasses the lobby entirely.
+ * cannot close that hole, because loading a save bypasses the inter-round lobby entirely.
  *
  * A draw here is a pure function of (seed, draw index), and BOTH live in the
  * save. Restoring a save therefore restores the exact point in the sequence,
@@ -30,7 +30,7 @@ function valueAt(seed: number, index: number): number {
   let x = (seed % M + M) % M;
   if (x === 0) x = 1;
   // Advance deterministically. The loop is bounded by the draw count, which
-  // only grows by a handful per lobby visit.
+  // only grows by a handful per inter-round lobby visit.
   for (let i = 0; i <= index; i++) {
     x = (A * x) % M;
   }

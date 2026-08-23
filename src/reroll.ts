@@ -1,8 +1,8 @@
 import { Trigger } from 'w3ts';
 import { gameState, syncState } from './state';
 import { REROLL_ITEM_ID, REROLL_ABILITY_ID } from './constants';
-import { rerollLobbyHero } from './heroes';
-import { rerollLobbyMerc } from './mercenary';
+import { rerollInterRoundLobbyHero } from './heroes';
+import { rerollInterRoundLobbyMerc } from './mercenary';
 import { nextFrame, forEachUnitInWorld } from './util';
 
 const REROLL_COST = 1;
@@ -15,7 +15,7 @@ const TOME_EFFECT = 'Objects\\InventoryItems\\TomeRed\\TomeRed.mdl';
  * (gameState.gold + syncState), matching how every shop purchase works —
  * native per-player gold changes from the shop UI are overwritten by the
  * sync. The item itself stays in the buyer's inventory (not a powerup) until
- * cast on a lobby hero or pawned back to the shop.
+ * cast on an inter-round lobby hero or pawned back to the shop.
  */
 export function initReroll(): void {
   // Purchase: charge shared gold, or swallow the item if it can't be afforded
@@ -45,7 +45,7 @@ export function initReroll(): void {
     print('Hero Reroll refunded.');
   });
 
-  // Cast: swap the targeted lobby hero for a random new one
+  // Cast: swap the targeted inter-round lobby hero for a random new one
   const castTrigger = Trigger.create();
   castTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
   castTrigger.addAction(() => {
@@ -56,7 +56,7 @@ export function initReroll(): void {
     const y = GetUnitY(target);
 
     // One item for both: try the heroes, then the mercenary standing with them.
-    if (rerollLobbyHero(target) || rerollLobbyMerc(target)) {
+    if (rerollInterRoundLobbyHero(target) || rerollInterRoundLobbyMerc(target)) {
       // The cast is based on Wand of Illusion purely because it is an item
       // ability that always accepts a friendly unit -- Purge, the obvious
       // choice, refuses a target with nothing to dispel. Its actual effect is
@@ -71,9 +71,9 @@ export function initReroll(): void {
       const sfx = AddSpecialEffect(TOME_EFFECT, x, y);
       if (sfx != null) DestroyEffect(sfx);
     } else {
-      // Not a lobby hero — the cast already consumed the item's charge, so
+      // Not an inter-round lobby hero — the cast already consumed the item's charge, so
       // hand a fresh one back
-      print('Hero Reroll can only target the heroes in the lobby.');
+      print('Hero Reroll can only target the heroes in the inter-round lobby.');
       const caster = GetTriggerUnit();
       if (caster != null && GetUnitTypeId(caster) !== 0) {
         UnitAddItem(caster, CreateItem(REROLL_ITEM_ID, GetUnitX(caster), GetUnitY(caster))!);

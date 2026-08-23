@@ -149,7 +149,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         }
 
         case Entity.CRATE_START: {
-          // Starting crate (left side) — syncCrateInventory populates from state or shows max in lobby
+          // Starting crate (left side) — syncCrateInventory populates from state or shows max in inter-round lobby
           const startCrate = Unit.create(getNeutralExtra(), CRATE_ID, world.x, world.y, 270);
           if (startCrate != null) setCrateStart(startCrate);
           break;

@@ -43,7 +43,7 @@ export function isShopUpgrade(itemTypeId: number): boolean {
   return false;
 }
 
-/** Bought by a peasant and carried in the lobby until cast on a hero. */
+/** Bought by a peasant and carried in the inter-round lobby until cast on a hero. */
 export function isPeasantUtility(itemTypeId: number): boolean {
   return itemTypeId === REROLL_ITEM_ID;
 }

@@ -344,10 +344,10 @@ export function releaseMercUnit(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Lobby display + reroll
+// Inter-round lobby display + reroll
 // ---------------------------------------------------------------------------
 
-/** Neutral display copies, one per living mercenary, shown in the lobby beside
+/** Neutral display copies, one per living mercenary, shown in the inter-round lobby beside
  *  the heroes so the Reroll item can target them.
  *
  *  Keyed by slot INDEX, not by slot object: the save reset swaps in fresh slot
@@ -356,17 +356,17 @@ let lobbyMercs: Array<{ unit: Unit; slotIndex: number }> = [];
 
 /** Forget the display units without touching the world. Pairs with the terrain
  *  sweep, which has already removed them. */
-export function clearLobbyMercs(): void {
+export function clearInterRoundLobbyMercs(): void {
   lobbyMercs = [];
 }
 
-/** Stand the living mercenaries in the lobby, contract slot i on positions[i].
+/** Stand the living mercenaries in the inter-round lobby, contract slot i on positions[i].
  *
  *  Additive, so buying a contract can call this to put the new hire on the
  *  floor at once rather than leaving the player to wonder what they bought
- *  until the next lobby. Mercenaries already standing are left alone, kit and
+ *  until the next inter-round lobby. Mercenaries already standing are left alone, kit and
  *  all. */
-export function syncLobbyMercs(positions: Array<{ x: number; y: number }>): void {
+export function syncInterRoundLobbyMercs(positions: Array<{ x: number; y: number }>): void {
   for (let i = 0; i < slots.length; i++) {
     const sl = slots[i];
     if (sl.typeId === 0 || sl.dead) continue;
@@ -375,7 +375,7 @@ export function syncLobbyMercs(positions: Array<{ x: number; y: number }>): void
     const u = Unit.create(getNeutralPassive(), sl.typeId, pos.x, pos.y, 270);
     if (u == null) continue;
     u.invulnerable = true;
-    // Show the kit, so the lobby says what a reroll would keep.
+    // Show the kit, so the inter-round lobby says what a reroll would keep.
     for (const itemId of sl.items) {
       const it = CreateItem(itemId, u.x, u.y);
       if (it != null) UnitAddItem(u.handle, it);
@@ -384,10 +384,10 @@ export function syncLobbyMercs(positions: Array<{ x: number; y: number }>): void
   }
 }
 
-/** Reroll the lobby mercenary under `unitHandle`: a new type, keeping its kit.
- *  Returns false if that unit is not a lobby mercenary, so the caller can fall
+/** Reroll the inter-round lobby mercenary under `unitHandle`: a new type, keeping its kit.
+ *  Returns false if that unit is not an inter-round lobby mercenary, so the caller can fall
  *  through to the hero reroll. */
-export function rerollLobbyMerc(unitHandle: unit): boolean {
+export function rerollInterRoundLobbyMerc(unitHandle: unit): boolean {
   const entry = lobbyMercs.find(e => e.unit.handle === unitHandle);
   if (entry == null) return false;
   const slot = slots[entry.slotIndex];
@@ -395,7 +395,7 @@ export function rerollLobbyMerc(unitHandle: unit): boolean {
   const x = entry.unit.x;
   const y = entry.unit.y;
   // Read the kit off the display unit rather than trusting the stored list --
-  // the player may have handed it something since the lobby was built.
+  // the player may have handed it something since the inter-round lobby was built.
   slot.items = getInventoryItemIds(entry.unit.handle);
   markRandomOutcomeTaken();
   // Excludes every mercenary in play, so a reroll is always something new.

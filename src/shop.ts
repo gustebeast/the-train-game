@@ -3,7 +3,7 @@ import { Players } from 'w3ts/globals';
 import { Units } from '@objectdata/units';
 import { gameState, syncState, TRAIN_INITIAL_MAX_HP } from './state';
 import { getTrain, getTrackWagon } from './train';
-import { getCrateStart, loadCrateForLobby } from './items';
+import { getCrateStart, loadCrateForInterRoundLobby } from './items';
 import {
   SUMMON_UPGRADE_ITEM_ID, PEASANT_ID, REROLL_ITEM_ID,
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
@@ -21,7 +21,7 @@ import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges'
 import { markRandomOutcomeTaken } from './randomOutcome';
 import { onGlobalTick } from './globalTick';
 import { showChallengePreview, clearChallengePreview } from './challengeUI';
-import { refreshLobbyRoster, hasLobbyRerollTargets } from './lobbyRoster';
+import { refreshInterRoundLobbyRoster, hasInterRoundLobbyRerollTargets } from './interRoundLobbyRoster';
 
 const ITEM_COSTS: Map<number, number> = new Map([
   [FLAME_RESISTANCE_ID, 1],
@@ -85,20 +85,20 @@ export function stockShop(shop: Unit): void {
       AddItemToStock(shop.handle, MERC_CONTRACT_2_ID, 1, 1);
     }
     // Rerolls only make sense when there is someone standing here to reroll
-    if (hasLobbyRerollTargets()) {
+    if (hasInterRoundLobbyRerollTargets()) {
       AddItemToStock(shop.handle, REROLL_ITEM_ID, 10, 10);
     }
   });
 }
 
-/** Put whoever a purchase just added into the lobby, and make sure the Reroll
+/** Put whoever a purchase just added into the inter-round lobby, and make sure the Reroll
  *  item is on the shelf for them. Both contracts and Summon Heroes change who
- *  is standing in the corner, and the shop is a lobby fixture, so the display
- *  can catch up immediately instead of waiting for the next lobby load. */
-function addRosterToLobby(): void {
-  refreshLobbyRoster();
+ *  is standing in the corner, and the shop is an inter-round lobby fixture, so the display
+ *  can catch up immediately instead of waiting for the next inter-round lobby load. */
+function addRosterToInterRoundLobby(): void {
+  refreshInterRoundLobbyRoster();
   if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0
-      && hasLobbyRerollTargets()) {
+      && hasInterRoundLobbyRerollTargets()) {
     AddItemToStock(currentShop.handle, REROLL_ITEM_ID, 10, 10);
   }
 }
@@ -165,7 +165,7 @@ export function initShop(): void {
       gameState.trainMaxHP = TRAIN_INITIAL_MAX_HP;
       effectTargets = [getTrain()];
       // The train is whole again, so the pair swaps back without waiting for
-      // the next lobby -- otherwise repairing would cost you the chance to
+      // the next inter-round lobby -- otherwise repairing would cost you the chance to
       // upgrade this visit.
       if (currentShop != null) {
         AddItemToStock(currentShop.handle, FLAME_RESISTANCE_ID, 10, 10);
@@ -182,10 +182,10 @@ export function initShop(): void {
       effectTargets = [getTrackWagon()];
     } else if (itemTypeId === CRATE_CAPACITY_ID) {
       gameState.crateMaxStack += 4;
-      // The shop is in the lobby, where the START crate displays capacity as
+      // The shop is in the inter-round lobby, where the START crate displays capacity as
       // item charges — refresh it and play the effect there (the target
       // crate from getCrate() only exists during gameplay rounds)
-      loadCrateForLobby();
+      loadCrateForInterRoundLobby();
       const crateStart = getCrateStart();
       if (crateStart != null) effectTargets = [crateStart];
     } else if (itemTypeId === SUMMON_UPGRADE_ITEM_ID) {
@@ -201,7 +201,7 @@ export function initShop(): void {
       effectTargets = targets;
       // The roster is yours from this moment, so show it rather than making the
       // player finish a round to find out who they bought.
-      addRosterToLobby();
+      addRosterToInterRoundLobby();
       print('Summon Heroes unlocked!');
     } else if (itemTypeId === MERC_CONTRACT_ID) {
       const wasRevive = isMercDead();
@@ -212,7 +212,7 @@ export function initShop(): void {
       if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
         RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_ID);
       }
-      addRosterToLobby();
+      addRosterToInterRoundLobby();
       print(wasRevive
         ? 'Mercenary Contract renewed: a fresh mercenary takes the job, carrying the gear the last one was holding. Level 2 creep camps are back.'
         : 'Mercenary Contract purchased: level 2 creep camps unlocked; a mercenary will join your next hero summon.');
@@ -225,7 +225,7 @@ export function initShop(): void {
       if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
         RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_2_ID);
       }
-      addRosterToLobby();
+      addRosterToInterRoundLobby();
       print('Second Contract signed: a second mercenary joins you, and level 3 creep camps open up.');
       const secondBuyer = Unit.fromHandle(GetTriggerUnit());
       if (secondBuyer != null) effectTargets = [secondBuyer];
@@ -248,10 +248,10 @@ export function initShop(): void {
   });
 }
 
-/** The dealer standing in the current lobby, if there is one. */
+/** The dealer standing in the current inter-round lobby, if there is one. */
 let dealerUnit: Unit | null = null;
 
-/** Remember this lobby's dealer, so the overlay can tell when he is selected. */
+/** Remember this inter-round lobby's dealer, so the overlay can tell when he is selected. */
 export function registerDealer(dealer: Unit): void {
   dealerUnit = dealer;
 }
@@ -277,7 +277,7 @@ function dealerIsSelected(): boolean {
  *
  *  Selection is the trigger because clicking the dealer is already the gesture
  *  for "what have you got?". Earlier attempts said it in chat -- on entering
- *  the lobby, which was noise, then on selection, which needed a cooldown to
+ *  the inter-round lobby, which was noise, then on selection, which needed a cooldown to
  *  survive a stray double-click. A panel needs neither: re-selecting redraws
  *  the same thing, and it goes away when you look away.
  *

@@ -1,12 +1,12 @@
 import { gridToWorld } from './terrain/constants';
-import { syncLobbyHeroes, clearLobbyHeroes } from './heroes';
-import { syncLobbyMercs, clearLobbyMercs, hasActiveMerc } from './mercenary';
+import { syncInterRoundLobbyHeroes, clearInterRoundLobbyHeroes } from './heroes';
+import { syncInterRoundLobbyMercs, clearInterRoundLobbyMercs, hasActiveMerc } from './mercenary';
 import { isSummonUpgradePurchased } from './summonUpgrade';
 
 /**
  * Where everyone you own stands while you shop.
  *
- * The roster fills the south-east corner of the 9x9 lobby, laid out as it
+ * The roster fills the south-east corner of the 9x9 inter-round lobby, laid out as it
  * reads on screen (north up):
  *
  *     .  .  .  .
@@ -34,9 +34,9 @@ const MERC_SPOTS = [
 /** Forget the display units. Call after the terrain sweep has removed them,
  *  and before refreshing: the handles are dead, and WC3 recycles handles, so a
  *  stale reference can otherwise start reading as some unrelated new unit. */
-export function resetLobbyRoster(): void {
-  clearLobbyHeroes();
-  clearLobbyMercs();
+export function resetInterRoundLobbyRoster(): void {
+  clearInterRoundLobbyHeroes();
+  clearInterRoundLobbyMercs();
 }
 
 /** Stand up anyone who is missing from the roster.
@@ -45,13 +45,13 @@ export function resetLobbyRoster(): void {
  *  contract puts that mercenary on the floor immediately instead of making you
  *  wait a whole round to meet what you paid for, and the heroes and
  *  mercenaries already standing (and whatever they are holding) are untouched. */
-export function refreshLobbyRoster(): void {
-  syncLobbyHeroes(HERO_SPOTS);
-  syncLobbyMercs(MERC_SPOTS);
+export function refreshInterRoundLobbyRoster(): void {
+  syncInterRoundLobbyHeroes(HERO_SPOTS);
+  syncInterRoundLobbyMercs(MERC_SPOTS);
 }
 
-/** Whether the lobby currently holds anything the Reroll item could target.
+/** Whether the inter-round lobby currently holds anything the Reroll item could target.
  *  Drives whether the shop bothers stocking it. */
-export function hasLobbyRerollTargets(): boolean {
+export function hasInterRoundLobbyRerollTargets(): boolean {
   return isSummonUpgradePurchased() || hasActiveMerc();
 }

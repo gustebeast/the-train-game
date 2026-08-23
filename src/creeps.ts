@@ -18,13 +18,13 @@ const CREEP_DPS_ADVANTAGE = 1.1;
 /** Creep DPS multiplier when the Tough Creep Camp challenge is armed. */
 const TOUGH_CAMP_DPS_ADVANTAGE = 1.5;
 
-/** Whether we're in DPS test mode (lobby sparring). */
+/** Whether we're in DPS test mode (inter-round lobby sparring). */
 let dpsTestMode = false;
 
-/** Measured hero DPS from the lobby DPS test. Used for gameplay scaling. */
+/** Measured hero DPS from the inter-round lobby DPS test. Used for gameplay scaling. */
 let measuredHeroDPS = 0;
 
-/** Measured creep DPS from the lobby DPS test (accounts for hero stuns/spells). */
+/** Measured creep DPS from the inter-round lobby DPS test (accounts for hero stuns/spells). */
 let measuredCreepDPS = 0;
 
 /** Active DPS test timer (so it can be cancelled early). */
@@ -379,7 +379,7 @@ export function scaleCreepStats(heroes: Unit[]): void {
 }
 
 // ---------------------------------------------------------------------------
-// DPS test — lobby sparring to measure real DPS
+// DPS test — inter-round lobby sparring to measure real DPS
 // ---------------------------------------------------------------------------
 
 /** End the DPS test: measure damage, compute DPS, clean up all state.
@@ -419,7 +419,7 @@ export function cancelDPSTest(): void {
 }
 
 /** Start DPS test: destroy cage to spawn creeps, spawn heroes, let them fight.
- *  Called after lobby terrain is spawned. */
+ *  Called after inter-round lobby terrain is spawned. */
 export function startDPSTest(): void {
   if (cageDestructable == null) return;
 

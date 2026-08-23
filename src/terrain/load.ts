@@ -1,44 +1,44 @@
 import { Grid, GRID_MAX_X } from './constants';
-import { generateTerrain, generateCheatTerrain, generateLobby, generateDefeatLobby } from './generate';
+import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
-import { initTrain, initLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
+import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { awardVictory } from '../victory';
 import { gameState } from '../state';
-import { revertToLobbySnapshot, saveLobbySnapshot } from '../save';
+import { revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
   hasHeroes, initRandomHeroes,
-  saveHeroLobbySnapshot, revertHeroesToLobbySnapshot,
+  saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
 } from '../heroes';
 import { startDPSTest } from '../creeps';
-import { loadCrateForRound, loadCrateForLobby } from '../items';
+import { loadCrateForRound, loadCrateForInterRoundLobby } from '../items';
 import { resetChallengeProgress } from '../challengeList';
 import { hideChallengeUI } from '../challengeUI';
 import { applyChallengeEffects, clearChallengeEffects } from '../challengeEffects';
 import { startDayNightForRound, stopDayNight } from '../daynight';
 import { resetRandomOutcome } from '../randomOutcome';
-import { refreshLobbyRoster, resetLobbyRoster } from '../lobbyRoster';
+import { refreshInterRoundLobbyRoster, resetInterRoundLobbyRoster } from '../interRoundLobbyRoster';
 import { deriveSeed } from '../rng';
 import { advanceChallengeOffer } from '../challenges';
 
 // Finishing a round is what counts as a new visit to the dealer, so that is
-// where the shelf rotates. NOT inside loadLobby: Reset Purchases goes back
+// where the shelf rotates. NOT inside loadInterRoundLobby: Reset Purchases goes back
 // through there too, and rewinding a purchase must leave the same wager on
 // sale rather than letting a player shop for a different one.
 setVictoryCallback(() => {
   advanceChallengeOffer();
-  loadLobby();
+  loadInterRoundLobby();
 });
 setDefeatCallback(() => loadDefeatLobby());
 setAwardVictoryCallback(() => awardVictory());
 registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round));
 registerReadyZone('revert', 'Resetting purchases', () => {
-  revertToLobbySnapshot();
-  revertHeroesToLobbySnapshot(); // undoes rerolls bought this lobby
-  loadLobby();
+  revertToInterRoundLobbySnapshot();
+  revertHeroesToInterRoundLobbySnapshot(); // undoes rerolls bought this inter-round lobby
+  loadInterRoundLobby();
 });
 
-// Both lobby tracks: IMA ADPCM in a WAV container, on a sound handle.
+// Both inter-round lobby tracks: IMA ADPCM in a WAV container, on a sound handle.
 // WC3 decodes ADPCM fine (verified in game). Chosen over PCM because MPQ was
 // measured to recover only ~5% on PCM, so a 24-bit master would cost its full
 // size in the archive.
@@ -47,7 +47,7 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 // Documents/Music/Bounces/TheTrainGame. Re-encode from there rather than from
 // these files -- the difference between one lossy generation and two.
 const TRACK_FILES = {
-  lobby: 'war3mapImported\\InterRoundLobby.wav',
+  interRound: 'war3mapImported\\InterRoundLobby.wav',
   defeat: 'war3mapImported\\Purgatory.wav',
 };
 
@@ -55,7 +55,7 @@ type MusicTrack = keyof typeof TRACK_FILES;
 
 /** Which track SHOULD be playing, or null for none. */
 let currentTrack: MusicTrack | null = null;
-const trackHandles: { [K in MusicTrack]: sound | null } = { lobby: null, defeat: null };
+const trackHandles: { [K in MusicTrack]: sound | null } = { interRound: null, defeat: null };
 
 /**
  * Say which track should be playing. Declarative on purpose.
@@ -63,7 +63,7 @@ const trackHandles: { [K in MusicTrack]: sound | null } = { lobby: null, defeat:
  * Callers state the desired end state rather than issuing stop/start pairs, so
  * asking for the track that is ALREADY playing does nothing at all. That is
  * what makes a whole class of bug impossible: "Resetting purchases" re-enters
- * the lobby while the lobby track is already running, and the previous
+ * the inter-round lobby while the inter-round lobby track is already running, and the previous
  * stop-then-start version left it silent, because it tore down a playing sound
  * and could not reliably restart it in the same frame. Nothing here can produce
  * silence unless silence was asked for.
@@ -88,7 +88,7 @@ function setMusic(track: MusicTrack | null): void {
   // linger. StopMusic does not touch sound handles, hence both.
   StopMusic(false);
   ClearMapMusic();
-  for (const key of ['lobby', 'defeat'] as MusicTrack[]) {
+  for (const key of ['interRound', 'defeat'] as MusicTrack[]) {
     const h = trackHandles[key];
     if (h != null) StopSound(h, false, false);
   }
@@ -146,14 +146,14 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
   loadGameplay(generateCheatTerrain(exitX, exitY));
 }
 
-/** Load the defeat lobby: the lobby tileset, empty.
+/** Load the defeat lobby: the inter-round lobby tileset, empty.
  *
  *  Intentionally spawns nothing else -- no train, shop, crate, heroes, merc or
  *  ready circles. There is no way to start another round from here, which is
  *  the point: the run is over. It also does NOT snapshot or save, so a defeat
- *  cannot overwrite the lobby state a later session would load.
+ *  cannot overwrite the inter-round lobby state a later session would load.
  *
- *  Contrast loadLobby(), which is the victory path and rebuilds everything. */
+ *  Contrast loadInterRoundLobby(), which is the victory path and rebuilds everything. */
 export function loadDefeatLobby(): void {
   hideChallengeUI();
   clearChallengeEffects();
@@ -163,23 +163,23 @@ export function loadDefeatLobby(): void {
   spawnTerrain(generateDefeatLobby());
 }
 
-export function loadLobby(): void {
+export function loadInterRoundLobby(): void {
   // No round in progress, so no challenge overlay, handicaps or night timer.
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
   resetRandomOutcome();
-  saveLobbySnapshot();
-  saveHeroLobbySnapshot();
-  setMusic('lobby');
+  saveInterRoundLobbySnapshot();
+  saveHeroInterRoundLobbySnapshot();
+  setMusic('interRound');
   SetTimeOfDay(12);
-  const spawned = spawnTerrain(generateLobby());
-  if (spawned.engine != null && spawned.wagon != null) initLobbyTrain(spawned.engine, spawned.wagon);
-  loadCrateForLobby();
+  const spawned = spawnTerrain(generateInterRoundLobby());
+  if (spawned.engine != null && spawned.wagon != null) initInterRoundLobbyTrain(spawned.engine, spawned.wagon);
+  loadCrateForInterRoundLobby();
   // Heroes and mercenaries stand together in the south-east corner, so the one
   // Reroll item can target either. Reset first: spawnTerrain has just removed
-  // the previous lobby's display units, and their handles must not be reused.
-  resetLobbyRoster();
-  refreshLobbyRoster();
+  // the previous inter-round lobby's display units, and their handles must not be reused.
+  resetInterRoundLobbyRoster();
+  refreshInterRoundLobbyRoster();
   startDPSTest();
 }

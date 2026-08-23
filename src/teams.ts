@@ -1,9 +1,9 @@
 import { MapPlayer } from 'w3ts';
 import { getHumanPlayers } from './util';
 
-/** Player 22: computer-controlled hero owner for the lobby DPS check. */
+/** Player 22: computer-controlled hero owner for the inter-round lobby DPS check. */
 const DPS_CHECK_PLAYER_INDEX = 22;
-/** Player 23: owns the train (and lobby vision water). */
+/** Player 23: owns the train (and inter-round lobby vision water). */
 const TRAIN_PLAYER_INDEX = 23;
 
 /** Set the same alliance state in both directions between two players. */

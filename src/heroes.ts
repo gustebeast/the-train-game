@@ -396,7 +396,7 @@ function transferPeasantsAndSpawnHeroes(casterX: number, casterY: number): void 
 
 /** Create one hero unit from allHeroes[dataIdx] with XP, skills and items
  *  applied. Tome stat bonuses land one frame later (hero stats must finalize
- *  first). Shared by round summons and the lobby hero display. */
+ *  first). Shared by round summons and the inter-round lobby hero display. */
 function spawnHeroUnit(dataIdx: number, owner: MapPlayer, x: number, y: number): Unit | null {
   const data = allHeroes[dataIdx];
   if (data.typeId === 0) return null;
@@ -523,32 +523,32 @@ export function areHeroesSpawned(): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Lobby hero display + reroll
+// Inter-round lobby hero display + reroll
 // ---------------------------------------------------------------------------
 
-/** Neutral display copies of the hero roster, lobby only.
- *  (Terrain cleanup removes the units; clearLobbyHeroes drops the handles.) */
+/** Neutral display copies of the hero roster, inter-round lobby only.
+ *  (Terrain cleanup removes the units; clearInterRoundLobbyHeroes drops the handles.) */
 let lobbyHeroes: Array<{ unit: Unit; dataIdx: number }> = [];
 
 /** Forget the display units without touching the world. Pairs with the terrain
  *  sweep, which has already removed them. */
-export function clearLobbyHeroes(): void {
+export function clearInterRoundLobbyHeroes(): void {
   lobbyHeroes = [];
 }
 
-/** Stand the hero roster in the lobby, hero i on positions[i].
+/** Stand the hero roster in the inter-round lobby, hero i on positions[i].
  *
  *  ALL FOUR are shown, not just the two that fought last round. The other two
  *  are equally yours -- equally rerollable, equally able to hold gear -- and
- *  showing only the pair that happened to be summoned made the lobby
+ *  showing only the pair that happened to be summoned made the inter-round lobby
  *  misrepresent the roster. Nothing shows before Summon Heroes is bought,
  *  because until then there is no roster to speak of.
  *
  *  Additive: it fills in whoever is missing and leaves standing heroes alone.
  *  That is what makes it safe to call mid-lobby after a purchase. A rebuild
  *  would recreate each hero from HeroData and silently drop anything a player
- *  had handed the display unit since the lobby opened. */
-export function syncLobbyHeroes(positions: Array<{ x: number; y: number }>): void {
+ *  had handed the display unit since the inter-round lobby opened. */
+export function syncInterRoundLobbyHeroes(positions: Array<{ x: number; y: number }>): void {
   if (!isSummonUpgradePurchased()) return;
   const owner = getNeutralPassive();
   for (let dataIdx = 0; dataIdx < allHeroes.length; dataIdx++) {
@@ -563,14 +563,14 @@ export function syncLobbyHeroes(positions: Array<{ x: number; y: number }>): voi
   }
 }
 
-/** Reroll the lobby hero represented by unitHandle: swap its slot in
+/** Reroll the inter-round lobby hero represented by unitHandle: swap its slot in
  *  allHeroes to a random hero type not currently in the pool of 4, keeping
  *  XP, items and tome bonuses (skills are hero-specific and reset), and
- *  replace the lobby unit in place. Returns false if unitHandle is not a
- *  lobby hero or no candidate types remain. */
+ *  replace the inter-round lobby unit in place. Returns false if unitHandle is not a
+ *  inter-round lobby hero or no candidate types remain. */
 /** Next hero off the shared reroll queue.
  *
- *  ONE queue for the whole lobby, not a fresh roll per hero: rerolling your
+ *  ONE queue for the whole inter-round lobby, not a fresh roll per hero: rerolling your
  *  other hero hands you the same hero the first one would have got. The queue
  *  is the seeded stream (rng.ts) walked from a saved cursor, so it is identical
  *  every time a given save is loaded -- reloading to fish for a better result
@@ -597,7 +597,7 @@ function nextQueuedHeroType(candidates: number[]): number {
   return candidates[0];
 }
 
-export function rerollLobbyHero(unitHandle: unit): boolean {
+export function rerollInterRoundLobbyHero(unitHandle: unit): boolean {
   const entry = lobbyHeroes.find(e => e.unit.handle === unitHandle);
   if (entry == null) return false;
 
@@ -633,7 +633,7 @@ export function rerollLobbyHero(unitHandle: unit): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Lobby snapshot — pairs with gameState's lobby snapshot so the lobby's
+// Inter-round lobby snapshot — pairs with gameState's inter-round lobby snapshot so the inter-round lobby's
 // "revert purchases" zone also undoes rerolls
 // ---------------------------------------------------------------------------
 
@@ -647,13 +647,13 @@ function cloneHero(h: HeroData): HeroData {
 
 let lobbyHeroSnapshot: HeroData[] | null = null;
 
-/** Snapshot hero data on lobby entry, for revert. */
-export function saveHeroLobbySnapshot(): void {
+/** Snapshot hero data on inter-round lobby entry, for revert. */
+export function saveHeroInterRoundLobbySnapshot(): void {
   lobbyHeroSnapshot = allHeroes.map(h => cloneHero(h));
 }
 
-/** Restore hero data from the lobby snapshot (undoes rerolls). */
-export function revertHeroesToLobbySnapshot(): void {
+/** Restore hero data from the inter-round lobby snapshot (undoes rerolls). */
+export function revertHeroesToInterRoundLobbySnapshot(): void {
   if (lobbyHeroSnapshot == null) return;
   for (let i = 0; i < 4; i++) {
     allHeroes[i] = cloneHero(lobbyHeroSnapshot[i]);

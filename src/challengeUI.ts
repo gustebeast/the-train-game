@@ -106,7 +106,7 @@ export function clearChallengePreview(): void {
 function draw(): void {
   // An armed challenge outranks a preview: what you are actually playing
   // matters more than what is on the shelf. In practice they never collide --
-  // the dealer only exists in the lobby, where nothing is armed.
+  // the dealer only exists in the inter-round lobby, where nothing is armed.
   const armed = getArmedChallenge();
   const def = armed != null ? armed : preview;
   if (def == null) {
@@ -162,7 +162,7 @@ export function initChallengeUI(): void {
   draw();
 }
 
-/** Take the overlay off screen -- used when leaving gameplay, so the lobby and
+/** Take the overlay off screen -- used when leaving gameplay, so the inter-round lobby and
  *  the defeat screen are not left with a stale challenge in the corner.
  *
  *  Hides rather than destroys, so a player who collapsed it finds it still

@@ -6,7 +6,7 @@ import { SUMMON_TECH_ID, SUMMON_UPGRADE_ITEM_ID } from './constants';
 /** Whether the Summon Heroes upgrade has been bought (persisted in saves). */
 let purchased = false;
 
-/** The current lobby shop unit, so the upgrade can be pulled from stock. */
+/** The current inter-round lobby shop unit, so the upgrade can be pulled from stock. */
 let shopUnit: Unit | null = null;
 
 export function isSummonUpgradePurchased(): boolean {
@@ -27,7 +27,7 @@ function removeFromShopStock(): void {
   }
 }
 
-/** Register the lobby shop after it spawns, so a later purchase can pull
+/** Register the inter-round lobby shop after it spawns, so a later purchase can pull
  *  the item from its stock. Initial stocking is additive (stockShop in
  *  shop.ts) — when the upgrade is owned the item is simply never added. */
 export function registerSummonShop(shop: Unit): void {

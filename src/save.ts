@@ -109,7 +109,7 @@ function captureStateBundle(): StateBundle {
 /** Restore a bundle: reset every segment to baseline, decode the bundle's
  *  segments over that, then apply core state. The single convergence point
  *  for -load (bundle read from disk) and Reset Purchases (bundle captured
- *  in memory on lobby entry). */
+ *  in memory on inter-round lobby entry). */
 function applyStateBundle(bundle: StateBundle): void {
   // Reset all segments first — a bundle without a segment means "back to
   // default", never "keep whatever the current session has"
@@ -125,16 +125,16 @@ function applyStateBundle(bundle: StateBundle): void {
   applyState(bundle.core);
 }
 
-/** In-memory bundle captured on lobby entry, used by Reset Purchases. */
+/** In-memory bundle captured on inter-round lobby entry, used by Reset Purchases. */
 let lobbyBundle: StateBundle | null = null;
 
-/** Snapshot the current state for lobby revert. Called on lobby entry. */
-export function saveLobbySnapshot(): void {
+/** Snapshot the current state for inter-round lobby revert. Called on inter-round lobby entry. */
+export function saveInterRoundLobbySnapshot(): void {
   lobbyBundle = captureStateBundle();
 }
 
-/** Restore the lobby-entry snapshot. Returns false if none exists. */
-export function revertToLobbySnapshot(): boolean {
+/** Restore the inter-round lobby-entry snapshot. Returns false if none exists. */
+export function revertToInterRoundLobbySnapshot(): boolean {
   if (lobbyBundle == null) return false;
   applyStateBundle(lobbyBundle);
   return true;

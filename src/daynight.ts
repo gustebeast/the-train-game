@@ -213,7 +213,7 @@ export function cancelNightForVictory(): void {
   endNight();
 }
 
-/** Full stop, for leaving gameplay by any route (victory, defeat, lobby). */
+/** Full stop, for leaving gameplay by any route (victory, defeat, inter-round lobby). */
 export function stopDayNight(): void {
   nightStart = cancelTimer(nightStart);
   cancelNightForVictory();

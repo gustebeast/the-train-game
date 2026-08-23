@@ -3,7 +3,7 @@ import { registerSaveSegment, parseFields } from './save';
 import { deriveSeed } from './rng';
 
 /**
- * Shady Dealer challenges — optional wagers bought in the lobby for 1 gold
+ * Shady Dealer challenges — optional wagers bought in the inter-round lobby for 1 gold
  * that pay 2 gold when their condition is met, so a completed challenge is a
  * net win of 1.
  *
@@ -37,7 +37,7 @@ export interface ChallengeDef {
 const defs: ChallengeDef[] = [];
 
 /** Register a challenge. Call at module scope; import the module from main.ts
- *  so every definition exists before the first lobby is built. */
+ *  so every definition exists before the first inter-round lobby is built. */
 export function defineChallenge(def: ChallengeDef): void {
   defs.push(def);
 }
@@ -64,7 +64,7 @@ let armedId: string | null = null;
 let seen: string[] = [];
 
 /** The challenge currently on the shelf. Held rather than recomputed, so
- *  asking twice in a lobby visit does not burn through the rotation. */
+ *  asking twice in an inter-round lobby visit does not burn through the rotation. */
 let offeredId: string | null = null;
 
 /** How many times the player has been offered every challenge and come back
@@ -138,7 +138,7 @@ function shuffledIds(): string[] {
   return ids;
 }
 
-/** Put the next challenge on the shelf. Called once per lobby visit.
+/** Put the next challenge on the shelf. Called once per inter-round lobby visit.
  *
  *  Takes the first id of the lap not yet OFFERED, and marks it offered there
  *  and then -- so declining it still moves the rotation on. When the lap is
