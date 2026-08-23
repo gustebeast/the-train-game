@@ -36,9 +36,10 @@ const LOBBY_MUSIC = 'war3mapImported\\InGameLobby.mp3';
 // Chosen over PCM because MPQ was measured to recover only ~5% on PCM, so the
 // master would have cost its full 2.3MB in the archive.
 //
-// The master lives at assets/audio/Purgatory-master.wav, outside the map so it
-// is not packaged. Re-encode from there rather than from this file: it is the
-// difference between one lossy generation and two.
+// The 24-bit master is kept outside the repo, with the other bounces:
+//   Documents/Music/Bounces/TheTrainGame/DefeatLobby.wav
+// Re-encode from there rather than from this file -- the difference between one
+// lossy generation and two. Loop length must stay a multiple of 1017 samples.
 const DEFEAT_MUSIC = 'war3mapImported\\PurgatoryAdpcm.wav';
 
 /** Start the looping lobby track. The music channel loops it natively — no re-trigger needed. */

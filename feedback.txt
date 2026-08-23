@@ -1,6 +1,7 @@
-Axe, pickaxe and bucket should show up on minimap
-If heroes die, creeps should be removed
-Two cars, one for tracks one for resources/crafting
-Item grants aren't working for heroes
-Peasant pathing should be slightly larger to not pass in 1x1 tile
-Despawn peasant on player leave
+* Hero reroll
+* Dash
+Initial starting lobby for host, tutorial
+* Defeat lobby
+Defeat save handling
+Unlock level 3 camps
+* Despawn peasant on player leave
