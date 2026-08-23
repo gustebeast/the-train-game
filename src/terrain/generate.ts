@@ -463,7 +463,7 @@ function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
 }
 
 // ============================================================
-// Train start layout (shared by lobby and round generation)
+// Train start layout (shared by inter-round lobby and round generation)
 // ============================================================
 
 /** Place the train start: track wagon on the anchor tile, engine one tile
@@ -471,7 +471,7 @@ function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
  *  track is added ahead of the engine so players have time to gather
  *  materials before the train reaches the end of the line. West→east scan
  *  order means placedTracks[0] is the wagon's tile, [1] the engine's, and
- *  [2] the runway. The lobby train doesn't move, so it skips the runway. */
+ *  [2] the runway. The inter-round lobby train doesn't move, so it skips the runway. */
 function placeTrainStart(grid: Grid, gx: number, gy: number, runway: boolean): void {
   grid.cells[idx(gx, gy)].entity = Entity.TRACK_WITH_WAGON;
   grid.cells[idx(gx + 1, gy)].entity = Entity.TRACK_WITH_ENGINE;
@@ -482,10 +482,10 @@ function placeTrainStart(grid: Grid, gx: number, gy: number, runway: boolean): v
 }
 
 // ============================================================
-// Lobby grid (post-victory)
+// Inter-round lobby grid (post-victory)
 // ============================================================
 
-// 9x9 lobby grid (no water border).
+// 9x9 inter-round lobby grid (no water border).
 // Shorthand: terrain + optional entity
 function c(terrain: Terrain, entity = Entity.NONE): Cell { return { terrain, entity }; }
 const M = c(Terrain.WHITE_MARBLE);
@@ -514,10 +514,10 @@ const LOBBY_GRID: Cell[][] = [
   [ M, M, M, M, M, M, M, M, M], // y=-4
 ].reverse();
 
-export function generateLobby(): Grid {
+export function generateInterRoundLobby(): Grid {
   const grid = createGrid();
 
-  // Default terrain is grass; 6-wide water border around the lobby
+  // Default terrain is grass; 6-wide water border around the inter-round lobby
   // Inner ring (-5..+5) uses WATER_VISIBLE for shared vision via train player
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
@@ -530,7 +530,7 @@ export function generateLobby(): Grid {
     }
   }
 
-  // Apply lobby grid to center 9x9
+  // Apply inter-round lobby grid to center 9x9
   for (let ly = -4; ly <= 4; ly++) {
     for (let lx = -4; lx <= 4; lx++) {
       const lobbyCell = LOBBY_GRID[ly + 4][lx + 4];
@@ -541,7 +541,7 @@ export function generateLobby(): Grid {
   }
 
   // Train start (wagon, engine, start crate) — same layout as a round,
-  // minus the runway (the lobby train never moves)
+  // minus the runway (the inter-round lobby train never moves)
   placeTrainStart(grid, -4, 0, false);
 
   // DPS test area: 6x3 at far bottom-right of grid
@@ -569,15 +569,15 @@ export function generateLobby(): Grid {
   return grid;
 }
 
-/** The lobby's tileset with nothing in it.
+/** The inter-round lobby's tileset with nothing in it.
  *
- *  Same floor and water boundary as the victory lobby -- built from it, so the
+ *  Same floor and water boundary as the inter-round lobby -- built from it, so the
  *  two can never drift -- but stripped of every unit and building: no shop,
  *  crates, ready circles, train or creep cage. Player spawns are kept, since
  *  the point is to have somewhere to stand and walk after a defeat, and the
  *  water border is kept because it is the map edge rather than scenery. */
 export function generateDefeatLobby(): Grid {
-  const grid = generateLobby();
+  const grid = generateInterRoundLobby();
   for (const cell of grid.cells) {
     if (cell.entity === Entity.NONE) continue;
     const isBoundary = cell.entity === Entity.WATER || cell.entity === Entity.WATER_VISIBLE;

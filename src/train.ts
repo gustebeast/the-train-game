@@ -173,7 +173,7 @@ export function onTrackPlaced(): void {
 
 /** Re-issue the train's current move order (call after programmatic inventory changes). */
 export function reissueMoveOrder(): void {
-  // Inventory changes also happen in the lobby (capacity display items) —
+  // Inventory changes also happen in the inter-round lobby (capacity display items) —
   // never issue move orders there; the stored points are from the last round
   if (!isInGameplay()) return;
 
@@ -227,7 +227,7 @@ export function syncTrainStats(): void {
   SetUnitState(train.handle, UNIT_STATE_LIFE, train.maxLife);
   BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
 
-  // In lobby, display items at max stack to illustrate capacity
+  // In inter-round lobby, display items at max stack to illustrate capacity
   if (!isInGameplay()) {
     setStorageItem(train, WOOD_ID, gameState.trainCargoMaxStack, 1);
     setStorageItem(train, STONE_ID, gameState.trainCargoMaxStack, 2);
@@ -239,7 +239,7 @@ export function syncTrainStats(): void {
 
 registerSyncCallback(syncTrainStats);
 
-export function initLobbyTrain(unit: Unit, wagon: Unit): void {
+export function initInterRoundLobbyTrain(unit: Unit, wagon: Unit): void {
   setInGameplay(false);
   setupTrainUnit(unit);
   setupWagonUnit(wagon);
@@ -290,7 +290,7 @@ export function setAwardVictoryCallback(cb: () => void): void {
   onAwardVictory = cb;
 }
 
-function enterLobby(): void {
+function enterInterRoundLobby(): void {
   setInGameplay(false);
   if (onVictory != null) onVictory();
 }
@@ -381,7 +381,7 @@ export function initTrain(unit: Unit, wagon: Unit) {
       startOneShot(victoryDelay, () => {
         print('Victory!');
         if (onAwardVictory != null) onAwardVictory();
-        enterLobby();
+        enterInterRoundLobby();
       });
       return;
     }

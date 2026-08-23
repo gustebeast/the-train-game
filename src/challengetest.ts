@@ -33,8 +33,8 @@ function runChallengeTest(t: TestReporter): void {
   // Walk the whole sequence, buying each offer. No id may repeat.
   //
   // advanceChallengeOffer, not getOfferedChallenge: the shelf HOLDS its offer
-  // so that browsing the shop twice in one lobby visit does not burn through
-  // the rotation. Only a new lobby visit moves it on, and this loop is standing
+  // so that browsing the shop twice in one inter-round lobby visit does not burn through
+  // the rotation. Only a new inter-round lobby visit moves it on, and this loop is standing
   // in for those visits.
   const seen: string[] = [];
   let repeated = 0;

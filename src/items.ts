@@ -76,8 +76,8 @@ export function loadCrateForRound(): void {
   gameState.crateStoneCount = 0;
 }
 
-/** Populate the start crate with max stack to show capacity. Called in lobby. */
-export function loadCrateForLobby(): void {
+/** Populate the start crate with max stack to show capacity. Called in inter-round lobby. */
+export function loadCrateForInterRoundLobby(): void {
   if (crateStart == null) return;
   setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateMaxStack, 0);
   setStorageItem(crateStart, WOOD_ID, gameState.crateMaxStack, 1);

@@ -49,7 +49,7 @@ const DEFAULT_STATE: GameState = {
 /** The single source of truth for persistent game state. */
 export const gameState: GameState = { ...DEFAULT_STATE };
 
-/** Whether the game is currently in gameplay (not lobby). */
+/** Whether the game is currently in gameplay (not inter-round lobby). */
 let inGameplay = false;
 
 export function isInGameplay(): boolean {

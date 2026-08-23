@@ -27,7 +27,7 @@ function runDamageTest(t: TestReporter): void {
     { label: 'fullbucket', itemId: BUCKET_FULL_ID, abilityId: FourCC(Abilities.ItemDamageBonusPlus4) },
   ];
 
-  // Corner of the map, away from lobby/gameplay entities
+  // Corner of the map, away from inter-round lobby/gameplay entities
   const bounds = getWorldBounds();
   const x = GetRectMaxX(bounds) - 400;
   const y = GetRectMaxY(bounds) - 400;

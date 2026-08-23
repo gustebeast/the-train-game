@@ -703,7 +703,7 @@ compiletime(({ objectData, constants }) => {
 
   // Summon Heroes tech: MagicSentry upgrade repurposed as the requirement
   // gating the summon ability. Granted via SetPlayerTechResearched when the
-  // upgrade is bought from the lobby shop (see summonUpgrade.ts).
+  // upgrade is bought from the inter-round lobby shop (see summonUpgrade.ts).
   const summonTech = objectData.upgrades.get(constants.upgrades.MagicSentry)!;
   // Name shows up in the ability's greyed-out "Requires <name>" text.
   summonTech.name = 'Shop Upgrade';
@@ -722,7 +722,7 @@ compiletime(({ objectData, constants }) => {
   summonHeroes.hotkeyNormal = 'R';
   summonHeroes.buffs = '';
   summonHeroes.effect = '';
-  // Grayed out until the Summon Heroes upgrade is bought from the lobby shop
+  // Grayed out until the Summon Heroes upgrade is bought from the inter-round lobby shop
   summonHeroes.requirements = constants.upgrades.MagicSentry;
 
   // Unsummon Heroes spell: RoarNeutralHostile repurposed as a no-target instant-cast ability
@@ -777,10 +777,10 @@ compiletime(({ objectData, constants }) => {
   // ability must not be hero-only or the peasant can't activate it.
   rerollCast.heroAbility = false;
   rerollCast.tooltipNormal = 'Reroll';
-  rerollCast.tooltipNormalExtended = 'Replace a lobby hero or mercenary with a random new one. XP and items carry over.';
+  rerollCast.tooltipNormalExtended = 'Replace a hero or mercenary in the inter-round lobby with a random new one. XP and items carry over.';
   rerollCast.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
   // Must include the friendly/own-player flags: the target is one of YOUR OWN
-  // lobby heroes, and without them the hero is not a legal target at all.
+  // inter-round lobby heroes, and without them the hero is not a legal target at all.
   // NONHERO matters as much as hero: the mercenary is a plain creep, and a
   // list with only 'hero' on it makes the merc an illegal target, so the
   // cursor refuses it however the code behind is wired.
@@ -791,7 +791,7 @@ compiletime(({ objectData, constants }) => {
   rerollCast.effect = '';
   rerollCast.buffs = '';
 
-  // Shady Dealer: Tomb of Relics reskinned as an acolyte, sells lobby challenges.
+  // Shady Dealer: Tomb of Relics reskinned as an acolyte, sells inter-round lobby challenges.
   // SelectHero(Aneu)/SellItems/ShopPurchaseItem make it usable while neutral.
   const shadyDealer = objectData.units.get(constants.units.TombOfRelics)!;
   shadyDealer.name = 'Shady Dealer';
@@ -1031,11 +1031,11 @@ compiletime(({ objectData, constants }) => {
 
   // Hero Reroll (VoodooDoll — purchased from shop, kept in inventory, not a
   // powerup: the buyer carries it, can pawn it back for a refund, and casts
-  // it on a lobby hero to reroll them (reroll.ts)
+  // it on an inter-round lobby hero to reroll them (reroll.ts)
   const heroReroll = objectData.items.get(constants.items.VoodooDoll)!;
   heroReroll.name = 'Reroll';
   heroReroll.tooltipBasic = heroReroll.name;
-  heroReroll.description = 'Use on a lobby hero or mercenary to replace it with a random new one. XP and items carry over. Sell back to the shop for a full refund.';
+  heroReroll.description = 'Use on a hero or mercenary in the inter-round lobby to replace it with a random new one. XP and items carry over. Sell back to the shop for a full refund.';
   heroReroll.tooltipExtended = heroReroll.description;
   heroReroll.goldCost = 1;
   heroReroll.stockMaximum = 10;
