@@ -6,7 +6,9 @@ import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants
 import { loadFromFile } from './save';
 import { stopGameplay, triggerDefeat } from './train';
 import { toggleShoulderCam } from './challengeEffects';
-import { getChallengeDefs, armChallenge, clearChallenges } from './challenges';
+import {
+  getChallengeDefs, armChallenge, clearChallenges, advanceChallengeOffer,
+} from './challenges';
 import { applyTrackShapes } from './challengeList';
 import { getNeutralPassive } from './teams';
 import { getHumanPlayers, getWorldBounds } from './util';
@@ -122,10 +124,26 @@ export function initCheat(): void {
     print('uichallenge ' + I2S(uiIndex + 1) + '/' + I2S(all.length) + ': ' + def.name);
   });
 
+  // Disarm, which is what Reset Purchases does. Pairs with -uichallenge to
+  // walk the buy -> reset -> buy again cycle that a real lobby visit produces,
+  // since that is the path where the overlay used to come back wrong.
+  onChatCommand('-uiclear', () => {
+    clearChallenges();
+    print('uiclear: nothing armed');
+  });
+
   // Drive the defeat path without having to actually run the train out of
   // track, which otherwise takes a whole round to reach.
   onChatCommand('-testdefeat', () => {
     triggerDefeat();
+  });
+
+  // Jump to the lobby, for looking at the shop and the dealer without playing
+  // a round to get there.
+  onChatCommand('-lobby', () => {
+    stopGameplay();
+    advanceChallengeOffer();
+    loadLobby();
   });
 
   onChatCommand('-load', () => {
