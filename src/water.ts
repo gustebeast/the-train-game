@@ -2,6 +2,7 @@ import { Item, Trigger, Unit } from 'w3ts';
 import { getTrain, extinguish } from './train';
 import { isTrain, findItemByType, registerPeasantTargetCheck, updateBuildAbility } from './items';
 import { BUCKET_ID, BUCKET_FULL_ID, WATER_TRAIN_ABILITY_ID } from './constants';
+import { noteWateredTrain } from './tutorialBoard';
 import { updateCarryingVisual } from './carrying';
 import { nextFrame } from './util';
 
@@ -28,6 +29,7 @@ export function initWaterTrain(): void {
       UnitAddItem(u.handle, emptyBucket.handle);
     }
 
+    noteWateredTrain(u.owner.id);
     extinguish();
     const train = getTrain();
     SetUnitState(train.handle, UNIT_STATE_LIFE, train.maxLife);

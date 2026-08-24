@@ -103,7 +103,59 @@ export function clearChallengePreview(): void {
   draw();
 }
 
+/** A board owned by something that is not a challenge -- currently the
+ *  tutorial. Takes precedence over both the armed challenge and the preview,
+ *  because during the tutorial neither exists.
+ *
+ *  Reuses this board rather than making a second multiboard: the sizing and
+ *  collapse-memory lessons above were expensive to learn once. */
+let panel: { title: string; lines: () => string[] } | null = null;
+
+export function showPanel(title: string, lines: () => string[]): void {
+  panel = { title, lines };
+  draw();
+}
+
+export function hidePanel(): void {
+  if (panel == null) return;
+  panel = null;
+  hideBoard();
+}
+
+function drawPanel(): void {
+  if (panel == null) return;
+  const lines = panel.lines();
+  const joined = table.concat(lines, ' | ');
+  if (board != null && panel.title === lastTitle && joined === lastProgress) return;
+
+  let created = false;
+  if (board == null) {
+    const made = CreateMultiboard();
+    if (made == null) return;
+    board = made;
+    created = true;
+    MultiboardSetColumnCount(board, 1);
+  }
+  const b = board;
+  MultiboardSetRowCount(b, lines.length);
+  MultiboardSetTitleText(b, panel.title);
+  let longest = string.len(panel.title);
+  for (const text of lines) {
+    const len = string.len(text);
+    if (len > longest) longest = len;
+  }
+  const wanted = longest * CHAR_WIDTH;
+  const width = wanted > MIN_WIDTH ? wanted : MIN_WIDTH;
+  for (let i = 0; i < lines.length; i++) setRow(i, lines[i], width);
+  MultiboardDisplay(b, true);
+  if (created) MultiboardMinimize(b, false);
+  lastTitle = panel.title;
+  lastName = '';
+  lastProgress = joined;
+}
+
 function draw(): void {
+  if (panel != null) { drawPanel(); return; }
   // An armed challenge outranks a preview: what you are actually playing
   // matters more than what is on the shelf. In practice they never collide --
   // the dealer only exists in the inter-round lobby, where nothing is armed.
