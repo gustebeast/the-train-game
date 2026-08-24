@@ -686,8 +686,15 @@ compiletime(({ objectData, constants }) => {
   water.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   water.scalingValueundefined = 1;
   water.shadowTextureBuilding = 'NONE';
-  water.sightRadiusDay = 320;
-  water.sightRadiusNight = 320;
+  // 320 saw straight past the water and onto the grass beyond it. The border
+  // tiles exist to give the lobby an even ring of vision, not to reveal what
+  // is outside it, so one tile is enough.
+  //
+  // Day and night are the same number on purpose -- they always were. Night
+  // only LOOKS tighter because the terrain is darker; the radius never changed
+  // between them, so there was no night-time value to adopt.
+  water.sightRadiusDay = 128;
+  water.sightRadiusNight = 128;
 
   // Storage crate: GrainWarehouse shrunk to 4x4 with crate model and inventory
   const crate = objectData.units.get(constants.units.GrainWarehouse)!;
