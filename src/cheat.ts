@@ -11,6 +11,7 @@ import {
 } from './challenges';
 import { applyTrackShapes } from './challengeList';
 import { getNeutralPassive } from './teams';
+import { makeDancer } from './dance';
 import { getHumanPlayers, getWorldBounds } from './util';
 
 /** True once the map has been revealed, so repeat calls are no-ops. */
@@ -130,6 +131,19 @@ export function initCheat(): void {
   onChatCommand('-uiclear', () => {
     clearChallenges();
     print('uiclear: nothing armed');
+  });
+
+  // Spawn a dancer wherever the camera is looking, so the start-lobby dance
+  // spells can be tried without needing three other players in the game.
+  onChatCommand('-dance', () => {
+    const x = GetCameraTargetPositionX();
+    const y = GetCameraTargetPositionY();
+    const dancer = Unit.create(Players[0], PEASANT_ID, x, y, 270);
+    if (dancer == null) { print('dance: could not spawn a peasant'); return; }
+    makeDancer(dancer);
+    ClearSelection();
+    SelectUnit(dancer.handle, true);
+    print('Dancer spawned. Q W E R and U I O P are the dances.');
   });
 
   // Drive the defeat path without having to actually run the train out of

@@ -631,24 +631,39 @@ export function generateStartLobby(): Grid {
  *  rather than somewhere out on a procedural map. */
 export function generateTutorial(): Grid {
   const grid = generateCheatTerrain(GRID_MIN_X + 11);
-  // Row -2 is where the four player spawns live and row -3 holds the tools, so
-  // the props go on row -1 and row 1. Putting a tree on a spawn cell is exactly
-  // what went wrong the first time: it replaced player 1, so the tutorial
-  // started with no peasant -- and with no peasant there was no vision, which
-  // read as the fog never being reset.
-  const teach: Array<[number, number, Entity]> = [
-    [GRID_MIN_X + 4, -1, Entity.TREE],
-    [GRID_MIN_X + 5, -1, Entity.TREE],
-    [GRID_MIN_X + 6, -1, Entity.ROCK],
-    [GRID_MIN_X + 7, -1, Entity.ROCK],
-    [GRID_MIN_X + 4, 1, Entity.WATER_VISIBLE],
-    [GRID_MIN_X + 5, 1, Entity.WATER_VISIBLE],
-  ];
+  // SPAWN is the generator's reserved box -- the cleared ground the players,
+  // tools and train start on. Props go OUTSIDE it, just beyond its eastern
+  // edge and just south of it, so they are a couple of steps away without
+  // standing in the ground the map keeps clear on purpose.
+  //
+  // Dropping one inside is exactly what went wrong first time: a tree landed on
+  // the cell that places player 1, so the tutorial began with no peasant -- and
+  // with no peasant there was no vision, which read as the fog never resetting.
+  // Plenty of everything, so nobody runs out mid-experiment: two columns of
+  // trees and two of rock running south to the map edge, and a broad pool to
+  // the north to practise bridging across.
+  const teach: Array<[number, number, Entity]> = [];
+  for (let gy = GRID_MIN_Y; gy <= -1; gy++) {
+    teach.push([GRID_MIN_X + 6, gy, Entity.TREE]);
+    teach.push([GRID_MIN_X + 7, gy, Entity.TREE]);
+    teach.push([GRID_MIN_X + 8, gy, Entity.ROCK]);
+    teach.push([GRID_MIN_X + 9, gy, Entity.ROCK]);
+  }
+  for (let gy = 2; gy <= 6; gy++) {
+    for (let gx = GRID_MIN_X + 4; gx <= GRID_MIN_X + 10; gx++) {
+      teach.push([gx, gy, Entity.WATER_VISIBLE]);
+    }
+  }
   for (const [gx, gy, entity] of teach) {
     if (!inBounds(gx, gy)) continue;
+    // Honour the generator's reserved box by rule rather than by choosing
+    // coordinates carefully, so a later nudge cannot wander back into it.
+    const inReserve = gx >= SPAWN.minX && gx <= SPAWN.maxX
+      && gy >= SPAWN.minY && gy <= SPAWN.maxY;
+    if (inReserve) continue;
     const cell = grid.cells[idx(gx, gy)];
-    // Never build over a spawn or anything else already placed: a prop is the
-    // least important thing on this map.
+    // Anything already placed wins -- the track corridor, the creep camp and
+    // the crate all matter more than a prop.
     if (cell.entity !== Entity.NONE) continue;
     cell.entity = entity;
   }
