@@ -327,7 +327,7 @@ function writeSlot(slot: number, defeated: boolean): void {
 export function saveToFile(): void {
   if (currentSlot === 0) claimNewSlot();
   writeSlot(currentSlot, false);
-  print('Game saved.');
+  print('Progress saved.');
 }
 
 /** Mark the session's save as defeated: it stays on disk, and stops being
