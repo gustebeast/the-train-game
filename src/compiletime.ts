@@ -47,7 +47,7 @@ compiletime(({ objectData, constants }) => {
   // DASH_ABILITY_ID in constants.ts.
   const DASH_ABILITY = 'A000';
   // Keep in step with DANCE_ABILITY_IDS in constants.ts.
-  const DANCE_IDS = ['A001', 'A002', 'A003', 'A004'];
+  const DANCE_IDS = ['A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A007', 'A008'];
 
   const trackTypes: { [key: string]: string } = {
     EN: constants.units.ArcaneTower,
@@ -231,7 +231,15 @@ compiletime(({ objectData, constants }) => {
   // Each needs its OWN base order. Two abilities sharing one order id on the
   // same unit collide on the command card, and the order is also how a cast is
   // told apart before the spell event resolves.
-  const DANCE_ORDERS = ['battleroar', 'berserk', 'howlofterror', 'thunderclap'];
+  // Base orders are only identifiers here -- the dances are MINTED abilities,
+  // so no hero or mercenary spell is repurposed or altered. They are still
+  // chosen off units that cannot appear in this map, so an order string can
+  // never collide with something a hero, merc or creep casts.
+  const DANCE_ORDERS = [
+    'robogoblin', 'battlestations', 'burrow', 'unburrow',
+    'corporealform', 'etherealform', 'sacrifice', 'ambush',
+  ];
+  const DANCE_HOTKEYS = ['Q', 'W', 'E', 'R', 'U', 'I', 'O', 'P'];
   for (let i = 0; i < DANCE_IDS.length; i++) {
     const dance = objectData.abilities.copy(constants.abilities.Channel, DANCE_IDS[i]) as ChannelAbility | undefined;
     if (dance == null) continue;
@@ -245,12 +253,13 @@ compiletime(({ objectData, constants }) => {
     dance.cooldown = 0;
     dance.animationNames = '';
     dance.baseOrderIDundefined = DANCE_ORDERS[i];
-    dance.tooltipNormal = 'Dance ' + String(i + 1);
+    dance.tooltipNormal = 'Dance (' + DANCE_HOTKEYS[i] + ')';
     dance.tooltipNormalExtended = 'Bust a move.';
     dance.iconNormal = 'ReplaceableTextures\CommandButtons\BTNBrilliance.blp';
-    dance.hotkeyNormal = String(i + 1);
-    dance.buttonPositionNormalX = i;
-    dance.buttonPositionNormalY = 1;
+    dance.hotkeyNormal = DANCE_HOTKEYS[i];
+    // Two rows of four: QWER above UIOP, mirroring the keyboard.
+    dance.buttonPositionNormalX = i % 4;
+    dance.buttonPositionNormalY = i < 4 ? 1 : 2;
     dance.caster = '';
     dance.target = '';
     dance.effect = '';
