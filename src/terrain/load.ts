@@ -22,7 +22,8 @@ import {
 import { startDPSTest } from '../creeps';
 import { loadCrateForRound, loadCrateForInterRoundLobby } from '../items';
 import { resetChallengeProgress } from '../challengeList';
-import { hideChallengeUI } from '../challengeUI';
+import { hideChallengeUI, hidePanel, showPanel } from '../challengeUI';
+import { startTutorialBoard, stopTutorialBoard, tutorialBoardLines } from '../tutorialBoard';
 import { applyChallengeEffects, clearChallengeEffects } from '../challengeEffects';
 import { startDayNightForRound, stopDayNight } from '../daynight';
 import { resetRandomOutcome } from '../randomOutcome';
@@ -51,6 +52,8 @@ export function isInTutorial(): boolean {
  *  nothing the tutorial did can follow the player into a real run. */
 function endTutorial(): void {
   inTutorial = false;
+  stopTutorialBoard();
+  hidePanel();
   resetToNewRun();
   loadStartLobby();
 }
@@ -81,6 +84,10 @@ registerReadyZone('tutorial', 'Starting the tutorial', () => {
   resetToNewRun();
   inTutorial = true;
   loadGameplay(generateTutorial());
+  // After the load: loadGameplay hides the overlay on its way through, so the
+  // board has to be put up once the round is standing.
+  startTutorialBoard();
+  showPanel('Tutorial', tutorialBoardLines);
 });
 registerReadyZone('loadsave', 'Opening saved games', () => loadChooseSaveLobby());
 registerReadyZone('saveback', 'Going back', () => {

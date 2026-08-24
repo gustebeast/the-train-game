@@ -2,6 +2,7 @@ import { Destructable, Item, Trigger, Unit } from 'w3ts';
 import { TREE_RAW, ROCK_RAW, GRANITE_RAW } from './terrain/constants';
 import { unitHasItemType, rejectOrder } from './items';
 import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID } from './constants';
+import { noteChoppedTree, noteMinedStone } from './tutorialBoard';
 
 
 const TREE_DEST_ID = FourCC(TREE_RAW);
@@ -16,6 +17,13 @@ let resourceDropsPaused = false;
 export function pauseResourceDrops(): void { resourceDropsPaused = true; }
 export function resumeResourceDrops(): void { resourceDropsPaused = false; }
 
+/** Who last ordered work on a resource, by destructable handle.
+ *
+ *  A destructable's death event does not say who killed it, so credit for
+ *  chopping and mining comes from the order that started the job -- which this
+ *  file already intercepts. Only read by the tutorial board. */
+const lastHarvester = new Map<number, number>();
+
 function dropResource(itemId: number): void {
   if (resourceDropsPaused) return;
   const w = GetTriggerWidget();
@@ -23,6 +31,11 @@ function dropResource(itemId: number): void {
   const x = GetWidgetX(w);
   const y = GetWidgetY(w);
   Item.create(itemId, x, y);
+  const playerId = lastHarvester.get(GetHandleId(w));
+  if (playerId == null) return;
+  lastHarvester.delete(GetHandleId(w));
+  if (itemId === WOOD_ID) noteChoppedTree(playerId);
+  else if (itemId === STONE_ID) noteMinedStone(playerId);
 }
 
 /** Register a resource destructable so it drops an item on death. */
@@ -111,6 +124,7 @@ export function initHarvest(): void {
 
     const unit = Unit.fromEvent();
     if (unit == null) return;
+    lastHarvester.set(GetHandleId(dest), unit.owner.id);
     handleResourceOrder(unit, dest);
   });
 

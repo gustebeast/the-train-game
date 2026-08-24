@@ -1,3 +1,4 @@
+import { noteLoadedMaterial } from './tutorialBoard';
 import { Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { nextFrame } from './util';
@@ -126,6 +127,7 @@ export function initGiveTake(): void {
     } else {
       // Give item to storage — re-validate in case order-time rejection lost the race
       if (validateGive(item.typeId, target) != null) return;
+      if (isTrain(target)) noteLoadedMaterial(unit.owner.id);
       giveToStorage(unit, item, target);
     }
     updateBuildAbility(unit);
