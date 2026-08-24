@@ -690,11 +690,21 @@ compiletime(({ objectData, constants }) => {
   // tiles exist to give the lobby an even ring of vision, not to reveal what
   // is outside it, so one tile is enough.
   //
-  // Day and night are the same number on purpose -- they always were. Night
-  // only LOOKS tighter because the terrain is darker; the radius never changed
-  // between them, so there was no night-time value to adopt.
-  water.sightRadiusDay = 128;
-  water.sightRadiusNight = 128;
+  // Day and night carry the same number here, but they do NOT come out the same
+  // in game: WC3 shrinks sight at night on top of these fields, which is why
+  // the border behaved at night and overreached during the day. So this is one
+  // value tuned for the day, with the engine's night reduction still applying
+  // under it.
+  // Night is the look worth keeping, so night stays at 320. Day does not: WC3
+  // shrinks sight at night on top of this field, so the same number that looks
+  // right after dark reaches much further before it. Day is therefore set
+  // LOWER than night on purpose -- an odd-looking pair, but it is what makes
+  // the two match on screen.
+  //
+  // 180 is a starting guess at the engine's night reduction, not a measured
+  // figure. Tune this one number if the border still overreaches by day.
+  water.sightRadiusDay = 180;
+  water.sightRadiusNight = 320;
 
   // Storage crate: GrainWarehouse shrunk to 4x4 with crate model and inventory
   const crate = objectData.units.get(constants.units.GrainWarehouse)!;
