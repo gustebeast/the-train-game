@@ -1,5 +1,5 @@
 import { Grid, GRID_MAX_X } from './constants';
-import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby, generateStartLobby, generateChooseSaveLobby } from './generate';
+import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
@@ -34,16 +34,53 @@ import { advanceChallengeOffer } from '../challenges';
 // where the shelf rotates. NOT inside loadInterRoundLobby: Reset Purchases goes back
 // through there too, and rewinding a purchase must leave the same wager on
 // sale rather than letting a player shop for a different one.
+/** True while the tutorial is being played.
+ *
+ *  The tutorial must leave no trace: it never claims a save slot, never calls
+ *  awardVictory (which is what writes one), and both of its endings go back to
+ *  the start lobby rather than into the inter-round or defeat lobby. Every
+ *  other way into gameplay either loads a save or starts a run that will claim
+ *  its own slot, so nothing here can reach one. */
+let inTutorial = false;
+
+export function isInTutorial(): boolean {
+  return inTutorial;
+}
+
+/** Leave the tutorial: back to the start lobby, with the session wiped so
+ *  nothing the tutorial did can follow the player into a real run. */
+function endTutorial(): void {
+  inTutorial = false;
+  resetToNewRun();
+  loadStartLobby();
+}
+
 setVictoryCallback(() => {
+  // Reaching the target track finishes the tutorial rather than opening the
+  // inter-round lobby: there is no run to continue.
+  if (inTutorial) { endTutorial(); return; }
   advanceChallengeOffer();
   loadInterRoundLobby();
 });
-setDefeatCallback(() => loadDefeatLobby());
-setAwardVictoryCallback(() => awardVictory());
+setDefeatCallback(() => {
+  if (inTutorial) { endTutorial(); return; }
+  loadDefeatLobby();
+});
+// Reaching the target track ends the tutorial instead of paying it out:
+// awardVictory is what writes a save, and the tutorial must not write one.
+setAwardVictoryCallback(() => {
+  if (inTutorial) return;
+  awardVictory();
+});
 registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round));
 registerReadyZone('newgame', 'Starting a new game', () => {
   resetToNewRun();
   loadTerrain(0);
+});
+registerReadyZone('tutorial', 'Starting the tutorial', () => {
+  resetToNewRun();
+  inTutorial = true;
+  loadGameplay(generateTutorial());
 });
 registerReadyZone('loadsave', 'Opening saved games', () => loadChooseSaveLobby());
 registerReadyZone('saveback', 'Going back', () => {

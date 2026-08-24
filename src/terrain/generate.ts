@@ -608,8 +608,29 @@ export function generateStartLobby(): Grid {
   grid.cells[idx(-2, 3)].entity = Entity.PLAYER_2;
   grid.cells[idx(0, 3)].entity = Entity.PLAYER_3;
   grid.cells[idx(2, 3)].entity = Entity.PLAYER_4;
+  grid.cells[idx(-2, -3)].entity = Entity.TUTORIAL_CIRCLE;
   grid.cells[idx(0, -3)].entity = Entity.NEW_GAME_CIRCLE;
   grid.cells[idx(2, -3)].entity = Entity.LOAD_CIRCLE;
+  return grid;
+}
+
+/** The tutorial map: the cheat layout, so the target track sits exactly where
+ *  -cheatmode puts it, with a tree, a rock and a pool of water placed within a
+ *  few steps of the spawn. Everything a first-timer needs to try is in sight
+ *  rather than somewhere out on a procedural map. */
+export function generateTutorial(): Grid {
+  const grid = generateCheatTerrain(GRID_MIN_X + 11);
+  const teach: Array<[number, number, Entity]> = [
+    [GRID_MIN_X + 3, -1, Entity.TREE],
+    [GRID_MIN_X + 3, -2, Entity.TREE],
+    [GRID_MIN_X + 4, -2, Entity.ROCK],
+    [GRID_MIN_X + 5, -2, Entity.ROCK],
+    [GRID_MIN_X + 4, 1, Entity.WATER_VISIBLE],
+    [GRID_MIN_X + 5, 1, Entity.WATER_VISIBLE],
+  ];
+  for (const [gx, gy, entity] of teach) {
+    if (inBounds(gx, gy)) grid.cells[idx(gx, gy)].entity = entity;
+  }
   return grid;
 }
 
