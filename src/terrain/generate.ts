@@ -609,6 +609,21 @@ export function generateStartLobby(): Grid {
   grid.cells[idx(0, 3)].entity = Entity.PLAYER_3;
   grid.cells[idx(2, 3)].entity = Entity.PLAYER_4;
   grid.cells[idx(0, -3)].entity = Entity.NEW_GAME_CIRCLE;
+  grid.cells[idx(2, -3)].entity = Entity.LOAD_CIRCLE;
+  return grid;
+}
+
+/** Picking which save to resume. Player 1 only, like the start lobby it comes
+ *  from: the four circles are back, older, newer and confirm, and the selected
+ *  save's heroes are displayed above them by chooseSaveLobby.ts. */
+export function generateChooseSaveLobby(): Grid {
+  const grid = generateStartLobby();
+  grid.cells[idx(0, -3)].entity = Entity.NONE;
+  grid.cells[idx(2, -3)].entity = Entity.NONE;
+  grid.cells[idx(-3, -3)].entity = Entity.BACK_CIRCLE;
+  grid.cells[idx(-1, -3)].entity = Entity.PREV_CIRCLE;
+  grid.cells[idx(1, -3)].entity = Entity.NEXT_CIRCLE;
+  grid.cells[idx(3, -3)].entity = Entity.CONFIRM_CIRCLE;
   return grid;
 }
 

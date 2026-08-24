@@ -1,5 +1,5 @@
 import { Grid, GRID_MAX_X } from './constants';
-import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby, generateStartLobby } from './generate';
+import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby, generateStartLobby, generateChooseSaveLobby } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
@@ -7,9 +7,14 @@ import { Unit } from 'w3ts';
 import { PEASANT_ID } from '../constants';
 import { getHumanPlayers } from '../util';
 import { makeDancer, startDanceClock } from '../dance';
+import {
+  closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,
+  selectNewerSave, selectOlderSave,
+} from '../chooseSaveLobby';
+import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
 import { gameState } from '../state';
-import { markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
+import { loadFromSlot, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
   hasHeroes, initRandomHeroes,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
@@ -39,6 +44,29 @@ registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.ro
 registerReadyZone('newgame', 'Starting a new game', () => {
   resetToNewRun();
   loadTerrain(0);
+});
+registerReadyZone('loadsave', 'Opening saved games', () => loadChooseSaveLobby());
+registerReadyZone('saveback', 'Going back', () => {
+  closeChooseSaveLobby();
+  loadStartLobby();
+});
+// Paging does NOT reload the lobby: only the displayed heroes and the label
+// change, so the circles the player is standing among stay put.
+registerReadyZone('saveprev', 'Showing the newer save', () => selectNewerSave());
+registerReadyZone('savenext', 'Showing the older save', () => selectOlderSave());
+registerReadyZone('saveconfirm', 'Loading the selected save', () => {
+  const slot = getSelectedSlot();
+  if (slot === 0) {
+    print('No save selected.');
+    return;
+  }
+  closeChooseSaveLobby();
+  if (!loadFromSlot(slot)) {
+    print('That save could not be read.');
+    loadStartLobby();
+    return;
+  }
+  loadTerrain(gameState.round);
 });
 registerReadyZone('restart', 'Returning to the start lobby', () => {
   // The run is already marked defeated (loadDefeatLobby did that on the way
@@ -210,6 +238,19 @@ export function loadStartLobby(): void {
     });
     DestroyGroup(group);
   }
+}
+
+/** The save chooser. Same shell as the start lobby, with paging circles in
+ *  place of the menu ones. */
+export function loadChooseSaveLobby(): void {
+  hideChallengeUI();
+  clearChallengeEffects();
+  stopDayNight();
+  setMusic('interRound');
+  SetTimeOfDay(12);
+  spawnTerrain(generateChooseSaveLobby());
+  // Heroes stand in the middle of the floor, north of the circles.
+  openChooseSaveLobby(0, TRACK_SIZE);
 }
 
 export function loadInterRoundLobby(): void {
