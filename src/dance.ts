@@ -1,5 +1,6 @@
 import { Timer, Trigger, Unit } from 'w3ts';
-import { DANCE_ABILITY_IDS, PEASANT_ID } from './constants';
+import { Abilities } from '@objectdata/abilities';
+import { DANCE_ABILITY_IDS, DASH_ABILITY_ID, PEASANT_ID } from './constants';
 
 // Something for the other players to do while the host picks what to play.
 //
@@ -7,16 +8,24 @@ import { DANCE_ABILITY_IDS, PEASANT_ID } from './constants';
 // carrying these spells, each of which plays a different animation. Purely
 // cosmetic: nothing here touches game state, and the lobby writes no save.
 //
-// PLACEHOLDER ANIMATIONS. The intent is to transplant proper dances out of the
-// Villager 255 set the roll came from (scripts/transplant-roll-anim.js), but
-// that source map is no longer on disk. Until it is back these point at
-// sequences the peasant already owns, so the mechanism is real and only the
-// choreography is standing in.
+// Transplanted from Villager 255 Animations by Graber (hiveworkshop.com) --
+// see scripts/transplant-dance-anims.js. Indices, not names: WC3 plays a
+// sequence by index, and these are ones the engine would never choose on its
+// own, which is exactly why they have to be asked for explicitly.
+//
+//   Q Walk Victory - 1     U Attack Morph - 26
+//   W Attack Morph - 16    I Attack - 6
+//   E Attack - 9           O Attack - 7
+//   R Attack Morph - 20    P Attack - 8
 const DANCE_SEQUENCES: ReadonlyArray<number> = [
-  2,  // 'Stand - 3'
-  3,  // 'Stand - 4'
-  9,  // 'Attack -2 '
-  22, // 'Walk Alternate' (the roll)
+  23, // Q  Walk Victory - 1
+  24, // W  Attack Morph - 16
+  30, // E  Attack - 9
+  25, // R  Attack Morph - 20
+  26, // U  Attack Morph - 26
+  27, // I  Attack - 6
+  28, // O  Attack - 7
+  29, // P  Attack - 8
 ];
 
 /** Seconds per beat, 0 while no song is playing. Set this from the lobby track
@@ -63,6 +72,11 @@ function play(h: unit, sequence: number): void {
  *  dance, the way it did on the dashing peasant. */
 export function makeDancer(u: Unit): void {
   SetUnitMoveSpeed(u.handle, 0);
+  // Take away everything a peasant normally carries. Two of the dance hotkeys
+  // would otherwise be taken: give/take owns W and the dash owns E. A dancer
+  // has nothing to give and nowhere to dash to, so the whole set goes.
+  UnitRemoveAbility(u.handle, DASH_ABILITY_ID);
+  UnitRemoveAbility(u.handle, FourCC(Abilities.Channel));
   for (const id of DANCE_ABILITY_IDS) UnitAddAbility(u.handle, id);
 }
 
