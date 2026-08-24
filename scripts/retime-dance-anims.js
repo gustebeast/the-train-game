@@ -43,7 +43,7 @@ const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
  *          different source animation, this number changes with it and the
  *          script will say so rather than guess. */
 const RETIMED = {
-  'Dance Two': { speed: 1.15, natural: 1667 },  // Attack Morph - 31, played on R
+  'Dance Two': { speed: 1.15, natural: 1667 },  // Attack Morph - 31, played on E
 };
 
 const model = new Model();

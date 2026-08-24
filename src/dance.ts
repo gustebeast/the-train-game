@@ -29,8 +29,8 @@ import { getHumanPlayers } from './util';
 //
 //   Q Walk Victory - 1     I Attack - 7
 //   W Stand Hit - 1        O Stand Hit - 5
-//   E Attack - 9           V Stand Hit - 4
-//   R Attack Morph - 31    B Stand Victory - 17
+//   E Attack Morph - 31    V Stand Hit - 4
+//   R Attack - 9           B Stand Victory - 17
 //   Y Attack - 8
 //   U Attack - 6
 //
@@ -50,7 +50,7 @@ const DANCE_KEYS: ReadonlyArray<oskeytype> = [
   OSKEY_U, OSKEY_I, OSKEY_O, OSKEY_V, OSKEY_B,
 ];
 //                                             Q   W   E   R   Y   U   I   O   V   B
-const DANCE_SEQUENCES: ReadonlyArray<number> = [23, 26, 25, 24, 30, 28, 29, 27, 31, 32];
+const DANCE_SEQUENCES: ReadonlyArray<number> = [23, 26, 24, 25, 30, 28, 29, 27, 31, 32];
 
 /** Seconds per beat, 0 while no song is playing. Set this from the lobby track
  *  and every dance lands on the beat instead of whenever the button was hit. */
