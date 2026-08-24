@@ -36,8 +36,8 @@ function setLabel(text: string): void {
   SetTextTagPermanent(label, true);
 }
 
-/** Show whatever is currently selected: the save's heroes in a row, with its
- *  highest completed round above them. */
+/** Show whatever is currently selected: the save's party -- its heroes and any
+ *  living mercenaries -- standing in a row. */
 function refresh(): void {
   clearDisplay();
   if (offered.length === 0) {
@@ -45,12 +45,20 @@ function refresh(): void {
     return;
   }
   const info = offered[selected];
-  setLabel('Round ' + I2S(info.round)! + '   (save ' + I2S(selected + 1)! + ' of ' + I2S(offered.length)! + ')');
+  // No text: a save is recognised by the faces in it. The party IS the label,
+  // so the heroes and the mercs standing with them are the whole display.
+  const party: number[] = [];
+  for (const typeId of info.heroTypeIds) party.push(typeId);
+  for (const typeId of info.mercTypeIds) party.push(typeId);
+  if (party.length === 0) {
+    setLabel('Empty save');
+    return;
+  }
   // Display only: neutral passive, invulnerable and paused, so the chooser
-  // cannot be played with and the heroes cannot wander off their marks.
-  const startX = originX - ((info.heroTypeIds.length - 1) * TRACK_SIZE) / 2;
-  for (let i = 0; i < info.heroTypeIds.length; i++) {
-    const u = Unit.create(getNeutralPassive(), info.heroTypeIds[i], startX + i * TRACK_SIZE, originY, 270);
+  // cannot be played with and nobody wanders off their mark.
+  const startX = originX - ((party.length - 1) * TRACK_SIZE) / 2;
+  for (let i = 0; i < party.length; i++) {
+    const u = Unit.create(getNeutralPassive(), party[i], startX + i * TRACK_SIZE, originY, 270);
     if (u == null) continue;
     u.invulnerable = true;
     PauseUnit(u.handle, true);

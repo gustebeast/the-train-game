@@ -40,6 +40,9 @@ export interface SaveSlotInfo {
   defeated: boolean;
   /** Hero unit type ids, for the chooser to display. */
   heroTypeIds: number[];
+  /** Living mercenary unit type ids, likewise. Dead ones are left out -- a
+   *  corpse is not part of the party you would be resuming. */
+  mercTypeIds: number[];
 }
 
 /** Short keys for core state encoding. */
@@ -178,6 +181,22 @@ export function revertToInterRoundLobbySnapshot(): boolean {
   return true;
 }
 
+/** Living mercenary type ids out of the 'mm' segment (see mercenary.ts:
+ *  t1/t2 are the types, d1/d2 the death flags). */
+function decodeMercs(raw: string): number[] {
+  const out: number[] = [];
+  if (raw === '') return out;
+  const fields = parseFields(raw);
+  for (let i = 1; i <= 2; i++) {
+    const n = I2S(i)!;
+    const typeId = tonumber(fields['t' + n] ?? '');
+    if (typeId == null || typeId === 0) continue;
+    if ((fields['d' + n] ?? '0') === '1') continue;
+    out.push(typeId);
+  }
+  return out;
+}
+
 /** What this session has written, by slot.
  *
  *  Re-reading a save file the same session that wrote it does NOT come back
@@ -218,6 +237,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
     round: core.round,
     defeated: stored(KEY_DEFEATED) === DEFEATED_YES,
     heroTypeIds,
+    mercTypeIds: decodeMercs(stored('mm')),
   };
   FlushGameCache(gc);
   return writtenThisSession.get(slot) ?? info;
@@ -286,14 +306,20 @@ function writeSlot(slot: number, defeated: boolean): void {
   if (defeated) preloadStore(cacheFile, KEY_DEFEATED, DEFEATED_YES);
   PreloadGenEnd(slotSaveFile(slot));
 
+  // Same picture the disk would give, so a save written this session describes
+  // itself the way one read back from a file does.
   const heroTypeIds: number[] = [];
+  let mercTypeIds: number[] = [];
   for (let i = 0; i < extraKeys.length; i++) {
+    const encoded = extraEncoders[i]();
+    if (extraKeys[i] === 'mm') { mercTypeIds = decodeMercs(encoded); continue; }
     if (extraKeys[i] !== 'h' + I2S(heroTypeIds.length + 1)!) continue;
-    const typeId = tonumber(parseFields(extraEncoders[i]())['t'] ?? '');
-    heroTypeIds.push(typeId ?? 0);
+    const typeId = tonumber(parseFields(encoded)['t'] ?? '');
+    if (typeId != null && typeId !== 0) heroTypeIds.push(typeId);
   }
   writtenThisSession.set(slot, {
-    slot, seq: highestSeq + 1, round: gameState.round, defeated, heroTypeIds,
+    slot, seq: highestSeq + 1, round: gameState.round, defeated,
+    heroTypeIds, mercTypeIds,
   });
 }
 
