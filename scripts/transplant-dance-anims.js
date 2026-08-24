@@ -8,7 +8,7 @@
 // thumb falls on B, with the left thumb on V. P is avoided throughout -- it
 // issues a patrol order the engine owns and will not give up.
 //   Q Walk Victory - 1     I Attack - 7
-//   W Death - 1            O Attack - 8
+//   W Attack Morph - 31    O Attack - 8
 //   E Attack - 9           V Stand Hit - 4
 //   R Stand Hit - 1        B Stand Victory - 17
 //   Y Stand Hit - 5
@@ -47,7 +47,7 @@ const GAP = 2000;
  *  Dance One is Q, Dance Ten is B -- so dance.ts is a straight list. */
 const DANCES = [
   'Walk Victory - 1',
-  'Death - 1',
+  'Attack Morph - 31',
   'Attack - 9',
   'Stand Hit - 1',
   'Stand Hit - 5',
