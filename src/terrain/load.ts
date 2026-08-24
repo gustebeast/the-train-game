@@ -124,7 +124,7 @@ registerReadyZone('revert', 'Resetting purchases', () => {
   loadInterRoundLobby();
 });
 
-// Both inter-round lobby tracks: IMA ADPCM in a WAV container, on a sound handle.
+// Every track: IMA ADPCM in a WAV container, on a sound handle.
 // WC3 decodes ADPCM fine (verified in game). Chosen over PCM because MPQ was
 // measured to recover only ~5% on PCM, so a 24-bit master would cost its full
 // size in the archive.
@@ -133,6 +133,7 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 // Documents/Music/Bounces/TheTrainGame. Re-encode from there rather than from
 // these files -- the difference between one lossy generation and two.
 const TRACK_FILES = {
+  startLobby: 'war3mapImported\\StartLobby.wav',
   interRound: 'war3mapImported\\InterRoundLobby.wav',
   defeat: 'war3mapImported\\Purgatory.wav',
 };
@@ -141,7 +142,10 @@ type MusicTrack = keyof typeof TRACK_FILES;
 
 /** Which track SHOULD be playing, or null for none. */
 let currentTrack: MusicTrack | null = null;
-const trackHandles: { [K in MusicTrack]: sound | null } = { interRound: null, defeat: null };
+/** Built on first play and kept, so a track that stops can start again
+ *  without re-reading the file. Keyed off TRACK_FILES, so adding a track is
+ *  one line up there and nothing else. */
+const trackHandles: { [K in MusicTrack]?: sound } = {};
 
 /**
  * Say which track should be playing. Declarative on purpose.
@@ -174,14 +178,14 @@ function setMusic(track: MusicTrack | null): void {
   // linger. StopMusic does not touch sound handles, hence both.
   StopMusic(false);
   ClearMapMusic();
-  for (const key of ['interRound', 'defeat'] as MusicTrack[]) {
-    const h = trackHandles[key];
+  for (const key in TRACK_FILES) {
+    const h = trackHandles[key as MusicTrack];
     if (h != null) StopSound(h, false, false);
   }
   currentTrack = track;
   if (track == null) return;
 
-  let handle = trackHandles[track];
+  let handle = trackHandles[track] ?? null;
   if (handle == null) {
     // looping = true; is3D = false so it plays at full volume everywhere.
     handle = CreateSound(TRACK_FILES[track], true, false, false, 10, 10, '') ?? null;
@@ -189,7 +193,7 @@ function setMusic(track: MusicTrack | null): void {
       SetSoundChannel(handle, 7);   // must be set before StartSound
       SetSoundVolume(handle, 127);
     }
-    trackHandles[track] = handle;
+    trackHandles[track] = handle ?? undefined;
   }
   if (handle != null) StartSound(handle);
 }
@@ -253,8 +257,10 @@ export function loadDefeatLobby(): void {
   spawnTerrain(generateDefeatLobby());
 }
 
-/** Beats per minute of the starting-lobby track. 0 means no song yet, so
- *  dances play the moment they are cast rather than waiting for a beat. */
+/** Beats per minute the dance clock counts at in the start lobby. The track
+ *  itself runs at 130, but 0 here means the dances play the moment they are
+ *  cast rather than waiting for a beat. Set it to 130 to sync them to the
+ *  song; that is a gameplay decision, not a consequence of adding the song. */
 const START_LOBBY_BPM = 0;
 
 /** The lobby the map boots into, and where a defeated run restarts to.
@@ -265,7 +271,7 @@ export function loadStartLobby(): void {
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
-  setMusic('interRound');
+  setMusic('startLobby');
   SetTimeOfDay(12);
   spawnTerrain(generateStartLobby());
   // Everyone but the host becomes a dancer: immobile, with the dance spells on
@@ -290,7 +296,7 @@ export function loadChooseSaveLobby(): void {
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
-  setMusic('interRound');
+  setMusic('startLobby');
   SetTimeOfDay(12);
   spawnTerrain(generateChooseSaveLobby());
   // Heroes stand in the middle of the floor, north of the circles.
