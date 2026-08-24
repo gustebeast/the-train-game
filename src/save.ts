@@ -25,6 +25,24 @@ function slotCacheFile(slot: number): string {
 const KEY_SEQ = 'seq';
 const KEY_DEFEATED = 'DEFEATED';
 const DEFEATED_YES = 'yes';
+const KEY_VERSION = 'VERSION';
+
+/**
+ * The save format this build reads and writes.
+ *
+ * Bump this whenever a change would make an older save load WRONG rather than
+ * merely incomplete -- a segment's fields changing meaning, a unit or item
+ * rawcode being reused for something else, a rule that older state cannot
+ * satisfy. Do NOT bump for additions: a save without a segment already resets
+ * that segment to its baseline, which is exactly right for a new one.
+ *
+ * A slot is readable only if it stamps this exact number. Older is out of date
+ * and newer was written by a build this one does not understand, and neither
+ * can be trusted; both are ignored, which also frees the slot for a new run to
+ * claim. That is the point -- an early build's save is silently replaced rather
+ * than loaded into a game whose rules have moved on underneath it.
+ */
+const SAVE_VERSION = 0;
 
 /** Which slot this session is playing, or 0 if it has not claimed one. */
 let currentSlot = 0;
@@ -209,6 +227,13 @@ function decodeMercs(raw: string): number[] {
  *  remembered here and laid over what the disk says. */
 const writtenThisSession = new Map<number, SaveSlotInfo>();
 
+/** Whether an already-opened slot cache holds the save format this build
+ *  speaks. An unstamped save predates versioning entirely, and tonumber('')
+ *  is nil rather than 0, so it fails this the same way a wrong number does. */
+function versionMatches(gc: gamecache): boolean {
+  return tonumber(GetStoredString(gc, CACHE_CAT, KEY_VERSION) ?? '') === SAVE_VERSION;
+}
+
 /** Read what a slot advertises WITHOUT applying any of it: the chooser has to
  *  describe every save on offer, and loading each one to read it would trample
  *  the session. Returns null for an empty or unreadable slot. */
@@ -216,6 +241,9 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
   Preloader(slotSaveFile(slot));
   const gc = InitGameCache(slotCacheFile(slot));
   if (gc == null) return null;
+  // Out-of-date saves do not exist as far as the chooser is concerned, and the
+  // slot reads as free so a new run will claim it.
+  if (!versionMatches(gc)) { FlushGameCache(gc); return null; }
   const stored = (key: string) => GetStoredString(gc, CACHE_CAT, key) ?? '';
   // Fall back to the legacy 'data' key, as loadFromSlot does.
   let raw = stored('core');
@@ -302,6 +330,7 @@ function writeSlot(slot: number, defeated: boolean): void {
     const encoded = extraEncoders[i]();
     if (encoded !== '') preloadStore(cacheFile, extraKeys[i], encoded);
   }
+  preloadStore(cacheFile, KEY_VERSION, I2S(SAVE_VERSION)!);
   preloadStore(cacheFile, KEY_SEQ, I2S(highestSeq + 1)!);
   if (defeated) preloadStore(cacheFile, KEY_DEFEATED, DEFEATED_YES);
   PreloadGenEnd(slotSaveFile(slot));
@@ -377,6 +406,7 @@ function readSlotInto(slot: number): boolean {
   Preloader(slotSaveFile(slot));
   const gc = InitGameCache(slotCacheFile(slot));
   if (gc == null) return false;
+  if (!versionMatches(gc)) { FlushGameCache(gc); return false; }
 
   // Load core state
   const coreRaw = GetStoredString(gc, CACHE_CAT, 'core');
