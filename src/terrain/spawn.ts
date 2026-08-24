@@ -237,6 +237,43 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           break;
         }
 
+        case Entity.LOAD_CIRCLE: {
+          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(circle.handle, 'Load Save');
+          initReadyZone(world.x, world.y, 'loadsave', circle);
+          break;
+        }
+
+        case Entity.BACK_CIRCLE: {
+          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(circle.handle, 'Back');
+          SetUnitVertexColor(circle.handle, 255, 180, 180, 255);
+          initReadyZone(world.x, world.y, 'saveback', circle);
+          break;
+        }
+
+        case Entity.PREV_CIRCLE: {
+          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(circle.handle, 'Newer Save');
+          initReadyZone(world.x, world.y, 'saveprev', circle);
+          break;
+        }
+
+        case Entity.NEXT_CIRCLE: {
+          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(circle.handle, 'Older Save');
+          initReadyZone(world.x, world.y, 'savenext', circle);
+          break;
+        }
+
+        case Entity.CONFIRM_CIRCLE: {
+          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(circle.handle, 'Play This Save');
+          SetUnitVertexColor(circle.handle, 180, 255, 180, 255);
+          initReadyZone(world.x, world.y, 'saveconfirm', circle);
+          break;
+        }
+
         case Entity.CRITTER: {
           const critterType = CRITTER_TYPE_IDS[GetRandomInt(0, CRITTER_TYPE_IDS.length - 1)];
           Unit.create(getNeutralPassive(), critterType, world.x, world.y, GetRandomReal(0, 360));

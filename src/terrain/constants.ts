@@ -51,6 +51,15 @@ export enum Entity {
   NEW_GAME_CIRCLE = 24,
   /** Defeat lobby: abandon the run and go back to the start lobby. */
   RESTART_CIRCLE = 25,
+  /** Start lobby: open the save chooser. */
+  LOAD_CIRCLE = 26,
+  /** Save chooser: leave without picking anything. */
+  BACK_CIRCLE = 27,
+  /** Save chooser: select the next newer / next older save. */
+  PREV_CIRCLE = 28,
+  NEXT_CIRCLE = 29,
+  /** Save chooser: play the selected save. */
+  CONFIRM_CIRCLE = 30,
 }
 
 export interface Cell {
