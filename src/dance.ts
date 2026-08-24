@@ -98,6 +98,10 @@ const dancers = new Map<number, unit>();
  *  walk animation from overriding a dance. */
 export function makeDancer(u: Unit): void {
   SetUnitMoveSpeed(u.handle, 0);
+  // Per instance, not per unit type, so the peasants still working elsewhere in
+  // the map keep their own name. Nothing else about the unit says it dances --
+  // the keys are read raw, so there are no command-card buttons to hint at it.
+  u.name = 'Dancer';
   dancers.set(u.owner.id, u.handle);
   // Take away everything a peasant normally carries. Two of the dance hotkeys
   // would otherwise be taken: give/take owns W and the dash owns E. A dancer
