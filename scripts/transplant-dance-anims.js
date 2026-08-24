@@ -13,6 +13,16 @@
 // Source model, not committed here -- point SOURCE at wherever it lives:
 //   https://www.hiveworkshop.com/threads/villager-255-animations.192204/
 //
+// The sequences are RENAMED to "Dance - N" on the way in. WC3 resolves an
+// animation request by collecting every sequence whose name contains the
+// requested tokens and picking one at random, so keeping the source names would
+// make "Attack - 6" a variant of "Attack" and "Walk Victory - 1" a variant of
+// "Walk" -- an ordinary peasant would break into a dance while chopping or
+// walking. Nothing reads these names: dance.ts plays them by index.
+//
+// Run scripts/fix-dance-anims.js afterwards to key geoset alpha across the new
+// ranges (and to rename any dances left over from an older run of this script).
+//
 // Idempotent: sequences already present are skipped, so re-running adds only
 // what is missing.
 // Run from the project root:  node scripts/transplant-dance-anims.js
@@ -29,6 +39,7 @@ let nextStart = 210000;
 /** Gap between transplanted ranges so no two can interpolate into each other. */
 const GAP = 2000;
 
+/** Source sequence, and the safe name it is stored under. */
 const DANCES = [
   'Walk Victory - 1',
   'Attack Morph - 16',
@@ -38,7 +49,7 @@ const DANCES = [
   'Attack - 6',
   'Attack - 7',
   'Attack - 8',
-];
+].map((source, i) => ({ source, name: `Dance - ${i + 1}` }));
 
 function nodesByName(model) {
   const out = new Map();
@@ -60,13 +71,13 @@ const vNodes = nodesByName(villager);
 const pNodes = nodesByName(peasant);
 let added = 0;
 
-for (const name of DANCES) {
+for (const { source: sourceName, name } of DANCES) {
   if (peasant.sequences.some((s) => s.name === name)) {
     console.log('skip (already present): ' + name);
     continue;
   }
-  const srcSeq = villager.sequences.find((s) => s.name === name);
-  if (srcSeq == null) throw new Error('source sequence not found: ' + name);
+  const srcSeq = villager.sequences.find((s) => s.name === sourceName);
+  if (srcSeq == null) throw new Error('source sequence not found: ' + sourceName);
   const srcStart = srcSeq.interval[0];
   const srcEnd = srcSeq.interval[1];
   const newStart = nextStart;
@@ -145,7 +156,7 @@ const check = new Model();
 check.load(new Uint8Array(fs.readFileSync(TARGET)));
 console.log('--- sequences now in the peasant ---');
 check.sequences.forEach((s, i) => {
-  if (DANCES.includes(s.name) || s.name === 'Walk Alternate') {
+  if (DANCES.some((d) => d.name === s.name) || s.name === 'Walk Alternate') {
     console.log('  ' + i + ' ' + JSON.stringify(s.name));
   }
 });

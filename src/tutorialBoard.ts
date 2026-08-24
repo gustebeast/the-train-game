@@ -1,6 +1,6 @@
 import { getHumanPlayers } from './util';
 
-// The tutorial's scoreboard. Four things a new player needs to have tried, each
+// The tutorial's scoreboard. Five things a new player needs to have tried, each
 // counting how many of them have done it -- so a table of four learns together
 // rather than one person doing everything while the rest watch.
 //
@@ -10,13 +10,14 @@ const chopped = new Set<number>();
 const mined = new Set<number>();
 const watered = new Set<number>();
 const loaded = new Set<number>();
+const bridged = new Set<number>();
 
 /** True while the tutorial board should be counting. Off outside the tutorial,
  *  so nothing in a real round pays for these hooks. */
 let counting = false;
 
 export function startTutorialBoard(): void {
-  chopped.clear(); mined.clear(); watered.clear(); loaded.clear();
+  chopped.clear(); mined.clear(); watered.clear(); loaded.clear(); bridged.clear();
   counting = true;
 }
 
@@ -36,6 +37,9 @@ export function noteWateredTrain(playerId: number): void {
 export function noteLoadedMaterial(playerId: number): void {
   if (counting) loaded.add(playerId);
 }
+export function noteBuiltBridge(playerId: number): void {
+  if (counting) bridged.add(playerId);
+}
 
 function line(label: string, done: Set<number>, total: number): string {
   const n = done.size;
@@ -51,5 +55,6 @@ export function tutorialBoardLines(): string[] {
     line('Mined a stone', mined, total),
     line('Watered the train', watered, total),
     line('Loaded the engine', loaded, total),
+    line('Built a bridge', bridged, total),
   ];
 }

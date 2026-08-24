@@ -53,6 +53,17 @@ const CHAR_WIDTH = 0.0092;
 /** Never narrower than this, so a short label still looks like a panel. */
 const MIN_WIDTH = 0.14;
 
+/** Printed length of a line: colour codes take no screen space.
+ *
+ *  A tutorial row like "Chopped a tree 2 / 4" is 20 characters on screen but 32
+ *  in the string, because the "|cff44ff44"/"|r" wrapper the board colours it
+ *  with counts too. Sizing off the raw length made the panel half again as wide
+ *  as it needed to be. */
+function visibleLen(text: string): number {
+  const [stripped] = string.gsub(string.gsub(text, '|c%x%x%x%x%x%x%x%x', '')[0], '|r', '');
+  return string.len(stripped);
+}
+
 function setRow(row: number, label: string, width: number): void {
   if (board == null) return;
   const item = MultiboardGetItem(board, row, 0);
@@ -71,8 +82,8 @@ function setRow(row: number, label: string, width: number): void {
  *  panel. Sized to the content instead, both rows together so they stay a
  *  rectangle. */
 function widthFor(name: string, progress: string): number {
-  let longest = string.len(name);
-  const p = string.len(progress);
+  let longest = visibleLen(name);
+  const p = visibleLen(progress);
   if (p > longest) longest = p;
   const wanted = longest * CHAR_WIDTH;
   return wanted > MIN_WIDTH ? wanted : MIN_WIDTH;
@@ -139,9 +150,9 @@ function drawPanel(): void {
   const b = board;
   MultiboardSetRowCount(b, lines.length);
   MultiboardSetTitleText(b, panel.title);
-  let longest = string.len(panel.title);
+  let longest = visibleLen(panel.title);
   for (const text of lines) {
-    const len = string.len(text);
+    const len = visibleLen(text);
     if (len > longest) longest = len;
   }
   const wanted = longest * CHAR_WIDTH;
