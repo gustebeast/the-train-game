@@ -1,6 +1,7 @@
 import { Trigger, Unit } from 'w3ts';
 import { findItemByType, registerPeasantTargetCheck, updateBuildAbility } from './items';
 import { WOOD_ID, WATER_ID, BRIDGE_ABILITY_ID } from './constants';
+import { noteBuiltBridge } from './tutorialBoard';
 import { nextFrame } from './util';
 
 const BRIDGE_ORDER_ID = 852230; // fingerofdeath
@@ -41,6 +42,7 @@ export function initBridge(): void {
         const ty = target.y;
         target.destroy();
         SetTerrainType(tx, ty, FourCC(TERRAIN_BRICKS), -1, 1, 0);
+        noteBuiltBridge(u.owner.id);
       }
     }
   });

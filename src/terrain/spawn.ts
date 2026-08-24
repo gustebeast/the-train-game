@@ -247,7 +247,6 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         case Entity.BACK_CIRCLE: {
           const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
           BlzSetUnitName(circle.handle, 'Back');
-          SetUnitVertexColor(circle.handle, 255, 180, 180, 255);
           initReadyZone(world.x, world.y, 'saveback', circle);
           break;
         }
@@ -269,7 +268,6 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         case Entity.CONFIRM_CIRCLE: {
           const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
           BlzSetUnitName(circle.handle, 'Play This Save');
-          SetUnitVertexColor(circle.handle, 180, 255, 180, 255);
           initReadyZone(world.x, world.y, 'saveconfirm', circle);
           break;
         }
