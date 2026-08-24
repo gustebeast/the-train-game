@@ -3,7 +3,7 @@ import {
   AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID,
   BUCKET_ID, BUCKET_FULL_ID, REROLL_ITEM_ID,
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
-  SHOP_UPGRADE_ITEM_IDS,
+  SHOP_UPGRADE_ITEM_IDS, UNKNOWN_UNIT_ID,
 } from './constants';
 
 /**
@@ -88,6 +88,13 @@ export function canHold(holder: Unit, itemTypeId: number): string | null {
   }
   if (holder.typeId === CRATE_ID) {
     return isResourceItem(itemTypeId) ? null : "Can't store that!";
+  }
+  if (holder.typeId === UNKNOWN_UNIT_ID) {
+    // A hero or mercenary you have rolled but not yet met. Both live by the
+    // hero rules, so the placeholder does too -- if what it accepted depended
+    // on who was hiding behind it, handing it an item would give the answer
+    // away, which is the one thing the question mark exists to prevent.
+    return isHeroItem(itemTypeId) ? null : "They can't carry that!";
   }
   if (isPeasantUnit(holder)) {
     return (isResourceItem(itemTypeId) || isToolItem(itemTypeId) || isPeasantUtility(itemTypeId))

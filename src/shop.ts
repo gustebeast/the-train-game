@@ -18,7 +18,6 @@ import {
 import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
 import { forEachUnitInWorld, nextFrame, getHumanPlayers } from './util';
 import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges';
-import { markRandomOutcomeTaken } from './randomOutcome';
 import { onGlobalTick } from './globalTick';
 import { showChallengePreview, clearChallengePreview } from './challengeUI';
 import { refreshInterRoundLobbyRoster, hasInterRoundLobbyRerollTargets } from './interRoundLobbyRoster';
@@ -206,8 +205,6 @@ export function initShop(): void {
     } else if (itemTypeId === MERC_CONTRACT_ID) {
       const wasRevive = isMercDead();
       buyMercContract();
-      // The creep type is rolled right here, so the gamble is already taken.
-      markRandomOutcomeTaken();
       // Sold out until this one dies, at which point stockShop offers it again.
       if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
         RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_ID);
@@ -220,8 +217,6 @@ export function initShop(): void {
       if (contractBuyer != null) effectTargets = [contractBuyer];
     } else if (itemTypeId === MERC_CONTRACT_2_ID) {
       buySecondContract();
-      // Its creep type is rolled here, so the gamble is already taken.
-      markRandomOutcomeTaken();
       if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
         RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_2_ID);
       }

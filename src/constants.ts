@@ -10,6 +10,11 @@ export const TRACK_WAGON_ID = FourCC(Units.Wagon);
 export const CRATE_ID = FourCC(Units.GrainWarehouse);
 export const WATER_ID = FourCC(Units.Burrow);
 
+/** The "?" placeholder for a hero or mercenary you have rolled but not yet seen.
+ *  A custom unit authored in compiletime.ts (copied from the peasant); the
+ *  rawcode is duplicated there as UNKNOWN_UNIT_RAWCODE. */
+export const UNKNOWN_UNIT_ID = FourCC('qmrk');
+
 // Critters: the wandering-animal set from classic 1v1 melee maps
 export const CRITTER_TYPE_IDS: ReadonlyArray<number> = [
   FourCC(Units.Rabbit),

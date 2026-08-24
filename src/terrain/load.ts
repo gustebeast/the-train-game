@@ -26,8 +26,8 @@ import { hideChallengeUI, hidePanel, showPanel } from '../challengeUI';
 import { startTutorialBoard, stopTutorialBoard, tutorialBoardLines } from '../tutorialBoard';
 import { applyChallengeEffects, clearChallengeEffects } from '../challengeEffects';
 import { startDayNightForRound, stopDayNight } from '../daynight';
-import { resetRandomOutcome } from '../randomOutcome';
 import { refreshInterRoundLobbyRoster, resetInterRoundLobbyRoster } from '../interRoundLobbyRoster';
+import { saveMercInterRoundLobbySnapshot } from '../mercenary';
 import { deriveSeed } from '../rng';
 import { advanceChallengeOffer } from '../challenges';
 
@@ -302,9 +302,9 @@ export function loadInterRoundLobby(): void {
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
-  resetRandomOutcome();
   saveInterRoundLobbySnapshot();
   saveHeroInterRoundLobbySnapshot();
+  saveMercInterRoundLobbySnapshot();
   setMusic('interRound');
   SetTimeOfDay(12);
   const spawned = spawnTerrain(generateInterRoundLobby());
