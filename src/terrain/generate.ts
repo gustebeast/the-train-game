@@ -631,24 +631,30 @@ export function generateStartLobby(): Grid {
  *  rather than somewhere out on a procedural map. */
 export function generateTutorial(): Grid {
   const grid = generateCheatTerrain(GRID_MIN_X + 11);
-  // Row -2 is where the four player spawns live and row -3 holds the tools, so
-  // the props go on row -1 and row 1. Putting a tree on a spawn cell is exactly
-  // what went wrong the first time: it replaced player 1, so the tutorial
-  // started with no peasant -- and with no peasant there was no vision, which
-  // read as the fog never being reset.
+  // SPAWN is the generator's reserved box -- the cleared ground the players,
+  // tools and train start on. Props go OUTSIDE it, just beyond its eastern
+  // edge and just south of it, so they are a couple of steps away without
+  // standing in the ground the map keeps clear on purpose.
+  //
+  // Dropping one inside is exactly what went wrong first time: a tree landed on
+  // the cell that places player 1, so the tutorial began with no peasant -- and
+  // with no peasant there was no vision, which read as the fog never resetting.
   const teach: Array<[number, number, Entity]> = [
-    [GRID_MIN_X + 4, -1, Entity.TREE],
-    [GRID_MIN_X + 5, -1, Entity.TREE],
-    [GRID_MIN_X + 6, -1, Entity.ROCK],
+    [GRID_MIN_X + 6, -2, Entity.TREE],
+    [GRID_MIN_X + 6, -1, Entity.TREE],
+    [GRID_MIN_X + 7, -2, Entity.ROCK],
     [GRID_MIN_X + 7, -1, Entity.ROCK],
     [GRID_MIN_X + 4, 1, Entity.WATER_VISIBLE],
     [GRID_MIN_X + 5, 1, Entity.WATER_VISIBLE],
   ];
   for (const [gx, gy, entity] of teach) {
     if (!inBounds(gx, gy)) continue;
+    // Honour the reserve by rule rather than by choosing coordinates carefully,
+    // so a later nudge cannot wander back into it.
+    const inReserve = gx >= SPAWN.minX && gx <= SPAWN.maxX
+      && gy >= SPAWN.minY && gy <= SPAWN.maxY;
+    if (inReserve) continue;
     const cell = grid.cells[idx(gx, gy)];
-    // Never build over a spawn or anything else already placed: a prop is the
-    // least important thing on this map.
     if (cell.entity !== Entity.NONE) continue;
     cell.entity = entity;
   }
