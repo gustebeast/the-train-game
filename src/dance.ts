@@ -17,6 +17,10 @@ import { DANCE_ABILITY_IDS, DASH_ABILITY_ID, PEASANT_ID } from './constants';
 //   W Attack Morph - 16    I Attack - 6
 //   E Attack - 9           O Attack - 7
 //   R Attack Morph - 20    P Attack - 8
+//
+// They are stored as "Dance One" .. "Dance Eight" -- see fix-dance-anims.js.
+// Only seven fit on the command card; the eighth has nowhere to go while the
+// engine's own five buttons hold their slots (compiletime.ts has the detail).
 const DANCE_SEQUENCES: ReadonlyArray<number> = [
   23, // Q  Walk Victory - 1
   24, // W  Attack Morph - 16
@@ -61,14 +65,26 @@ function untilNextBeat(): number {
   return beatPeriod - into;
 }
 
-function play(h: unit, sequence: number): void {
-  SetUnitAnimationByIndex(h, sequence);
-  QueueUnitAnimation(h, 'stand');
-}
+/** How long after a cast lands before the dance can be set.
+ *
+ *  The engine drives the caster's own animation for most of a second after
+ *  SPELL_EFFECT and overwrites anything a trigger sets inside that window --
+ *  which is why a pressed dance looked like it snapped straight back to
+ *  standing. Measured in game: 0.0s, 0.2s and 0.4s are all eaten; 0.8s and
+ *  later hold, and every dance then plays.
+ *
+ *  Things that did NOT shorten it, so they are not worth trying again: zeroing
+ *  the unit's cast point and backswing (already 0 in object data), and naming
+ *  the sequence in the ability's Art - Animation Names field. */
+const CAST_ANIM_HOLD = 0.85;
 
-/** The engine's patrol button, which it grants to anything that can move. Not
- *  in the peasant's ability list, so it cannot be taken away in object data. */
-const PATROL_ABILITY_ID = FourCC('Apat');
+function play(h: unit, sequence: number): void {
+  Timer.create().start(CAST_ANIM_HOLD, false, () => {
+    if (GetUnitTypeId(h) === 0) return;
+    SetUnitAnimationByIndex(h, sequence);
+    QueueUnitAnimation(h, 'stand');
+  });
+}
 
 /** Dancers keep their normal move speed for now.
  *
@@ -83,14 +99,11 @@ const DANCE_MOVE_SPEED = 190;
 /** Park a peasant as a dancer: its command card is the dance set. */
 export function makeDancer(u: Unit): void {
   SetUnitMoveSpeed(u.handle, DANCE_MOVE_SPEED);
-  // Take away everything a peasant normally carries. Three of the dance hotkeys
-  // would otherwise be taken: give/take owns W, the dash owns E, and the
-  // engine's own patrol button owns P. A dancer has nothing to give, nowhere to
-  // dash to and nothing to patrol, so the whole set goes -- and dropping patrol
-  // also frees the command card slot the eighth dance needs.
+  // Take away everything a peasant normally carries. Two of the dance hotkeys
+  // would otherwise be taken: give/take owns W and the dash owns E. A dancer
+  // has nothing to give and nowhere to dash to, so the whole set goes.
   UnitRemoveAbility(u.handle, DASH_ABILITY_ID);
   UnitRemoveAbility(u.handle, FourCC(Abilities.Channel));
-  UnitRemoveAbility(u.handle, PATROL_ABILITY_ID);
   for (const id of DANCE_ABILITY_IDS) UnitAddAbility(u.handle, id);
 }
 

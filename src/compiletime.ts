@@ -255,9 +255,17 @@ compiletime(({ objectData, constants }) => {
     dance.baseOrderIDundefined = DANCE_ORDERS[i];
     dance.tooltipNormal = 'Dance (' + DANCE_HOTKEYS[i] + ')';
     dance.tooltipNormalExtended = 'Bust a move.';
-    dance.iconNormal = 'ReplaceableTextures\CommandButtons\BTNBrilliance.blp';
+    dance.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNBrilliance.blp';
     dance.hotkeyNormal = DANCE_HOTKEYS[i];
     // Two rows of four: QWER above UIOP, mirroring the keyboard.
+    //
+    // KNOWN UNRESOLVED: only seven of the eight ever appear. The engine draws
+    // move, stop, hold, attack and patrol at fixed slots and none of them can
+    // be removed -- taking 'Apat' and then 'Amov' off a live peasant left all
+    // five, and so did minting a dancer unit type with move type "none" and no
+    // attacks (all measured in game). Nor does the engine honour these two
+    // fields for these abilities: the layout below is identical whatever they
+    // are set to, so the eighth dance cannot simply be moved somewhere free.
     dance.buttonPositionNormalX = i % 4;
     dance.buttonPositionNormalY = i < 4 ? 1 : 2;
     dance.caster = '';

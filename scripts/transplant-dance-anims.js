@@ -13,7 +13,7 @@
 // Source model, not committed here -- point SOURCE at wherever it lives:
 //   https://www.hiveworkshop.com/threads/villager-255-animations.192204/
 //
-// The sequences are RENAMED to "Dance - N" on the way in. WC3 resolves an
+// The sequences are RENAMED to "Dance <word>" on the way in. WC3 resolves an
 // animation request by collecting every sequence whose name contains the
 // requested tokens and picking one at random, so keeping the source names would
 // make "Attack - 6" a variant of "Attack" and "Walk Victory - 1" a variant of
@@ -49,7 +49,7 @@ const DANCES = [
   'Attack - 6',
   'Attack - 7',
   'Attack - 8',
-].map((source, i) => ({ source, name: `Dance - ${i + 1}` }));
+].map((source, i) => ({ source, name: `Dance ${['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'][i]}` }));
 
 function nodesByName(model) {
   const out = new Map();
