@@ -27,25 +27,24 @@ import { getHumanPlayers } from './util';
 // sequence by index, and these are ones the engine would never choose on its
 // own, which is exactly why they have to be asked for explicitly.
 //
-//   Q Walk Victory - 1     U Attack Morph - 26
-//   W Attack Morph - 16    I Attack - 6
-//   E Attack - 9           O Attack - 7
-//   R Attack Morph - 20    P Attack - 8
+//   Q Walk Victory - 1     I Attack - 7
+//   W Death - 1            O Attack - 8
+//   E Attack - 9           V Stand Hit - 4
+//   R Stand Hit - 1        B Stand Victory - 17
+//   Y Stand Hit - 5
+//   U Attack - 6
 //
-// They are stored as "Dance One" .. "Dance Eight" -- see fix-dance-anims.js.
+// QWERYUIO puts the right hand one key over so a thumb falls on B, with the
+// left thumb on V. P is avoided throughout: it issues a patrol order, and the
+// keys being read raw does not stop that order going through.
+//
+// They are stored as "Dance One" .. "Dance Ten" in this same order -- see
+// scripts/fix-dance-anims.js -- so the indices below are simply consecutive.
 const DANCE_KEYS: ReadonlyArray<oskeytype> = [
-  OSKEY_Q, OSKEY_W, OSKEY_E, OSKEY_R, OSKEY_U, OSKEY_I, OSKEY_O, OSKEY_P,
+  OSKEY_Q, OSKEY_W, OSKEY_E, OSKEY_R, OSKEY_Y,
+  OSKEY_U, OSKEY_I, OSKEY_O, OSKEY_V, OSKEY_B,
 ];
-const DANCE_SEQUENCES: ReadonlyArray<number> = [
-  23, // Q  Walk Victory - 1
-  24, // W  Attack Morph - 16
-  30, // E  Attack - 9
-  25, // R  Attack Morph - 20
-  26, // U  Attack Morph - 26
-  27, // I  Attack - 6
-  28, // O  Attack - 7
-  29, // P  Attack - 8
-];
+const DANCE_SEQUENCES: ReadonlyArray<number> = [23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
 
 /** Seconds per beat, 0 while no song is playing. Set this from the lobby track
  *  and every dance lands on the beat instead of whenever the button was hit. */

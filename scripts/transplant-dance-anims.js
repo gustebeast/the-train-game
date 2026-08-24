@@ -3,12 +3,16 @@
 // bone-name matching as transplant-roll-anim.js -- both models descend from
 // Blizzard's villager rig, so most nodes share names.
 //
-// The dances the host's guests get, chosen by eye and mapped to hotkeys:
-//   Q Walk Victory - 1     U Attack Morph - 26
-//   W Attack Morph - 16    I Attack - 6
-//   E Attack - 9           O Attack - 7
-//   R Attack Morph - 20
-//                          P Attack - 8
+// The dances the host's guests get, chosen by eye and mapped to hotkeys.
+// QWERYUIO rather than QWERTYUI: it puts the right hand one key over so a
+// thumb falls on B, with the left thumb on V. P is avoided throughout -- it
+// issues a patrol order the engine owns and will not give up.
+//   Q Walk Victory - 1     I Attack - 7
+//   W Death - 1            O Attack - 8
+//   E Attack - 9           V Stand Hit - 4
+//   R Stand Hit - 1        B Stand Victory - 17
+//   Y Stand Hit - 5
+//   U Attack - 6
 //
 // Source model, not committed here -- point SOURCE at wherever it lives:
 //   https://www.hiveworkshop.com/threads/villager-255-animations.192204/
@@ -39,17 +43,20 @@ let nextStart = 210000;
 /** Gap between transplanted ranges so no two can interpolate into each other. */
 const GAP = 2000;
 
-/** Source sequence, and the safe name it is stored under. */
+/** Source sequence, and the safe name it is stored under. Hotkey order --
+ *  Dance One is Q, Dance Ten is B -- so dance.ts is a straight list. */
 const DANCES = [
   'Walk Victory - 1',
-  'Attack Morph - 16',
-  'Attack Morph - 20',
-  'Attack Morph - 26',
+  'Death - 1',
   'Attack - 9',
+  'Stand Hit - 1',
+  'Stand Hit - 5',
   'Attack - 6',
   'Attack - 7',
   'Attack - 8',
-].map((source, i) => ({ source, name: `Dance ${['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'][i]}` }));
+  'Stand Hit - 4',
+  'Stand Victory - 17',
+].map((source, i) => ({ source, name: `Dance ${['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][i]}` }));
 
 function nodesByName(model) {
   const out = new Map();

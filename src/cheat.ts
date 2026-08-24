@@ -143,7 +143,7 @@ export function initCheat(): void {
     makeDancer(dancer);
     ClearSelection();
     SelectUnit(dancer.handle, true);
-    print('Dancer spawned. Q W E R and U I O P are the dances.');
+    print('Dancer spawned. Q W E R Y U I O V B are the dances.');
   });
 
   // Drive the defeat path without having to actually run the train out of
