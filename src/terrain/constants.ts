@@ -60,6 +60,8 @@ export enum Entity {
   NEXT_CIRCLE = 29,
   /** Save chooser: play the selected save. */
   CONFIRM_CIRCLE = 30,
+  /** Start lobby: play the tutorial. */
+  TUTORIAL_CIRCLE = 31,
 }
 
 export interface Cell {

@@ -274,6 +274,13 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           break;
         }
 
+        case Entity.TUTORIAL_CIRCLE: {
+          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
+          BlzSetUnitName(circle.handle, 'Tutorial');
+          initReadyZone(world.x, world.y, 'tutorial', circle);
+          break;
+        }
+
         case Entity.CRITTER: {
           const critterType = CRITTER_TYPE_IDS[GetRandomInt(0, CRITTER_TYPE_IDS.length - 1)];
           Unit.create(getNeutralPassive(), critterType, world.x, world.y, GetRandomReal(0, 360));
