@@ -116,11 +116,17 @@ export function initDance(): void {
       const sequence = DANCE_SEQUENCES[i];
       const key = Trigger.create();
       // metaKey 0: no modifier, so shift-clicking around the lobby cannot
-      // accidentally set eight people dancing.
+      // accidentally set the whole room dancing.
       BlzTriggerRegisterPlayerKeyEvent(key.handle, player.handle, DANCE_KEYS[i], 0, true);
       key.addAction(() => {
-        const h = dancers.get(GetPlayerId(GetTriggerPlayer()!));
+        const caster = GetTriggerPlayer()!;
+        const h = dancers.get(GetPlayerId(caster));
         if (h == null || GetUnitTypeId(h) === 0) return;
+        // Only while the player has the dancer selected. These are ten plain
+        // letter keys with no modifier, and a key event fires wherever the
+        // player's attention is -- so without this, anyone reading the lobby or
+        // clicking around the map sets their peasant off by accident.
+        if (!IsUnitSelected(h, caster)) return;
 
         const wait = untilNextBeat();
         if (wait <= 0) { play(h, sequence); return; }
