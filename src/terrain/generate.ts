@@ -639,22 +639,31 @@ export function generateTutorial(): Grid {
   // Dropping one inside is exactly what went wrong first time: a tree landed on
   // the cell that places player 1, so the tutorial began with no peasant -- and
   // with no peasant there was no vision, which read as the fog never resetting.
-  const teach: Array<[number, number, Entity]> = [
-    [GRID_MIN_X + 6, -2, Entity.TREE],
-    [GRID_MIN_X + 6, -1, Entity.TREE],
-    [GRID_MIN_X + 7, -2, Entity.ROCK],
-    [GRID_MIN_X + 7, -1, Entity.ROCK],
-    [GRID_MIN_X + 4, 1, Entity.WATER_VISIBLE],
-    [GRID_MIN_X + 5, 1, Entity.WATER_VISIBLE],
-  ];
+  // Plenty of everything, so nobody runs out mid-experiment: two columns of
+  // trees and two of rock running south to the map edge, and a broad pool to
+  // the north to practise bridging across.
+  const teach: Array<[number, number, Entity]> = [];
+  for (let gy = GRID_MIN_Y; gy <= -1; gy++) {
+    teach.push([GRID_MIN_X + 6, gy, Entity.TREE]);
+    teach.push([GRID_MIN_X + 7, gy, Entity.TREE]);
+    teach.push([GRID_MIN_X + 8, gy, Entity.ROCK]);
+    teach.push([GRID_MIN_X + 9, gy, Entity.ROCK]);
+  }
+  for (let gy = 2; gy <= 6; gy++) {
+    for (let gx = GRID_MIN_X + 4; gx <= GRID_MIN_X + 10; gx++) {
+      teach.push([gx, gy, Entity.WATER_VISIBLE]);
+    }
+  }
   for (const [gx, gy, entity] of teach) {
     if (!inBounds(gx, gy)) continue;
-    // Honour the reserve by rule rather than by choosing coordinates carefully,
-    // so a later nudge cannot wander back into it.
+    // Honour the generator's reserved box by rule rather than by choosing
+    // coordinates carefully, so a later nudge cannot wander back into it.
     const inReserve = gx >= SPAWN.minX && gx <= SPAWN.maxX
       && gy >= SPAWN.minY && gy <= SPAWN.maxY;
     if (inReserve) continue;
     const cell = grid.cells[idx(gx, gy)];
+    // Anything already placed wins -- the track corridor, the creep camp and
+    // the crate all matter more than a prop.
     if (cell.entity !== Entity.NONE) continue;
     cell.entity = entity;
   }
