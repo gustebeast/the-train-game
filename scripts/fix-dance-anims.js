@@ -38,20 +38,24 @@ const SOURCE_NAMES = [
   'Attack - 7',
   'Attack - 8',
 ];
-const safeName = (i) => `Dance - ${i + 1}`;
+const WORDS = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
+/** Unique, so an ability's Animation Names field can name exactly one of them
+ *  -- "Dance - 1" and friends were all variants of one base name, and the
+ *  engine picks among variants at random. */
+const safeName = (i) => `Dance ${WORDS[i]}`;
 
 const m = new Model();
 m.load(new Uint8Array(fs.readFileSync(TARGET)));
 
 let renamed = 0;
 for (let i = 0; i < SOURCE_NAMES.length; i++) {
-  const seq = m.sequences.find((s) => s.name === SOURCE_NAMES[i]);
+  const seq = m.sequences.find((s) => s.name === SOURCE_NAMES[i] || s.name === `Dance - ${i + 1}`);
   if (seq == null) continue; // already renamed, or never transplanted
   seq.name = safeName(i);
   renamed += 1;
 }
 
-const dances = m.sequences.filter((s) => s.name.startsWith('Dance - '));
+const dances = m.sequences.filter((s) => s.name.startsWith('Dance '));
 if (dances.length === 0) {
   throw new Error('no dance sequences -- run transplant-dance-anims.js first');
 }
@@ -95,11 +99,11 @@ console.log(`renamed ${renamed} sequences, patched ${patched} geoset alpha range
 const check = new Model();
 check.load(new Uint8Array(fs.readFileSync(TARGET)));
 for (const name of SOURCE_NAMES) {
-  if (check.sequences.some((s) => s.name === name)) {
+  if (check.sequences.some((s) => s.name === name || s.name.indexOf('Dance - ') === 0)) {
     throw new Error(`sequence "${name}" survived the rename`);
   }
 }
-const out2 = check.sequences.filter((s) => s.name.startsWith('Dance - '));
+const out2 = check.sequences.filter((s) => s.name.startsWith('Dance '));
 for (const seq of out2) {
   for (const g of check.geosetAnimations) {
     const track = g.animations && g.animations[0];
