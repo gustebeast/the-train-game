@@ -3,6 +3,10 @@ compiletime(({ objectData, constants }) => {
    *  loop below and the hero block near the end of this file. */
   const UNIT_SCALE = 0.6;
 
+  /** Rawcode of the "?" placeholder unit. Must match UNKNOWN_UNIT_ID in
+   *  constants.ts -- this side authors the unit, that side spawns it. */
+  const UNKNOWN_UNIT_RAWCODE = 'qmrk';
+
   // Everything in the world is peasant-sized unless we say otherwise.
   //
   // The heroes are scaled to 0.6 to match the peasant (see the hero block near
@@ -1175,6 +1179,29 @@ compiletime(({ objectData, constants }) => {
     hero.shadowImageCenterY = 40;
     hero.speedBase = 200;
   }
+
+  // The "?" that stands in for a hero or mercenary whose identity you have
+  // rolled but not yet seen (see hiddenRoll in heroes.ts / mercenary.ts).
+  //
+  // A COPY of the peasant rather than a repurposed stock unit: every stock unit
+  // worth taking is already spoken for -- towers are track, the marketplace is
+  // the shop, and every neutral creep is now a camp or mercenary type -- and
+  // copying keeps the peasant's small footprint and inventory without dragging
+  // in a creep's attacks or abilities.
+  //
+  // The model path is real, not guessed: an invalid path renders NOTHING, so it
+  // was confirmed in game before being written down here.
+  const unknown = objectData.units.copy(constants.units.Peasant, UNKNOWN_UNIT_RAWCODE)!;
+  unknown.name = 'Unknown';
+  unknown.description = 'Rolled, but not yet revealed. You will meet them when the round starts.';
+  unknown.modelFile = 'Doodads\Cinematic\QuestionMark\QuestionMark.mdl';
+  // Only the inventory: it still has to show the kit it is holding, which is
+  // the whole reason the lobby displays these units at all. Everything else the
+  // peasant can do (build, harvest, repair) would be nonsense on a question mark.
+  unknown.normal = constants.abilities.InventoryHero;
+  unknown.speedBase = 0;
+  unknown.attacksEnabled = '0';
+  unknown.unitsTrained = '';
 
   objectData.save();
 });

@@ -2,8 +2,7 @@ import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { isInGameplay } from './state';
 import { registerSaveSegment, parseFields } from './save';
-import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants';
-import { markRandomOutcomeTaken } from './randomOutcome';
+import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID, UNKNOWN_UNIT_ID } from './constants';
 import { seededValueAt } from './rng';
 import { gameState } from './state';
 import { getNeutralPassive } from './teams';
@@ -550,17 +549,48 @@ export function clearInterRoundLobbyHeroes(): void {
  *  had handed the display unit since the inter-round lobby opened. */
 export function syncInterRoundLobbyHeroes(positions: Array<{ x: number; y: number }>): void {
   if (!isSummonUpgradePurchased()) return;
-  const owner = getNeutralPassive();
   for (let dataIdx = 0; dataIdx < allHeroes.length; dataIdx++) {
     if (allHeroes[dataIdx].typeId === 0) continue;
     if (lobbyHeroes.some(e => e.dataIdx === dataIdx)) continue;
     const pos = positions[math.min(dataIdx, positions.length - 1)];
-    const hero = spawnHeroUnit(dataIdx, owner, pos.x, pos.y);
-    if (hero != null) {
-      hero.invulnerable = true;
-      lobbyHeroes.push({ unit: hero, dataIdx });
-    }
+    const unit = createRosterHeroUnit(dataIdx, pos.x, pos.y);
+    if (unit != null) lobbyHeroes.push({ unit, dataIdx });
   }
+}
+
+/** Whether this roster slot holds someone the player has rolled but not yet
+ *  met, and so is displayed as a question mark.
+ *
+ *  DERIVED, not tracked. The snapshot is the roster as it stood when this
+ *  inter-round lobby visit began, so "different from the snapshot" is exactly
+ *  "rolled since you walked in". Two things fall out for free: Reset Purchases
+ *  restores the snapshot, which un-conceals everything without a second code
+ *  path, and a mercenary hired into an empty slot differs from nothing, so a
+ *  contract purchase conceals itself the same way a reroll does. */
+function heroConcealed(dataIdx: number): boolean {
+  if (lobbyHeroSnapshot == null) return false;
+  return lobbyHeroSnapshot[dataIdx].typeId !== allHeroes[dataIdx].typeId;
+}
+
+/** The roster unit for a hero slot: the hero, or the "?" standing in for them.
+ *
+ *  The placeholder still carries the kit. What a reroll keeps is information
+ *  the player is entitled to -- it is WHO they got that is being withheld. */
+function createRosterHeroUnit(dataIdx: number, x: number, y: number): Unit | null {
+  const owner = getNeutralPassive();
+  if (!heroConcealed(dataIdx)) {
+    const hero = spawnHeroUnit(dataIdx, owner, x, y);
+    if (hero != null) hero.invulnerable = true;
+    return hero;
+  }
+  const placeholder = Unit.create(owner, UNKNOWN_UNIT_ID, x, y, 270);
+  if (placeholder == null) return null;
+  placeholder.invulnerable = true;
+  for (const itemId of allHeroes[dataIdx].items) {
+    const it = CreateItem(itemId, placeholder.x, placeholder.y);
+    if (it != null) UnitAddItem(placeholder.handle, it);
+  }
+  return placeholder;
 }
 
 /** Reroll the inter-round lobby hero represented by unitHandle: swap its slot in
@@ -601,12 +631,18 @@ export function rerollInterRoundLobbyHero(unitHandle: unit): boolean {
   const entry = lobbyHeroes.find(e => e.unit.handle === unitHandle);
   if (entry == null) return false;
 
+  // Exclude the roster as it stands AND the roster you walked in with. The
+  // second half matters because the result is hidden: with heroes A and B,
+  // rerolling A to C and then B to A leaves two question marks that reveal as
+  // C and A, and the player -- who cannot see either -- has no way to tell that
+  // one of their rerolls handed back a hero they already had.
   const currentTypes = allHeroes.map(h => h.typeId);
-  const candidates = HERO_POOL.map(n => FourCC(n)).filter(id => !currentTypes.includes(id));
+  const startedWith = lobbyHeroSnapshot == null ? [] : lobbyHeroSnapshot.map(h => h.typeId);
+  const candidates = HERO_POOL.map(n => FourCC(n))
+    .filter(id => !currentTypes.includes(id) && !startedWith.includes(id));
   if (candidates.length === 0) return false;
 
   const data = allHeroes[entry.dataIdx];
-  markRandomOutcomeTaken();
 
   // Items follow the hero. The replacement is rebuilt from HeroData, so
   // anything picked up onto the LOBBY unit has to be written back first --
@@ -624,11 +660,10 @@ export function rerollInterRoundLobbyHero(unitHandle: unit): boolean {
   const x = entry.unit.x;
   const y = entry.unit.y;
   RemoveUnit(entry.unit.handle);
-  const replacement = spawnHeroUnit(entry.dataIdx, getNeutralPassive(), x, y);
-  if (replacement != null) {
-    replacement.invulnerable = true;
-    entry.unit = replacement;
-  }
+  // Now concealed by construction -- the type just changed, so this comes back
+  // as the question mark rather than the hero.
+  const replacement = createRosterHeroUnit(entry.dataIdx, x, y);
+  if (replacement != null) entry.unit = replacement;
   return true;
 }
 

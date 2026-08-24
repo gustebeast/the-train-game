@@ -3,9 +3,9 @@ import { Abilities } from '@objectdata/abilities';
 import { registerSaveSegment, parseFields } from './save';
 import { getHumanPlayers, getInventoryItemIds, forEachInventoryItem } from './util';
 import { getNeutralPassive } from './teams';
-import { markRandomOutcomeTaken } from './randomOutcome';
 import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creep_camps';
+import { UNKNOWN_UNIT_ID } from './constants';
 
 /** Hero-style inventory (the same ability the peasant carries tools with). It
  *  is BAKED onto every merc-able creep type in object data (see compiletime.ts):
@@ -215,7 +215,7 @@ function mercPool(maxLevel: number): string[] {
  *  reroll has to hand you something new -- and it stops the second contract
  *  duplicating the first. Seeded (rng.ts), so a save always rolls the same. */
 function rollMercType(maxLevel: number): number {
-  const excluded = livingSlots().map(sl => sl.typeId);
+  const excluded = livingSlots().map(sl => sl.typeId).concat(startedWithTypes());
   const pool = mercPool(maxLevel).filter(id => !excluded.includes(FourCC(id)));
   if (pool.length === 0) return 0;
   return FourCC(pool[seededInt(0, pool.length - 1)]);
@@ -347,6 +347,31 @@ export function releaseMercUnit(): void {
 // Inter-round lobby display + reroll
 // ---------------------------------------------------------------------------
 
+/** Slot types as they stood when this inter-round lobby visit began, so a
+ *  mercenary rolled since can be told apart from one you already had. Mirrors
+ *  the hero snapshot in heroes.ts; see heroConcealed there for why this is
+ *  derived rather than tracked. */
+let lobbyMercSnapshot: number[] | null = null;
+
+/** Snapshot mercenary slots on inter-round lobby entry. */
+export function saveMercInterRoundLobbySnapshot(): void {
+  lobbyMercSnapshot = slots.map(sl => (sl.dead ? 0 : sl.typeId));
+}
+
+/** Types the player already had standing in front of them when the visit began.
+ *  Excluded from rolls so a reroll cannot hand back a mercenary they walked in
+ *  with -- invisible to them now that the result is concealed. */
+function startedWithTypes(): number[] {
+  return lobbyMercSnapshot == null ? [] : lobbyMercSnapshot.filter(id => id !== 0);
+}
+
+/** Whether this slot holds a mercenary rolled but not yet met. */
+function mercConcealed(slotIndex: number): boolean {
+  if (lobbyMercSnapshot == null) return false;
+  const sl = slots[slotIndex];
+  return lobbyMercSnapshot[slotIndex] !== (sl.dead ? 0 : sl.typeId);
+}
+
 /** Neutral display copies, one per living mercenary, shown in the inter-round lobby beside
  *  the heroes so the Reroll item can target them.
  *
@@ -372,7 +397,10 @@ export function syncInterRoundLobbyMercs(positions: Array<{ x: number; y: number
     if (sl.typeId === 0 || sl.dead) continue;
     if (lobbyMercs.some(e => e.slotIndex === i)) continue;
     const pos = positions[math.min(i, positions.length - 1)];
-    const u = Unit.create(getNeutralPassive(), sl.typeId, pos.x, pos.y, 270);
+    // A mercenary rolled this visit -- hired or rerolled -- stands as a question
+    // mark until the round starts.
+    const typeId = mercConcealed(i) ? UNKNOWN_UNIT_ID : sl.typeId;
+    const u = Unit.create(getNeutralPassive(), typeId, pos.x, pos.y, 270);
     if (u == null) continue;
     u.invulnerable = true;
     // Show the kit, so the inter-round lobby says what a reroll would keep.
@@ -397,13 +425,14 @@ export function rerollInterRoundLobbyMerc(unitHandle: unit): boolean {
   // Read the kit off the display unit rather than trusting the stored list --
   // the player may have handed it something since the inter-round lobby was built.
   slot.items = getInventoryItemIds(entry.unit.handle);
-  markRandomOutcomeTaken();
   // Excludes every mercenary in play, so a reroll is always something new.
   const rolled = rollMercType(mercCampLevel());
   if (rolled !== 0) slot.typeId = rolled;
   RemoveUnit(entry.unit.handle);
 
-  const replacement = Unit.create(getNeutralPassive(), slot.typeId, x, y, 270);
+  // Concealed by construction: the type just changed.
+  const replacement = Unit.create(getNeutralPassive(),
+    mercConcealed(entry.slotIndex) ? UNKNOWN_UNIT_ID : slot.typeId, x, y, 270);
   if (replacement != null) {
     replacement.invulnerable = true;
     for (const itemId of slot.items) {
