@@ -639,11 +639,15 @@ export function generateTutorial(): Grid {
  *  save's heroes are displayed above them by chooseSaveLobby.ts. */
 export function generateChooseSaveLobby(): Grid {
   const grid = generateStartLobby();
+  // Clear the start lobby's own menu -- all three of it, tutorial included.
+  grid.cells[idx(-2, -3)].entity = Entity.NONE;
   grid.cells[idx(0, -3)].entity = Entity.NONE;
   grid.cells[idx(2, -3)].entity = Entity.NONE;
+  // Older on the left, newer on the right, so paging right walks forward in
+  // time the way a timeline reads.
   grid.cells[idx(-3, -3)].entity = Entity.BACK_CIRCLE;
-  grid.cells[idx(-1, -3)].entity = Entity.PREV_CIRCLE;
-  grid.cells[idx(1, -3)].entity = Entity.NEXT_CIRCLE;
+  grid.cells[idx(-1, -3)].entity = Entity.NEXT_CIRCLE;
+  grid.cells[idx(1, -3)].entity = Entity.PREV_CIRCLE;
   grid.cells[idx(3, -3)].entity = Entity.CONFIRM_CIRCLE;
   return grid;
 }
