@@ -576,7 +576,7 @@ export function generateInterRoundLobby(): Grid {
  *  crates, ready circles, train or creep cage. Player spawns are kept, since
  *  the point is to have somewhere to stand and walk after a defeat, and the
  *  water border is kept because it is the map edge rather than scenery. */
-export function generateDefeatLobby(): Grid {
+function generateEmptyLobby(): Grid {
   const grid = generateInterRoundLobby();
   for (const cell of grid.cells) {
     if (cell.entity === Entity.NONE) continue;
@@ -584,6 +584,22 @@ export function generateDefeatLobby(): Grid {
     const isPlayerSpawn = cell.entity >= Entity.PLAYER_1 && cell.entity <= Entity.PLAYER_4;
     if (!isBoundary && !isPlayerSpawn) cell.entity = Entity.NONE;
   }
+  return grid;
+}
+
+/** Move players 2-4 to the back row, where they stand as dancers. Used by the
+ *  lobbies only the host acts in. */
+function parkTheGuests(grid: Grid): void {
+  for (const cell of grid.cells) {
+    if (cell.entity >= Entity.PLAYER_2 && cell.entity <= Entity.PLAYER_4) cell.entity = Entity.NONE;
+  }
+  grid.cells[idx(-2, 3)].entity = Entity.PLAYER_2;
+  grid.cells[idx(0, 3)].entity = Entity.PLAYER_3;
+  grid.cells[idx(2, 3)].entity = Entity.PLAYER_4;
+}
+
+export function generateDefeatLobby(): Grid {
+  const grid = generateEmptyLobby();
   // The one thing you can do from here: give up on this run and go back to the
   // start lobby. Every player has to agree, the way Reset Purchases works,
   // because it ends the run for all of them.
@@ -598,16 +614,11 @@ export function generateDefeatLobby(): Grid {
  *  until a game is actually running. Built from the empty defeat-lobby shell so
  *  the three lobbies cannot drift apart in floor or boundary. */
 export function generateStartLobby(): Grid {
-  const grid = generateDefeatLobby();
+  const grid = generateEmptyLobby();
   // Players 2-4 move to the back row and stay there as dancers (see dance.ts).
   // They keep a spawn rather than losing one: the point is that they have
   // something to do while the host decides, not that they are absent.
-  for (const cell of grid.cells) {
-    if (cell.entity >= Entity.PLAYER_2 && cell.entity <= Entity.PLAYER_4) cell.entity = Entity.NONE;
-  }
-  grid.cells[idx(-2, 3)].entity = Entity.PLAYER_2;
-  grid.cells[idx(0, 3)].entity = Entity.PLAYER_3;
-  grid.cells[idx(2, 3)].entity = Entity.PLAYER_4;
+  parkTheGuests(grid);
   grid.cells[idx(-2, -3)].entity = Entity.TUTORIAL_CIRCLE;
   grid.cells[idx(0, -3)].entity = Entity.NEW_GAME_CIRCLE;
   grid.cells[idx(2, -3)].entity = Entity.LOAD_CIRCLE;
@@ -620,16 +631,26 @@ export function generateStartLobby(): Grid {
  *  rather than somewhere out on a procedural map. */
 export function generateTutorial(): Grid {
   const grid = generateCheatTerrain(GRID_MIN_X + 11);
+  // Row -2 is where the four player spawns live and row -3 holds the tools, so
+  // the props go on row -1 and row 1. Putting a tree on a spawn cell is exactly
+  // what went wrong the first time: it replaced player 1, so the tutorial
+  // started with no peasant -- and with no peasant there was no vision, which
+  // read as the fog never being reset.
   const teach: Array<[number, number, Entity]> = [
-    [GRID_MIN_X + 3, -1, Entity.TREE],
-    [GRID_MIN_X + 3, -2, Entity.TREE],
-    [GRID_MIN_X + 4, -2, Entity.ROCK],
-    [GRID_MIN_X + 5, -2, Entity.ROCK],
+    [GRID_MIN_X + 4, -1, Entity.TREE],
+    [GRID_MIN_X + 5, -1, Entity.TREE],
+    [GRID_MIN_X + 6, -1, Entity.ROCK],
+    [GRID_MIN_X + 7, -1, Entity.ROCK],
     [GRID_MIN_X + 4, 1, Entity.WATER_VISIBLE],
     [GRID_MIN_X + 5, 1, Entity.WATER_VISIBLE],
   ];
   for (const [gx, gy, entity] of teach) {
-    if (inBounds(gx, gy)) grid.cells[idx(gx, gy)].entity = entity;
+    if (!inBounds(gx, gy)) continue;
+    const cell = grid.cells[idx(gx, gy)];
+    // Never build over a spawn or anything else already placed: a prop is the
+    // least important thing on this map.
+    if (cell.entity !== Entity.NONE) continue;
+    cell.entity = entity;
   }
   return grid;
 }
@@ -638,11 +659,10 @@ export function generateTutorial(): Grid {
  *  from: the four circles are back, older, newer and confirm, and the selected
  *  save's heroes are displayed above them by chooseSaveLobby.ts. */
 export function generateChooseSaveLobby(): Grid {
-  const grid = generateStartLobby();
-  // Clear the start lobby's own menu -- all three of it, tutorial included.
-  grid.cells[idx(-2, -3)].entity = Entity.NONE;
-  grid.cells[idx(0, -3)].entity = Entity.NONE;
-  grid.cells[idx(2, -3)].entity = Entity.NONE;
+  // Built from the empty shell, not from the start lobby: a lobby places what
+  // it wants rather than inheriting another's furniture and unpicking it.
+  const grid = generateEmptyLobby();
+  parkTheGuests(grid);
   // Older on the left, newer on the right, so paging right walks forward in
   // time the way a timeline reads.
   grid.cells[idx(-3, -3)].entity = Entity.BACK_CIRCLE;
