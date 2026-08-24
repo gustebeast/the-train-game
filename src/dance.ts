@@ -66,17 +66,31 @@ function play(h: unit, sequence: number): void {
   QueueUnitAnimation(h, 'stand');
 }
 
-/** Park a peasant as a dancer: it cannot walk, and its command card is the
- *  dance set. Move speed 0 rather than a movement lock so the engine simply
- *  never moves it -- which also stops the walk animation from overriding a
- *  dance, the way it did on the dashing peasant. */
+/** The engine's patrol button, which it grants to anything that can move. Not
+ *  in the peasant's ability list, so it cannot be taken away in object data. */
+const PATROL_ABILITY_ID = FourCC('Apat');
+
+/** Dancers keep their normal move speed for now.
+ *
+ *  They were parked at 0 so the engine would simply never move them, but a
+ *  dance pressed at that speed snapped straight back to standing. Move speed is
+ *  the suspect: WC3 scales a unit's animation playback with how fast it is
+ *  travelling, and at a standstill that scale may be collapsing the dance to
+ *  nothing. Normal speed tells us whether that is really what is happening --
+ *  if the dances play now, the fix is a time scale rather than a speed. */
+const DANCE_MOVE_SPEED = 190;
+
+/** Park a peasant as a dancer: its command card is the dance set. */
 export function makeDancer(u: Unit): void {
-  SetUnitMoveSpeed(u.handle, 0);
-  // Take away everything a peasant normally carries. Two of the dance hotkeys
-  // would otherwise be taken: give/take owns W and the dash owns E. A dancer
-  // has nothing to give and nowhere to dash to, so the whole set goes.
+  SetUnitMoveSpeed(u.handle, DANCE_MOVE_SPEED);
+  // Take away everything a peasant normally carries. Three of the dance hotkeys
+  // would otherwise be taken: give/take owns W, the dash owns E, and the
+  // engine's own patrol button owns P. A dancer has nothing to give, nowhere to
+  // dash to and nothing to patrol, so the whole set goes -- and dropping patrol
+  // also frees the command card slot the eighth dance needs.
   UnitRemoveAbility(u.handle, DASH_ABILITY_ID);
   UnitRemoveAbility(u.handle, FourCC(Abilities.Channel));
+  UnitRemoveAbility(u.handle, PATROL_ABILITY_ID);
   for (const id of DANCE_ABILITY_IDS) UnitAddAbility(u.handle, id);
 }
 
