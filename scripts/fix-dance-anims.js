@@ -30,7 +30,7 @@ const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 /** Source names, in the order transplant-dance-anims.js appends them. */
 const SOURCE_NAMES = [
   'Walk Victory - 1',
-  'Death - 1',
+  'Attack Morph - 31',
   'Attack - 9',
   'Stand Hit - 1',
   'Stand Hit - 5',

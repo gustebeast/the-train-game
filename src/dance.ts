@@ -28,7 +28,7 @@ import { getHumanPlayers } from './util';
 // own, which is exactly why they have to be asked for explicitly.
 //
 //   Q Walk Victory - 1     I Attack - 7
-//   W Death - 1            O Attack - 8
+//   W Attack Morph - 31    O Attack - 8
 //   E Attack - 9           V Stand Hit - 4
 //   R Stand Hit - 1        B Stand Victory - 17
 //   Y Stand Hit - 5
