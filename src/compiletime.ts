@@ -50,8 +50,6 @@ compiletime(({ objectData, constants }) => {
   // in the generated constants and is referenced by rawcode. Keep in step with
   // DASH_ABILITY_ID in constants.ts.
   const DASH_ABILITY = 'A000';
-  // Keep in step with DANCE_ABILITY_IDS in constants.ts.
-  const DANCE_IDS = ['A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A007', 'A008'];
 
   const trackTypes: { [key: string]: string } = {
     EN: constants.units.ArcaneTower,
@@ -225,57 +223,6 @@ compiletime(({ objectData, constants }) => {
   dash.target = '';
   dash.effect = '';
 
-  // Dance spells: copies of Channel minted here rather than authored in the
-  // editor, since abilities.copy() can mint them at build time.
-  //
-  // They exist for the players who are NOT the host: while player 1 picks what
-  // to do in the start lobby, the others are parked as immobile peasants
-  // with these on their command card, so there is something to do.
-  //
-  // Each needs its OWN base order. Two abilities sharing one order id on the
-  // same unit collide on the command card, and the order is also how a cast is
-  // told apart before the spell event resolves.
-  // Base orders are only identifiers here -- the dances are MINTED abilities,
-  // so no hero or mercenary spell is repurposed or altered. They are still
-  // chosen off units that cannot appear in this map, so an order string can
-  // never collide with something a hero, merc or creep casts.
-  const DANCE_ORDERS = [
-    'robogoblin', 'battlestations', 'burrow', 'unburrow',
-    'corporealform', 'etherealform', 'sacrifice', 'ambush',
-  ];
-  const DANCE_HOTKEYS = ['Q', 'W', 'E', 'R', 'U', 'I', 'O', 'P'];
-  for (let i = 0; i < DANCE_IDS.length; i++) {
-    const dance = objectData.abilities.copy(constants.abilities.Channel, DANCE_IDS[i]) as ChannelAbility | undefined;
-    if (dance == null) continue;
-    dance.heroAbility = false;
-    dance.levels = 1;
-    dance.targetType = 0; // instant, no target to pick
-    dance.options = 1; // visible on the command card
-    dance.followThroughTime = 0.01; // 0 means "channel forever" -- see the dash
-    dance.artDuration = 0;
-    dance.castingTime = 0;
-    dance.cooldown = 0;
-    dance.animationNames = '';
-    dance.baseOrderIDundefined = DANCE_ORDERS[i];
-    dance.tooltipNormal = 'Dance (' + DANCE_HOTKEYS[i] + ')';
-    dance.tooltipNormalExtended = 'Bust a move.';
-    dance.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNBrilliance.blp';
-    dance.hotkeyNormal = DANCE_HOTKEYS[i];
-    // Two rows of four: QWER above UIOP, mirroring the keyboard.
-    //
-    // KNOWN UNRESOLVED: only seven of the eight ever appear. The engine draws
-    // move, stop, hold, attack and patrol at fixed slots and none of them can
-    // be removed -- taking 'Apat' and then 'Amov' off a live peasant left all
-    // five, and so did minting a dancer unit type with move type "none" and no
-    // attacks (all measured in game). Nor does the engine honour these two
-    // fields for these abilities: the layout below is identical whatever they
-    // are set to, so the eighth dance cannot simply be moved somewhere free.
-    dance.buttonPositionNormalX = i % 4;
-    dance.buttonPositionNormalY = i < 4 ? 1 : 2;
-    dance.caster = '';
-    dance.target = '';
-    dance.effect = '';
-  }
 
   // Build track spell (BuildTinyFarm — repurposed for one-click track placement)
   const buildTrack = objectData.abilities.get(constants.abilities.BuildTinyFarm)!;

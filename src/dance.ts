@@ -1,12 +1,26 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
-import { DANCE_ABILITY_IDS, DASH_ABILITY_ID, PEASANT_ID } from './constants';
+import { DASH_ABILITY_ID } from './constants';
+import { getHumanPlayers } from './util';
 
 // Something for the other players to do while the host picks what to play.
 //
-// In the start lobby players 2-4 stand at the back as immobile peasants
-// carrying these spells, each of which plays a different animation. Purely
+// In the start lobby players 2-4 stand at the back as immobile peasants, and a
+// keypress plays a different animation on each of the eight keys. Purely
 // cosmetic: nothing here touches game state, and the lobby writes no save.
+//
+// Raw key events rather than spells. Spells worked, but not well: the engine
+// drives the caster's animation for most of a second after the cast and
+// overwrites anything a trigger sets inside that window, so a dance could only
+// start 0.85s after the key went down -- far too late to feel like dancing
+// (measured in game; 0.4s was still eaten). A key event is not a cast, so
+// nothing fights us and the dance starts on the frame the key goes down.
+//
+// It also settles the eighth dance. Eight abilities never fit: the engine draws
+// move, stop, hold, attack and patrol at fixed command-card slots, none of them
+// can be removed ('Apat', 'Amov' and a bespoke unit type with no move type and
+// no attacks were all tried in game), and it ignores the abilities' own button
+// position fields. With no abilities involved there is no card to run out of.
 //
 // Transplanted from Villager 255 Animations by Graber (hiveworkshop.com) --
 // see scripts/transplant-dance-anims.js. Indices, not names: WC3 plays a
@@ -19,8 +33,9 @@ import { DANCE_ABILITY_IDS, DASH_ABILITY_ID, PEASANT_ID } from './constants';
 //   R Attack Morph - 20    P Attack - 8
 //
 // They are stored as "Dance One" .. "Dance Eight" -- see fix-dance-anims.js.
-// Only seven fit on the command card; the eighth has nowhere to go while the
-// engine's own five buttons hold their slots (compiletime.ts has the detail).
+const DANCE_KEYS: ReadonlyArray<oskeytype> = [
+  OSKEY_Q, OSKEY_W, OSKEY_E, OSKEY_R, OSKEY_U, OSKEY_I, OSKEY_O, OSKEY_P,
+];
 const DANCE_SEQUENCES: ReadonlyArray<number> = [
   23, // Q  Walk Victory - 1
   24, // W  Attack Morph - 16
@@ -65,71 +80,49 @@ function untilNextBeat(): number {
   return beatPeriod - into;
 }
 
-/** How long after a cast lands before the dance can be set.
- *
- *  The engine drives the caster's own animation for most of a second after
- *  SPELL_EFFECT and overwrites anything a trigger sets inside that window --
- *  which is why a pressed dance looked like it snapped straight back to
- *  standing. Measured in game: 0.0s, 0.2s and 0.4s are all eaten; 0.8s and
- *  later hold, and every dance then plays.
- *
- *  Things that did NOT shorten it, so they are not worth trying again: zeroing
- *  the unit's cast point and backswing (already 0 in object data), and naming
- *  the sequence in the ability's Art - Animation Names field. */
-const CAST_ANIM_HOLD = 0.85;
-
 function play(h: unit, sequence: number): void {
-  Timer.create().start(CAST_ANIM_HOLD, false, () => {
-    if (GetUnitTypeId(h) === 0) return;
-    SetUnitAnimationByIndex(h, sequence);
-    QueueUnitAnimation(h, 'stand');
-  });
+  SetUnitAnimationByIndex(h, sequence);
+  QueueUnitAnimation(h, 'stand');
 }
 
-/** Dancers keep their normal move speed for now.
- *
- *  They were parked at 0 so the engine would simply never move them, but a
- *  dance pressed at that speed snapped straight back to standing. Move speed is
- *  the suspect: WC3 scales a unit's animation playback with how fast it is
- *  travelling, and at a standstill that scale may be collapsing the dance to
- *  nothing. Normal speed tells us whether that is really what is happening --
- *  if the dances play now, the fix is a time scale rather than a speed. */
-const DANCE_MOVE_SPEED = 190;
+/** Which dancer belongs to which player, so a keypress knows who to move. */
+const dancers = new Map<number, unit>();
 
-/** Park a peasant as a dancer: its command card is the dance set. */
+/** Park a peasant as a dancer: it cannot walk, and the eight keys move it.
+ *  Move speed 0 so the engine simply never moves it -- which also stops the
+ *  walk animation from overriding a dance. */
 export function makeDancer(u: Unit): void {
-  SetUnitMoveSpeed(u.handle, DANCE_MOVE_SPEED);
+  SetUnitMoveSpeed(u.handle, 0);
+  dancers.set(u.owner.id, u.handle);
   // Take away everything a peasant normally carries. Two of the dance hotkeys
   // would otherwise be taken: give/take owns W and the dash owns E. A dancer
   // has nothing to give and nowhere to dash to, so the whole set goes.
   UnitRemoveAbility(u.handle, DASH_ABILITY_ID);
   UnitRemoveAbility(u.handle, FourCC(Abilities.Channel));
-  for (const id of DANCE_ABILITY_IDS) UnitAddAbility(u.handle, id);
 }
 
 export function initDance(): void {
-  const cast = Trigger.create();
-  cast.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
-  cast.addAction(() => {
-    const abilityId = GetSpellAbilityId();
-    let index = -1;
-    for (let i = 0; i < DANCE_ABILITY_IDS.length; i++) {
-      if (DANCE_ABILITY_IDS[i] === abilityId) { index = i; break; }
-    }
-    if (index < 0) return;
-    const u = Unit.fromEvent();
-    if (u == null || u.typeId !== PEASANT_ID) return;
-    const h = u.handle;
-    const sequence = DANCE_SEQUENCES[index];
+  for (const player of getHumanPlayers()) {
+    for (let i = 0; i < DANCE_KEYS.length; i++) {
+      const sequence = DANCE_SEQUENCES[i];
+      const key = Trigger.create();
+      // metaKey 0: no modifier, so shift-clicking around the lobby cannot
+      // accidentally set eight people dancing.
+      BlzTriggerRegisterPlayerKeyEvent(key.handle, player.handle, DANCE_KEYS[i], 0, true);
+      key.addAction(() => {
+        const h = dancers.get(GetPlayerId(GetTriggerPlayer()!));
+        if (h == null || GetUnitTypeId(h) === 0) return;
 
-    const wait = untilNextBeat();
-    if (wait <= 0) { play(h, sequence); return; }
-    // Land on the beat instead of on the keypress, so a room full of dancers
-    // moves together however sloppily they hit the button.
-    const beat = Timer.create();
-    beat.start(wait, false, () => {
-      beat.destroy();
-      if (GetUnitTypeId(h) !== 0) play(h, sequence);
-    });
-  });
+        const wait = untilNextBeat();
+        if (wait <= 0) { play(h, sequence); return; }
+        // Land on the beat instead of on the keypress, so a room full of
+        // dancers moves together however sloppily they hit the key.
+        const beat = Timer.create();
+        beat.start(wait, false, () => {
+          beat.destroy();
+          if (GetUnitTypeId(h) !== 0) play(h, sequence);
+        });
+      });
+    }
+  }
 }

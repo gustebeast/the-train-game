@@ -37,10 +37,6 @@ export const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
 export const DASH_ABILITY_ID = FourCC('A000');
 // Dance spells for the idle players in the start lobby. Minted in
 // compiletime.ts as Channel copies -- keep the two lists in step.
-export const DANCE_ABILITY_IDS: ReadonlyArray<number> = [
-  FourCC('A001'), FourCC('A002'), FourCC('A003'), FourCC('A004'),
-  FourCC('A005'), FourCC('A006'), FourCC('A007'), FourCC('A008'),
-];
 // Wand of Negation repurposed as the Hero Reroll cast (its native purge is
 // irrelevant — the target is replaced the moment the spell lands)
 export const REROLL_ABILITY_ID = FourCC(Abilities.ItemIllusions);
