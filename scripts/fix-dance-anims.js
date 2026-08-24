@@ -30,15 +30,17 @@ const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 /** Source names, in the order transplant-dance-anims.js appends them. */
 const SOURCE_NAMES = [
   'Walk Victory - 1',
-  'Attack Morph - 16',
-  'Attack Morph - 20',
-  'Attack Morph - 26',
+  'Death - 1',
   'Attack - 9',
+  'Stand Hit - 1',
+  'Stand Hit - 5',
   'Attack - 6',
   'Attack - 7',
   'Attack - 8',
+  'Stand Hit - 4',
+  'Stand Victory - 17',
 ];
-const WORDS = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
+const WORDS = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
 /** Unique, so an ability's Animation Names field can name exactly one of them
  *  -- "Dance - 1" and friends were all variants of one base name, and the
  *  engine picks among variants at random. */
