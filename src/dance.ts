@@ -28,9 +28,9 @@ import { getHumanPlayers } from './util';
 // own, which is exactly why they have to be asked for explicitly.
 //
 //   Q Walk Victory - 1     I Attack - 7
-//   W Attack Morph - 31    O Attack - 8
+//   W Stand Hit - 1        O Attack - 8
 //   E Attack - 9           V Stand Hit - 4
-//   R Stand Hit - 1        B Stand Victory - 17
+//   R Attack Morph - 31    B Stand Victory - 17
 //   Y Stand Hit - 5
 //   U Attack - 6
 //
@@ -38,13 +38,19 @@ import { getHumanPlayers } from './util';
 // left thumb on V. P is avoided throughout: it issues a patrol order, and the
 // keys being read raw does not stop that order going through.
 //
-// They are stored as "Dance One" .. "Dance Ten" in this same order -- see
-// scripts/fix-dance-anims.js -- so the indices below are simply consecutive.
+// The model stores them as "Dance One" .. "Dance Ten" in the order
+// scripts/fix-dance-anims.js appends them, which is the order they were first
+// chosen in rather than the order the keys are in now. Which key plays which is
+// this table's business alone, so moving a dance to another key is a swap here
+// and nothing else -- the model, its sequence indices and the retimes keyed to
+// its names all stay put. Attack Morph - 31 is the one retimed 15% faster, and
+// it keeps that wherever it is played from.
 const DANCE_KEYS: ReadonlyArray<oskeytype> = [
   OSKEY_Q, OSKEY_W, OSKEY_E, OSKEY_R, OSKEY_Y,
   OSKEY_U, OSKEY_I, OSKEY_O, OSKEY_V, OSKEY_B,
 ];
-const DANCE_SEQUENCES: ReadonlyArray<number> = [23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+//                                             Q   W   E   R   Y   U   I   O   V   B
+const DANCE_SEQUENCES: ReadonlyArray<number> = [23, 26, 25, 24, 27, 28, 29, 30, 31, 32];
 
 /** Seconds per beat, 0 while no song is playing. Set this from the lobby track
  *  and every dance lands on the beat instead of whenever the button was hit. */
