@@ -4,7 +4,16 @@ import { DEFAULT_STATE, GameState, gameState, applyState } from './state';
 // game, quit in the inter-round lobby, host another, and both are still there.
 // Each slot gets its OWN game cache too -- a shared cache would hand back the
 // previous slot's values when reading the next one.
-const SLOT_COUNT = 8;
+//
+// SLOT_COUNT is a PROBE RANGE, not a storage limit. WC3 cannot enumerate files,
+// so the only way to discover a save is to guess its name and try to read it,
+// and the range to guess over has to be decided in advance. Raising it costs
+// one Preloader read per extra slot on every listSaves() -- which runs on each
+// write, to find the next seq -- so it buys room for concurrent runs at a price
+// paid forever after. Unbounded would need an index file naming the live slots,
+// and losing that index would hide every save at once: a worse failure than the
+// one it solves.
+const SLOT_COUNT = 16;
 const CACHE_CAT = 's';
 
 function slotSaveFile(slot: number): string {
