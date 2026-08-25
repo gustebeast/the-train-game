@@ -11,6 +11,7 @@ import { DEFAULT_TRACK, SKINS } from '../track/constants';
 
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
+import { registerStrangeRock } from '../bossrock';
 import { placedTracks, setVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
 import { setCrate, setCrateStart } from '../items';
@@ -135,7 +136,8 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
 
         case Entity.STRANGE_ROCK: {
           // Full size and unrotated: this one is a landmark, not scenery.
-          Destructable.create(FourCC(STRANGE_ROCK_RAW), world.x, world.y, 0, 1.4, 0);
+          const seal = Destructable.create(FourCC(STRANGE_ROCK_RAW), world.x, world.y, 0, 1.4, 0);
+          if (seal != null) registerStrangeRock(seal.handle);
           break;
         }
 
