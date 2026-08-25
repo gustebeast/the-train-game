@@ -7,7 +7,14 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const MAP_DIR = 'C:\\Users\\guste\\Documents\\Warcraft III\\Maps\\W3Champions';
+// Where the ladder maps live. Overridable, because the path is per-machine and
+// the original was hard-coded to one user's profile:
+//   node extract_creeps.js [mapDir] [nameFilter ...]
+// With no name filter, EVERY .w3x/.w3m in the directory is read -- what you want
+// for a bulk sweep of the 2v2/3v3/4v4/FFA pools, as opposed to the curated 1v1
+// list below.
+const MAP_DIR = process.argv[2]
+    || 'C:/Users/gus/Documents/Warcraft III/Maps/W3Champions';
 const MPQ_READER = path.join(__dirname, 'mpq_reader.py');
 
 // W3Champions 1v1 ladder map pool
@@ -220,12 +227,17 @@ function clusterUnits(units) {
     return camps;
 }
 
+// Name filters from argv; with an explicit mapDir and no filters, take all.
+const FILTERS = process.argv.length > 3 ? process.argv.slice(3)
+    : (process.argv[2] ? [] : WANTED_MAPS);
+
 // Collect matching maps
 const candidateMaps = [];
 if (fs.existsSync(MAP_DIR)) {
     for (const f of fs.readdirSync(MAP_DIR)) {
-        if (f.endsWith('.w3x')) {
-            if (WANTED_MAPS.some(name => f.toLowerCase().includes(name.toLowerCase()))) {
+        if (f.endsWith('.w3x') || f.endsWith('.w3m')) {
+            if (FILTERS.length === 0
+                || FILTERS.some(name => f.toLowerCase().includes(name.toLowerCase()))) {
                 candidateMaps.push(f);
             }
         }
