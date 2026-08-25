@@ -634,6 +634,17 @@ function bossFloorTerrain(gx: number, gy: number): Terrain {
  * included, since they are destructables and the terrain sweep already removes
  * every destructable on load.
  */
+/** Hero places, north to south along the west wall. */
+const BOSS_HERO_SPOTS: ReadonlyArray<GridPos> = [
+  { x: -3, y: 2 }, { x: -3, y: 1 }, { x: -3, y: -1 }, { x: -3, y: -2 },
+];
+/** Mercenary places, a step behind the heroes. */
+const BOSS_MERC_SPOTS: ReadonlyArray<GridPos> = [
+  { x: -4, y: 1 }, { x: -4, y: -1 },
+];
+/** Where the boss waits. */
+const BOSS_SPOT: GridPos = { x: 3, y: 0 };
+
 export function generateBossBattlefield(): Grid {
   const grid = createGrid();
 
@@ -653,6 +664,22 @@ export function generateBossBattlefield(): Grid {
       }
     }
   }
+
+  // Who stands where. The template says the PLACES; the arena decides who
+  // fills them, because that depends on how many people are playing.
+  //
+  // The party comes in along the west wall with the mercenaries a step behind
+  // the heroes, and the boss waits east with the width of the floor between
+  // them -- so the fight starts with a charge rather than on top of everyone,
+  // and nobody spawns inside the meteor.
+  for (let i = 0; i < BOSS_HERO_SPOTS.length; i++) {
+    const spot = BOSS_HERO_SPOTS[i];
+    grid.cells[idx(spot.x, spot.y)].entity = Entity.HERO_SPOT;
+  }
+  for (const spot of BOSS_MERC_SPOTS) {
+    grid.cells[idx(spot.x, spot.y)].entity = Entity.MERC_SPOT;
+  }
+  grid.cells[idx(BOSS_SPOT.x, BOSS_SPOT.y)].entity = Entity.BOSS_SPOT;
 
   return grid;
 }

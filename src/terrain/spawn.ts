@@ -4,7 +4,7 @@ import { Units } from '@objectdata/units';
 import {
   Terrain, Entity, Grid,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
-  TREE_RAW, ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, STRANGE_ROCK_RAW,
+  TREE_RAW, ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, STRANGE_ROCK_RAW, GridPos,
   idx, gridToWorld,
 } from './constants';
 import { DEFAULT_TRACK, SKINS } from '../track/constants';
@@ -65,9 +65,23 @@ export interface SpawnedTrain {
 }
 
 /** Create all WC3 objects and paint terrain from the generated grid. Returns the train units if any were spawned. */
+/** Where the arena template said the party and the boss go, in world
+ *  coordinates. Filled while the grid is walked and read by loadBossBattlefield
+ *  -- the template marks the places, the arena decides who fills them. */
+let bossHeroSpots: GridPos[] = [];
+let bossMercSpots: GridPos[] = [];
+let bossSpot: GridPos | null = null;
+
+export function getBossHeroSpots(): ReadonlyArray<GridPos> { return bossHeroSpots; }
+export function getBossMercSpots(): ReadonlyArray<GridPos> { return bossMercSpots; }
+export function getBossSpot(): GridPos | null { return bossSpot; }
+
 export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
   let engineUnit: Unit | null = null;
   let wagonUnit: Unit | null = null;
+  bossHeroSpots = [];
+  bossMercSpots = [];
+  bossSpot = null;
 
   // Resolve human players once for PLAYER_1..4 spawning
   const humanPlayers = getHumanPlayers();
@@ -212,6 +226,18 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           }
           break;
         }
+
+        case Entity.HERO_SPOT:
+          bossHeroSpots.push({ x: world.x, y: world.y });
+          break;
+
+        case Entity.MERC_SPOT:
+          bossMercSpots.push({ x: world.x, y: world.y });
+          break;
+
+        case Entity.BOSS_SPOT:
+          bossSpot = { x: world.x, y: world.y };
+          break;
 
         case Entity.SHOP: {
           const shop = Unit.create(getNeutralPassive(), FourCC(Units.Marketplace), world.x, world.y, 270)!;

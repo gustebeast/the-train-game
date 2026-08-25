@@ -77,6 +77,12 @@ export enum Entity {
   LAVA = 32,
   /** Seals the boss exit until somebody brings the Strange Key. */
   STRANGE_ROCK = 33,
+  /** Boss battlefield: where a hero, a mercenary or the boss itself stands.
+   *  Marks a place rather than making anything -- who ends up on each spot is
+   *  decided when the arena loads, since it depends on who is playing. */
+  HERO_SPOT = 34,
+  MERC_SPOT = 35,
+  BOSS_SPOT = 36,
 }
 
 export interface Cell {
