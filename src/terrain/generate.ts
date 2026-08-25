@@ -514,6 +514,89 @@ const LOBBY_GRID: Cell[][] = [
   [ M, M, M, M, M, M, M, M, M], // y=-4
 ].reverse();
 
+// ============================================================
+// Boss battlefield
+// ============================================================
+
+/** Half-width of the playable floor, matching the inter-round lobby's 9x9. */
+const BOSS_HALF = 4;
+/** How far the lava reaches beyond the floor. Same 6 cells the lobby's water
+ *  uses, which is more than the camera ever shows. */
+const BOSS_SURROUND = 6;
+
+/** Spacing of the diamond lattice, measured along the diagonals. */
+const DIAMOND_PITCH = 6;
+/** How far a diamond reaches from its centre, along the diagonals.
+ *
+ *  Must be strictly less than half the pitch. At exactly half, neighbouring
+ *  diamonds share their edge cells and the pattern fuses into one slab with no
+ *  floor showing between -- which is what it did at pitch 4, radius 2. */
+const DIAMOND_RADIUS = 2;
+
+/**
+ * The floor pattern: diamonds on a diagonal lattice, alternating colour.
+ *
+ * A diamond in grid space is a square once you rotate 45 degrees, so the whole
+ * thing is easier read in diagonal coordinates: u = x + y and v = x - y. There
+ * a diamond is just "within RADIUS of a lattice point in both u and v", and the
+ * checkerboard is the parity of the two lattice indices. Working in x/y instead
+ * would mean an abs-sum distance test per centre and a search for which centre
+ * is nearest.
+ *
+ * Returns null for the gaps between diamonds, which stay as bare floor.
+ */
+function diamondTerrain(gx: number, gy: number): Terrain | null {
+  // Shifted half a pitch so the lattice straddles the middle of the arena
+  // instead of centring a diamond on it: the centre reads as a cross of bare
+  // floor with diamonds on the axes around it.
+  const u = gx + gy - DIAMOND_PITCH / 2;
+  const v = gx - gy - DIAMOND_PITCH / 2;
+  // Round to the nearest lattice point rather than flooring: a diamond is
+  // centred on its lattice point, so the cells on either side belong to it.
+  const iu = Math.floor((u + DIAMOND_PITCH / 2) / DIAMOND_PITCH);
+  const iv = Math.floor((v + DIAMOND_PITCH / 2) / DIAMOND_PITCH);
+  const du = Math.abs(u - iu * DIAMOND_PITCH);
+  const dv = Math.abs(v - iv * DIAMOND_PITCH);
+  if (du > DIAMOND_RADIUS || dv > DIAMOND_RADIUS) return null;
+  // Written to be non-negative regardless of language: Lua's % never returns a
+  // negative, but the same expression in JS would, and the lattice indices are
+  // negative over most of the map.
+  const parity = ((iu + iv) % 2 + 2) % 2;
+  return parity === 0 ? Terrain.DUNGEON_RED_STONE : Terrain.DUNGEON_BRICK;
+}
+
+/**
+ * The boss arena: a square of dungeon floor patterned with diamonds, ringed by
+ * lava that cannot be walked onto.
+ *
+ * Built through the same Grid the rounds and lobbies use, so it spawns, paints
+ * and cleans up through exactly one code path -- the lava's pathing blockers
+ * included, since they are destructables and the terrain sweep already removes
+ * every destructable on load.
+ */
+export function generateBossBattlefield(): Grid {
+  const grid = createGrid();
+
+  const reach = BOSS_HALF + BOSS_SURROUND;
+  for (let gy = -reach; gy <= reach; gy++) {
+    for (let gx = -reach; gx <= reach; gx++) {
+      if (!inBounds(gx, gy)) continue;
+      const cell = grid.cells[idx(gx, gy)];
+      const onFloor = gx >= -BOSS_HALF && gx <= BOSS_HALF
+        && gy >= -BOSS_HALF && gy <= BOSS_HALF;
+      if (onFloor) {
+        cell.terrain = diamondTerrain(gx, gy) ?? Terrain.DUNGEON_DIRT;
+        cell.entity = Entity.NONE;
+      } else {
+        cell.terrain = Terrain.LAVA_CRACKS;
+        cell.entity = Entity.LAVA;
+      }
+    }
+  }
+
+  return grid;
+}
+
 export function generateInterRoundLobby(): Grid {
   const grid = createGrid();
 

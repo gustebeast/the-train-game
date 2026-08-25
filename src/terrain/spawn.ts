@@ -4,7 +4,7 @@ import { Units } from '@objectdata/units';
 import {
   Terrain, Entity, Grid,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
-  TREE_RAW, ROCK_RAW, GRANITE_RAW, CAGE_RAW,
+  TREE_RAW, ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW,
   idx, gridToWorld,
 } from './constants';
 import { DEFAULT_TRACK, SKINS } from '../track/constants';
@@ -34,6 +34,10 @@ const TERRAIN_FOURCC: Record<Terrain, string> = {
   [Terrain.ROUGH_DIRT]: 'Ldro',
   [Terrain.WHITE_MARBLE]: 'Xwmb',
   [Terrain.BLACK_BRICKS]: 'Ibkb',
+  [Terrain.DUNGEON_DIRT]: 'Ddrt',
+  [Terrain.DUNGEON_BRICK]: 'Dbrk',
+  [Terrain.DUNGEON_RED_STONE]: 'Drds',
+  [Terrain.LAVA_CRACKS]: 'Dlvc',
 };
 
 // PLAYER_1..PLAYER_4 entity types mapped to player slot indices
@@ -126,6 +130,14 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
             FourCC(GRANITE_RAW), world.x, world.y,
             GetRandomReal(0, 360), ROCK_MODEL_SCALES[variation], variation,
           );
+          break;
+        }
+
+        case Entity.LAVA: {
+          // Terrain does the looking; this only stops anyone walking onto it.
+          // A destructable rather than a unit so the existing sweep clears it
+          // with the trees and rocks, and because it has no model to hide.
+          Destructable.create(FourCC(PATH_BLOCKER_RAW), world.x, world.y, 0, 1, 0);
           break;
         }
 
