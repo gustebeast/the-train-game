@@ -3,10 +3,14 @@ import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import { mercCampLevel } from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
 import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
-import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
+import {
+  SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, FILL_ABILITY_ID, BRIDGE_ABILITY_ID,
+  WATER_TRAIN_ABILITY_ID, PEASANT_ID,
+} from './constants';
 import { isChallengeArmed, completeChallenge } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
+import { onCampCleared } from './bosskey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
 
@@ -61,6 +65,17 @@ function metAtLevel(level: number): number[] {
   }
   return list;
 }
+
+/** Standard abilities the map has taken over for its own spells. Any creep
+ *  that carries one natively must have it removed on spawn -- see the spawn
+ *  loop. Keep in step with the repurposed abilities in compiletime.ts. */
+const REPURPOSED_ABILITY_IDS = [
+  UNSUMMON_ABILITY_ID,      // RoarNeutralHostile -- 4 creeps carry it
+  SUMMON_ABILITY_ID,        // Roar
+  FILL_ABILITY_ID,          // UndefinedNeutralHostile
+  BRIDGE_ABILITY_ID,        // FingerOfDeathNeutralHostile
+  WATER_TRAIN_ABILITY_ID,   // DrunkenHazeChen
+];
 
 /** The cage destructable spawned for this round. */
 let cageDestructable: Destructable | null = null;
@@ -183,8 +198,33 @@ export function rollCreepCamp(): void {
   campIndex = chosen;
 }
 
+/** Make the camp waiting for the next round a level 3 one -- what the Strange
+ *  Meat buys.
+ *
+ *  It REPLACES the camp rather than flagging a future roll, because the roll
+ *  has already happened: awardVictory rolls the next camp the moment the train
+ *  arrives, before anybody reaches the shop. A flag would sit unread until the
+ *  round after the one it was bought for.
+ *
+ *  Prefers a level 3 camp not met yet, so the meat shows you something new
+ *  where it can; falls back to any of them once the pool has been round once.
+ *  Reads and records against level 3's own met-list, so buying meat spends a
+ *  slot in that lap exactly as an ordinary level 3 roll would. */
+export function forceLevel3Camp(): boolean {
+  const top: number[] = [];
+  for (let i = 0; i < CREEP_CAMPS.length; i++) {
+    if (CREEP_CAMPS[i].level === 3) top.push(i);
+  }
+  if (top.length === 0) return false;
+  const met = metAtLevel(3);
+  let pool = top.filter(i => !met.includes(i));
+  if (pool.length === 0) pool = top;
+  const chosen = pool[seededInt(0, pool.length - 1)];
+  if (!met.includes(chosen)) met.push(chosen);
+  campIndex = chosen;
+  return true;
+}
 
-/** Get the selected camp, or null if none selected. */
 /** Which camp is selected, as an index into CREEP_CAMPS. Exported for the
  *  rotation test, which needs to tell two camps apart. */
 export function getCampIndex(): number | null {
@@ -236,7 +276,16 @@ const GRID_OFFSETS: ReadonlyArray<readonly [number, number]> = [
 let spawnedCreeps: Array<{ unit: Unit; campUnit: CreepUnit }> = [];
 
 /** Spawn creeps around the given world position in a 3x3 grid. Invulnerable until heroes arrive. */
+/** Where the current camp's cage stood, so a drop can be placed there after the
+ *  cage itself is long gone. */
+let campOrigin: { x: number; y: number } | null = null;
+
+export function getCampOrigin(): { x: number; y: number } | null {
+  return campOrigin;
+}
+
 export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
+  campOrigin = { x: cx, y: cy };
   const owner = getNeutralAggressive();
   spawnedCreeps = [];
   const creeps = camp.creeps;
@@ -245,6 +294,15 @@ export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
     const u = Unit.create(owner, FourCC(creeps[i].id), cx + dx, cy + dy, 270);
     if (u == null) continue;
     u.invulnerable = true;
+    // Strip the abilities the map has repurposed for its own spells. Four
+    // creeps carry RoarNeutralHostile natively, which is our Unsummon Heroes;
+    // its stats are zeroed at compile time so it does nothing for them anyway,
+    // and leaving it on means a selected creep shows an "Unsummon Heroes"
+    // button. The trigger that acts on it also checks the caster, so this is
+    // the second of two locks rather than the only one.
+    for (const abilityId of REPURPOSED_ABILITY_IDS) {
+      UnitRemoveAbility(u.handle, abilityId);
+    }
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_NUMBER_OF_DICE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);
@@ -412,6 +470,10 @@ export function scaleCreepStats(heroes: Unit[]): void {
         if (spawnedCreeps.every(c => GetUnitState(c.unit.handle, UNIT_STATE_LIFE) <= 0)) {
           grantUnsummonToAllPeasants();
           completeChallenge(CH_TOUGH_CAMP);
+          // A flawless level 3 clear leaves the Strange Key where the cage was.
+          const origin = campOrigin;
+          const level = getCampData();
+          if (origin != null && level != null) onCampCleared(origin.x, origin.y, level.level);
         }
       });
     }

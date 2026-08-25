@@ -13,6 +13,8 @@ import {
 } from '../chooseSaveLobby';
 import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
+import { resetBossKey } from '../bosskey';
+import { getCampData } from '../creeps';
 import { gameState } from '../state';
 import { loadFromSlot, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
@@ -229,7 +231,14 @@ export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRI
   //
   // Keyed on the round as well as the seed, so consecutive rounds differ.
   SetRandomSeed(deriveSeed(TERRAIN_STREAM) + difficulty);
-  return loadGameplay(generateTerrain(difficulty, exitX), skipCleanup);
+  // The Strange Key is a round's prize, not a run's: it is earned and spent
+  // inside one round, so a new round starts without one.
+  resetBossKey();
+  // A level 3 camp is the only one that can drop the key, so it is also the
+  // only round that gets a second exit -- the two arrive together or not at all.
+  const camp = getCampData();
+  const bossRound = camp != null && camp.level >= 3;
+  return loadGameplay(generateTerrain(difficulty, exitX, bossRound), skipCleanup);
 }
 
 export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {

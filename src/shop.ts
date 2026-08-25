@@ -8,14 +8,15 @@ import {
   SUMMON_UPGRADE_ITEM_ID, PEASANT_ID, REROLL_ITEM_ID,
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, MERC_CONTRACT_ID, MERC_CONTRACT_2_ID,
-  CHALLENGE_ITEM_ID, RESTORE_HP_ID,
+  CHALLENGE_ITEM_ID, RESTORE_HP_ID, STRANGE_MEAT_ID,
 } from './constants';
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
 import {
   isMercDead, buyMercContract, buySecondContract,
-  canBuyMercContract, canBuySecondContract,
+  canBuyMercContract, canBuySecondContract, livingMercCount,
 } from './mercenary';
 import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
+import { forceLevel3Camp } from './creeps';
 import { forEachUnitInWorld, nextFrame, getHumanPlayers } from './util';
 import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges';
 import { onGlobalTick } from './globalTick';
@@ -33,6 +34,7 @@ const ITEM_COSTS: Map<number, number> = new Map([
   [MERC_CONTRACT_2_ID, 1],
   [CHALLENGE_ITEM_ID, CHALLENGE_COST],
   [RESTORE_HP_ID, 1],
+  [STRANGE_MEAT_ID, 1],
 ]);
 
 /** Repeatable upgrades every shop sells. Flame Resistance is NOT here: it is
@@ -82,6 +84,13 @@ export function stockShop(shop: Unit): void {
       AddItemToStock(shop.handle, MERC_CONTRACT_ID, 1, 1);
     } else if (canBuySecondContract()) {
       AddItemToStock(shop.handle, MERC_CONTRACT_2_ID, 1, 1);
+    }
+    // Strange Meat is on the shelf only with both mercenaries alive -- which is
+    // the same thing as "the second contract is bought and neither has been
+    // lost", and also exactly the condition under which a level 3 camp can
+    // appear at all. Buying bait for a camp that cannot spawn would be a trap.
+    if (livingMercCount() >= 2) {
+      AddItemToStock(shop.handle, STRANGE_MEAT_ID, 10, 10);
     }
     // Rerolls only make sense when there is someone standing here to reroll
     if (hasInterRoundLobbyRerollTargets()) {
@@ -224,6 +233,14 @@ export function initShop(): void {
       print('Second Contract signed: a second mercenary joins you, and level 3 creep camps open up.');
       const secondBuyer = Unit.fromHandle(GetTriggerUnit());
       if (secondBuyer != null) effectTargets = [secondBuyer];
+    } else if (itemTypeId === STRANGE_MEAT_ID) {
+      if (forceLevel3Camp()) {
+        print('The meat is out. Something big is coming for it -- a level 3 camp waits on the next stretch of line.');
+      } else {
+        print('Nothing came for the meat.');
+      }
+      const meatBuyer = Unit.fromHandle(GetTriggerUnit());
+      if (meatBuyer != null) effectTargets = [meatBuyer];
     } else if (itemTypeId === CHALLENGE_ITEM_ID) {
       // One item sells whatever the dealer is currently offering; which one
       // that is comes from the seeded sequence, not from the shelf.

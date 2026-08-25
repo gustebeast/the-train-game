@@ -21,6 +21,13 @@ import { registerTest, TestReporter } from './testkit';
  * rather than a best case. A human microing the same fight should do better,
  * which is the direction the final tuning has to lean.
  *
+ * Every composition also fields the two mercenaries the party actually brings
+ * to this fight -- an Ogre Lord as the ideal one (the heaviest body and
+ * hardest hitter in the Lordaeron Summer pool, with an aura and a bash) and a
+ * Forest Troll High Priest as the good one (heals and inner fire, the most
+ * useful support in the pool). They spawn at base stats, which is what
+ * mercenaries have: only camp creeps are scaled.
+ *
  * Read `heroesAlive` with care when a Paladin is in the composition: Divine
  * Shield can leave him standing alone and invulnerable long after the fight is
  * decided, so the count says "not a wipe" when it effectively was one. The
@@ -31,6 +38,9 @@ import { registerTest, TestReporter } from './testkit';
 const FIGHT_SECONDS = 150;
 /** Distance between the heroes' spawn and the boss. */
 const ENGAGE_RANGE = 400;
+
+/** The mercenaries every party brings: one ideal, one good. */
+const MERC_TYPES: ReadonlyArray<string> = ['nogl', 'nfsh'];
 
 /** Item ladders, by what a hero actually wants. Two ideal, two good, two
  *  decent, per the balance brief -- good items, but not a best case. */
@@ -234,8 +244,20 @@ function runFight(comp: Comp, t: TestReporter): void {
     if (hero == null) { t.fail('hero' + I2S(i)!, 'did not spawn'); continue; }
     heroes.push(hero);
   }
+  // The two mercenaries, a step behind the heroes.
+  const mercs: Unit[] = [];
+  for (let i = 0; i < MERC_TYPES.length; i++) {
+    const merc = Unit.create(getDPSCheckPlayer(), FourCC(MERC_TYPES[i]),
+      bossX - ENGAGE_RANGE - 96, bossY + (i === 0 ? 96 : -96), 0);
+    if (merc != null) mercs.push(merc);
+  }
+
   t.report('comp', comp.name);
   t.report('heroCount', heroes.length);
+  t.report('mercCount', mercs.length);
+  for (let i = 0; i < mercs.length; i++) {
+    t.report('m' + I2S(i)! + 'Name', GetUnitName(mercs[i].handle)!);
+  }
   for (let i = 0; i < heroes.length; i++) {
     t.report('h' + I2S(i)! + 'Name', GetUnitName(heroes[i].handle)!);
     t.report('h' + I2S(i)! + 'HP', heroes[i].maxLife);
@@ -247,7 +269,7 @@ function runFight(comp: Comp, t: TestReporter): void {
   // sampled health -- regeneration, healing and lifesteal would all corrupt a
   // before/after reading.
   let dealtToBoss = 0;
-  let takenByHeroes = 0;
+  let takenByParty = 0;
   let addsKilled = 0;
   const heroPlayer = getDPSCheckPlayer().handle;
   const bossPlayer = boss.owner.handle;
@@ -263,9 +285,11 @@ function runFight(comp: Comp, t: TestReporter): void {
   const onHeroSide = Trigger.create();
   TriggerRegisterPlayerUnitEvent(onHeroSide.handle, heroPlayer, EVENT_PLAYER_UNIT_DAMAGED, undefined);
   onHeroSide.addAction(() => {
-    const hurt = GetTriggerUnit();
-    if (hurt == null || !IsUnitType(hurt, UNIT_TYPE_HERO)) return;
-    takenByHeroes += GetEventDamage();
+    // Everything the party fields, not just the heroes -- a mercenary soaking
+    // a meteor is damage the boss spent, and leaving it out would read as the
+    // boss doing less than it does.
+    if (GetTriggerUnit() == null) return;
+    takenByParty += GetEventDamage();
   });
 
   const onDeath = Trigger.create();
@@ -276,6 +300,7 @@ function runFight(comp: Comp, t: TestReporter): void {
   });
 
   for (const hero of heroes) IssueTargetOrder(hero.handle, 'attack', boss.handle);
+  for (const merc of mercs) IssueTargetOrder(merc.handle, 'attack', boss.handle);
 
   let elapsed = 0;
   let addsSeen = 0;
@@ -286,6 +311,10 @@ function runFight(comp: Comp, t: TestReporter): void {
     let alive = 0;
     for (const hero of heroes) {
       if (GetUnitTypeId(hero.handle) !== 0 && !IsUnitType(hero.handle, UNIT_TYPE_DEAD)) alive += 1;
+    }
+    let mercsAlive = 0;
+    for (const merc of mercs) {
+      if (GetUnitTypeId(merc.handle) !== 0 && !IsUnitType(merc.handle, UNIT_TYPE_DEAD)) mercsAlive += 1;
     }
     // Count the adds standing right now, so "how many were on the field" is
     // visible even when none of them died.
@@ -299,17 +328,18 @@ function runFight(comp: Comp, t: TestReporter): void {
     DestroyGroup(g);
     if (standing > addsSeen) addsSeen = standing;
 
-    if (bossDead || alive === 0 || elapsed >= FIGHT_SECONDS) {
+    if (bossDead || (alive === 0 && mercsAlive === 0) || elapsed >= FIGHT_SECONDS) {
       tick.destroy();
       stopBoss();
-      t.report('outcome', bossDead ? 'HEROES WIN' : (alive === 0 ? 'WIPE' : 'TIMEOUT'));
+      t.report('outcome', bossDead ? 'HEROES WIN' : (alive === 0 && mercsAlive === 0 ? 'WIPE' : 'TIMEOUT'));
       t.report('seconds', elapsed);
       t.report('heroesAlive', alive);
+      t.report('mercsAlive', mercsAlive);
       t.report('damageToBoss', dealtToBoss);
       t.report('bossHPLeft', bossDead ? 0 : boss.life);
-      t.report('damageToHeroes', takenByHeroes);
-      t.report('heroDPS', dealtToBoss / elapsed);
-      t.report('bossDPS', takenByHeroes / elapsed);
+      t.report('damageToParty', takenByParty);
+      t.report('partyDPS', dealtToBoss / elapsed);
+      t.report('bossDPS', takenByParty / elapsed);
       t.report('addsPeak', addsSeen);
       t.report('addsKilled', addsKilled);
       t.done();
