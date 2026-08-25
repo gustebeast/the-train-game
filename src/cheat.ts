@@ -13,6 +13,7 @@ import { applyTrackShapes } from './challengeList';
 import { beginNight, endNight, isNight } from './daynight';
 import { getNeutralPassive } from './teams';
 import { makeDancer } from './dance';
+import { spawnBoss } from './boss';
 import { getHumanPlayers, getWorldBounds } from './util';
 
 /** True once the map has been revealed, so repeat calls are no-ops. */
@@ -202,6 +203,13 @@ export function initCheat(): void {
       return;
     }
     beginNight();
+  });
+
+  // Drop the final boss wherever the camera is looking, for balance work.
+  onChatCommand('-boss', () => {
+    const boss = spawnBoss(GetCameraTargetPositionX(), GetCameraTargetPositionY());
+    if (boss == null) { print('boss: could not spawn'); return; }
+    print('Boss spawned: ' + I2S(R2I(boss.maxLife))! + ' HP, ' + I2S(R2I(boss.maxMana))! + ' mana.');
   });
 
   // Drive the defeat path without having to actually run the train out of

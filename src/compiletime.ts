@@ -1158,5 +1158,105 @@ compiletime(({ objectData, constants }) => {
   unknown.attacksEnabled = '0';
   unknown.unitsTrained = '';
 
+  // --- The final boss ------------------------------------------------------
+  //
+  // An Infernal, twice a hero's size and standing on a 2x2 tile footprint. Its stats are FIXED rather than scaled off a DPS measurement
+  // the way creep camps are, so the numbers below are the balance dial.
+  //
+  // The ability is a COPY of the NEUTRAL HOSTILE Inferno (ANin), which leaves
+  // the Dreadlord's AUin alone -- he is in our hero pool, so editing his
+  // Inferno would rewrite a spell a player can be handed.
+  //
+  // The neutral hostile version specifically, and this was measured rather than
+  // chosen: handing one unit each of AUin, the SNin campaign version and ANin
+  // in turn, only ANin accepted an "inferno" order. The other two are hero
+  // abilities, and the engine will not take their order from a unit that is not
+  // a hero -- the button appears and the order is simply refused. So the
+  // campaign copy the design asked for exists, but cannot be cast by a creep.
+  //
+  // Copying rather than editing ANin in place, for the same reason the dash is
+  // a Channel copy: a fresh rawcode cannot collide with anything.
+  const BOSS_UNIT = 'ubos';
+  const BOSS_ADD_UNIT = 'uinl';
+  const BOSS_INFERNO = 'A010';
+  const ADD_THUNDER_CLAP = 'A011';
+
+  /** Thunder Clap's mana cost, the same at all three levels. Stamped onto the
+   *  copy below rather than inherited, so the add's mana pool can be defined as
+   *  "exactly two casts" and stay true if the cost is ever retuned. */
+  const THUNDER_CLAP_MANA = 75;
+
+  type InfernoAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>
+    & { summonedUnit: string; duration: number };
+
+  const inferno = objectData.abilities.copy(
+    constants.abilities.InfernoNeutralHostile, BOSS_INFERNO) as InfernoAbility | undefined;
+  if (inferno != null) {
+    inferno.levels = 1;
+    inferno.heroAbility = false;
+    inferno.cooldown = 20;
+    inferno.manaCost = 200;
+    // NOT set here. "Data - Summoned Unit Type" is an INTEGER field holding a
+    // rawcode (ABILITY_ILF_SUMMONED_UNIT_UIN), but the object-data library
+    // writes summonedUnit as a string -- which serialises cleanly, is ignored
+    // by the engine, and drops a STOCK infernal instead (seen in game). It is
+    // stamped at runtime in boss.ts, where the field's real type is available.
+    inferno.name = 'Inferno';
+    inferno.tooltipNormal = 'Inferno';
+    inferno.tooltipNormalExtended =
+      'Calls down a meteor that stuns nearby enemies and leaves a lesser infernal behind.';
+  }
+
+  const clap = objectData.abilities.copy(constants.abilities.ThunderClap, ADD_THUNDER_CLAP);
+  if (clap != null) {
+    // One level, on a unit that is not a hero -- both have to be said, or the
+    // button is drawn but the ability never fires.
+    clap.levels = 1;
+    clap.heroAbility = false;
+    clap.manaCost = THUNDER_CLAP_MANA;
+  }
+
+  // The lesser infernal the boss drops: half the damage and a quarter of the
+  // health of a stock one, and a mana pool of exactly two Thunder Claps. Mana
+  // regeneration is zeroed so "two casts" is the whole of it rather than the
+  // opening pair.
+  const bossAdd = objectData.units.copy(constants.units.Infernal, BOSS_ADD_UNIT);
+  if (bossAdd != null) {
+    bossAdd.name = 'Lesser Infernal';
+    bossAdd.hitPointsMaximumBase = 375; // a quarter of the stock 1500
+    // Stock is 48 + 1d12, averaging 54.5. Halving both parts averages 27.5.
+    bossAdd.attack1DamageBase = 24;
+    bossAdd.attack1DamageNumberOfDice = 1;
+    bossAdd.attack1DamageSidesPerDie = 6;
+    bossAdd.manaMaximum = THUNDER_CLAP_MANA * 2;
+    bossAdd.manaInitialAmount = THUNDER_CLAP_MANA * 2;
+    bossAdd.manaRegeneration = 0;
+    // Stock infernal abilities (spell immunity, permanent immolation, resistant
+    // skin) plus the clap.
+    bossAdd.normal = 'ACmi,ANpi,ACrk,' + ADD_THUNDER_CLAP;
+  }
+
+  const boss = objectData.units.copy(constants.units.Infernal, BOSS_UNIT);
+  if (boss != null) {
+    boss.name = 'Infernal Colossus';
+    boss.scalingValueundefined = UNIT_SCALE * 2;
+    // Twice the peasant's 32, which is what makes a peasant fill a 128 tile --
+    // so twice it is the 2x2 footprint.
+    boss.collisionSize = 64;
+    boss.manaMaximum = 3000;
+    boss.manaInitialAmount = 3000;
+    // NOTE: the stock infernal's spell immunity (ACmi) is deliberately NOT
+    // carried over. Resistant Skin stays -- it is what makes spells use their
+    // shorter HERO durations on the boss -- but spell immunity would make every
+    // stun, slow and nuke in the game simply miss, and a fight nobody can cast
+    // into is not the fight this boss is meant to be.
+    boss.normal = 'ANpi,ACrk,' + BOSS_INFERNO;
+    // Placeholders. Balance testing sets these; see BOSS_TUNING in boss.ts.
+    boss.hitPointsMaximumBase = 15000;
+    boss.attack1DamageBase = 120;
+    boss.attack1DamageNumberOfDice = 1;
+    boss.attack1DamageSidesPerDie = 20;
+  }
+
   objectData.save();
 });
