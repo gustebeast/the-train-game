@@ -546,6 +546,18 @@ compiletime(({ objectData, constants }) => {
   bossKey.canBeSoldToMerchants = false;
   bossKey.abilities = '';
 
+  // Strange Meat: bait. Buying it makes the next camp a level 3 one, which is
+  // the only camp that can drop the Strange Key.
+  const strangeMeat = objectData.items.get(constants.items.BloodfeathersHeart)!;
+  strangeMeat.name = 'Strange Meat';
+  strangeMeat.description = 'Something out there wants this badly enough to bring friends.';
+  strangeMeat.tooltipExtended = 'Leave it on the line and the next camp you meet will be a level 3 one.';
+  strangeMeat.goldCost = 1;
+  strangeMeat.canBeDropped = true;
+  strangeMeat.perishable = false;
+  strangeMeat.canBeSoldToMerchants = false;
+  strangeMeat.abilities = '';
+
   // Pickaxe item
   const pickaxe = objectData.items.get(constants.items.RustyMiningPick)!;
   pickaxe.name = 'Pickaxe';
