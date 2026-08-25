@@ -14,6 +14,14 @@ export const WATER_ID = FourCC(Units.Burrow);
  *  A custom unit authored in compiletime.ts (copied from the peasant); the
  *  rawcode is duplicated there as UNKNOWN_UNIT_RAWCODE. */
 export const UNKNOWN_UNIT_ID = FourCC('qmrk');
+/** The final boss and the lesser infernals it calls down, both minted in
+ *  compiletime.ts. */
+export const BOSS_ID = FourCC('ubos');
+export const BOSS_ADD_ID = FourCC('uinl');
+/** The boss's Inferno (a Tichondrius-campaign copy) and the add's Thunder Clap
+ *  (a copy with the hero flag cleared). */
+export const BOSS_INFERNO_ABILITY_ID = FourCC('A010');
+export const BOSS_ADD_CLAP_ABILITY_ID = FourCC('A011');
 
 // Critters: the wandering-animal set from classic 1v1 melee maps
 export const CRITTER_TYPE_IDS: ReadonlyArray<number> = [
