@@ -8,6 +8,7 @@ import { initHarvest } from './harvest';
 import { initItems } from './items';
 import { initGiveTake } from './givetake';
 import { initCheat } from './cheat';
+import { initDayNight } from './daynight';
 import { initBridge } from './bridge';
 import { initFill } from './fill';
 import { initWaterTrain } from './water';
@@ -35,6 +36,7 @@ import './burntest'; // burning train: production lock and wrecked end state
 import './shoptest'; // Repair Train purchase effect
 import './challengetest'; // challenge sequencing and payouts
 import './fogtest'; // blackout must give the map back at dawn
+import './daynighttest'; // the clock must stay frozen, lobbies included
 import './dashfieldstest'; // asks the engine about A000's button data
 import './inputwatchtest'; // observes a real VNC-driven input sequence
 import { loadStartLobby } from './terrain/load';
@@ -62,6 +64,9 @@ function tsMain() {
     initBridge();
     initFill();
     initWaterTrain();
+    // Before anything can show a sky: outside a round the map is permanently
+    // day, and the clock only moves when daynight.ts moves it.
+    initDayNight();
     initCheat();
     initShop();
     initDealerOffer();

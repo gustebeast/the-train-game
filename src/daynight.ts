@@ -187,6 +187,22 @@ export function endNight(): void {
   print('|cffffff80Dawn breaks.|r Allied vision is restored.');
 }
 
+/** Freeze the clock, once, at map init.
+ *
+ *  The freeze used to live only in startDayNightForRound, which was fine while
+ *  the map booted straight into a round -- that call happened at init and the
+ *  clock never moved again. The map now boots into the start lobby, so nothing
+ *  froze the clock until the player started playing, and every lobby before
+ *  that ran a normal day/night cycle: stopDayNight set the time to noon and the
+ *  engine promptly carried on from there.
+ *
+ *  Called from main, so the clock is stopped before anything else can show a
+ *  sky. Everything after this only moves time deliberately. */
+export function initDayNight(): void {
+  SetTimeOfDayScale(0);
+  SetTimeOfDay(DAY_TIME);
+}
+
 /** Start a round: freeze the clock at day and schedule this round's night. */
 export function startDayNightForRound(): void {
   nightStart = cancelTimer(nightStart);
@@ -217,5 +233,9 @@ export function cancelNightForVictory(): void {
 export function stopDayNight(): void {
   nightStart = cancelTimer(nightStart);
   cancelNightForVictory();
+  // Re-assert the freeze rather than only setting the hour: this is the call
+  // every lobby makes on the way in, and a lobby is precisely where the clock
+  // was found running.
+  SetTimeOfDayScale(0);
   SetTimeOfDay(DAY_TIME);
 }
