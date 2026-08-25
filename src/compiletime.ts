@@ -1234,12 +1234,10 @@ compiletime(({ objectData, constants }) => {
     bossAdd.manaMaximum = THUNDER_CLAP_MANA * 2;
     bossAdd.manaInitialAmount = THUNDER_CLAP_MANA * 2;
     bossAdd.manaRegeneration = 0;
-    // The clap and nothing else. Every stock infernal ability is dropped:
-    // spell immunity and resistant skin by request, and permanent immolation
-    // with them, since "only thunderclap" leaves no room for a damage aura
-    // either. Spell immunity mattered most -- with it, no hero AoE could touch
-    // the adds and they had to be attacked down one at a time.
-    bossAdd.normal = ADD_THUNDER_CLAP;
+    // Permanent immolation and the clap. Spell immunity and resistant skin are
+    // deliberately gone: with spell immunity no hero AoE could touch the adds
+    // at all, so clearing them meant attacking each one down by hand.
+    bossAdd.normal = 'ANpi,' + ADD_THUNDER_CLAP;
   }
 
   const boss = objectData.units.copy(constants.units.Infernal, BOSS_UNIT);
