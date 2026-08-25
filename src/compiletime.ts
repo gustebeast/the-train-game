@@ -1223,9 +1223,12 @@ compiletime(({ objectData, constants }) => {
   const bossAdd = objectData.units.copy(constants.units.Infernal, BOSS_ADD_UNIT);
   if (bossAdd != null) {
     bossAdd.name = 'Lesser Infernal';
-    bossAdd.hitPointsMaximumBase = 375; // a quarter of the stock 1500
-    // Stock is 48 + 1d12, averaging 54.5. Halving both parts averages 27.5.
-    bossAdd.attack1DamageBase = 24;
+    // A quarter of the stock 1500, then a fifth again on top: the adds were
+    // dying too fast to matter in the balance runs.
+    bossAdd.hitPointsMaximumBase = 450;
+    // Stock is 48 + 1d12, averaging 54.5. Half of that is 27.5; a fifth again
+    // on top rounds to 33, which is 30 + 1d6.
+    bossAdd.attack1DamageBase = 30;
     bossAdd.attack1DamageNumberOfDice = 1;
     bossAdd.attack1DamageSidesPerDie = 6;
     bossAdd.manaMaximum = THUNDER_CLAP_MANA * 2;
@@ -1251,11 +1254,14 @@ compiletime(({ objectData, constants }) => {
     // stun, slow and nuke in the game simply miss, and a fight nobody can cast
     // into is not the fight this boss is meant to be.
     boss.normal = 'ANpi,ACrk,' + BOSS_INFERNO;
-    // Placeholders. Balance testing sets these; see BOSS_TUNING in boss.ts.
-    boss.hitPointsMaximumBase = 15000;
-    boss.attack1DamageBase = 120;
+    // Set by balance testing, not guessed. At 15000 HP and 120+1d20 the boss
+    // lost to nine of ten AI-run hero compositions -- the best of them killed
+    // it in 63 seconds without losing anybody -- so both numbers went up.
+    // Measured hero output across those ten runs was 77-240 DPS.
+    boss.hitPointsMaximumBase = 30000;
+    boss.attack1DamageBase = 300;
     boss.attack1DamageNumberOfDice = 1;
-    boss.attack1DamageSidesPerDie = 20;
+    boss.attack1DamageSidesPerDie = 60;
   }
 
   objectData.save();

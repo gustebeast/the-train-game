@@ -36,6 +36,8 @@ const STOCK_INFERNAL_ID = FourCC('ninf');
 const ADD_LIFETIME = 180;
 /** Buff id every timed-life summon uses. */
 const TIMED_LIFE_BUFF = FourCC('BTLF');
+/** Fallback if the ability will not report its own impact delay. */
+const DEFAULT_IMPACT_DELAY = 1.0;
 
 let swapInstalled = false;
 
@@ -52,6 +54,14 @@ let swapInstalled = false;
  *  Catching the summon is the one route that does not depend on that field. The
  *  event is registered for the boss's own player rather than through
  *  registerAnyUnitEvent, which covers the playing slots and not neutral. */
+/** The meteor's flight time, from the ability itself. */
+function impactDelay(caster: unit): number {
+  const ab = BlzGetUnitAbility(caster, BOSS_INFERNO_ABILITY_ID);
+  if (ab == null) return DEFAULT_IMPACT_DELAY;
+  const d = BlzGetAbilityRealLevelField(ab, ABILITY_RLF_IMPACT_DELAY, 0);
+  return d > 0 ? d : DEFAULT_IMPACT_DELAY;
+}
+
 function installAddSwap(owner: player): void {
   if (swapInstalled) return;
   swapInstalled = true;
@@ -65,8 +75,18 @@ function installAddSwap(owner: player): void {
     const y = GetUnitY(summoned);
     const facing = GetUnitFacing(summoned);
     RemoveUnit(summoned);
-    const add = CreateUnit(at, BOSS_ADD_ID, x, y, facing);
-    if (add != null) UnitApplyTimedLife(add, TIMED_LIFE_BUFF, ADD_LIFETIME);
+    // The event fires when the spell goes off, not when the meteor lands: the
+    // engine makes its infernal at cast time and only shows it on impact, so
+    // creating ours here put it on the ground a second early. Wait out the
+    // ability's own impact delay so it arrives with the meteor.
+    const caster = GetSummoningUnit();
+    const delay = caster != null ? impactDelay(caster) : DEFAULT_IMPACT_DELAY;
+    const drop = Timer.create();
+    drop.start(delay, false, () => {
+      drop.destroy();
+      const add = CreateUnit(at, BOSS_ADD_ID, x, y, facing);
+      if (add != null) UnitApplyTimedLife(add, TIMED_LIFE_BUFF, ADD_LIFETIME);
+    });
   });
 }
 
