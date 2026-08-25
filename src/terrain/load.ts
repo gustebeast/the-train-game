@@ -1,11 +1,11 @@
 import { Grid, GRID_MAX_X } from './constants';
-import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateDefeatLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
+import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { Unit } from 'w3ts';
 import { PEASANT_ID } from '../constants';
-import { getHumanPlayers } from '../util';
+import { getHumanPlayers, getWorldBounds } from '../util';
 import { makeDancer, startDanceClock } from '../dance';
 import {
   closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,
@@ -301,6 +301,26 @@ export function loadChooseSaveLobby(): void {
   spawnTerrain(generateChooseSaveLobby());
   // Heroes stand in the middle of the floor, north of the circles.
   openChooseSaveLobby(0, TRACK_SIZE);
+}
+
+/** Load the boss battlefield: the arena floor and its lava surround, and
+ *  nothing else. No train, no shop, no ready circles -- Brenner's boss and
+ *  whatever fights it are placed on top of this.
+ *
+ *  Reveals the arena outright. Every other map relies on units for vision, and
+ *  the lava has none by design (its blockers are invisible destructables), so
+ *  without this the surround would sit unexplored and render black. */
+export function loadBossBattlefield(): void {
+  hideChallengeUI();
+  clearChallengeEffects();
+  stopDayNight();
+  setMusic(null);
+  SetTimeOfDay(12);
+  spawnTerrain(generateBossBattlefield());
+  for (const p of getHumanPlayers()) {
+    const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_VISIBLE, getWorldBounds(), true, false);
+    if (fog != null) FogModifierStart(fog);
+  }
 }
 
 export function loadInterRoundLobby(): void {

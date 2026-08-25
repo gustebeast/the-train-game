@@ -20,6 +20,12 @@ export enum Terrain {
   ROUGH_DIRT = 3,
   WHITE_MARBLE = 4,
   BLACK_BRICKS = 5,
+  // Dungeon tileset — the boss battlefield. DUNGEON_DIRT is its floor, the
+  // other two make the diamond pattern, and LAVA_CRACKS is the surround.
+  DUNGEON_DIRT = 6,
+  DUNGEON_BRICK = 7,
+  DUNGEON_RED_STONE = 8,
+  LAVA_CRACKS = 9,
 }
 
 export enum Entity {
@@ -62,6 +68,8 @@ export enum Entity {
   CONFIRM_CIRCLE = 30,
   /** Start lobby: play the tutorial. */
   TUTORIAL_CIRCLE = 31,
+  /** Boss battlefield surround: lava you can see but not walk onto. */
+  LAVA = 32,
 }
 
 export interface Cell {
@@ -110,3 +118,8 @@ export const TREE_RAW = 'LTlt';  // SummerTreeWall (Lordaeron Summer)
 export const ROCK_RAW = 'LTrt';  // RockChunks2 (Lordaeron Summer — 6 variations)
 export const GRANITE_RAW = 'LTrc';  // RockChunks1 (Lordaeron Summer — indestructible)
 export const CAGE_RAW = 'LOcg';  // Cage (creep camp spawner)
+/** Pathing Blocker (Ground) (Large). No model at all, so it is invisible, and
+ *  its 4x4Default pathing texture covers exactly one TRACK_SIZE cell. Used to
+ *  wall off terrain that should look walkable but is not -- the lava around the
+ *  boss battlefield -- without the visible unit the lobby's water relies on. */
+export const PATH_BLOCKER_RAW = 'YTpc';

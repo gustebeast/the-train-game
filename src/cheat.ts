@@ -1,6 +1,6 @@
 import { Destructable, Item, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
-import { loadCheatTerrain, loadInterRoundLobby } from './terrain/load';
+import { loadCheatTerrain, loadInterRoundLobby , loadBossBattlefield} from './terrain/load';
 import { TRACK_PIECE_ID, WOOD_ID, STONE_ID, PEASANT_ID, WATER_ID, TRAIN_ID } from './constants';
 import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants';
 import { loadFromFile } from './save';
@@ -220,6 +220,12 @@ export function initCheat(): void {
 
   // Jump to the inter-round lobby, for looking at the shop and the dealer without playing
   // a round to get there.
+  onChatCommand('-boss', () => {
+    stopGameplay();
+    loadBossBattlefield();
+    print('Boss battlefield loaded.');
+  });
+
   onChatCommand('-lobby', () => {
     stopGameplay();
     advanceChallengeOffer();
