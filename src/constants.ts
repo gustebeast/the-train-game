@@ -88,10 +88,13 @@ export const RESTORE_HP_ID = FourCC(Items.HeartOfAszune);
  *  sequence is up to. Which one that is comes from challenges.ts, so this
  *  item's name and tooltip are deliberately generic. */
 export const CHALLENGE_ITEM_ID = FourCC(Items.Shimmerweed);
+/** Shop item: makes the next creep camp a level 3 one. */
+export const STRANGE_MEAT_ID = FourCC(Items.BloodfeathersHeart);
 
 /** Everything the shop sells that is consumed on acquisition. */
 export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = [
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, SUMMON_UPGRADE_ITEM_ID,
   MERC_CONTRACT_ID, MERC_CONTRACT_2_ID, CHALLENGE_ITEM_ID, RESTORE_HP_ID,
+  STRANGE_MEAT_ID,
 ];

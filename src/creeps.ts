@@ -150,6 +150,33 @@ export function rollCreepCamp(): void {
   campState = { tileset, campIndex: chosen };
 }
 
+/** Make the camp waiting for the next round a level 3 one -- what the Strange
+ *  Meat buys.
+ *
+ *  It REPLACES the camp rather than flagging a future roll, because the roll
+ *  has already happened: awardVictory rolls the next camp the moment the train
+ *  arrives, before anybody reaches the shop. A flag would sit unread until the
+ *  round after the one it was bought for.
+ *
+ *  Prefers a level 3 camp not met yet, so the meat shows you something new
+ *  where it can; falls back to any of them once the pool has been round once. */
+export function forceLevel3Camp(): boolean {
+  const tileset = 'Lordaeron Summer';
+  const camps = CREEP_CAMPS[tileset];
+  if (camps == null) return false;
+  const top: number[] = [];
+  for (let i = 0; i < camps.length; i++) {
+    if (camps[i].level === 3) top.push(i);
+  }
+  if (top.length === 0) return false;
+  let pool = top.filter(i => !encountered.includes(i));
+  if (pool.length === 0) pool = top;
+  const chosen = pool[seededInt(0, pool.length - 1)];
+  if (!encountered.includes(chosen)) encountered.push(chosen);
+  campState = { tileset, campIndex: chosen };
+  return true;
+}
+
 /** Get the selected camp, or null if none selected. */
 export function getCampData(): CreepCamp | null {
   if (campState == null) return null;
