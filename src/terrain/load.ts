@@ -13,6 +13,7 @@ import {
 } from '../chooseSaveLobby';
 import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
+import { resetBossKey } from '../bosskey';
 import { gameState } from '../state';
 import { loadFromSlot, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
@@ -229,6 +230,9 @@ export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRI
   //
   // Keyed on the round as well as the seed, so consecutive rounds differ.
   SetRandomSeed(deriveSeed(TERRAIN_STREAM) + difficulty);
+  // The Strange Key is a round's prize, not a run's: it is earned and spent
+  // inside one round, so a new round starts without one.
+  resetBossKey();
   return loadGameplay(generateTerrain(difficulty, exitX), skipCleanup);
 }
 

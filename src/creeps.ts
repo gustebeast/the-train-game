@@ -7,6 +7,7 @@ import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
 import { isChallengeArmed, completeChallenge } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
+import { onCampCleared } from './bosskey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
 
@@ -196,7 +197,16 @@ const GRID_OFFSETS: ReadonlyArray<readonly [number, number]> = [
 let spawnedCreeps: Array<{ unit: Unit; campUnit: CreepUnit }> = [];
 
 /** Spawn creeps around the given world position in a 3x3 grid. Invulnerable until heroes arrive. */
+/** Where the current camp's cage stood, so a drop can be placed there after the
+ *  cage itself is long gone. */
+let campOrigin: { x: number; y: number } | null = null;
+
+export function getCampOrigin(): { x: number; y: number } | null {
+  return campOrigin;
+}
+
 export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
+  campOrigin = { x: cx, y: cy };
   const owner = getNeutralAggressive();
   spawnedCreeps = [];
   const creeps = camp.creeps;
@@ -372,6 +382,10 @@ export function scaleCreepStats(heroes: Unit[]): void {
         if (spawnedCreeps.every(c => GetUnitState(c.unit.handle, UNIT_STATE_LIFE) <= 0)) {
           grantUnsummonToAllPeasants();
           completeChallenge(CH_TOUGH_CAMP);
+          // A flawless level 3 clear leaves the Strange Key where the cage was.
+          const origin = campOrigin;
+          const level = getCampData();
+          if (origin != null && level != null) onCampCleared(origin.x, origin.y, level.level);
         }
       });
     }

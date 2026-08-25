@@ -1,7 +1,7 @@
 import { Unit } from 'w3ts';
 import {
   AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID,
-  BUCKET_ID, BUCKET_FULL_ID, REROLL_ITEM_ID,
+  BUCKET_ID, BUCKET_FULL_ID, REROLL_ITEM_ID, BOSS_KEY_ITEM_ID,
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
   SHOP_UPGRADE_ITEM_IDS, UNKNOWN_UNIT_ID,
 } from './constants';
@@ -43,9 +43,14 @@ export function isShopUpgrade(itemTypeId: number): boolean {
   return false;
 }
 
-/** Bought by a peasant and carried in the inter-round lobby until cast on a hero. */
+/** Carried by a peasant and by nothing else: the Reroll, bought in the
+ *  inter-round lobby, and the Strange Key that opens the way to the boss.
+ *
+ *  Being on this list is what keeps the key off the engine, the wagon and the
+ *  crate -- each of those accepts only its own resources -- and out of hero and
+ *  mercenary hands, since anything not listed here counts as hero loot. */
 export function isPeasantUtility(itemTypeId: number): boolean {
-  return itemTypeId === REROLL_ITEM_ID;
+  return itemTypeId === REROLL_ITEM_ID || itemTypeId === BOSS_KEY_ITEM_ID;
 }
 
 /** Anything the train game does not define is treated as hero loot (claws,
