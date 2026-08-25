@@ -531,6 +531,21 @@ compiletime(({ objectData, constants }) => {
   axe.abilities = '';
   axe.modelUsed = 'war3mapImported\\AxeGround.mdx';
 
+  // The Strange Key: dropped by a level 3 creep camp cleared without losing
+  // anybody, and the only thing that breaks the Strange Rock barring the way to
+  // the boss. A peasant item, so it lives by the peasant's one-item rule and
+  // cannot be handed to the engine, the wagon or the crate -- see itemRules.ts.
+  const bossKey = objectData.items.get(constants.items.KeyOfThreeMoons)!;
+  bossKey.name = 'Strange Key';
+  bossKey.description = 'Taken from something that should not have been carrying it.';
+  bossKey.tooltipExtended = 'Whatever this opens is not on any map. Carry it to the Strange Rock at the far edge of the line.';
+  bossKey.goldCost = 0;
+  bossKey.canBeDropped = true;
+  bossKey.droppedWhenCarrierDies = true;
+  bossKey.perishable = false;
+  bossKey.canBeSoldToMerchants = false;
+  bossKey.abilities = '';
+
   // Pickaxe item
   const pickaxe = objectData.items.get(constants.items.RustyMiningPick)!;
   pickaxe.name = 'Pickaxe';
