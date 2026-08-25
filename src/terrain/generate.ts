@@ -527,32 +527,33 @@ const BOSS_SURROUND = 6;
 /**
  * One period of the floor pattern, laid out as it appears in game (north up).
  *
- * Written out rather than computed. The pattern is a small diamond plus a
- * single-cell accent, which is two lattice families at different sizes -- more
- * words to describe in code than to draw, and drawing it means what ships is
- * exactly the reference rather than a formula that approximates it. The
- * inter-round lobby's LOBBY_GRID is written the same way for the same reason.
+ * Two diamonds of the SAME shape -- a centre and its four neighbours -- on a
+ * period-4 lattice, the red stone offset from the brick by half a period in
+ * both directions so the two interleave. Every cell is either one of the two
+ * diamonds or the dirt between them.
  *
- * The reference is 5x5, but its last row and column are the first ones coming
- * round again, so the period is 4:
+ * Written out rather than computed, the way the inter-round lobby's LOBBY_GRID
+ * is: what ships is exactly the reference rather than a formula that
+ * approximates it, and the shape is quicker to read as a picture than as a
+ * distance test. Tiled across the floor it gives:
  *
- *     O X X X O
- *     X X O X X
- *     X O O O X
- *     X X O X X
- *     O X X X O
+ *     o o X o o o X o o
+ *     o X O X o X O X o
+ *     X O O O X O O O X     O = brick diamond
+ *     o X O X o X O X o     o = red stone diamond
+ *     o o X o o o X o o     X = dirt
  */
 const BOSS_FLOOR_PERIOD = 4;
 // prettier-ignore
 const BOSS_FLOOR: Terrain[][] = (() => {
-  const D = Terrain.DUNGEON_DIRT;
-  const K = Terrain.DUNGEON_BRICK;      // the diamond
-  const R = Terrain.DUNGEON_RED_STONE;  // the accent between diamonds
+  const X = Terrain.DUNGEON_DIRT;
+  const O = Terrain.DUNGEON_BRICK;
+  const o = Terrain.DUNGEON_RED_STONE;
   return [
-    [R, D, D, D],
-    [D, D, K, D],
-    [D, K, K, K],
-    [D, D, K, D],
+    [o, o, X, o],
+    [o, X, O, X],
+    [X, O, O, O],
+    [o, X, O, X],
   ];
 })();
 
