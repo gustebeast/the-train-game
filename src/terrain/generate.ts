@@ -1,5 +1,5 @@
 import {
-  Terrain, Entity, Cell, Grid, GridPos, DIRS, SPAWN, VICTORY,
+  Terrain, Entity, Cell, Grid, GridPos, DIRS, SPAWN, VICTORY, BOSS_EXIT,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, GRID_W, GRID_H,
   idx, idxToCoords, inBounds, isReserved,
 } from './constants';
@@ -17,7 +17,7 @@ function createGrid(): Grid {
     cells[i] = { terrain: Terrain.GRASS, entity: Entity.NONE };
     path[i] = false;
   }
-  return { cells, path, exit: { x: GRID_MAX_X, y: 0 } };
+  return { cells, path, exit: { x: GRID_MAX_X, y: 0 }, bossExit: null };
 }
 
 // --- Find a random empty tile (no entity, not reserved) ---
@@ -168,6 +168,65 @@ function generatePath(grid: Grid, exitX: number, exitY?: number): void {
   grid.exit = { x: exitX, y };
   VICTORY.minY = y - 4;
   VICTORY.maxY = y;
+}
+
+/** How far the boss exit must sit from the ordinary one, in tiles. Enough that
+ *  the two reserved areas cannot touch: each is 5 tall. */
+const BOSS_EXIT_GAP = 7;
+/** The boss exit's reserved area, matching VICTORY's 6x5. */
+const BOSS_EXIT_W = 5;
+const BOSS_EXIT_H = 4;
+
+/**
+ * A second exit on the right edge, leading to the boss.
+ *
+ * Placed as far from the ordinary exit as the map allows, so the two are never
+ * confused for each other, and given the same guarantee: the corridor to it is
+ * marked as path, and placeGranite leaves path tiles alone. Without that a run
+ * of granite could seal the boss off entirely and the round would be
+ * unwinnable-by-that-route through no fault of the player.
+ *
+ * The connection is an L drawn back to the ordinary exit's row rather than a
+ * fresh route from the start. The main path already reaches that row, so
+ * joining it is enough to reach everything -- and it keeps the branch short,
+ * which matters because every path tile is a tile granite may not use.
+ */
+function generateBossExit(grid: Grid, exitX: number): void {
+  const mainY = grid.exit.y;
+  // Both directions are tried and the roomier one wins, so the boss exit lands
+  // on whichever side of the main exit actually has space.
+  const low = GRID_MIN_Y + BOSS_EXIT_H;
+  const high = GRID_MAX_Y;
+  const below = mainY - BOSS_EXIT_GAP;
+  const above = mainY + BOSS_EXIT_GAP;
+  let bossY: number;
+  if (above <= high && (mainY - low) < (high - mainY)) {
+    bossY = above;
+  } else if (below >= low) {
+    bossY = below;
+  } else if (above <= high) {
+    bossY = above;
+  } else {
+    // No room either way: give up rather than stack the exits on top of one
+    // another. The round simply has no boss route.
+    return;
+  }
+
+  grid.bossExit = { x: exitX, y: bossY };
+  BOSS_EXIT.active = true;
+  BOSS_EXIT.minX = exitX - BOSS_EXIT_W;
+  BOSS_EXIT.maxX = exitX;
+  BOSS_EXIT.minY = bossY - BOSS_EXIT_H;
+  BOSS_EXIT.maxY = bossY;
+
+  // The L: up or down the column just west of the edge, then one step east
+  // onto the tile itself.
+  const spineX = exitX - 1;
+  const step = bossY > mainY ? 1 : -1;
+  for (let y = mainY; y !== bossY + step; y += step) {
+    grid.path[idx(spineX, y)] = true;
+  }
+  grid.path[idx(exitX, bossY)] = true;
 }
 
 // ============================================================
@@ -792,6 +851,22 @@ function placeEntities(grid: Grid): void {
   grid.cells[idx(GRID_MIN_X, 0)].terrain = Terrain.WHITE_MARBLE;
   grid.cells[idx(grid.exit.x, grid.exit.y)].terrain = Terrain.WHITE_MARBLE;
 
+  // The boss exit: the arena's own lava tile, so where it goes is legible
+  // before you have ever been there, sealed by the Strange Rock. Terrain only
+  // -- the arena pairs LAVA_CRACKS with a pathing blocker, and this one has to
+  // be walked onto and built on.
+  const bossExit = grid.bossExit;
+  if (bossExit != null) {
+    for (let gy = BOSS_EXIT.minY; gy <= BOSS_EXIT.maxY; gy++) {
+      for (let gx = BOSS_EXIT.minX; gx <= BOSS_EXIT.maxX; gx++) {
+        grid.cells[idx(gx, gy)].terrain = Terrain.GRASSY_DIRT;
+        grid.cells[idx(gx, gy)].entity = Entity.NONE;
+      }
+    }
+    grid.cells[idx(bossExit.x, bossExit.y)].terrain = Terrain.LAVA_CRACKS;
+    grid.cells[idx(bossExit.x, bossExit.y)].entity = Entity.STRANGE_ROCK;
+  }
+
   // Entities
   grid.cells[idx(grid.exit.x, grid.exit.y - 1)].entity = Entity.CRATE;
   placeTrainStart(grid, GRID_MIN_X, 0, true);
@@ -834,9 +909,11 @@ function placeCritters(grid: Grid, count: number): void {
   }
 }
 
-export function generateTerrain(difficulty: number, exitX = GRID_MAX_X): Grid {
+export function generateTerrain(difficulty: number, exitX = GRID_MAX_X, withBossExit = false): Grid {
   const grid = createGrid();
+  BOSS_EXIT.active = false;
   generatePath(grid, exitX);
+  if (withBossExit) generateBossExit(grid, exitX);
   placeGranite(grid, difficulty);
   placeWater(grid, difficulty);
   placeResources(grid, difficulty);
