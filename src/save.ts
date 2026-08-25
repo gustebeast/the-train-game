@@ -5,16 +5,13 @@ import { DEFAULT_STATE, GameState, gameState, applyState } from './state';
 // Each slot gets its OWN game cache too -- a shared cache would hand back the
 // previous slot's values when reading the next one.
 const SLOT_COUNT = 8;
-/** The single save file this map used before slots existed. Still readable, so
- *  an existing run is not stranded; never written to again. */
-const LEGACY_SLOT = 0;
 const CACHE_CAT = 's';
 
 function slotSaveFile(slot: number): string {
-  return slot === LEGACY_SLOT ? 'TheTrainGame/save.txt' : 'TheTrainGame/save' + I2S(slot)! + '.txt';
+  return 'TheTrainGame/save' + I2S(slot)! + '.txt';
 }
 function slotCacheFile(slot: number): string {
-  return slot === LEGACY_SLOT ? 'TheTrainGame/save.w3v' : 'TheTrainGame/save' + I2S(slot)! + '.w3v';
+  return 'TheTrainGame/save' + I2S(slot)! + '.w3v';
 }
 
 /** Cache keys holding a slot's own bookkeeping rather than game state.
@@ -37,10 +34,19 @@ const KEY_VERSION = 'VERSION';
  * that segment to its baseline, which is exactly right for a new one.
  *
  * A slot is readable only if it stamps this exact number. Older is out of date
- * and newer was written by a build this one does not understand, and neither
- * can be trusted; both are ignored, which also frees the slot for a new run to
- * claim. That is the point -- an early build's save is silently replaced rather
- * than loaded into a game whose rules have moved on underneath it.
+ * and newer was written by a build this one does not understand; neither can be
+ * trusted, so both are malformed as far as this build is concerned. A malformed
+ * save is treated exactly as a defeated one: it keeps its slot and is kept out
+ * of the chooser, so an early build's save is never loaded into a game whose
+ * rules have moved on underneath it, and is recycled in its own time rather
+ * than being clobbered the instant someone starts a run.
+ *
+ * This is the ONLY concession to save compatibility anywhere in the map, and
+ * deliberately so. There is no reading of superseded field names, no migrating
+ * an old save forward, no slot kept around because a previous format used it.
+ * A save either says it is this format or it is malformed, and malformed means
+ * gone. Anything else means old formats live on in code that has to keep being
+ * understood, which is the cost this constant exists to avoid.
  */
 const SAVE_VERSION = 0;
 
@@ -241,14 +247,21 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
   Preloader(slotSaveFile(slot));
   const gc = InitGameCache(slotCacheFile(slot));
   if (gc == null) return null;
-  // Out-of-date saves do not exist as far as the chooser is concerned, and the
-  // slot reads as free so a new run will claim it.
-  if (!versionMatches(gc)) { FlushGameCache(gc); return null; }
   const stored = (key: string) => GetStoredString(gc, CACHE_CAT, key) ?? '';
-  // Fall back to the legacy 'data' key, as loadFromSlot does.
-  let raw = stored('core');
-  if (raw === '') raw = stored('data');
+  // No core record at all is an EMPTY slot -- there is no save here to speak of.
+  // Core present but unreadable is a MALFORMED save, which is a different thing
+  // and handled below.
+  const raw = stored('core');
   if (raw === '') { FlushGameCache(gc); return null; }
+  // Something is written here, but not in a format this build speaks. Report it
+  // the way a defeated run is reported: it holds its slot and stays out of the
+  // chooser, rather than vanishing and letting the next run land on top of it
+  // the moment one is started. Nothing inside is trusted, so nothing inside is
+  // read -- seq 0 puts it first in line for reuse once slots run short.
+  if (!versionMatches(gc)) {
+    FlushGameCache(gc);
+    return { slot, seq: 0, round: 0, defeated: true, heroTypeIds: [], mercTypeIds: [] };
+  }
   const core = decodeRecord(raw, SHORT_TO_KEY);
   if (core.round == null) { FlushGameCache(gc); return null; }
 
@@ -276,7 +289,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
  *  the same as deleting it. */
 export function listSaves(includeDefeated = false): SaveSlotInfo[] {
   const found: SaveSlotInfo[] = [];
-  for (let slot = LEGACY_SLOT; slot <= SLOT_COUNT; slot++) {
+  for (let slot = 1; slot <= SLOT_COUNT; slot++) {
     const info = readSlotInfo(slot) ?? writtenThisSession.get(slot) ?? null;
     if (info == null) continue;
     if (info.defeated && !includeDefeated) continue;
@@ -287,15 +300,15 @@ export function listSaves(includeDefeated = false): SaveSlotInfo[] {
 }
 
 /** The slot a new run should claim: a free one, else the oldest defeated one,
- *  else the oldest of all. Never the legacy slot, which is read-only. */
+ *  else the oldest of all. A slot holding a save this build cannot read counts
+ *  as free -- readSlotInfo returns nothing for it. */
 function allocateSlot(): number {
   const used = listSaves(true);
   for (let slot = 1; slot <= SLOT_COUNT; slot++) {
     if (!used.some(info => info.slot === slot)) return slot;
   }
-  const reusable = used.filter(info => info.slot !== LEGACY_SLOT);
-  const dead = reusable.filter(info => info.defeated);
-  const pool = dead.length > 0 ? dead : reusable;
+  const dead = used.filter(info => info.defeated);
+  const pool = dead.length > 0 ? dead : used;
   let oldest = pool[0];
   for (const info of pool) {
     if (info.seq < oldest.seq) oldest = info;
@@ -385,12 +398,11 @@ export function resetToNewRun(): void {
 }
 
 /** Load a specific slot into the session. On success the session adopts that
- *  slot, so later saves write back to the same run -- except for the legacy
- *  slot, which is left untouched as a backup and continues into a fresh slot. */
+ *  slot, so later saves write back to the same run. */
 export function loadFromSlot(slot: number): boolean {
   const ok = readSlotInto(slot);
   if (!ok) return false;
-  currentSlot = slot === LEGACY_SLOT ? allocateSlot() : slot;
+  currentSlot = slot;
   return true;
 }
 
@@ -409,9 +421,7 @@ function readSlotInto(slot: number): boolean {
   if (!versionMatches(gc)) { FlushGameCache(gc); return false; }
 
   // Load core state
-  const coreRaw = GetStoredString(gc, CACHE_CAT, 'core');
-  // Fall back to legacy 'data' key for old saves
-  const raw = (coreRaw != null && coreRaw !== '') ? coreRaw : GetStoredString(gc, CACHE_CAT, 'data');
+  const raw = GetStoredString(gc, CACHE_CAT, 'core');
   if (raw == null || raw === '') {
     FlushGameCache(gc);
     return false;
@@ -436,7 +446,6 @@ function readSlotInto(slot: number): boolean {
  *  normal play -- defeat marks a save rather than removing it -- but it is the
  *  only way to genuinely clear one. */
 export function deleteSave(slot: number = currentSlot): void {
-  if (slot === LEGACY_SLOT) return;
   PreloadGenClear();
   PreloadGenStart();
   PreloadGenEnd(slotSaveFile(slot));
