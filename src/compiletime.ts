@@ -7,6 +7,9 @@ compiletime(({ objectData, constants }) => {
    *  constants.ts -- this side authors the unit, that side spawns it. */
   const UNKNOWN_UNIT_RAWCODE = 'qmrk';
 
+  /** Keep in step with STRANGE_ROCK_RAW in terrain/constants.ts. */
+  const STRANGE_ROCK_RAWCODE = 'BRoc';
+
   // Everything in the world is peasant-sized unless we say otherwise.
   //
   // The heroes are scaled to 0.6 to match the peasant (see the hero block near
@@ -660,6 +663,33 @@ compiletime(({ objectData, constants }) => {
   granite.tintingColor1Red = 40;
   granite.tintingColor2Green = 40;
   granite.tintingColor3Blue = 40;
+
+  // The Strange Rock: seals the boss exit until somebody brings the key.
+  //
+  // A copy of the granite chunk rather than granite itself -- granite is
+  // scattered over every map and must stay anonymous and indestructible, while
+  // this one has a name, a colour and a way to die.
+  //
+  // Health is granite's, so ordinary attacks can chip at it forever and never
+  // break it. Breaking it is not a matter of damage at all: a peasant holding
+  // the Strange Key drops its health to 1 by ordering an attack on it, and the
+  // swing that follows finishes it (see bossrock.ts).
+  //
+  // Targeted as debris, which is what makes it attackable at all -- the same
+  // setting the trees use. It is a different rawcode from either resource, so
+  // the harvest system never mistakes it for wood or stone.
+  const strangeRock = objectData.destructables.copy(
+    constants.destructables.RockChunks1, STRANGE_ROCK_RAWCODE);
+  if (strangeRock != null) {
+    strangeRock.name = 'Strange Rock';
+    strangeRock.hitPoints = 999999;
+    strangeRock.occlusionHeight = 0;
+    strangeRock.selectableInGame = true;
+    strangeRock.targetedAs = 'debris';
+    strangeRock.tintingColor1Red = 255;
+    strangeRock.tintingColor2Green = 40;
+    strangeRock.tintingColor3Blue = 40;
+  }
 
   // Water: Burrow repurposed with WaterPlane model, targetable by spells, no shadow
   const water = objectData.units.get(constants.units.Burrow)!;

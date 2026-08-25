@@ -4,7 +4,7 @@ import { Units } from '@objectdata/units';
 import {
   Terrain, Entity, Grid,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
-  TREE_RAW, ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW,
+  TREE_RAW, ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, STRANGE_ROCK_RAW,
   idx, gridToWorld,
 } from './constants';
 import { DEFAULT_TRACK, SKINS } from '../track/constants';
@@ -130,6 +130,12 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
             FourCC(GRANITE_RAW), world.x, world.y,
             GetRandomReal(0, 360), ROCK_MODEL_SCALES[variation], variation,
           );
+          break;
+        }
+
+        case Entity.STRANGE_ROCK: {
+          // Full size and unrotated: this one is a landmark, not scenery.
+          Destructable.create(FourCC(STRANGE_ROCK_RAW), world.x, world.y, 0, 1.4, 0);
           break;
         }
 
