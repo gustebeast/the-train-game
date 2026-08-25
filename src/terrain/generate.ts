@@ -768,6 +768,23 @@ function parkTheGuests(grid: Grid): void {
   grid.cells[idx(2, 3)].entity = Entity.PLAYER_4;
 }
 
+/**
+ * The victory lobby: where the run ends when the boss goes down.
+ *
+ * Its own board rather than the defeat lobby with different words, so the two
+ * endings can drift apart -- a run that beat the boss has earned somewhere that
+ * can grow trophies, a scoreboard, whatever comes later -- without either one
+ * having to check which case it is in.
+ *
+ * For now it offers the same single exit: back to the start lobby, with every
+ * player agreeing, because it ends the run for all of them.
+ */
+export function generateVictoryLobby(): Grid {
+  const grid = generateEmptyLobby();
+  grid.cells[idx(0, -3)].entity = Entity.RESTART_CIRCLE;
+  return grid;
+}
+
 export function generateDefeatLobby(): Grid {
   const grid = generateEmptyLobby();
   // The one thing you can do from here: give up on this run and go back to the

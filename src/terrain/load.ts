@@ -1,5 +1,5 @@
 import { Grid, GRID_MAX_X } from './constants';
-import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
+import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateVictoryLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
@@ -14,6 +14,8 @@ import {
 import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
 import { resetBossKey } from '../bosskey';
+import { isBossVictory } from '../track/state';
+import { setBossArenaCallbacks, startBossFight } from '../bossArena';
 import { getCampData } from '../creeps';
 import { gameState } from '../state';
 import { loadFromSlot, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
@@ -64,9 +66,27 @@ setVictoryCallback(() => {
   // Reaching the target track finishes the tutorial rather than opening the
   // inter-round lobby: there is no run to continue.
   if (inTutorial) { endTutorial(); return; }
+  // The line ran to the boss exit rather than the usual one, so the train
+  // pulls into the arena instead of the lobby. The round itself was already
+  // won and paid out on arrival -- this is what the round bought.
+  if (isBossVictory()) {
+    loadBossBattlefield();
+    startBossFight();
+    return;
+  }
   advanceChallengeOffer();
   loadInterRoundLobby();
 });
+
+// How the boss fight ends. Losing costs the attempt, not the run: it lands
+// exactly where an ordinary victory would, because the round was already won.
+setBossArenaCallbacks(
+  () => {
+    advanceChallengeOffer();
+    loadInterRoundLobby();
+  },
+  () => loadVictoryLobby(),
+);
 setDefeatCallback(() => {
   if (inTutorial) { endTutorial(); return; }
   loadDefeatLobby();
@@ -253,6 +273,20 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
  *  cannot overwrite the inter-round lobby state a later session would load.
  *
  *  Contrast loadInterRoundLobby(), which is the victory path and rebuilds everything. */
+/** The run is over and won. Same shape as the defeat lobby, on its own board:
+ *  the save is left alone rather than marked, because beating the boss is not
+ *  something that should stop you loading the run again. */
+export function loadVictoryLobby(): void {
+  hideChallengeUI();
+  clearChallengeEffects();
+  stopDayNight();
+  // No victory track exists yet; the between-rounds one is the closest thing
+  // to celebratory the map owns. Swap it the moment there is a real one.
+  setMusic('interRound');
+  SetTimeOfDay(12);
+  spawnTerrain(generateVictoryLobby());
+}
+
 export function loadDefeatLobby(): void {
   // The run is over: mark its save so the chooser stops offering it. Marked,
   // not deleted -- see markCurrentSaveDefeated. A session that never claimed a

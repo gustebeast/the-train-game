@@ -12,7 +12,7 @@ import { DEFAULT_TRACK, SKINS } from '../track/constants';
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { registerStrangeRock } from '../bossrock';
-import { placedTracks, setVictoryTile, resetVictoryTriggered } from '../track/state';
+import { placedTracks, setVictoryTile, setBossVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
 import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../creeps';
@@ -345,6 +345,10 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
 
   const exitWorld = gridToWorld(grid.exit);
   setVictoryTile(exitWorld.x, exitWorld.y);
+  if (grid.bossExit != null) {
+    const bossWorld = gridToWorld(grid.bossExit);
+    setBossVictoryTile(bossWorld.x, bossWorld.y);
+  }
 
   return { engine: engineUnit, wagon: wagonUnit };
 }

@@ -137,7 +137,7 @@ for (let i = 0; i < 4; i++) {
 // ---------------------------------------------------------------------------
 
 /** Indices into allHeroes for the 2 chosen this round. Persisted via save segment. */
-let chosenIndices: [number, number] = [0, 1];
+let chosenIndices: number[] = [0, 1];
 let chosenFromSave = false;
 
 // Persist chosenIndices as "ci" segment: "0,1" format
@@ -285,6 +285,19 @@ export function initRandomHeroes(): void {
 
 /** Choose the 2 heroes with the lowest XP from the 4.
  *  If all XP is equal, pick 2 at random. Sets chosenIndices. */
+/** Field the WHOLE roster, not the usual two.
+ *
+ *  The boss fight is the one time everybody comes: an ordinary round summons
+ *  the two least-rested heroes, which is what chooseHeroes picks, and turning
+ *  up to the finale with half the roster would be a strange way to end a run. */
+export function chooseAllHeroes(): void {
+  const all: number[] = [];
+  for (let i = 0; i < allHeroes.length; i++) {
+    if (allHeroes[i].typeId !== 0) all.push(i);
+  }
+  chosenIndices = all;
+}
+
 export function chooseHeroes(): void {
   if (chosenFromSave) {
     chosenFromSave = false;
