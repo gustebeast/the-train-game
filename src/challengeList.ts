@@ -73,6 +73,13 @@ function dashTarget(): number {
 }
 
 // --- definitions ----------------------------------------------------------
+//
+// NOTE: the `description` strings are built when this module loads, and I2S is
+// NOT usable that early -- it returns an empty string, so "Lay 15 curved track
+// pieces" shipped as "Lay  curved track pieces" with the number silently gone.
+// Plain concatenation works, because Lua coerces a number in `..`. The
+// `progress` lambdas may keep using I2S: they run at draw time, long after the
+// natives are up.
 
 defineChallenge({
   id: CH_CRITTERPOCALYPSE,
@@ -91,21 +98,21 @@ defineChallenge({
 defineChallenge({
   id: CH_STRAIGHT_15,
   name: 'Straight and Narrow',
-  description: 'Lay ' + I2S(STRAIGHT_TARGET) + ' straight track pieces in an unbroken run.',
+  description: 'Lay ' + STRAIGHT_TARGET + ' straight track pieces in an unbroken run.',
   progress: () => 'Straight in a row ' + I2S(straightRun) + ' / ' + I2S(STRAIGHT_TARGET),
 });
 
 defineChallenge({
   id: CH_CURVED_15,
   name: 'The Scenic Route',
-  description: 'Lay ' + I2S(CURVED_TARGET) + ' curved track pieces this round.',
+  description: 'Lay ' + CURVED_TARGET + ' curved track pieces this round.',
   progress: () => 'Curves laid ' + I2S(curvedCount) + ' / ' + I2S(CURVED_TARGET),
 });
 
 defineChallenge({
   id: CH_DASH,
   name: 'Marathon',
-  description: 'Dash ' + I2S(DASHES_PER_PLAYER) + ' times per player this round.',
+  description: 'Dash ' + DASHES_PER_PLAYER + ' times per player this round.',
   progress: () => 'Dashes ' + I2S(dashCount) + ' / ' + I2S(dashTarget()),
 });
 
@@ -120,8 +127,8 @@ defineChallenge({
 defineChallenge({
   id: CH_BRINK,
   name: 'Living Dangerously',
-  description: 'Keep the train within ' + I2S(BRINK_TRACKS) + ' tracks of the end '
-    + 'of the line for ' + I2S(BRINK_SECONDS) + ' seconds.',
+  description: 'Keep the train within ' + BRINK_TRACKS + ' tracks of the end '
+    + 'of the line for ' + BRINK_SECONDS + ' seconds.',
   progress: () => 'Near the end ' + I2S(brinkSeconds) + ' / ' + I2S(BRINK_SECONDS) + 's',
 });
 
