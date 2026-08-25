@@ -5,7 +5,7 @@ import { TRACK_PIECE_ID, WOOD_ID, STONE_ID, PEASANT_ID, WATER_ID, TRAIN_ID } fro
 import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants';
 import { loadFromFile } from './save';
 import { stopGameplay, triggerDefeat } from './train';
-import { toggleShoulderCam } from './challengeEffects';
+import { applyChallengeEffects, toggleShoulderCam } from './challengeEffects';
 import {
   getChallengeDefs, armChallenge, clearChallenges, advanceChallengeOffer,
 } from './challenges';
@@ -42,6 +42,26 @@ function onChatCommand(command: string, action: () => void): void {
     TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, command, true);
   });
   trigger.addAction(action);
+}
+
+/** Register a chat command that takes an argument, e.g. "-challenge 4".
+ *
+ *  WC3's non-exact chat event matches a SUBSTRING, not a prefix, so "-challenge"
+ *  would also fire on someone typing "look at -challenge 4" mid-sentence. The
+ *  guard below insists the message actually starts with the command, which is
+ *  also what keeps the argument at a known offset. */
+function onChatCommandWithArg(command: string, action: (arg: string) => void): void {
+  const trigger = Trigger.create();
+  Players.forEach(p => {
+    TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, command, false);
+  });
+  trigger.addAction(() => {
+    const said = GetEventPlayerChatString();
+    if (said == null) return;
+    if (string.sub(said, 1, string.len(command)) !== command) return;
+    const [rest] = string.gsub(string.sub(said, string.len(command) + 1), '^%s+', '');
+    action(rest);
+  });
 }
 
 export function initCheat(): void {
@@ -124,6 +144,30 @@ export function initCheat(): void {
     armChallenge(def.id);
     applyTrackShapes({ straightRun: 7, curved: 3 });
     print('uichallenge ' + I2S(uiIndex + 1) + '/' + I2S(all.length) + ': ' + def.name);
+  });
+
+  // Arm a challenge by number, for playing one deliberately rather than
+  // waiting for the dealer to offer it. Bare "-challenge" lists them, since
+  // the number is only useful next to the name it belongs to.
+  //
+  // Applies the handicaps too, so arming Over the Shoulder or From Memory
+  // mid-round does what buying it would have done at the round's start --
+  // otherwise the challenge would be armed but invisible until the next round.
+  onChatCommandWithArg('-challenge', arg => {
+    const all = getChallengeDefs();
+    const n = S2I(arg);
+    if (n < 1 || n > all.length) {
+      print('|cffffcc00Challenges|r (use -challenge <number>):');
+      for (let i = 0; i < all.length; i++) {
+        print('  ' + I2S(i + 1) + '. ' + all[i].name);
+      }
+      return;
+    }
+    const def = all[n - 1];
+    clearChallenges();
+    armChallenge(def.id);
+    applyChallengeEffects();
+    print('Armed ' + I2S(n) + '. |cffffcc00' + def.name + '|r: ' + def.description);
   });
 
   // Disarm, which is what Reset Purchases does. Pairs with -uichallenge to
