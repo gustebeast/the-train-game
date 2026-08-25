@@ -123,6 +123,9 @@ onAllHeroesDead(() => removeSpawnedCreeps());
  *  simply what is left. When nothing eligible remains the whole list clears
  *  together and the rotation starts over.
  *
+ *  Within that pool the draw is two-stage -- level first, then camp -- so each
+ *  unlocked level comes up equally often regardless of how many camps it has.
+ *
  *  campIndex always indexes the full camp list, so saves stay stable. */
 export function rollCreepCamp(): void {
   const tileset = 'Lordaeron Summer';
@@ -145,7 +148,28 @@ export function rollCreepCamp(): void {
     fresh = unlocked;
   }
 
-  const chosen = fresh[seededInt(0, fresh.length - 1)];
+  // Draw the LEVEL first, then a camp within it, rather than drawing flat from
+  // every eligible camp. The catalogue is lopsided -- far more level 2 camps
+  // exist than level 1 or 3 -- so a flat draw hands out difficulty in
+  // proportion to how many camps the ladder maps happened to contain, which is
+  // not a design decision anyone made. Two stages give each level you have
+  // unlocked an equal share.
+  //
+  // Only levels that still have an unmet camp take part, so a level that has
+  // been worked through drops out until the lap resets rather than blocking a
+  // draw.
+  const levels: number[] = [];
+  for (const i of fresh) {
+    if (!levels.includes(camps[i].level)) levels.push(camps[i].level);
+  }
+  // Sorted so the draw is reproducible: `fresh` is in index order, and the
+  // level a given seed picks must not depend on which camp happened to come
+  // first in the catalogue.
+  levels.sort((a, b) => a - b);
+  const level = levels[seededInt(0, levels.length - 1)];
+  const pool = fresh.filter(i => camps[i].level === level);
+
+  const chosen = pool[seededInt(0, pool.length - 1)];
   encountered.push(chosen);
   campState = { tileset, campIndex: chosen };
 }
