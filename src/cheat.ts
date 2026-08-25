@@ -10,6 +10,7 @@ import {
   getChallengeDefs, armChallenge, clearChallenges, advanceChallengeOffer,
 } from './challenges';
 import { applyTrackShapes } from './challengeList';
+import { beginNight, endNight, isNight } from './daynight';
 import { getNeutralPassive } from './teams';
 import { makeDancer } from './dance';
 import { getHumanPlayers, getWorldBounds } from './util';
@@ -144,6 +145,19 @@ export function initCheat(): void {
     ClearSelection();
     SelectUnit(dancer.handle, true);
     print('Dancer spawned. Q W E R Y U I O V B are the dances.');
+  });
+
+  // Bring on night without waiting out the random 1-10 minute timer. Toggles,
+  // so the same command puts the day back -- and going back through endNight
+  // means the Blackout challenge's fog restore runs too, rather than the map
+  // simply brightening.
+  onChatCommand('-night', () => {
+    if (isNight()) {
+      endNight();
+      print('Day.');
+      return;
+    }
+    beginNight();
   });
 
   // Drive the defeat path without having to actually run the train out of

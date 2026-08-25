@@ -136,6 +136,15 @@ let running: string | null = null;
 /** Register a test, runnable in-game via `-test <name>`. Call at module scope;
  *  import the module from main.ts so registration happens before initTestKit. */
 export function registerTest(name: string, run: (this: void, reporter: TestReporter) => void): void {
+  // A duplicate name used to be silent, and `find` below returns whichever was
+  // registered first -- so the second test simply never ran, while the runner
+  // happily reported a PASS full of the FIRST test's measurements. That is the
+  // worst kind of green: it looks like your test passed. Refuse instead.
+  if (tests.find(t => t.name === name) != null) {
+    print('|cffff8080testkit: two tests are named "' + name + '"|r -- rename one, '
+      + 'or the second never runs, and its reported results are the first one instead.');
+    return;
+  }
   tests.push({ name, run });
 }
 
