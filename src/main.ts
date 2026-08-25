@@ -37,6 +37,7 @@ import './shoptest'; // Repair Train purchase effect
 import './challengetest'; // challenge sequencing and payouts
 import './fogtest'; // blackout must give the map back at dawn
 import './bossbalance'; // final boss balance harness
+import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included
 import './dashfieldstest'; // asks the engine about A000's button data
 import './inputwatchtest'; // observes a real VNC-driven input sequence
