@@ -5,7 +5,9 @@ import {
   Direction, toOrientationKey,
 } from './constants';
 import { reskinTrack, replaceTrack } from './helpers';
-import { placedTracks, isVictoryTriggered, getVictoryTile } from './state';
+import {
+  placedTracks, isVictoryTriggered, getVictoryTile, getBossVictoryTile, markBossVictory,
+} from './state';
 import { findItemByType, updateBuildAbility } from '../items';
 import { TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID } from '../constants';
 import { onTrackPlaced } from '../train';
@@ -77,6 +79,16 @@ function onTrackBuilt() {
     // rather than crediting that one piece -- see computeTrackShapes.
     recountTrackShapes();
     onTrackPlaced();
+    // Either exit finishes the line. The boss exit is only ever present in a
+    // round that can reach the boss, and it is remembered here rather than
+    // re-derived on arrival, because the terrain is gone by then.
+    const bossTile = getBossVictoryTile();
+    if (bossTile != null && snapX === bossTile.x && snapY === bossTile.y) {
+      markBossVictory();
+      noteFinalTrackPlaced();
+      triggerVictory(newTrack);
+      return;
+    }
     const victoryTile = getVictoryTile();
     if (snapX === victoryTile.x && snapY === victoryTile.y) {
       // Round-long challenges are judged here, when the line is finished --
