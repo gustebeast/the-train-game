@@ -712,9 +712,12 @@ export function initHeroes(): void {
     if (!isInGameplay()) return;
     if (heroesSpawned) return;
 
-    heroesSpawned = true;
     const caster = Unit.fromEvent();
-    if (caster == null) return;
+    // Same guard as Unsummon below. No creep in the camp list carries Roar
+    // today, but the ability is a repurposed standard one and the camp list
+    // grows, so the check belongs here rather than in a comment.
+    if (caster == null || caster.typeId !== PEASANT_ID) return;
+    heroesSpawned = true;
 
     UnitRemoveAbility(caster.handle, SUMMON_ABILITY_ID);
     transferPeasantsAndSpawnHeroes(caster.x, caster.y);
@@ -726,6 +729,13 @@ export function initHeroes(): void {
   unsummonTrigger.addAction(() => {
     if (GetSpellAbilityId() !== UNSUMMON_ABILITY_ID) return;
     if (!isInGameplay()) return;
+    // The caster MUST be one of ours. Unsummon Heroes is RoarNeutralHostile
+    // repurposed, and four creeps in the camp list carry that same ability
+    // natively as Roar -- Dire Wendigo, Dire Wolf, Wind Serpent and Sasquatch
+    // Oracle. Without this check, a creep roaring at you dismissed your heroes
+    // mid-fight, from an ability nobody could see it cast.
+    const caster = GetTriggerUnit();
+    if (caster == null || GetUnitTypeId(caster) !== PEASANT_ID) return;
     endHeroState();
   });
 

@@ -3,7 +3,10 @@ import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import { mercCampLevel } from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
 import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
-import { SUMMON_ABILITY_ID, PEASANT_ID } from './constants';
+import {
+  SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, FILL_ABILITY_ID, BRIDGE_ABILITY_ID,
+  WATER_TRAIN_ABILITY_ID, PEASANT_ID,
+} from './constants';
 import { isChallengeArmed, completeChallenge } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
@@ -35,26 +38,44 @@ let dpsTestTimer: Timer | null = null;
 let dpsTestCreepStartHP = 0;
 
 // ---------------------------------------------------------------------------
-// Creep camp state — persisted as tileset + campIndex
+// Creep camp state — persisted as an index into the flat camp list
 // ---------------------------------------------------------------------------
 
-interface CreepCampState {
-  tileset: string;
-  campIndex: number;
-}
+let campIndex: number | null = null;
 
-let campState: CreepCampState | null = null;
-
-/** Camp indices already ENCOUNTERED this lap, so the same camp does not come
- *  back until everything currently available has been seen.
+/** Camp indices already ENCOUNTERED this lap, kept as ONE LIST PER LEVEL.
  *
  *  Encountered, not defeated: a camp counts the moment it is picked, win or
  *  lose, so a camp you keep failing does not sit in front of you forever.
- *  Unlocking a level therefore changes what you meet -- clear every level 1
- *  camp, buy the Mercenary Contract, and only level 2 camps remain eligible
- *  until those have been seen too. When nothing is left the list clears and
- *  the whole rotation starts again. */
-let encountered: number[] = [];
+ *
+ *  Per level rather than one shared list, because the two rules pull against
+ *  each other otherwise. Each level is supposed to come up equally often, but
+ *  the levels hold very different numbers of camps; with a single list, the
+ *  smallest level runs out of unseen camps first and then stops being drawn,
+ *  and the even split quietly becomes uneven near the end of a lap. Each level
+ *  now finishes its own lap and wipes its own list, independently of the
+ *  others, so the split holds forever. */
+const encountered: Record<number, number[]> = {};
+
+function metAtLevel(level: number): number[] {
+  let list = encountered[level];
+  if (list == null) {
+    list = [];
+    encountered[level] = list;
+  }
+  return list;
+}
+
+/** Standard abilities the map has taken over for its own spells. Any creep
+ *  that carries one natively must have it removed on spawn -- see the spawn
+ *  loop. Keep in step with the repurposed abilities in compiletime.ts. */
+const REPURPOSED_ABILITY_IDS = [
+  UNSUMMON_ABILITY_ID,      // RoarNeutralHostile -- 4 creeps carry it
+  SUMMON_ABILITY_ID,        // Roar
+  FILL_ABILITY_ID,          // UndefinedNeutralHostile
+  BRIDGE_ABILITY_ID,        // FingerOfDeathNeutralHostile
+  WATER_TRAIN_ABILITY_ID,   // DrunkenHazeChen
+];
 
 /** The cage destructable spawned for this round. */
 let cageDestructable: Destructable | null = null;
@@ -66,39 +87,51 @@ let cageTrigger: Trigger | null = null;
 // Save/load
 // ---------------------------------------------------------------------------
 
-/** Encode as "t=tileset;i=index". */
+/** Encode as "i=index;e1=...;e2=...;e3=..." -- one met-list per level. */
 function encodeCamp(): string {
-  if (campState == null) return '';
-  const parts = ['t=' + campState.tileset, 'i=' + tostring(campState.campIndex)];
-  if (encountered.length > 0) parts.push('e=' + encountered.join(','));
+  if (campIndex == null) return '';
+  const parts = ['i=' + tostring(campIndex)];
+  for (const level of [1, 2, 3]) {
+    const met = encountered[level];
+    if (met != null && met.length > 0) {
+      parts.push('e' + tostring(level) + '=' + met.join(','));
+    }
+  }
   return table.concat(parts, ';');
 }
 
-/** Decode "t=tileset;i=index". */
+function decodeMet(level: number, val: string): void {
+  const list: number[] = [];
+  for (const [idxStr] of string.gmatch(val, '([^,]+)')) {
+    const idx = tonumber(idxStr);
+    if (idx != null) list.push(idx);
+  }
+  encountered[level] = list;
+}
+
+/** Decode "i=index;e1=...". A save from before the camp list was flattened
+ *  carries "t=<tileset>" and an index into that tileset's camps, which means
+ *  something different now; such a save drops its camp state and rolls afresh
+ *  rather than pointing at an unrelated camp. */
 function decodeCamp(raw: string): void {
-  let tileset = '';
-  let campIndex = 0;
+  let index: number | null = null;
+  let legacy = false;
   for (const [key, val] of pairs(parseFields(raw))) {
-    if (key === 't') tileset = val;
-    else if (key === 'i') campIndex = tonumber(val) ?? 0;
-    else if (key === 'e') {
-      encountered = [];
-      for (const [idxStr] of string.gmatch(val, '([^,]+)')) {
-        const idx = tonumber(idxStr);
-        if (idx != null) encountered.push(idx);
-      }
-    }
+    if (key === 't') legacy = true;
+    else if (key === 'i') index = tonumber(val) ?? null;
+    else if (key === 'e1') decodeMet(1, val);
+    else if (key === 'e2') decodeMet(2, val);
+    else if (key === 'e3') decodeMet(3, val);
   }
-  if (tileset !== '') {
-    campState = { tileset, campIndex };
-  }
+  if (legacy) return;
+  campIndex = index;
 }
 
 // Reset re-rolls the camp — the new-game baseline is a fresh random pick
 /** Start the camp rotation over: nothing has been met, so every unlocked camp
  *  is eligible again. Used by the new-game/reset baseline. */
 export function clearCampRotation(): void {
-  encountered = [];
+  for (const level of [1, 2, 3]) encountered[level] = [];
 }
 
 registerSaveSegment('cc', encodeCamp, decodeCamp, () => {
@@ -128,50 +161,41 @@ onAllHeroesDead(() => removeSpawnedCreeps());
  *
  *  campIndex always indexes the full camp list, so saves stay stable. */
 export function rollCreepCamp(): void {
-  const tileset = 'Lordaeron Summer';
-  const camps = CREEP_CAMPS[tileset];
-  if (camps == null || camps.length === 0) return;
+  const camps = CREEP_CAMPS;
+  if (camps.length === 0) return;
   // One camp level per living mercenary: none -> 1, one -> 2, both -> 3.
   // Losing one really does close its camps again.
   const maxLevel = mercCampLevel();
 
-  const unlocked: number[] = [];
-  for (let i = 0; i < camps.length; i++) {
-    if (camps[i].level <= maxLevel) unlocked.push(i);
-  }
-  if (unlocked.length === 0) return;
-
-  let fresh = unlocked.filter(i => !encountered.includes(i));
-  if (fresh.length === 0) {
-    // Everything unlocked has been met: start a new lap over the same pool.
-    encountered = [];
-    fresh = unlocked;
-  }
-
   // Draw the LEVEL first, then a camp within it, rather than drawing flat from
   // every eligible camp. The catalogue is lopsided -- far more level 2 camps
-  // exist than level 1 or 3 -- so a flat draw hands out difficulty in
-  // proportion to how many camps the ladder maps happened to contain, which is
-  // not a design decision anyone made. Two stages give each level you have
-  // unlocked an equal share.
-  //
-  // Only levels that still have an unmet camp take part, so a level that has
-  // been worked through drops out until the lap resets rather than blocking a
-  // draw.
+  // than level 1 or 3 -- so a flat draw would hand out difficulty in proportion
+  // to how many camps the ladder maps happened to contain, which is not a
+  // decision anyone made. Two stages give each unlocked level an equal share.
   const levels: number[] = [];
-  for (const i of fresh) {
-    if (!levels.includes(camps[i].level)) levels.push(camps[i].level);
+  for (let level = 1; level <= maxLevel; level++) {
+    if (camps.some(c => c.level === level)) levels.push(level);
   }
-  // Sorted so the draw is reproducible: `fresh` is in index order, and the
-  // level a given seed picks must not depend on which camp happened to come
-  // first in the catalogue.
-  levels.sort((a, b) => a - b);
+  if (levels.length === 0) return;
   const level = levels[seededInt(0, levels.length - 1)];
-  const pool = fresh.filter(i => camps[i].level === level);
 
-  const chosen = pool[seededInt(0, pool.length - 1)];
-  encountered.push(chosen);
-  campState = { tileset, campIndex: chosen };
+  // Each level keeps its own met-list and finishes its own lap, so running out
+  // of unseen camps at one level never changes how often that level is drawn.
+  const atLevel: number[] = [];
+  for (let i = 0; i < camps.length; i++) {
+    if (camps[i].level === level) atLevel.push(i);
+  }
+  const met = metAtLevel(level);
+  let fresh = atLevel.filter(i => !met.includes(i));
+  if (fresh.length === 0) {
+    // Every camp at this level has been met: wipe THIS level's list only.
+    encountered[level] = [];
+    fresh = atLevel;
+  }
+
+  const chosen = fresh[seededInt(0, fresh.length - 1)];
+  metAtLevel(level).push(chosen);
+  campIndex = chosen;
 }
 
 /** Make the camp waiting for the next round a level 3 one -- what the Strange
@@ -183,30 +207,34 @@ export function rollCreepCamp(): void {
  *  round after the one it was bought for.
  *
  *  Prefers a level 3 camp not met yet, so the meat shows you something new
- *  where it can; falls back to any of them once the pool has been round once. */
+ *  where it can; falls back to any of them once the pool has been round once.
+ *  Reads and records against level 3's own met-list, so buying meat spends a
+ *  slot in that lap exactly as an ordinary level 3 roll would. */
 export function forceLevel3Camp(): boolean {
-  const tileset = 'Lordaeron Summer';
-  const camps = CREEP_CAMPS[tileset];
-  if (camps == null) return false;
   const top: number[] = [];
-  for (let i = 0; i < camps.length; i++) {
-    if (camps[i].level === 3) top.push(i);
+  for (let i = 0; i < CREEP_CAMPS.length; i++) {
+    if (CREEP_CAMPS[i].level === 3) top.push(i);
   }
   if (top.length === 0) return false;
-  let pool = top.filter(i => !encountered.includes(i));
+  const met = metAtLevel(3);
+  let pool = top.filter(i => !met.includes(i));
   if (pool.length === 0) pool = top;
   const chosen = pool[seededInt(0, pool.length - 1)];
-  if (!encountered.includes(chosen)) encountered.push(chosen);
-  campState = { tileset, campIndex: chosen };
+  if (!met.includes(chosen)) met.push(chosen);
+  campIndex = chosen;
   return true;
 }
 
-/** Get the selected camp, or null if none selected. */
+/** Which camp is selected, as an index into CREEP_CAMPS. Exported for the
+ *  rotation test, which needs to tell two camps apart. */
+export function getCampIndex(): number | null {
+  return campIndex;
+}
+
 export function getCampData(): CreepCamp | null {
-  if (campState == null) return null;
-  const camps = CREEP_CAMPS[campState.tileset];
-  if (camps == null || campState.campIndex >= camps.length) return null;
-  return camps[campState.campIndex];
+  if (campIndex == null) return null;
+  if (campIndex < 0 || campIndex >= CREEP_CAMPS.length) return null;
+  return CREEP_CAMPS[campIndex];
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +294,15 @@ export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
     const u = Unit.create(owner, FourCC(creeps[i].id), cx + dx, cy + dy, 270);
     if (u == null) continue;
     u.invulnerable = true;
+    // Strip the abilities the map has repurposed for its own spells. Four
+    // creeps carry RoarNeutralHostile natively, which is our Unsummon Heroes;
+    // its stats are zeroed at compile time so it does nothing for them anyway,
+    // and leaving it on means a selected creep shows an "Unsummon Heroes"
+    // button. The trigger that acts on it also checks the caster, so this is
+    // the second of two locks rather than the only one.
+    for (const abilityId of REPURPOSED_ABILITY_IDS) {
+      UnitRemoveAbility(u.handle, abilityId);
+    }
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_NUMBER_OF_DICE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);

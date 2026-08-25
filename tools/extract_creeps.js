@@ -291,11 +291,19 @@ for (const mapFile of candidateMaps) {
             }
         }
 
+        // Per-creep drops as well as the flat list: creep_camps.ts hangs
+        // itemDrops off the individual creep, and flattening loses which
+        // instance dropped what when a camp holds two of the same unit.
+        const creeps = camp
+            .map(u => ({ id: u.unitId, drops: u.drops }))
+            .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
         allCamps.push({
             map: mapFile,
             tileset: mapTilesets[mapFile] || 'Unknown',
             units: unitTypes,
             names: unitTypes.map(t => UNIT_NAMES[t] || t),
+            creeps,
             drops,
             count: camp.length,
         });

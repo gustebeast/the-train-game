@@ -21,7 +21,6 @@ import { UNKNOWN_UNIT_ID } from './constants';
 const MERC_INVENTORY_ABILITY_ID = FourCC(Abilities.InventoryHero);
 
 /** Must match the tileset used by rollCreepCamp in creeps.ts. */
-const MERC_TILESET = 'Lordaeron Summer';
 
 // ---------------------------------------------------------------------------
 // Persistent state (saved via the 'mm' segment)
@@ -193,8 +192,7 @@ function pickMercController(): MapPlayer | null {
  *  Level tracks the contracts: the first mercenary opens level 2 camps and
  *  draws from them, the second opens level 3 and draws from those too. */
 function mercPool(maxLevel: number): string[] {
-  const camps = CREEP_CAMPS[MERC_TILESET];
-  if (camps == null) return [];
+  const camps = CREEP_CAMPS;
   const seen: Record<string, boolean> = {};
   const pool: string[] = [];
   for (const camp of camps) {
