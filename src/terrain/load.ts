@@ -1,4 +1,5 @@
 import { Grid, GRID_MAX_X } from './constants';
+import { stopPregameMusic } from '../lobbyMusic';
 import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateVictoryLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
@@ -208,7 +209,11 @@ function setMusic(track: MusicTrack | null): void {
   if (track === currentTrack) return;   // already in the requested state
 
   // Our own handles first. StopMusic does not touch them, and whichever way
-  // this call goes none of them should still be playing afterwards.
+  // this call goes none of them should still be playing afterwards. The lobby
+  // track counts as one of ours even though it belongs to a screen this map
+  // never sees again -- it outlives the lobby, so it has to be stopped here
+  // too rather than trusted to have ended.
+  stopPregameMusic();
   for (const key in TRACK_FILES) {
     const h = trackHandles[key as MusicTrack];
     if (h != null) StopSound(h, false, false);

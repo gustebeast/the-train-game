@@ -29,6 +29,24 @@ const PREGAME_MS = 44577;
 
 const PREGAME_FILE = 'war3mapImported\\PregameLobby.wav';
 
+/** The lobby track, kept so it can be stopped. It has to be reachable from
+ *  outside config: the sound does not end when the map loads -- it plays on
+ *  through the loading screen and into the game, underneath whatever the map
+ *  starts next -- and a sound can only be stopped through its own handle. */
+let pregameHandle: sound | null = null;
+
+/** Stop the lobby track. Safe to call at any time and more than once; it does
+ *  nothing once the track has been stopped, and nothing if it never started.
+ *
+ *  Called from setMusic, so the rule that only one of our tracks plays at a
+ *  time covers this one too rather than leaving it as the exception that has
+ *  to be remembered separately. */
+export function stopPregameMusic(): void {
+  if (pregameHandle == null) return;
+  StopSound(pregameHandle, false, false);
+  pregameHandle = null;
+}
+
 addScriptHook(W3TS_HOOK.CONFIG_BEFORE, () => {
   // Silence the client's menu theme. StopMusic alone is not enough -- measured
   // in game, the theme comes back on its own after config returns, and the
@@ -49,6 +67,7 @@ addScriptHook(W3TS_HOOK.CONFIG_BEFORE, () => {
   SetSoundChannel(handle, 0);
   SetSoundVolume(handle, 127);
   StartSound(handle);
+  pregameHandle = handle;
 });
 
 // Give the music channel back the moment the map loads. The mute above is for
@@ -57,5 +76,9 @@ addScriptHook(W3TS_HOOK.CONFIG_BEFORE, () => {
 // path for another. 127 is full volume; the player's own music slider still
 // scales it, so this restores rather than overrides their setting.
 addScriptHook(W3TS_HOOK.MAIN_BEFORE, () => {
+  // The map has loaded, so the lobby is over. Stopping here rather than leaving
+  // it to the first setMusic call means there is no window where the map's own
+  // music and the lobby's can both be playing.
+  stopPregameMusic();
   SetMusicVolume(127);
 });
