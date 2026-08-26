@@ -138,12 +138,26 @@ function parseLua(luaText) {
             currentFunc = null;
         }
         if (currentFunc) {
+            // A drop function is a run of independent sets, each
+            //   RandomDistReset(); RandomDistAddItem(...); RandomDistChoose()
+            // and each dropping ONE item, so two sets means two drops rather
+            // than a choice between them. Both shapes of set appear:
             const dropMatch = line.match(/ChooseRandomItemEx\((ITEM_TYPE_\w+),\s*(\d+)\)/);
             if (dropMatch) {
+                // ...a random item of a class and level, the common case.
                 dropFuncs[currentFunc].push({
                     type: dropMatch[1].replace('ITEM_TYPE_', '').toLowerCase(),
                     level: parseInt(dropMatch[2]),
                 });
+            } else {
+                // ...or a NAMED item. Rarer -- absent from the twelve 1v1 maps
+                // entirely, which is why it went unnoticed until a camp came
+                // back with no drops at all despite dropping a Ring of
+                // Regeneration on its own map.
+                const fixedMatch = line.match(/RandomDistAddItem\(FourCC\("(\w{4})"\)/);
+                if (fixedMatch) {
+                    dropFuncs[currentFunc].push({ item: fixedMatch[1] });
+                }
             }
         }
     }

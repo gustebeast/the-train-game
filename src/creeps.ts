@@ -458,7 +458,11 @@ export function scaleCreepStats(heroes: Unit[]): void {
         awardHeroXP(xpReward);
         if (drops != null) {
           for (const drop of drops) {
-            const itemId = ChooseRandomItemEx(drop.type, drop.level);
+            // A named drop is taken literally; everything else is a class and
+            // a level for the engine to roll.
+            const itemId = drop.id != null
+              ? FourCC(drop.id)
+              : ChooseRandomItemEx(drop.type ?? ITEM_TYPE_PERMANENT, drop.level ?? 1);
             if (itemId !== 0) {
               const dying = GetTriggerUnit()!;
               CreateItem(itemId, GetUnitX(dying), GetUnitY(dying));
