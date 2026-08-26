@@ -1,6 +1,9 @@
 import { W3TS_HOOK, addScriptHook } from 'w3ts/hooks';
 
 import './compiletime';
+// Must be imported for its side effect: it wraps the engine's config(), which
+// runs while the pre-game lobby is open, long before tsMain.
+import './lobbyMusic';
 import { initTeams } from './teams';
 import { initTrackBuildTrigger } from './track/build';
 import { initTrackDestroyTrigger } from './track/destroy';

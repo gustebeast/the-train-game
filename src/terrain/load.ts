@@ -154,6 +154,12 @@ registerReadyZone('revert', 'Resetting purchases', () => {
 // The masters live outside the repo with the other bounces, in
 // Documents/Music/Bounces/TheTrainGame. Re-encode from there rather than from
 // these files -- the difference between one lossy generation and two.
+/** Warcraft's own playlist, named the way war3map.lua's main() names it when
+ *  it calls SetMapMusic("Music", true, 0). Asking for it again is what gives
+ *  ordinary gameplay its default music back after a lobby has taken the
+ *  channel. Keep this in step with that call. */
+const DEFAULT_MUSIC = 'Music';
+
 const TRACK_FILES = {
   startLobby: 'war3mapImported\\StartLobby.wav',
   interRound: 'war3mapImported\\InterRoundLobby.wav',
@@ -190,22 +196,39 @@ const trackHandles: { [K in MusicTrack]?: sound } = {};
  *     and answers to sound effects instead.
  *  3. Only ONE track plays at a time, which is this function's job.
  *
+ * Asking for null does NOT mean silence -- it means "this is not one of our
+ * scenes", and Warcraft's own playlist takes the channel back. That playlist is
+ * the one war3map.lua sets up in main(), so restoring it is a matter of asking
+ * for it again by the same name.
+ *
  * Why sound handles and not PlayMusic: the music channel loops by restarting
  * the file and cannot do it seamlessly. A sound handle loops internally.
  */
 function setMusic(track: MusicTrack | null): void {
   if (track === currentTrack) return;   // already in the requested state
 
-  // Silence the music channel and every track handle, so nothing can stack or
-  // linger. StopMusic does not touch sound handles, hence both.
-  StopMusic(false);
-  ClearMapMusic();
+  // Our own handles first. StopMusic does not touch them, and whichever way
+  // this call goes none of them should still be playing afterwards.
   for (const key in TRACK_FILES) {
     const h = trackHandles[key as MusicTrack];
     if (h != null) StopSound(h, false, false);
   }
   currentTrack = track;
-  if (track == null) return;
+
+  if (track == null) {
+    // Hand the channel back rather than leaving it empty. ClearMapMusic with
+    // nothing to follow is what made ordinary rounds silent: the map's own
+    // playlist was thrown away when the first lobby track started and never
+    // put back, so the engine had nothing to play for the rest of the session.
+    SetMapMusic(DEFAULT_MUSIC, true, 0);
+    ResumeMusic();
+    return;
+  }
+
+  // One of ours is taking over, so silence the engine's playlist. Without this
+  // the two stack: StartSound does not stop what the music channel is doing.
+  StopMusic(false);
+  ClearMapMusic();
 
   let handle = trackHandles[track] ?? null;
   if (handle == null) {
