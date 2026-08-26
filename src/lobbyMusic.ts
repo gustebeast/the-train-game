@@ -30,7 +30,17 @@ const PREGAME_MS = 44577;
 const PREGAME_FILE = 'war3mapImported\\PregameLobby.wav';
 
 addScriptHook(W3TS_HOOK.CONFIG_BEFORE, () => {
-  // The client is playing its own menu theme; without this both play at once.
+  // Silence the client's menu theme. StopMusic alone is not enough -- measured
+  // in game, the theme comes back on its own after config returns, and the
+  // lobby gives a map no second moment to stop it again: no timer runs there,
+  // and config is called once. Taking the music channel's volume to zero holds
+  // however many times the client restarts it.
+  //
+  // Our own track is untouched by that because it plays on channel 0, whose
+  // volume group is not the music one. That is also why this track cannot sit
+  // on channel 7 the way the in-game tracks do: muting the channel it played on
+  // would mute it too.
+  SetMusicVolume(0);
   StopMusic(false);
   // looping = true, is3D = false so it plays at full volume with no listener.
   const handle = CreateSound(PREGAME_FILE, true, false, false, 10, 10, 'DefaultEAXON');
@@ -39,4 +49,13 @@ addScriptHook(W3TS_HOOK.CONFIG_BEFORE, () => {
   SetSoundChannel(handle, 0);
   SetSoundVolume(handle, 127);
   StartSound(handle);
+});
+
+// Give the music channel back the moment the map loads. The mute above is for
+// the lobby only, and leaving it in place would silence the default gameplay
+// music that setMusic(null) hands the channel back to -- trading one silent
+// path for another. 127 is full volume; the player's own music slider still
+// scales it, so this restores rather than overrides their setting.
+addScriptHook(W3TS_HOOK.MAIN_BEFORE, () => {
+  SetMusicVolume(127);
 });
