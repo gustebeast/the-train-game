@@ -14,27 +14,6 @@ import { beginNight, endNight, isNight } from './daynight';
 import { getNeutralPassive } from './teams';
 import { makeDancer } from './dance';
 import { spawnBoss } from './boss';
-import { getHumanPlayers, getWorldBounds } from './util';
-
-/** True once the map has been revealed, so repeat calls are no-ops. */
-let mapRevealed = false;
-
-/** Reveal the whole map to all human players for the rest of the session.
- *  An active VISIBLE fog modifier outrides the masked-fog reset that runs on
- *  every terrain respawn, so the reveal survives round transitions.
- *
- *  Guarded because more than one cheat command calls this and each call used to
- *  create a fresh modifier per player without destroying the last, so typing
- *  -cheatmode (or -rolltest) repeatedly stacked leaked fog modifiers. One
- *  permanent modifier per player is all the reveal needs. */
-function revealWholeMap(): void {
-  if (mapRevealed) return;
-  mapRevealed = true;
-  for (const p of getHumanPlayers()) {
-    const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_VISIBLE, getWorldBounds(), true, false);
-    if (fog != null) FogModifierStart(fog);
-  }
-}
 
 /** Register a chat command (exact match, any player) with its action. */
 function onChatCommand(command: string, action: () => void): void {
@@ -77,15 +56,13 @@ export function initCheat(): void {
     const stonePos = gridToWorld({ x: GRID_MIN_X + 6, y: -3 });
     const stone = Item.create(STONE_ID, stonePos.x, stonePos.y)!;
     stone.charges = 99;
-    revealWholeMap();
   });
 
   // Roll obstacle arena: clears a patch around the camera and drops one of each
   // collision hazard around a fresh peasant so you can roll (E) into each and
   // confirm the roll no longer clips through them. rock=E, tree=N, water=W,
-  // train=S. Reveals the map so the arena is fully visible.
+  // train=S.
   onChatCommand('-rolltest', () => {
-    revealWholeMap();
     const ax = GetCameraTargetPositionX();
     const ay = GetCameraTargetPositionY();
     const r = Rect(ax - 700, ay - 700, ax + 700, ay + 700);
