@@ -80,6 +80,12 @@ function refresh(): void {
   }
 }
 
+/** How many saves the chooser is currently offering. Paging through one save,
+ *  or none, has nothing to page to. */
+export function offeredSaveCount(): number {
+  return offered.length;
+}
+
 /** Enter the chooser: read what is on disk and select the most recent save. */
 export function openChooseSaveLobby(cx: number, cy: number): void {
   originX = cx;

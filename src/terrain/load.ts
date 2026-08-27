@@ -11,6 +11,7 @@ import { makeDancer, startDanceClock } from '../dance';
 import {
   closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,
   selectNewerSave, selectOlderSave,
+  offeredSaveCount,
 } from '../chooseSaveLobby';
 import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
@@ -19,7 +20,7 @@ import { isBossVictory } from '../track/state';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';
 import { getCampData } from '../creeps';
 import { gameState } from '../state';
-import { loadFromSlot, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
+import { loadFromSlot, listSaves, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
   hasHeroes, initRandomHeroes,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
@@ -112,15 +113,21 @@ registerReadyZone('tutorial', 'Starting the tutorial', () => {
   startTutorialBoard();
   showPanel('Tutorial', tutorialBoardLines);
 });
-registerReadyZone('loadsave', 'Opening saved games', () => loadChooseSaveLobby());
+registerReadyZone('loadsave', 'Opening saved games', () => loadChooseSaveLobby(),
+  () => (listSaves().length === 0 ? 'There are no saved games to load.' : null));
 registerReadyZone('saveback', 'Going back', () => {
   closeChooseSaveLobby();
   loadStartLobby();
 });
 // Paging does NOT reload the lobby: only the displayed heroes and the label
 // change, so the circles the player is standing among stay put.
-registerReadyZone('saveprev', 'Showing the newer save', () => selectNewerSave());
-registerReadyZone('savenext', 'Showing the older save', () => selectOlderSave());
+const nothingToPage = (): string | null => {
+  const count = offeredSaveCount();
+  if (count === 0) return 'There are no saved games.';
+  return count === 1 ? 'This is the only saved game.' : null;
+};
+registerReadyZone('saveprev', 'Showing the newer save', () => selectNewerSave(), nothingToPage);
+registerReadyZone('savenext', 'Showing the older save', () => selectOlderSave(), nothingToPage);
 registerReadyZone('saveconfirm', 'Loading the selected save', () => {
   const slot = getSelectedSlot();
   if (slot === 0) {
@@ -133,7 +140,11 @@ registerReadyZone('saveconfirm', 'Loading the selected save', () => {
     loadStartLobby();
     return;
   }
-  loadTerrain(gameState.round);
+  // Into the LOBBY, not into a round. A save is written on the way into the
+  // inter-round lobby, so resuming there puts you exactly where the save was
+  // taken -- shop, roster and all. Dropping straight into gameplay skipped the
+  // half of the round the save was standing in.
+  loadInterRoundLobby();
 });
 registerReadyZone('restart', 'Returning to the start lobby', () => {
   // The run is already marked defeated (loadDefeatLobby did that on the way
