@@ -1,6 +1,6 @@
 import { registerTest, TestReporter } from './testkit';
 import { dpsTestStatus } from './creeps';
-import { loadInterRoundLobby, loadTerrain } from './terrain/load';
+import { loadInterRoundLobby, beginNewRun } from './terrain/load';
 import { purchaseSummonUpgrade, isSummonUpgradePurchased } from './summonUpgrade';
 import { refreshInterRoundLobbyRoster } from './interRoundLobbyRoster';
 import { hasHeroes, getChosenHeroCount } from './heroes';
@@ -12,22 +12,31 @@ function expect(t: TestReporter, key: string, actual: number, want: number): voi
   if (actual !== want) t.fail(key, 'expected ' + I2S(want) + ', got ' + I2S(actual));
 }
 
-/** Watch the inter-round lobby's DPS sparring match, and see what buying
- *  Summon Heroes does to it while it is running.
+/** The DPS test itself, under test.
  *
- *  The match is meant to last DPS_TEST_DURATION (30s) and is what calibrates
- *  creep scaling for the next round, so anything that cuts it short silently
- *  mis-scales the following camp. */
-function runDpsProbe(t: TestReporter): void {
-  // Load a gameplay round first, WITHOUT buying Summon Heroes -- not to play
-  // it, but because loadGameplay is what picks the roster. Jumping straight to
-  // the lobby leaves nobody chosen, and the match then measures the shortcut
-  // rather than the game. The sparring itself happens in the lobby, below.
-  //
-  // The question is whether the roster and the match happen at all when the
-  // upgrade is unbought, or whether they quietly wait on the purchase.
+ *  The game's DPS test is the sparring match the inter-round lobby runs against
+ *  the next camp: heroes and creeps both rigged so neither can die, damage
+ *  measured both ways for 30 seconds, and the result is what scales the next
+ *  round's camp. Nothing about it is visible if it goes wrong -- it just leaves
+ *  measuredHeroDPS at zero and the following camp scaled off a guess.
+ *
+ *  What this holds it to:
+ *
+ *  - starting a run picks four heroes and fields two, before any round is
+ *    loaded and without buying anything;
+ *  - the match then runs, with heroes in it and creeps to hit;
+ *  - buying Summon Heroes changes none of that. The upgrade gates casting the
+ *    spell and showing the roster in the lobby corner, and nothing else.
+ *
+ *  Both halves are asserted rather than reported. Gating startDPSTest on the
+ *  purchase -- the regression this exists to catch -- fails the unbought half
+ *  while the bought half still passes, which is that bug's fingerprint. */
+function runDpsTest(t: TestReporter): void {
+  // Start a run the way the New Game circle does, WITHOUT buying Summon
+  // Heroes. Starting a run is what picks the roster now, so this no longer has
+  // to load a round it does not intend to play just to get one.
   t.report('purchasedAtStart', isSummonUpgradePurchased() ? 1 : 0);
-  loadTerrain(0);
+  beginNewRun();
   expect(t, 'heroesPickedUnbought', hasHeroes() ? 1 : 0, 1);
   expect(t, 'chosenThisRoundUnbought', getChosenHeroCount(), 2);
 
@@ -43,7 +52,6 @@ function runDpsProbe(t: TestReporter): void {
     // nothing else should differ.
     purchaseSummonUpgrade();
     refreshInterRoundLobbyRoster();
-    loadTerrain(1);
     expect(t, 'heroesPickedBought', hasHeroes() ? 1 : 0, 1);
     expect(t, 'chosenThisRoundBought', getChosenHeroCount(), 2);
     loadInterRoundLobby();
@@ -60,4 +68,4 @@ function runDpsProbe(t: TestReporter): void {
   });
 }
 
-registerTest('dpsprobe', runDpsProbe);
+registerTest('dps', runDpsTest);

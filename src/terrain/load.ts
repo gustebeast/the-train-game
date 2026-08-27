@@ -64,6 +64,26 @@ function endTutorial(): void {
   loadStartLobby();
 }
 
+/** Begin a fresh run: wipe the session, then pick the four heroes it will be
+ *  played with.
+ *
+ *  The roster used to be picked lazily by loadGameplay -- "if nobody has been
+ *  chosen yet, choose now" -- which made having a roster a side effect of
+ *  loading a round rather than a property of the run. Anything that reached the
+ *  lobby without loading a round first (the -lobby cheat, a test) found nobody
+ *  chosen and quietly measured that instead. A run has a roster from the moment
+ *  it starts. */
+export function beginNewRun(): void {
+  resetToNewRun();
+  initRandomHeroes();
+}
+
+/** Adopt a run that came off disk. The save carries its own roster, so this
+ *  only covers a save written before there was one to carry. */
+export function ensureRosterForLoadedRun(): void {
+  if (!hasHeroes()) initRandomHeroes();
+}
+
 setVictoryCallback(() => {
   // Reaching the target track finishes the tutorial rather than opening the
   // inter-round lobby: there is no run to continue.
@@ -101,11 +121,11 @@ setAwardVictoryCallback(() => {
 });
 registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round));
 registerReadyZone('newgame', 'Starting a new game', () => {
-  resetToNewRun();
+  beginNewRun();
   loadTerrain(0);
 });
 registerReadyZone('tutorial', 'Starting the tutorial', () => {
-  resetToNewRun();
+  beginNewRun();
   inTutorial = true;
   loadGameplay(generateTutorial());
   // After the load: loadGameplay hides the overlay on its way through, so the
@@ -140,6 +160,7 @@ registerReadyZone('saveconfirm', 'Loading the selected save', () => {
     loadStartLobby();
     return;
   }
+  ensureRosterForLoadedRun();
   // Into the LOBBY, not into a round. A save is written on the way into the
   // inter-round lobby, so resuming there puts you exactly where the save was
   // taken -- shop, roster and all. Dropping straight into gameplay skipped the
@@ -149,7 +170,7 @@ registerReadyZone('saveconfirm', 'Loading the selected save', () => {
 registerReadyZone('restart', 'Returning to the start lobby', () => {
   // The run is already marked defeated (loadDefeatLobby did that on the way
   // in), so this only has to put the session back to how it boots.
-  resetToNewRun();
+  beginNewRun();
   loadStartLobby();
 });
 registerReadyZone('revert', 'Resetting purchases', () => {
@@ -264,7 +285,6 @@ function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   setMusic(null);
   applyChallengeEffects();
   startDayNightForRound();
-  if (!hasHeroes()) initRandomHeroes();
   const spawned = spawnTerrain(grid, skipCleanup);
   // Counters are per round, so a challenge bought now starts from zero rather
   // than inheriting whatever last round left behind. After the spawn, not
@@ -300,7 +320,10 @@ export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRI
   return loadGameplay(generateTerrain(difficulty, exitX, bossRound), skipCleanup);
 }
 
+/** -cheatmode drops straight into gameplay without passing a start lobby, so
+ *  it has to answer for the roster itself. */
 export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
+  ensureRosterForLoadedRun();
   loadGameplay(generateCheatTerrain(exitX, exitY));
 }
 
