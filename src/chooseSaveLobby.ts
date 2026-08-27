@@ -1,6 +1,7 @@
 import { Unit } from 'w3ts';
 import { SaveSlotInfo, listSaves } from './save';
 import { getNeutralPassive } from './teams';
+import { decodeHero, spawnHeroFromData } from './heroes';
 import { TRACK_SIZE } from './track/constants';
 
 // The save chooser's own state: which of the offered saves is selected, and the
@@ -47,22 +48,35 @@ function refresh(): void {
   const info = offered[selected];
   // No text: a save is recognised by the faces in it. The party IS the label,
   // so the heroes and the mercs standing with them are the whole display.
-  const party: number[] = [];
-  for (const typeId of info.heroTypeIds) party.push(typeId);
-  for (const typeId of info.mercTypeIds) party.push(typeId);
-  if (party.length === 0) {
+  const partySize = info.heroRecords.length + info.mercTypeIds.length;
+  if (partySize === 0) {
     setLabel('Empty save');
     return;
   }
   // Display only: neutral passive, invulnerable and paused, so the chooser
   // cannot be played with and nobody wanders off their mark.
-  const startX = originX - ((party.length - 1) * TRACK_SIZE) / 2;
-  for (let i = 0; i < party.length; i++) {
-    const u = Unit.create(getNeutralPassive(), party[i], startX + i * TRACK_SIZE, originY, 270);
-    if (u == null) continue;
+  const startX = originX - ((partySize - 1) * TRACK_SIZE) / 2;
+  const stand = (u: Unit | null | undefined): void => {
+    if (u == null) return;
     u.invulnerable = true;
     PauseUnit(u.handle, true);
     display.push(u);
+  };
+
+  // The heroes go up through the ordinary hero spawner, so the save shows the
+  // party you would actually resume: its levels, skills, items and tomes. Built
+  // from the save's own records rather than the live roster -- looking at a save
+  // must not load it.
+  let slot = 0;
+  for (const record of info.heroRecords) {
+    stand(spawnHeroFromData(decodeHero(record), getNeutralPassive(),
+      startX + slot * TRACK_SIZE, originY));
+    slot += 1;
+  }
+  // Mercenaries are creeps: a type id is the whole of what one is.
+  for (const typeId of info.mercTypeIds) {
+    stand(Unit.create(getNeutralPassive(), typeId, startX + slot * TRACK_SIZE, originY, 270));
+    slot += 1;
   }
 }
 
