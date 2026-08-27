@@ -78,9 +78,9 @@ export interface SaveSlotInfo {
    *  items and tomes -- not just what type they are. Kept as the raw strings so
    *  this module never has to know the shape of a hero. */
   heroRecords: string[];
-  /** Living mercenary unit type ids, likewise. Dead ones are left out -- a
-   *  corpse is not part of the party you would be resuming. */
-  mercTypeIds: number[];
+  /** The living mercenaries and their kit, likewise. Dead ones are left out --
+   *  a corpse is not part of the party you would be resuming. */
+  mercs: SavedMerc[];
 }
 
 /** Short keys for core state encoding. */
@@ -221,8 +221,16 @@ export function revertToInterRoundLobbySnapshot(): boolean {
 
 /** Living mercenary type ids out of the 'mm' segment (see mercenary.ts:
  *  t1/t2 are the types, d1/d2 the death flags). */
-function decodeMercs(raw: string): number[] {
-  const out: number[] = [];
+/** A mercenary as a save describes it: what it is and what it is holding. The
+ *  kit matters because the chooser stands these up through the ordinary
+ *  mercenary spawner, which shows what a save would actually resume. */
+export interface SavedMerc {
+  typeId: number;
+  items: number[];
+}
+
+function decodeMercs(raw: string): SavedMerc[] {
+  const out: SavedMerc[] = [];
   if (raw === '') return out;
   const fields = parseFields(raw);
   for (let i = 1; i <= 2; i++) {
@@ -230,7 +238,12 @@ function decodeMercs(raw: string): number[] {
     const typeId = tonumber(fields['t' + n] ?? '');
     if (typeId == null || typeId === 0) continue;
     if ((fields['d' + n] ?? '0') === '1') continue;
-    out.push(typeId);
+    const items: number[] = [];
+    for (const [idStr] of string.gmatch(fields['i' + n] ?? '', '([^,]+)')) {
+      const id = tonumber(idStr) ?? 0;
+      if (id !== 0) items.push(id);
+    }
+    out.push({ typeId, items });
   }
   return out;
 }
@@ -276,7 +289,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
     FlushGameCache(gc);
     return {
       slot, seq: 0, round: 0, defeated: true,
-      heroTypeIds: [], heroRecords: [], mercTypeIds: [],
+      heroTypeIds: [], heroRecords: [], mercs: [],
     };
   }
   const core = decodeRecord(raw, SHORT_TO_KEY);
@@ -300,7 +313,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
     defeated: stored(KEY_DEFEATED) === DEFEATED_YES,
     heroTypeIds,
     heroRecords,
-    mercTypeIds: decodeMercs(stored('mm')),
+    mercs: decodeMercs(stored('mm')),
   };
   FlushGameCache(gc);
   return writtenThisSession.get(slot) ?? info;
@@ -374,10 +387,10 @@ function writeSlot(slot: number, defeated: boolean): void {
   // itself the way one read back from a file does.
   const heroTypeIds: number[] = [];
   const heroRecords: string[] = [];
-  let mercTypeIds: number[] = [];
+  let mercs: SavedMerc[] = [];
   for (let i = 0; i < extraKeys.length; i++) {
     const encoded = extraEncoders[i]();
-    if (extraKeys[i] === 'mm') { mercTypeIds = decodeMercs(encoded); continue; }
+    if (extraKeys[i] === 'mm') { mercs = decodeMercs(encoded); continue; }
     if (extraKeys[i] !== 'h' + I2S(heroTypeIds.length + 1)!) continue;
     const typeId = tonumber(parseFields(encoded)['t'] ?? '');
     if (typeId != null && typeId !== 0) {
@@ -387,7 +400,7 @@ function writeSlot(slot: number, defeated: boolean): void {
   }
   writtenThisSession.set(slot, {
     slot, seq: highestSeq + 1, round: gameState.round, defeated,
-    heroTypeIds, heroRecords, mercTypeIds,
+    heroTypeIds, heroRecords, mercs,
   });
 }
 
