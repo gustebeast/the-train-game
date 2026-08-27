@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.79/win64" 1787501155 0
+<REAPER_PROJECT 0.1 "7.79/win64" 1787838739 0
   <NOTES 0 2
   >
   RIPPLE 0 0
@@ -33,7 +33,8 @@
   >
   <APPLYFX_CFG
   >
-  RENDER_FILE "C:\Users\gus\Sync\Documents\Games\Warcraft3\TheTrainGame\maps\TheTrainGame.w3x\war3mapImported\Purgatory.wav"
+  RENDER_FILE C:\Users\gus\Sync\Documents\Games\Warcraft3\TheTrainGame\soundtrack
+  RENDER_PATTERN $project
   RENDER_FMT 0 2 44100
   RENDER_1X 0
   RENDER_RANGE 1 0 0 2 2000
@@ -647,7 +648,7 @@
         OSBwaXRjaCAxCjEwIHBpdGNoIDEKMTEgcGl0Y2ggMQoxMiBwaXRjaCAxCn0KcHJlc2V0U3RhY2tJbmZvIHsKfQpDbGVhclRyYWNrc0ZpcnN0ClNvbmdUcmFjayAwIHsK
         TWluaW1pemVkIDAKQ2xlYXJUcmFja0ZpcnN0ClRyYWNrTGVuZ3RoIDgwMApWaXNpYmxlQXJlYSAwIDI1Ny40MjEKWm9vbSA0LjQ1ClRlbXBvIDEyMCAwIDAKVGltZVNp
         ZyA0IDQgMApLZXlTaWduIDAgMSAwIDAgMApUcmFja05hbWUgIlRyYWNrIDEiCk11dGVkQ0NzIApDbGVhclNvbmdQYXJ0cwpHcmlkUmVzIDMyCkxvb3BBcmVhIDAgMApM
-        b29wQWN0aXZlIDAKU3RhcnROdW1iZXIgMQpQbGF5SGVhZFBvcyAxMy4yNTUxCn0KU2V0Q3VycmVudFNvbmdUcmFjayAwCmVkaXRvclZhcnMgewpzZWxlY3RlZFRhYiAx
+        b29wQWN0aXZlIDAKU3RhcnROdW1iZXIgMQpQbGF5SGVhZFBvcyAyMC4wMjQ5Cn0KU2V0Q3VycmVudFNvbmdUcmFjayAwCmVkaXRvclZhcnMgewpzZWxlY3RlZFRhYiAx
         CnNlbGVjdGVkUG9zSXggMApzZWxlY3RlZEFydGljdWxhdGlvbkl4IC0xClBpYW5vUm9sbFZpc2libGUgMApNYWNyb0NvbnRyb2xzVmlzaWJsZSAwCk1peGVyUHJvcHNW
         aXNpYmxlIDEKU29uZ0NyZWF0b3JJc1Zpc2libGUgMApTb25nQ3JlYXRvclNob3dzU29uZ1BhcnRzIDAKTWlkaUVkaXRTbmFwTW9kZSAxCk1pZGlFZGl0U25hcE9uIDEK
         TWlkaUVkaXRTbmFwVmFsdWVUIDAgMApNaWRpRWRpdEF1dG9TY3JvbGwgMQpNaWRpRWRpdFByZXZpZXcgMQpNaWRpRWRpdFJvd1Zpc2liaWxpdHkgMQpNaWRpRWRpdFpv

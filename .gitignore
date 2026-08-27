@@ -92,3 +92,10 @@ typings/
 
 # DynamoDB Local files
 .dynamodb/
+
+# REAPER working files. Both are regenerated on their own and would otherwise
+# show as modified every time a project is opened: peaks are a waveform cache,
+# and Backups is REAPER's rolling auto-save. The projects and their stems are
+# tracked; these are not worth the churn.
+soundtrack/Media/peaks/
+soundtrack/Backups/
