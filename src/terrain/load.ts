@@ -22,7 +22,7 @@ import { getCampData } from '../creeps';
 import { gameState } from '../state';
 import { loadFromSlot, listSaves, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
-  hasHeroes, initRandomHeroes,
+  hasHeroes, initRandomHeroes, chooseHeroes,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
 } from '../heroes';
 import { startDPSTest } from '../creeps';
@@ -289,6 +289,11 @@ function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   // -cheatmode replaces the map mid-round, and leaving the flag set meant the
   // cheat map's camp could never drop a key.
   resetBossKey();
+  // Settle the roster for this round. Derived rather than loaded, so continuing
+  // a run fields whoever the XP rule says instead of whatever pair a save
+  // happened to record -- deriving it here, and not only at victory, is what
+  // lets a save written by an older build heal itself on the way in.
+  chooseHeroes();
   applyChallengeEffects();
   startDayNightForRound();
   const spawned = spawnTerrain(grid, skipCleanup);

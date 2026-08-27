@@ -3,7 +3,7 @@ import { Units } from '@objectdata/units';
 import { isInGameplay } from './state';
 import { registerSaveSegment, parseFields } from './save';
 import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID, UNKNOWN_UNIT_ID } from './constants';
-import { seededValueAt } from './rng';
+import { seededValueAt, deriveSeed } from './rng';
 import { gameState } from './state';
 import { getNeutralPassive } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
@@ -136,25 +136,19 @@ for (let i = 0; i < 4; i++) {
 // Per-round state
 // ---------------------------------------------------------------------------
 
-/** Indices into allHeroes for the 2 chosen this round. Persisted via save segment. */
+/** Indices into allHeroes fielded this round.
+ *
+ *  NOT saved. The roster is derived from (hero XP, round number, run seed), all
+ *  of which are already in the save, so re-deriving on load reproduces the same
+ *  pair without storing it. Persisting it was the bug: a save carried a pair
+ *  that outvoted the XP rule, so a run resumed with whoever the file happened to
+ *  name -- and a file written by a build with the old selection bug pinned the
+ *  same two heroes every round. Derived, a stale pair cannot exist. */
 let chosenIndices: number[] = [0, 1];
-let chosenFromSave = false;
 
-// Persist chosenIndices as "ci" segment: "0,1" format
-registerSaveSegment('ci',
-  () => tostring(chosenIndices[0]) + ',' + tostring(chosenIndices[1]),
-  (raw) => {
-    const [a, b] = string.match(raw, '(%d+),(%d+)');
-    if (a != null && b != null) {
-      chosenIndices = [tonumber(a) ?? 0, tonumber(b) ?? 1];
-      chosenFromSave = true;
-    }
-  },
-  () => {
-    chosenIndices = [0, 1];
-    chosenFromSave = false;
-  },
-);
+/** Sub-seed namespace for the roster draw (challenges use 1, terrain 2). Kept
+ *  well clear of those so a hero tie-break can never share a stream with them. */
+const HERO_PICK_STREAM = 1000;
 
 // ---------------------------------------------------------------------------
 // Hero player control — which players control heroes vs peasants
@@ -283,9 +277,7 @@ export function initRandomHeroes(): void {
     allHeroes[i].typeId = FourCC(available[idx]);
     available.splice(idx, 1);
   }
-  // A save that predates hero initialisation still carries a chosen pair; honour
-  // it once here (this is the one call that legitimately runs during a load).
-  if (chosenFromSave) chosenFromSave = false; else pickLeastRestedHeroes();
+  chooseHeroes();
   if (heroPlayersFromSave) heroPlayersFromSave = false; else pickLeastBusyHeroPlayers();
 }
 
@@ -304,32 +296,40 @@ export function chooseAllHeroes(): void {
   chosenIndices = all;
 }
 
+/** Field the two least-rested heroes for the round the game is on.
+ *
+ *  A pure function of (XP, round, run seed), so it can be called as often as it
+ *  likes and answer the same thing: at victory (the round counter has already
+ *  advanced, so this picks for the round about to be played), again when that
+ *  round loads, and again after a reload of the same save. That is what makes
+ *  the pair repeatable without saving it -- and why a reload cannot re-roll a
+ *  tie in the player's favour.
+ *
+ *  Call it only where the roster is meant to be settled: XP moves while a round
+ *  is played, so re-deriving mid-round would swap the party out from under it. */
 export function chooseHeroes(): void {
-  // Deliberately does NOT honour chosenFromSave. A loaded save's pair belongs to
-  // the round the player is about to play, and nothing re-picks between the load
-  // and that round -- so the next call is always the victory-time pick for the
-  // FOLLOWING round, which must rotate. Consuming the flag here instead froze
-  // the roster: continue a run, play a round, and the same two were re-picked
-  // (and kept levelling) because this returned early.
-  chosenFromSave = false;
-  pickLeastRestedHeroes();
-}
-
-/** Pick the 2 heroes with the lowest XP. If all XP is equal, pick 2 at random. */
-function pickLeastRestedHeroes(): void {
   const indices = [0, 1, 2, 3];
-
-  // Sort by XP ascending
-  indices.sort((a, b) => allHeroes[a].xp - allHeroes[b].xp);
-
-  const allSameXP = allHeroes.every(h => h.xp === allHeroes[0].xp);
-  if (allSameXP) {
-    // Shuffle for random pick
-    shuffle(indices);
+  // Least XP first. Ties -- common early, when nobody has fought yet -- break on
+  // a per-round seeded draw rather than table.sort's arbitrary order, which is
+  // both unstable in Lua and identical every round. Index last so the ordering
+  // is total and can never depend on sort internals.
+  const tie = ROSTER_TIEBREAKS;
+  for (let i = 0; i < 4; i++) {
+    tie[i] = deriveSeed(HERO_PICK_STREAM + gameState.round * 4 + i);
   }
+  indices.sort((a, b) => {
+    const byXp = allHeroes[a].xp - allHeroes[b].xp;
+    if (byXp !== 0) return byXp;
+    const byDraw = tie[a] - tie[b];
+    if (byDraw !== 0) return byDraw;
+    return a - b;
+  });
 
   chosenIndices = [indices[0], indices[1]];
 }
+
+/** Scratch space for the tie-break draws, reused so a pick allocates nothing. */
+const ROSTER_TIEBREAKS: number[] = [0, 0, 0, 0];
 
 /** Award XP to both chosen heroes and sync to units. */
 export function awardHeroXP(xp: number): void {
