@@ -12,13 +12,26 @@ function expect(t: TestReporter, key: string, actual: number, want: number): voi
   if (actual !== want) t.fail(key, 'expected ' + I2S(want) + ', got ' + I2S(actual));
 }
 
-/** Watch the inter-round lobby's DPS sparring match, and see what buying
- *  Summon Heroes does to it while it is running.
+/** The DPS test itself, under test.
  *
- *  The match is meant to last DPS_TEST_DURATION (30s) and is what calibrates
- *  creep scaling for the next round, so anything that cuts it short silently
- *  mis-scales the following camp. */
-function runDpsProbe(t: TestReporter): void {
+ *  The game's DPS test is the sparring match the inter-round lobby runs against
+ *  the next camp: heroes and creeps both rigged so neither can die, damage
+ *  measured both ways for 30 seconds, and the result is what scales the next
+ *  round's camp. Nothing about it is visible if it goes wrong -- it just leaves
+ *  measuredHeroDPS at zero and the following camp scaled off a guess.
+ *
+ *  What this holds it to:
+ *
+ *  - starting a run picks four heroes and fields two, before any round is
+ *    loaded and without buying anything;
+ *  - the match then runs, with heroes in it and creeps to hit;
+ *  - buying Summon Heroes changes none of that. The upgrade gates casting the
+ *    spell and showing the roster in the lobby corner, and nothing else.
+ *
+ *  Both halves are asserted rather than reported. Gating startDPSTest on the
+ *  purchase -- the regression this exists to catch -- fails the unbought half
+ *  while the bought half still passes, which is that bug's fingerprint. */
+function runDpsTest(t: TestReporter): void {
   // Start a run the way the New Game circle does, WITHOUT buying Summon
   // Heroes. Starting a run is what picks the roster now, so this no longer has
   // to load a round it does not intend to play just to get one.
@@ -55,4 +68,4 @@ function runDpsProbe(t: TestReporter): void {
   });
 }
 
-registerTest('dpsprobe', runDpsProbe);
+registerTest('dps', runDpsTest);
