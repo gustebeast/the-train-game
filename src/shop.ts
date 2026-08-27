@@ -50,6 +50,16 @@ const REPEATABLE_STOCK = [
 /** The current shop unit, so purchases can adjust its stock. */
 let currentShop: Unit | null = null;
 
+/** Whether a mercenary contract is worth anything yet.
+ *
+ *  A mercenary only appears alongside a hero summon, so without Summon Heroes
+ *  the contract buys a companion for a fight that never happens. Hidden rather
+ *  than sold-and-useless: the shelf should only ever hold things that do
+ *  something when bought. */
+function mercContractsUseful(): boolean {
+  return isSummonUpgradePurchased();
+}
+
 /** Stock a freshly spawned shop. The shop is a MARKETPLACE-based unit, the
  *  one shop type whose dynamically added stock displays; everything for
  *  sale is added here so availability can depend on game state (one-time
@@ -80,10 +90,12 @@ export function stockShop(shop: Unit): void {
     // shelf: none alive offers the first, one alive offers the second, two
     // alive offers neither. A death drops you a rung and puts that rung's
     // contract back up.
-    if (canBuyMercContract()) {
-      AddItemToStock(shop.handle, MERC_CONTRACT_ID, 1, 1);
-    } else if (canBuySecondContract()) {
-      AddItemToStock(shop.handle, MERC_CONTRACT_2_ID, 1, 1);
+    if (mercContractsUseful()) {
+      if (canBuyMercContract()) {
+        AddItemToStock(shop.handle, MERC_CONTRACT_ID, 1, 1);
+      } else if (canBuySecondContract()) {
+        AddItemToStock(shop.handle, MERC_CONTRACT_2_ID, 1, 1);
+      }
     }
     // Strange Meat is on the shelf only with both mercenaries alive -- which is
     // the same thing as "the second contract is bought and neither has been
@@ -105,6 +117,12 @@ export function stockShop(shop: Unit): void {
  *  can catch up immediately instead of waiting for the next inter-round lobby load. */
 function addRosterToInterRoundLobby(): void {
   refreshInterRoundLobbyRoster();
+  // Summon Heroes is what makes a contract worth buying, so the contract goes
+  // up the moment it is owned rather than waiting for the next lobby.
+  if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0
+      && mercContractsUseful() && canBuyMercContract()) {
+    AddItemToStock(currentShop.handle, MERC_CONTRACT_ID, 1, 1);
+  }
   if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0
       && hasInterRoundLobbyRerollTargets()) {
     AddItemToStock(currentShop.handle, REROLL_ITEM_ID, 10, 10);
@@ -147,11 +165,11 @@ export function initShop(): void {
       RemoveItem(item);
       return;
     }
-    if (itemTypeId === MERC_CONTRACT_ID && !canBuyMercContract()) {
+    if (itemTypeId === MERC_CONTRACT_ID && (!canBuyMercContract() || !mercContractsUseful())) {
       RemoveItem(item);
       return;
     }
-    if (itemTypeId === MERC_CONTRACT_2_ID && !canBuySecondContract()) {
+    if (itemTypeId === MERC_CONTRACT_2_ID && (!canBuySecondContract() || !mercContractsUseful())) {
       RemoveItem(item);
       return;
     }
