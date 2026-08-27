@@ -161,6 +161,19 @@ compiletime(({ objectData, constants }) => {
   peasant.speedMinimum = 1;
   peasant.animationCastPoint = 0;
   peasant.animationCastBackswing = 0;
+  // Daylight sight, a tile shorter than stock. Measured rather than guessed:
+  // the peasant carried 800 by day, which is 6.25 tiles at TRACK_SIZE 128, and
+  // read one tile too far in play.
+  //
+  // ONLY the day value; night keeps whatever it has always had, since only the
+  // day reading was too generous.
+  //
+  // Do not try to tune night by reading UNIT_RF_SIGHT_RADIUS a second or two
+  // after SetTimeOfDay: the engine FADES sight between the two values, so a
+  // reading taken during the fade is a point on the way, not the night figure.
+  // Three runs here gave 667, 757 and 624 for what should have been the same
+  // number, which is what that looks like.
+  peasant.sightRadiusDay = 672;
 
   type ChannelAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { targetType: number; options: number; followThroughTime: number; artDuration: number; baseOrderIDundefined: string };
 
