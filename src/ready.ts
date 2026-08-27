@@ -9,6 +9,12 @@ const REGION_HALF = 128; // 2x2 grid cells = 256 world units, half = 128
 interface ZoneConfig {
   message: string;
   callback: () => void;
+  /** Why this zone cannot do anything right now, or null when it can.
+   *
+   *  Asked the moment everyone is ready, so a circle that would achieve
+   *  nothing -- Load Save with no saves, paging with only one -- says so at
+   *  once instead of counting three down to nothing happening. */
+  blocked?: () => string | null;
 }
 
 interface ActiveZone {
@@ -23,6 +29,9 @@ interface ActiveZone {
   countdownTimer: Timer | null;
   countdownStep: number;
   readyPlayers: Set<number>;
+  /** Set while the zone is standing on a refusal, so stepping a second player
+   *  on does not repeat it. Cleared as soon as anybody steps off. */
+  refused: boolean;
 }
 
 const zoneConfigs = new Map<string, ZoneConfig>();
@@ -36,9 +45,15 @@ function checkAllReady(zone: ActiveZone): void {
   const allReady = activeIds.every(id => zone.readyPlayers.has(id));
 
   if (allReady && zone.countdownTimer == null) {
+    const why = zone.config.blocked != null ? zone.config.blocked() : null;
+    if (why != null) {
+      if (!zone.refused) { print(why); zone.refused = true; }
+      return;
+    }
     startCountdown(zone);
-  } else if (!allReady && zone.countdownTimer != null) {
-    cancelCountdown(zone);
+  } else if (!allReady) {
+    zone.refused = false;
+    if (zone.countdownTimer != null) cancelCountdown(zone);
   }
 }
 
@@ -67,8 +82,10 @@ function cancelCountdown(zone: ActiveZone): void {
 }
 
 /** Register a ready zone type with its countdown message and completion callback. */
-export function registerReadyZone(id: string, message: string, callback: () => void): void {
-  zoneConfigs.set(id, { message, callback });
+export function registerReadyZone(
+  id: string, message: string, callback: () => void, blocked?: () => string | null,
+): void {
+  zoneConfigs.set(id, { message, callback, blocked });
 }
 
 /** Create a ready zone centered at (cx, cy) for the given registered zone id. */
@@ -93,6 +110,7 @@ export function initReadyZone(cx: number, cy: number, id: string, marker: Unit |
     countdownTimer: null,
     countdownStep: 0,
     readyPlayers: new Set(),
+    refused: false,
   };
 
   zone.enterTrigger.registerEnterRegion(region.handle, undefined);
