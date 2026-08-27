@@ -509,6 +509,12 @@ export function endHeroState(): void {
 }
 
 /** Grant the Unsummon Heroes ability to all peasants. Called when all creeps are dead. */
+/** How many heroes are fielded this round. Diagnostics for the tests, which
+ *  need to see that a roster was chosen without spawning anybody. */
+export function getChosenHeroCount(): number {
+  return chosenIndices.length;
+}
+
 export function grantUnsummonToAllPeasants(): void {
   forEachPeasant(u => UnitAddAbility(u, UNSUMMON_ABILITY_ID));
 }
