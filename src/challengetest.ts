@@ -95,16 +95,16 @@ function repeat(move: string, times: number): string {
  *  as a corner. These lines are laid out in map coordinates and measured the
  *  same way the live game measures them. */
 function runTrackShapeTest(t: TestReporter): void {
-  // A dead straight run of 20 moves: 19 interior pieces, all straight, no
-  // corners anywhere.
+  // A dead straight run of 20 moves: 19 interior pieces plus the tip, all
+  // straight, no corners anywhere.
   const straight = computeTrackShapes(line(repeat('E', 20)), 0);
-  expect(t, 'straightRun', straight.straightRun, 19);
+  expect(t, 'straightRun', straight.straightRun, 20);
   expect(t, 'straightHasNoCurves', straight.curved, 0);
 
   // A staircase turns at every single interior piece, so nothing is straight.
   const stairs = computeTrackShapes(line('ENENENENEN'), 0);
   expect(t, 'stairsCurved', stairs.curved, 9);
-  expect(t, 'stairsStraightRun', stairs.straightRun, 0);
+  expect(t, 'stairsStraightRun', stairs.straightRun, 1);
 
   // A serpentine: two rows of four, weaving between them.
   //
@@ -118,11 +118,11 @@ function runTrackShapeTest(t: TestReporter): void {
   // come out as corners and the straight run is zero.
   const serpentine = computeTrackShapes(line('ENESENE'), 0);
   expect(t, 'serpentineCurved', serpentine.curved, 6);
-  expect(t, 'serpentineStraightRun', serpentine.straightRun, 0);
+  expect(t, 'serpentineStraightRun', serpentine.straightRun, 1);
 
   // Both axes must read as straight, not just east-west.
   const northward = computeTrackShapes(line(repeat('N', 6)), 0);
-  expect(t, 'northStraightRun', northward.straightRun, 5);
+  expect(t, 'northStraightRun', northward.straightRun, 6);
 
   // A single corner breaks the run in two: the longest wins, and the corner is
   // counted once. 8 east, turn, 5 north => runs of 7 and 4, one curve.
@@ -133,13 +133,13 @@ function runTrackShapeTest(t: TestReporter): void {
   // The two ENDS have no shape -- one neighbour each -- so a 2-piece line
   // measures nothing at all.
   const tiny = computeTrackShapes(line('E'), 0);
-  expect(t, 'tinyRun', tiny.straightRun, 0);
+  expect(t, 'tinyRun', tiny.straightRun, 1);
 
   // The map's own starting track must not count toward the wager. Same line,
   // measured with the first 10 pieces declared as scenery.
   const withBaseline = computeTrackShapes(line(repeat('E', 20)), 10);
   // 10, not 19: the first ten pieces are the map's, not the players'.
-  expect(t, 'baselineExcludesScenery', withBaseline.straightRun, 10);
+  expect(t, 'baselineExcludesScenery', withBaseline.straightRun, 11);
 
   // The regression this whole rewrite is for: rebuilding cannot inflate the
   // count. A destroyed piece leaves the line shorter, and re-measuring the
@@ -155,9 +155,9 @@ function runTrackShapeTest(t: TestReporter): void {
   // falls a piece short does not.
   gameState.gold = 0;
   armChallenge(CH_STRAIGHT_15);
-  applyTrackShapes(computeTrackShapes(line(repeat('E', 15)), 0)); // 14 interior
+  applyTrackShapes(computeTrackShapes(line(repeat('E', 14)), 0)); // 14 pieces
   expect(t, 'shortLinePaid', gameState.gold, 0);
-  applyTrackShapes(computeTrackShapes(line(repeat('E', 16)), 0)); // 15 interior
+  applyTrackShapes(computeTrackShapes(line(repeat('E', 15)), 0)); // 15 pieces
   expect(t, 'longEnoughLinePaid', gameState.gold, 2);
 
   // Corners pay the curved wager on geometry alone. A staircase turns at every
