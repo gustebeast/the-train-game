@@ -283,6 +283,12 @@ function setMusic(track: MusicTrack | null): void {
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
 function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   setMusic(null);
+  // The Strange Key is a round's prize, not a run's: it is earned and spent
+  // inside one round, so a round starts without one. Here rather than in
+  // loadTerrain because EVERY way of setting a round up has to clear it --
+  // -cheatmode replaces the map mid-round, and leaving the flag set meant the
+  // cheat map's camp could never drop a key.
+  resetBossKey();
   applyChallengeEffects();
   startDayNightForRound();
   const spawned = spawnTerrain(grid, skipCleanup);
@@ -310,9 +316,6 @@ export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRI
   //
   // Keyed on the round as well as the seed, so consecutive rounds differ.
   SetRandomSeed(deriveSeed(TERRAIN_STREAM) + difficulty);
-  // The Strange Key is a round's prize, not a run's: it is earned and spent
-  // inside one round, so a new round starts without one.
-  resetBossKey();
   // A level 3 camp is the only one that can drop the key, so it is also the
   // only round that gets a second exit -- the two arrive together or not at all.
   const camp = getCampData();
