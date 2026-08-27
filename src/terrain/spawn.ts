@@ -1,4 +1,4 @@
-import { Destructable, Item, Unit, MapPlayer } from 'w3ts';
+import { Destructable, Item, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
 
 import {
@@ -76,27 +76,6 @@ export function getBossHeroSpots(): ReadonlyArray<GridPos> { return bossHeroSpot
 export function getBossMercSpots(): ReadonlyArray<GridPos> { return bossMercSpots; }
 export function getBossSpot(): GridPos | null { return bossSpot; }
 
-/** Whole-map reveals handed out by a board that wants one -- currently only the
- *  arena, which has no fog. Held onto so they can be taken away again: a fog
- *  modifier outlives the board that made it, and a forgotten one leaves every
- *  later board fully visible. */
-let revealModifiers: fogmodifier[] = [];
-
-/** Reveal the whole world to these players until the next board is laid down. */
-export function revealWorldFor(players: ReadonlyArray<MapPlayer>): void {
-  for (const p of players) {
-    const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_VISIBLE, getWorldBounds(), true, false);
-    if (fog == null) continue;
-    FogModifierStart(fog);
-    revealModifiers.push(fog);
-  }
-}
-
-function dropWorldReveals(): void {
-  for (const fog of revealModifiers) DestroyFogModifier(fog);
-  revealModifiers = [];
-}
-
 export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
   let engineUnit: Unit | null = null;
   let wagonUnit: Unit | null = null;
@@ -121,11 +100,6 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
     resumeResourceDrops();
     placedTracks.length = 0;
     resetVictoryTriggered();
-
-    // Any reveal the previous board handed out goes with it, BEFORE the mask
-    // below: an active reveal outranks the reset and would leave the new board
-    // fully visible.
-    dropWorldReveals();
 
     // Reset fog of war to unexplored for all human players
     for (const p of humanPlayers) {
