@@ -2,7 +2,10 @@ import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import { mercCampLevel } from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
-import { awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes, grantUnsummonToAllPeasants } from './heroes';
+import {
+  awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes,
+  grantUnsummonToAllPeasants, hasHeroes,
+} from './heroes';
 import {
   SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, FILL_ABILITY_ID, BRIDGE_ABILITY_ID,
   WATER_TRAIN_ABILITY_ID, PEASANT_ID,
@@ -524,10 +527,32 @@ export function cancelDPSTest(): void {
   dpsTestMode = false;
 }
 
+/** What the DPS test is doing right now. Diagnostics only -- nothing in the
+ *  game reads this; it exists so a test can watch the sparring match from the
+ *  outside instead of inferring it. */
+export function dpsTestStatus(): {
+  mode: boolean; creeps: number; heroes: number; timer: boolean; elapsed: number;
+} {
+  return {
+    mode: dpsTestMode,
+    creeps: spawnedCreeps.length,
+    heroes: getSpawnedHeroes().length,
+    timer: dpsTestTimer != null,
+    elapsed: dpsTestTimer != null ? dpsTestTimer.elapsed : 0,
+  };
+}
+
 /** Start DPS test: destroy cage to spawn creeps, spawn heroes, let them fight.
  *  Called after inter-round lobby terrain is spawned. */
 export function startDPSTest(): void {
   if (cageDestructable == null) return;
+  // No roster means spawnHeroes produces nobody, and a match with no heroes is
+  // worse than no match: scaleCreepStats bails on an empty hero list, so the
+  // timer is never created, the creeps are never scaled or made vulnerable, and
+  // dpsTestMode stays true with them standing in the lobby until the next
+  // rebuild. Reachable through -lobby, which jumps here without playing the
+  // round that picks the roster.
+  if (!hasHeroes()) return;
 
   dpsTestMode = true;
   const cageX = cageDestructable.x;
