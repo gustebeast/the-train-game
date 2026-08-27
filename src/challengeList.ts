@@ -177,9 +177,14 @@ const AXIS_TOLERANCE = TRACK_SIZE * 0.25;
  *  actually stands cannot be farmed that way -- and it also cannot drift, which
  *  is the deeper reason to prefer it.
  *
- *  A piece's shape is only defined once it has a neighbour on BOTH sides, so
- *  the two ends of the line are never counted. Everything below `baseline` is
- *  the map's own starting track and is skipped.
+ *  An interior piece's shape comes from its two neighbours. The line's TAIL --
+ *  the piece the train starts from -- has nothing behind it and is never
+ *  counted. The TIP is different: it has no successor yet, but it is already
+ *  drawn straight, because a piece's skin comes from the direction it was
+ *  approached from and only a later piece can bend it into a curve. Leaving it
+ *  out made the tally read one short of the straight track actually on the
+ *  ground. Everything below `baseline` is the map's own starting track and is
+ *  skipped.
  *
  *  Straight means the two neighbours sit on a common axis through the piece --
  *  both due east/west of it, or both due north/south. Anything else is a
@@ -201,6 +206,13 @@ export function computeTrackShapes(points: TrackPoint[], baseline: number): Trac
       curved += 1;
       run = 0; // the run has to be unbroken
     }
+  }
+  // The tip, drawn straight until something follows it. Never curved: no piece
+  // renders as a corner until it has a successor to turn towards.
+  const tip = points.length - 1;
+  if (tip >= 1 && tip >= baseline) {
+    run += 1;
+    if (run > longest) longest = run;
   }
   return { straightRun: longest, curved };
 }
