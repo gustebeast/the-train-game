@@ -1,7 +1,7 @@
 import { Grid, GRID_MAX_X } from './constants';
 import { stopPregameMusic } from '../lobbyMusic';
 import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateVictoryLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
-import { spawnTerrain, SpawnedTrain } from './spawn';
+import { spawnTerrain, revealWorldFor, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { Unit } from 'w3ts';
@@ -388,10 +388,10 @@ export function loadBossBattlefield(): void {
   setMusic(null);
   SetTimeOfDay(12);
   spawnTerrain(generateBossBattlefield());
-  for (const p of getHumanPlayers()) {
-    const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_VISIBLE, getWorldBounds(), true, false);
-    if (fog != null) FogModifierStart(fog);
-  }
+  // The arena has no fog. Handed out through spawn.ts so the next board takes
+  // it back -- left to itself this modifier outlives the arena and every later
+  // board comes up fully visible.
+  revealWorldFor(getHumanPlayers());
 }
 
 export function loadInterRoundLobby(): void {
