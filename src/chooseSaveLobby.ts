@@ -2,6 +2,7 @@ import { Unit } from 'w3ts';
 import { SaveSlotInfo, listSaves } from './save';
 import { getNeutralPassive } from './teams';
 import { decodeHero, spawnHeroFromData } from './heroes';
+import { spawnMercFromData } from './mercenary';
 import { TRACK_SIZE } from './track/constants';
 
 // The save chooser's own state: which of the offered saves is selected, and the
@@ -48,7 +49,7 @@ function refresh(): void {
   const info = offered[selected];
   // No text: a save is recognised by the faces in it. The party IS the label,
   // so the heroes and the mercs standing with them are the whole display.
-  const partySize = info.heroRecords.length + info.mercTypeIds.length;
+  const partySize = info.heroRecords.length + info.mercs.length;
   if (partySize === 0) {
     setLabel('Empty save');
     return;
@@ -73,9 +74,10 @@ function refresh(): void {
       startX + slot * TRACK_SIZE, originY));
     slot += 1;
   }
-  // Mercenaries are creeps: a type id is the whole of what one is.
-  for (const typeId of info.mercTypeIds) {
-    stand(Unit.create(getNeutralPassive(), typeId, startX + slot * TRACK_SIZE, originY, 270));
+  // And the mercenaries through the ordinary mercenary spawner, for the same
+  // reason: a save shows the party you would resume, kit included.
+  for (const merc of info.mercs) {
+    stand(spawnMercFromData(merc, getNeutralPassive(), startX + slot * TRACK_SIZE, originY));
     slot += 1;
   }
 }

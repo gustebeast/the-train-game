@@ -282,14 +282,44 @@ export function buySecondContract(): boolean {
 // Spawn / lifecycle
 // ---------------------------------------------------------------------------
 
+/** What a mercenary IS, for the purpose of standing one up: a creep type and
+ *  whatever it is carrying. */
+export interface MercData {
+  typeId: number;
+  items: ReadonlyArray<number>;
+}
+
+/**
+ * The ONE way a mercenary is put on the map.
+ *
+ * Every place one appears goes through here -- the mid-round spawn, the boss
+ * fight, the inter-round lobby roster and the save chooser -- so all of them
+ * show the same mercenary, carrying the same kit in an inventory it can
+ * actually hold. Without the inventory ability the unit has no slots at all,
+ * and the items it is handed drop on the floor beside it.
+ *
+ * It takes the mercenary's DATA rather than a contract slot, because the save
+ * chooser is displaying a party that is not loaded and must not be: looking at
+ * a save cannot be allowed to overwrite the run you are looking at it from.
+ */
+export function spawnMercFromData(
+  data: MercData, owner: MapPlayer, x: number, y: number,
+): Unit | null {
+  if (data.typeId === 0) return null;
+  const u = Unit.create(owner, data.typeId, x, y, 270);
+  if (u == null) return null;
+  UnitAddAbility(u.handle, MERC_INVENTORY_ABILITY_ID);
+  for (const itemId of data.items) {
+    const it = CreateItem(itemId, u.x, u.y);
+    if (it != null) UnitAddItem(u.handle, it);
+  }
+  return u;
+}
+
 function spawnMercUnit(sl: MercSlot, owner: MapPlayer, x: number, y: number): void {
-  const u = Unit.create(owner, sl.typeId, x, y, 270);
+  const u = spawnMercFromData(sl, owner, x, y);
   if (u == null) return;
   sl.unit = u;
-  UnitAddAbility(u.handle, MERC_INVENTORY_ABILITY_ID);
-  for (const itemId of sl.items) {
-    UnitAddItem(u.handle, CreateItem(itemId, u.x, u.y)!);
-  }
   PanCameraToTimedForPlayer(owner.handle, x, y, 0.5);
 
   // Death empties the slot until its contract is bought again. Snapshot the kit
@@ -398,19 +428,13 @@ export function syncInterRoundLobbyMercs(positions: Array<{ x: number; y: number
     // A mercenary rolled this visit -- hired or rerolled -- stands as a question
     // mark until the round starts.
     const typeId = mercConcealed(i) ? UNKNOWN_UNIT_ID : sl.typeId;
-    const u = Unit.create(getNeutralPassive(), typeId, pos.x, pos.y, 270);
+    // Same routine as the fighting mercenary, so the display carries the kit
+    // the way it will carry it in the round -- in an inventory, not on the
+    // floor. The concealed case shows the question mark instead, holding the
+    // same items, so the lobby still says what a reroll would keep.
+    const u = spawnMercFromData({ typeId, items: sl.items }, getNeutralPassive(), pos.x, pos.y);
     if (u == null) continue;
     u.invulnerable = true;
-    // The same inventory the fighting mercenary is given. Without it the
-    // display unit has no slots at all, so UnitAddItem below has nowhere to put
-    // the kit and drops it on the floor beside them -- which is exactly what a
-    // mercenary carrying a cloak into the lobby did.
-    UnitAddAbility(u.handle, MERC_INVENTORY_ABILITY_ID);
-    // Show the kit, so the inter-round lobby says what a reroll would keep.
-    for (const itemId of sl.items) {
-      const it = CreateItem(itemId, u.x, u.y);
-      if (it != null) UnitAddItem(u.handle, it);
-    }
     lobbyMercs.push({ unit: u, slotIndex: i });
   }
 }
