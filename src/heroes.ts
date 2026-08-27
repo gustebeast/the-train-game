@@ -54,7 +54,7 @@ function forEachPeasant(cb: (u: unit) => void): void {
 // Persistent hero data (4 heroes, saved across rounds)
 // ---------------------------------------------------------------------------
 
-interface HeroData {
+export interface HeroData {
   typeId: number;
   xp: number;
   skills: Record<string, number>;
@@ -94,7 +94,7 @@ function encodeHero(hero: HeroData): string {
 }
 
 /** Decode "t=FourCC;x=XP;ts=1;ta=2;ti=0;it=id1,id2,...;abilId=level;..." into a HeroData. */
-function decodeHero(raw: string): HeroData {
+export function decodeHero(raw: string): HeroData {
   const hero = emptyHero();
   for (const [key, val] of pairs(parseFields(raw))) {
     if (key === 't') {
@@ -423,8 +423,22 @@ function transferPeasantsAndSpawnHeroes(casterX: number, casterY: number): void 
 /** Create one hero unit from allHeroes[dataIdx] with XP, skills and items
  *  applied. Tome stat bonuses land one frame later (hero stats must finalize
  *  first). Shared by round summons and the inter-round lobby hero display. */
-function spawnHeroUnit(dataIdx: number, owner: MapPlayer, x: number, y: number): Unit | null {
-  const data = allHeroes[dataIdx];
+/**
+ * The ONE way a hero is put on the map.
+ *
+ * Everywhere a hero appears goes through here -- the mid-round summon, the DPS
+ * test, the boss fight, the inter-round lobby display and the save chooser --
+ * so all of them show the same hero: its level, its skills, its items and its
+ * tomes. The callers differ only in WHICH heroes they stand up, WHO owns them
+ * and WHERE, which is the whole of the difference between those five cases.
+ *
+ * It takes the hero's DATA rather than an index into the live roster, because
+ * the save chooser is displaying a party that is not loaded and must not be:
+ * picking a save must not overwrite the run you are looking at it from.
+ */
+export function spawnHeroFromData(
+  data: HeroData, owner: MapPlayer, x: number, y: number,
+): Unit | null {
   if (data.typeId === 0) return null;
   const hero = Unit.create(owner, data.typeId, x, y, 270);
   if (hero == null) return null;
@@ -445,6 +459,11 @@ function spawnHeroUnit(dataIdx: number, owner: MapPlayer, x: number, y: number):
     }
   });
   return hero;
+}
+
+/** The same, for a hero in the live roster. */
+function spawnHeroUnit(dataIdx: number, owner: MapPlayer, x: number, y: number): Unit | null {
+  return spawnHeroFromData(allHeroes[dataIdx], owner, x, y);
 }
 
 /** Spawn the 2 chosen heroes. Each owner in the array gets one hero.

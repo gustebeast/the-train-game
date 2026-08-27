@@ -73,6 +73,11 @@ export interface SaveSlotInfo {
   defeated: boolean;
   /** Hero unit type ids, for the chooser to display. */
   heroTypeIds: number[];
+  /** The heroes exactly as stored, one encoded record each. The chooser stands
+   *  them up through the ordinary hero spawner, which needs the level, skills,
+   *  items and tomes -- not just what type they are. Kept as the raw strings so
+   *  this module never has to know the shape of a hero. */
+  heroRecords: string[];
   /** Living mercenary unit type ids, likewise. Dead ones are left out -- a
    *  corpse is not part of the party you would be resuming. */
   mercTypeIds: number[];
@@ -269,17 +274,24 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
   // read -- seq 0 puts it first in line for reuse once slots run short.
   if (!versionMatches(gc)) {
     FlushGameCache(gc);
-    return { slot, seq: 0, round: 0, defeated: true, heroTypeIds: [], mercTypeIds: [] };
+    return {
+      slot, seq: 0, round: 0, defeated: true,
+      heroTypeIds: [], heroRecords: [], mercTypeIds: [],
+    };
   }
   const core = decodeRecord(raw, SHORT_TO_KEY);
   if (core.round == null) { FlushGameCache(gc); return null; }
 
   const heroTypeIds: number[] = [];
+  const heroRecords: string[] = [];
   for (let i = 1; i <= 4; i++) {
     const heroRaw = stored('h' + I2S(i)!);
     if (heroRaw === '') continue;
     const typeId = tonumber(parseFields(heroRaw)['t'] ?? '');
-    if (typeId != null && typeId !== 0) heroTypeIds.push(typeId);
+    if (typeId != null && typeId !== 0) {
+      heroTypeIds.push(typeId);
+      heroRecords.push(heroRaw);
+    }
   }
   const info: SaveSlotInfo = {
     slot,
@@ -287,6 +299,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
     round: core.round,
     defeated: stored(KEY_DEFEATED) === DEFEATED_YES,
     heroTypeIds,
+    heroRecords,
     mercTypeIds: decodeMercs(stored('mm')),
   };
   FlushGameCache(gc);
@@ -360,17 +373,21 @@ function writeSlot(slot: number, defeated: boolean): void {
   // Same picture the disk would give, so a save written this session describes
   // itself the way one read back from a file does.
   const heroTypeIds: number[] = [];
+  const heroRecords: string[] = [];
   let mercTypeIds: number[] = [];
   for (let i = 0; i < extraKeys.length; i++) {
     const encoded = extraEncoders[i]();
     if (extraKeys[i] === 'mm') { mercTypeIds = decodeMercs(encoded); continue; }
     if (extraKeys[i] !== 'h' + I2S(heroTypeIds.length + 1)!) continue;
     const typeId = tonumber(parseFields(encoded)['t'] ?? '');
-    if (typeId != null && typeId !== 0) heroTypeIds.push(typeId);
+    if (typeId != null && typeId !== 0) {
+      heroTypeIds.push(typeId);
+      heroRecords.push(encoded);
+    }
   }
   writtenThisSession.set(slot, {
     slot, seq: highestSeq + 1, round: gameState.round, defeated,
-    heroTypeIds, mercTypeIds,
+    heroTypeIds, heroRecords, mercTypeIds,
   });
 }
 
