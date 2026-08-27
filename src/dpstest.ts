@@ -1,6 +1,6 @@
 import { registerTest, TestReporter } from './testkit';
 import { dpsTestStatus } from './creeps';
-import { loadInterRoundLobby, loadTerrain } from './terrain/load';
+import { loadInterRoundLobby, beginNewRun } from './terrain/load';
 import { purchaseSummonUpgrade, isSummonUpgradePurchased } from './summonUpgrade';
 import { refreshInterRoundLobbyRoster } from './interRoundLobbyRoster';
 import { hasHeroes, getChosenHeroCount } from './heroes';
@@ -19,15 +19,11 @@ function expect(t: TestReporter, key: string, actual: number, want: number): voi
  *  creep scaling for the next round, so anything that cuts it short silently
  *  mis-scales the following camp. */
 function runDpsProbe(t: TestReporter): void {
-  // Load a gameplay round first, WITHOUT buying Summon Heroes -- not to play
-  // it, but because loadGameplay is what picks the roster. Jumping straight to
-  // the lobby leaves nobody chosen, and the match then measures the shortcut
-  // rather than the game. The sparring itself happens in the lobby, below.
-  //
-  // The question is whether the roster and the match happen at all when the
-  // upgrade is unbought, or whether they quietly wait on the purchase.
+  // Start a run the way the New Game circle does, WITHOUT buying Summon
+  // Heroes. Starting a run is what picks the roster now, so this no longer has
+  // to load a round it does not intend to play just to get one.
   t.report('purchasedAtStart', isSummonUpgradePurchased() ? 1 : 0);
-  loadTerrain(0);
+  beginNewRun();
   expect(t, 'heroesPickedUnbought', hasHeroes() ? 1 : 0, 1);
   expect(t, 'chosenThisRoundUnbought', getChosenHeroCount(), 2);
 
@@ -43,7 +39,6 @@ function runDpsProbe(t: TestReporter): void {
     // nothing else should differ.
     purchaseSummonUpgrade();
     refreshInterRoundLobbyRoster();
-    loadTerrain(1);
     expect(t, 'heroesPickedBought', hasHeroes() ? 1 : 0, 1);
     expect(t, 'chosenThisRoundBought', getChosenHeroCount(), 2);
     loadInterRoundLobby();
