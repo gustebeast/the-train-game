@@ -1306,6 +1306,13 @@ compiletime(({ objectData, constants }) => {
     boss.collisionSize = 64;
     boss.manaMaximum = 3000;
     boss.manaInitialAmount = 3000;
+    // Red rather than the stock orange-yellow, so the boss reads as its own
+    // thing next to the lesser infernals it drops -- they keep the stock
+    // colour. Tinting multiplies, so holding red at full and pulling the other
+    // two right down turns the flames deep red without touching the model.
+    boss.tintingColor1Redundefined = 255;
+    boss.tintingColor2Greenundefined = 50;
+    boss.tintingColor3Blueundefined = 50;
     // NOTE: the stock infernal's spell immunity (ACmi) is deliberately NOT
     // carried over. Resistant Skin stays -- it is what makes spells use their
     // shorter HERO durations on the boss -- but spell immunity would make every
