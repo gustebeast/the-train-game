@@ -207,10 +207,14 @@ registerSaveSegment('hp',
 /** Choose which players control heroes this round.
  *  Players with the lowest heroControlCount are selected. */
 export function chooseHeroPlayers(): void {
-  if (heroPlayersFromSave) {
-    heroPlayersFromSave = false;
-    return;
-  }
+  // Same reasoning as chooseHeroes: the loaded assignment covers the round being
+  // resumed, so this victory-time call must always re-pick.
+  heroPlayersFromSave = false;
+  pickLeastBusyHeroPlayers();
+}
+
+/** Choose the player(s) with the lowest heroControlCount. */
+function pickLeastBusyHeroPlayers(): void {
   const humans = getHumanPlayers();
   const numPlayers = humans.length;
   if (numPlayers === 0) return;
@@ -279,8 +283,10 @@ export function initRandomHeroes(): void {
     allHeroes[i].typeId = FourCC(available[idx]);
     available.splice(idx, 1);
   }
-  chooseHeroes();
-  chooseHeroPlayers();
+  // A save that predates hero initialisation still carries a chosen pair; honour
+  // it once here (this is the one call that legitimately runs during a load).
+  if (chosenFromSave) chosenFromSave = false; else pickLeastRestedHeroes();
+  if (heroPlayersFromSave) heroPlayersFromSave = false; else pickLeastBusyHeroPlayers();
 }
 
 /** Choose the 2 heroes with the lowest XP from the 4.
@@ -299,10 +305,18 @@ export function chooseAllHeroes(): void {
 }
 
 export function chooseHeroes(): void {
-  if (chosenFromSave) {
-    chosenFromSave = false;
-    return;
-  }
+  // Deliberately does NOT honour chosenFromSave. A loaded save's pair belongs to
+  // the round the player is about to play, and nothing re-picks between the load
+  // and that round -- so the next call is always the victory-time pick for the
+  // FOLLOWING round, which must rotate. Consuming the flag here instead froze
+  // the roster: continue a run, play a round, and the same two were re-picked
+  // (and kept levelling) because this returned early.
+  chosenFromSave = false;
+  pickLeastRestedHeroes();
+}
+
+/** Pick the 2 heroes with the lowest XP. If all XP is equal, pick 2 at random. */
+function pickLeastRestedHeroes(): void {
   const indices = [0, 1, 2, 3];
 
   // Sort by XP ascending
