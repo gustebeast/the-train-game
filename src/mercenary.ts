@@ -401,6 +401,11 @@ export function syncInterRoundLobbyMercs(positions: Array<{ x: number; y: number
     const u = Unit.create(getNeutralPassive(), typeId, pos.x, pos.y, 270);
     if (u == null) continue;
     u.invulnerable = true;
+    // The same inventory the fighting mercenary is given. Without it the
+    // display unit has no slots at all, so UnitAddItem below has nowhere to put
+    // the kit and drops it on the floor beside them -- which is exactly what a
+    // mercenary carrying a cloak into the lobby did.
+    UnitAddAbility(u.handle, MERC_INVENTORY_ABILITY_ID);
     // Show the kit, so the inter-round lobby says what a reroll would keep.
     for (const itemId of sl.items) {
       const it = CreateItem(itemId, u.x, u.y);
