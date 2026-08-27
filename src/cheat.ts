@@ -6,6 +6,7 @@ import {
 } from './terrain/load';
 import { TRACK_PIECE_ID, WOOD_ID, STONE_ID, PEASANT_ID, WATER_ID, TRAIN_ID } from './constants';
 import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants';
+import { isInGameplay } from './state';
 import { loadFromFile } from './save';
 import { stopGameplay, triggerDefeat } from './train';
 import { applyChallengeEffects, toggleShoulderCam } from './challengeEffects';
@@ -49,6 +50,13 @@ function onChatCommandWithArg(command: string, action: (arg: string) => void): v
 
 export function initCheat(): void {
   onChatCommand('-cheatmode', () => {
+    // Replaces the map you are playing with the cheat map. It is not a way IN
+    // to gameplay: from a lobby there is no round to replace, and loading one
+    // here would skip everything starting a round properly does.
+    if (!isInGameplay()) {
+      print('-cheatmode only works during a round.');
+      return;
+    }
     loadCheatTerrain(GRID_MIN_X + 11);
     const trackPos = gridToWorld({ x: GRID_MIN_X + 4, y: -3 });
     const tracks = Item.create(TRACK_PIECE_ID, trackPos.x, trackPos.y)!;

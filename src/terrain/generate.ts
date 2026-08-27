@@ -968,9 +968,37 @@ export function generateTerrain(difficulty: number, exitX = GRID_MAX_X, withBoss
   return grid;
 }
 
+/** Seed for the cheat map's scatter. Fixed, so -cheatmode is the same map every
+ *  time: a testing map that reshuffles is a testing map you cannot compare runs
+ *  on. */
+const CHEAT_SEED = 20260827;
+
+/** Lay the cheat map's corridor: dead straight east, then a step to the exit
+ *  row if it is off-centre.
+ *
+ *  generatePath wanders on purpose -- that is what makes a real round a puzzle.
+ *  The cheat map is not a puzzle, it is a bench: the line should be trivially
+ *  layable so whatever is actually being tested is the only variable. */
+function layCheatPath(grid: Grid, exitX: number, exitY: number): void {
+  for (let x = GRID_MIN_X; x <= exitX; x++) {
+    grid.path[idx(x, 0)] = true;
+  }
+  const step = exitY > 0 ? 1 : -1;
+  for (let y = 0; y !== exitY; y += step) {
+    grid.path[idx(exitX, y)] = true;
+  }
+  grid.path[idx(exitX, exitY)] = true;
+  grid.exit = { x: exitX, y: exitY };
+}
+
+/** The cheat map: the same clean-and-build every other map goes through, over a
+ *  fixed layout rather than a generated one. placeEntities lays the spawn, the
+ *  train start, the tools, the players and the target crate exactly as a real
+ *  round does, so what is being tested sits in its normal surroundings. */
 export function generateCheatTerrain(exitX = GRID_MAX_X, exitY = 0): Grid {
+  SetRandomSeed(CHEAT_SEED);
   const grid = createGrid();
-  generatePath(grid, exitX, exitY);
+  layCheatPath(grid, exitX, exitY);
   placeEntities(grid);
   placeCreepCamp(grid, GRID_MIN_X + 4, SPAWN.minY - 2);
   placeCritters(grid, isChallengeArmed(CH_CRITTERPOCALYPSE) ? GRID_W * GRID_H : CRITTER_COUNT);
