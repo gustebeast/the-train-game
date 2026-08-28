@@ -2,7 +2,8 @@ import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { isInGameplay } from './state';
 import { registerSaveSegment, parseFields } from './save';
-import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID, UNKNOWN_UNIT_ID } from './constants';
+import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants';
+import { createPlaceholder } from './placeholder';
 import { seededValueAt, deriveSeed } from './rng';
 import { gameState } from './state';
 import { getNeutralPassive } from './teams';
@@ -635,14 +636,7 @@ function createRosterHeroUnit(dataIdx: number, x: number, y: number): Unit | nul
     if (hero != null) hero.invulnerable = true;
     return hero;
   }
-  const placeholder = Unit.create(owner, UNKNOWN_UNIT_ID, x, y, 270);
-  if (placeholder == null) return null;
-  placeholder.invulnerable = true;
-  for (const itemId of allHeroes[dataIdx].items) {
-    const it = CreateItem(itemId, placeholder.x, placeholder.y);
-    if (it != null) UnitAddItem(placeholder.handle, it);
-  }
-  return placeholder;
+  return createPlaceholder(owner, x, y, allHeroes[dataIdx].items);
 }
 
 /** Reroll the inter-round lobby hero represented by unitHandle: swap its slot in

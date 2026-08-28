@@ -6,6 +6,7 @@ import { getNeutralPassive } from './teams';
 import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creep_camps';
 import { UNKNOWN_UNIT_ID } from './constants';
+import { holdPlaceholderPose } from './placeholder';
 
 /** Hero-style inventory (the same ability the peasant carries tools with). It
  *  is BAKED onto every merc-able creep type in object data (see compiletime.ts):
@@ -435,6 +436,7 @@ export function syncInterRoundLobbyMercs(positions: Array<{ x: number; y: number
     const u = spawnMercFromData({ typeId, items: sl.items }, getNeutralPassive(), pos.x, pos.y);
     if (u == null) continue;
     u.invulnerable = true;
+    if (typeId === UNKNOWN_UNIT_ID) holdPlaceholderPose(u);
     lobbyMercs.push({ unit: u, slotIndex: i });
   }
 }
@@ -458,10 +460,11 @@ export function rerollInterRoundLobbyMerc(unitHandle: unit): boolean {
   RemoveUnit(entry.unit.handle);
 
   // Concealed by construction: the type just changed.
-  const replacement = Unit.create(getNeutralPassive(),
-    mercConcealed(entry.slotIndex) ? UNKNOWN_UNIT_ID : slot.typeId, x, y, 270);
+  const replacementType = mercConcealed(entry.slotIndex) ? UNKNOWN_UNIT_ID : slot.typeId;
+  const replacement = Unit.create(getNeutralPassive(), replacementType, x, y, 270);
   if (replacement != null) {
     replacement.invulnerable = true;
+    if (replacementType === UNKNOWN_UNIT_ID) holdPlaceholderPose(replacement);
     for (const itemId of slot.items) {
       const it = CreateItem(itemId, replacement.x, replacement.y);
       if (it != null) UnitAddItem(replacement.handle, it);

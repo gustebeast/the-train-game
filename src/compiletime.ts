@@ -1224,6 +1224,13 @@ compiletime(({ objectData, constants }) => {
   // the whole reason the lobby displays these units at all. Everything else the
   // peasant can do (build, harvest, repair) would be nonsense on a question mark.
   unknown.normal = constants.abilities.InventoryHero;
+  // Ten times its authored size. The mark is minuscule as shipped -- it is a
+  // cinematic prop, sized for a close camera in a scene.
+  //
+  // Flagged rather than asserted: in VM testing NOTHING rendered at this scale,
+  // while scale 1 rendered for a second or two before the one-shot animation
+  // ended. If that holds in a real game this wants turning DOWN, not up.
+  unknown.scalingValueundefined = 10;
   unknown.speedBase = 0;
   unknown.attacksEnabled = '0';
   unknown.unitsTrained = '';
