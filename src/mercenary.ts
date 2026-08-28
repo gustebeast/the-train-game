@@ -358,6 +358,33 @@ export function spawnMercWithHeroes(x: number, y: number, heroOwnerIds: number[]
   }
 }
 
+/** The mercenary units standing right now. Empty when none are fielded.
+ *
+ *  Exists for the DPS test, which fields the roster itself rather than through
+ *  the summon path, and so has to ask who else is on the field. */
+export function getSpawnedMercUnits(): Unit[] {
+  const live: Unit[] = [];
+  for (const sl of slots) {
+    if (sl.unit != null && GetUnitTypeId(sl.unit.handle) !== 0) live.push(sl.unit);
+  }
+  return live;
+}
+
+/** Take the mercenaries off the field, keeping their kit.
+ *
+ *  releaseMercUnit snapshots and forgets them but leaves the units standing,
+ *  because the callers it was written for (the unsummon sweep, the round reset)
+ *  remove the units themselves straight afterwards. The DPS test has no such
+ *  sweep -- its combatants belong to a non-human player nothing else touches --
+ *  so it needs the units gone as well. */
+export function removeSpawnedMercUnits(): void {
+  const live = getSpawnedMercUnits();
+  releaseMercUnit();   // snapshots kit first, then drops the references
+  for (const u of live) {
+    if (GetUnitTypeId(u.handle) !== 0) RemoveUnit(u.handle);
+  }
+}
+
 /** Snapshot every mercenary's kit and drop the live-unit references. Called
  *  before the unsummon sweep / round reset removes the units themselves. */
 export function releaseMercUnit(): void {

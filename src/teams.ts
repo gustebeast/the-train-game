@@ -61,9 +61,12 @@ export function initTeams() {
   if (dpsCheckPlayer) {
     SetPlayerTeam(dpsCheckPlayer.handle, 0);
     SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
+    // Allied but WITHOUT vision, for everyone. The first human used to be given
+    // vision of the sparring match as a special case, which meant one player
+    // watched the lobby's corner light up while the others saw nothing, and it
+    // was not a choice anybody made. -viewdps hands it to whoever asks instead.
     for (const p of humanPlayers) {
-      const vision = p === humanPlayers[0];
-      setAllianceBoth(dpsCheckPlayer, p, vision ? bj_ALLIANCE_ALLIED_VISION : bj_ALLIANCE_ALLIED);
+      setAllianceBoth(dpsCheckPlayer, p, bj_ALLIANCE_ALLIED);
     }
     // DPS check heroes must be enemies with neutral aggressive
     SetPlayerAlliance(dpsCheckPlayer.handle, enemy!.handle, ALLIANCE_PASSIVE, false);
@@ -113,6 +116,22 @@ export function getNeutralAggressive(): MapPlayer {
 
 export function getTrainPlayer(): MapPlayer {
   return MapPlayer.fromIndex(TRAIN_PLAYER_INDEX)!;
+}
+
+/** Who has asked to watch the sparring match, by player id. */
+const dpsVision: boolean[] = [];
+
+/** Show or hide the DPS test for one player. Returns the new state.
+ *
+ *  One-way on purpose: the check player shares its vision with the watcher,
+ *  and nothing is shared back. Per player, so one person looking does not put
+ *  the lobby corner on everybody's screen. */
+export function toggleDPSVision(who: player): boolean {
+  const id = GetPlayerId(who);
+  const on = !(dpsVision[id] ?? false);
+  dpsVision[id] = on;
+  SetPlayerAlliance(getDPSCheckPlayer().handle, who, ALLIANCE_SHARED_VISION, on);
+  return on;
 }
 
 export function getDPSCheckPlayer(): MapPlayer {
