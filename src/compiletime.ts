@@ -1223,18 +1223,19 @@ compiletime(({ objectData, constants }) => {
   const unknown = objectData.units.copy(constants.units.Peasant, UNKNOWN_UNIT_RAWCODE)!;
   unknown.name = 'Unknown';
   unknown.description = 'Rolled, but not yet revealed. You will meet them when the round starts.';
-  unknown.modelFile = 'Doodads\Cinematic\QuestionMark\QuestionMark.mdl';
+  // The World Editor's "Question Mark" model preset, read out of a map saved by
+  // the editor rather than guessed. The guessed path (a Doodads\Cinematic one)
+  // does not exist, and an invalid model path renders NOTHING -- which looks
+  // identical to a dozen more interesting explanations and cost a long hunt.
+  //
+  // Double backslashes matter: '\R' is not an escape sequence, so a single
+  // backslash silently collapses the path to ObjectsRandomObjectRandomObject
+  // and puts you straight back to rendering nothing.
+  unknown.modelFile = 'Objects\\RandomObject\\RandomObject.mdl';
   // Only the inventory: it still has to show the kit it is holding, which is
   // the whole reason the lobby displays these units at all. Everything else the
   // peasant can do (build, harvest, repair) would be nonsense on a question mark.
   unknown.normal = constants.abilities.InventoryHero;
-  // Ten times its authored size. The mark is minuscule as shipped -- it is a
-  // cinematic prop, sized for a close camera in a scene.
-  //
-  // Flagged rather than asserted: in VM testing NOTHING rendered at this scale,
-  // while scale 1 rendered for a second or two before the one-shot animation
-  // ended. If that holds in a real game this wants turning DOWN, not up.
-  unknown.scalingValueundefined = 10;
   unknown.speedBase = 0;
   unknown.attacksEnabled = '0';
   unknown.unitsTrained = '';
