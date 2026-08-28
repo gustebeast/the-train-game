@@ -1,5 +1,8 @@
 import { registerTest, TestReporter } from './testkit';
-import { dpsTestStatus, forceLevel3Camp, getCampData } from './creeps';
+import { dpsTestStatus, forceLevel3Camp, getCampData, restartDPSTest } from './creeps';
+import { buyMercContract, hasActiveMerc } from './mercenary';
+import { getDPSCheckPlayer, toggleDPSVision } from './teams';
+import { getHumanPlayers } from './util';
 import { loadInterRoundLobby, beginNewRun } from './terrain/load';
 import { purchaseSummonUpgrade, isSummonUpgradePurchased } from './summonUpgrade';
 import { refreshInterRoundLobbyRoster } from './interRoundLobbyRoster';
@@ -159,3 +162,76 @@ function runDpsRevertTest(t: TestReporter): void {
 }
 
 registerTest('dpsrevert', runDpsRevertTest);
+
+
+/** Mercenaries fight beside the heroes in a real round, so the match has to
+ *  include them -- a measurement of heroes alone understates the force the camp
+ *  will meet and scales the next camp too easily.
+ *
+ *  Also covers the restart's cleanup: re-running must field the mercenary
+ *  again, not leave the old one standing and add a second. */
+function runDpsMercTest(t: TestReporter): void {
+  beginNewRun();
+  expect(t, 'mercHired', buyMercContract() && hasActiveMerc() ? 1 : 0, 1);
+  loadInterRoundLobby();
+
+  t.after(4, () => {
+    const a = dpsTestStatus();
+    t.report('heroesInMatch', a.heroes);
+    t.report('mercsInMatch', a.mercs);
+    expect(t, 'matchRunning', a.timer ? 1 : 0, 1);
+    expect(t, 'mercFieldedWithHeroes', a.mercs, 1);
+
+    // Restarting must re-field the same one, not accumulate.
+    restartDPSTest();
+    t.after(2, () => {
+      const b = dpsTestStatus();
+      t.report('heroesAfterRestart', b.heroes);
+      t.report('mercsAfterRestart', b.mercs);
+      expect(t, 'mercNotDuplicated', b.mercs, 1);
+      expect(t, 'heroesNotDuplicated', b.heroes, a.heroes);
+      expect(t, 'matchRunningAfterRestart', b.timer ? 1 : 0, 1);
+      t.done();
+    });
+  });
+}
+
+registerTest('dpsmercs', runDpsMercTest);
+
+
+/** The sparring match is fought out of sight, for everybody.
+ *
+ *  It used to be visible to the first human as a special case -- one player
+ *  watched the corner light up while the others saw nothing, which was not a
+ *  decision anyone made. -viewdps hands vision to whoever asks, and only them. */
+function runDpsVisionTest(t: TestReporter): void {
+  const dps = getDPSCheckPlayer();
+  const humans = getHumanPlayers();
+  t.report('humanPlayers', humans.length);
+
+  let seeingByDefault = 0;
+  for (const p of humans) {
+    if (GetPlayerAlliance(dps.handle, p.handle, ALLIANCE_SHARED_VISION)) seeingByDefault += 1;
+  }
+  expect(t, 'nobodySeesByDefault', seeingByDefault, 0);
+
+  // What -viewdps does for the player who typed it.
+  const me = humans[0];
+  expect(t, 'toggleOn', toggleDPSVision(me.handle) ? 1 : 0, 1);
+  expect(t, 'watcherSees',
+    GetPlayerAlliance(dps.handle, me.handle, ALLIANCE_SHARED_VISION) ? 1 : 0, 1);
+
+  let othersSeeing = 0;
+  for (const p of humans) {
+    if (p.handle === me.handle) continue;
+    if (GetPlayerAlliance(dps.handle, p.handle, ALLIANCE_SHARED_VISION)) othersSeeing += 1;
+  }
+  expect(t, 'othersStillBlind', othersSeeing, 0);
+
+  expect(t, 'toggleOff', toggleDPSVision(me.handle) ? 1 : 0, 0);
+  expect(t, 'watcherBlindAgain',
+    GetPlayerAlliance(dps.handle, me.handle, ALLIANCE_SHARED_VISION) ? 1 : 0, 0);
+  t.done();
+}
+
+registerTest('dpsvision', runDpsVisionTest);

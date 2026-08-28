@@ -15,7 +15,7 @@ import {
 } from './challenges';
 import { applyTrackShapes } from './challengeList';
 import { beginNight, endNight, isNight } from './daynight';
-import { getNeutralPassive } from './teams';
+import { getNeutralPassive, toggleDPSVision } from './teams';
 import { makeDancer } from './dance';
 import { spawnBoss } from './boss';
 
@@ -198,6 +198,18 @@ export function initCheat(): void {
     const boss = spawnBoss(GetCameraTargetPositionX(), GetCameraTargetPositionY());
     if (boss == null) { print('boss: could not spawn'); return; }
     print('Boss spawned: ' + I2S(R2I(boss.maxLife))! + ' HP, ' + I2S(R2I(boss.maxMana))! + ' mana.');
+  });
+
+  // Watch the inter-round lobby's DPS sparring match, which is otherwise
+  // fought out of sight. Per player and toggleable, so one person looking does
+  // not reveal the corner for everyone.
+  onChatCommand('-viewdps', () => {
+    const who = GetTriggerPlayer();
+    if (who == null) return;
+    const on = toggleDPSVision(who);
+    DisplayTimedTextToPlayer(who, 0, 0, 8, on
+      ? 'DPS test vision ON. -viewdps again to hide it.'
+      : 'DPS test vision OFF.');
   });
 
   // Drive the defeat path without having to actually run the train out of

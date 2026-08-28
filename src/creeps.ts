@@ -1,6 +1,8 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
-import { mercCampLevel } from './mercenary';
+import {
+  mercCampLevel, spawnMercWithHeroes, getSpawnedMercUnits, removeSpawnedMercUnits,
+} from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
 import {
   awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes,
@@ -373,16 +375,16 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
   if (dpsTestMode) {
     const DPS_TEST_HP = 99999;
     dpsTestCreepStartHP = DPS_TEST_HP;
-    for (const h of heroes) {
+    // Mercenaries too: one that dies mid-match stops dealing damage and stops
+    // taking it, quietly biasing both numbers.
+    for (const h of dpsCombatants()) {
       BlzSetUnitMaxHP(h.handle, DPS_TEST_HP);
       SetUnitState(h.handle, UNIT_STATE_LIFE, DPS_TEST_HP);
     }
     dpsTestTimer = Timer.create();
     dpsTestTimer.start(DPS_TEST_DURATION, false, () => {
       cancelDPSTest();
-      for (const h of getSpawnedHeroes()) {
-        h.destroy();
-      }
+      clearSpawnedHeroUnits();
     });
     // Factors are unused in test mode — scaleCreepStats splits
     // dpsTestCreepStartHP evenly and leaves creep damage at defaults.
@@ -520,7 +522,7 @@ function teardownDPSTest(record: boolean): void {
       measuredHeroDPS = totalDamageToCreeps / elapsed;
 
       let totalDamageToHeroes = 0;
-      for (const h of getSpawnedHeroes()) {
+      for (const h of dpsCombatants()) {
         const maxHP = BlzGetUnitMaxHP(h.handle);
         const currentHP = GetUnitState(h.handle, UNIT_STATE_LIFE);
         totalDamageToHeroes += maxHP - currentHP;
@@ -535,6 +537,7 @@ function teardownDPSTest(record: boolean): void {
       c.unit.destroy();
     }
     spawnedCreeps = [];
+    removeSpawnedMercUnits();
   }
   dpsTestMode = false;
 }
@@ -543,12 +546,13 @@ function teardownDPSTest(record: boolean): void {
  *  game reads this; it exists so a test can watch the sparring match from the
  *  outside instead of inferring it. */
 export function dpsTestStatus(): {
-  mode: boolean; creeps: number; heroes: number; timer: boolean; elapsed: number;
-  campIndex: number;
+  mode: boolean; creeps: number; heroes: number; mercs: number; timer: boolean;
+  elapsed: number; campIndex: number;
 } {
   return {
     mode: dpsTestMode,
     campIndex: campIndex ?? -1,
+    mercs: getSpawnedMercUnits().length,
     creeps: spawnedCreeps.length,
     heroes: getSpawnedHeroes().length,
     timer: dpsTestTimer != null,
@@ -583,7 +587,20 @@ export function startDPSTest(): void {
  *  scaleCreepStats is where the timer is created. */
 function fieldDPSHeroes(cx: number, cy: number): void {
   // To the left of the 6x3 area.
-  spawnHeroes([getDPSCheckPlayer()], cx - 4 * TRACK_SIZE, cy);
+  const heroX = cx - 4 * TRACK_SIZE;
+  spawnHeroes([getDPSCheckPlayer()], heroX, cy);
+  // Mercenaries fight alongside the heroes in a real round, so a measurement
+  // taken without them understates the force the camp will actually face and
+  // scales the next camp too easily. Owned by the check player like the heroes,
+  // so the same teardown reaches them.
+  spawnMercWithHeroes(heroX, cy - 96, [getDPSCheckPlayer().id]);
+}
+
+/** Everyone fighting on our side of the sparring match. */
+function dpsCombatants(): Unit[] {
+  const all = getSpawnedHeroes();
+  for (const m of getSpawnedMercUnits()) all.push(m);
+  return all;
 }
 
 /** Throw the current match away and run it again against the camp as it now
@@ -604,6 +621,7 @@ export function restartDPSTest(): void {
   measuredHeroDPS = 0;
   measuredCreepDPS = 0;
   clearSpawnedHeroUnits();
+  removeSpawnedMercUnits();
 
   const camp = getCampData();
   if (origin == null || camp == null || !hasHeroes()) return;
