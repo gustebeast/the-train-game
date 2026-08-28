@@ -5,7 +5,7 @@ import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
 import { gameState, isInGameplay, setInGameplay, registerSyncCallback, syncState } from './state';
 // import { deleteSave } from './save';
-import { setStorageItem } from './items';
+import { setStorageItem, storageSlot } from './items';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 
 import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
@@ -229,10 +229,13 @@ export function syncTrainStats(): void {
 
   // In inter-round lobby, display items at max stack to illustrate capacity
   if (!isInGameplay()) {
-    setStorageItem(train, WOOD_ID, gameState.trainCargoMaxStack, 1);
-    setStorageItem(train, STONE_ID, gameState.trainCargoMaxStack, 2);
+    setStorageItem(train, WOOD_ID, gameState.trainCargoMaxStack,
+      storageSlot(train, WOOD_ID));
+    setStorageItem(train, STONE_ID, gameState.trainCargoMaxStack,
+      storageSlot(train, STONE_ID));
     if (trackWagon != null) {
-      setStorageItem(trackWagon, TRACK_PIECE_ID, gameState.trainTrackMaxStack, 0);
+      setStorageItem(trackWagon, TRACK_PIECE_ID, gameState.trainTrackMaxStack,
+        storageSlot(trackWagon, TRACK_PIECE_ID));
     }
   }
 }

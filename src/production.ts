@@ -3,6 +3,7 @@ import {
   findItemByType,
   getMaxStack,
   setStorageItem,
+  storageSlot,
   setTrainInventoryCallback,
 } from './items';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
@@ -62,7 +63,8 @@ function onManaFull(): void {
 
   // Create or add to the track wagon's track stack in slot 0
   const tracks = findItemByType(trackWagon, TRACK_PIECE_ID);
-  setStorageItem(trackWagon, TRACK_PIECE_ID, (tracks?.charges ?? 0) + 1, 0);
+  setStorageItem(trackWagon, TRACK_PIECE_ID, (tracks?.charges ?? 0) + 1,
+    storageSlot(trackWagon, TRACK_PIECE_ID));
 
   // Reset mana
   train.mana = 0;

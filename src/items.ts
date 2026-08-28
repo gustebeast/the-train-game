@@ -68,9 +68,12 @@ export function setStorageItem(target: Unit, itemTypeId: number, charges: number
 /** Populate the start crate from saved counts and reset them. Called at round start. */
 export function loadCrateForRound(): void {
   if (crateStart == null) return;
-  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateTrackCount, 0);
-  setStorageItem(crateStart, WOOD_ID, gameState.crateWoodCount, 1);
-  setStorageItem(crateStart, STONE_ID, gameState.crateStoneCount, 2);
+  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateTrackCount,
+    storageSlot(crateStart, TRACK_PIECE_ID));
+  setStorageItem(crateStart, WOOD_ID, gameState.crateWoodCount,
+    storageSlot(crateStart, WOOD_ID));
+  setStorageItem(crateStart, STONE_ID, gameState.crateStoneCount,
+    storageSlot(crateStart, STONE_ID));
   gameState.crateTrackCount = 0;
   gameState.crateWoodCount = 0;
   gameState.crateStoneCount = 0;
@@ -79,9 +82,12 @@ export function loadCrateForRound(): void {
 /** Populate the start crate with max stack to show capacity. Called in inter-round lobby. */
 export function loadCrateForInterRoundLobby(): void {
   if (crateStart == null) return;
-  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateMaxStack, 0);
-  setStorageItem(crateStart, WOOD_ID, gameState.crateMaxStack, 1);
-  setStorageItem(crateStart, STONE_ID, gameState.crateMaxStack, 2);
+  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateMaxStack,
+    storageSlot(crateStart, TRACK_PIECE_ID));
+  setStorageItem(crateStart, WOOD_ID, gameState.crateMaxStack,
+    storageSlot(crateStart, WOOD_ID));
+  setStorageItem(crateStart, STONE_ID, gameState.crateMaxStack,
+    storageSlot(crateStart, STONE_ID));
 }
 
 function isCrate(u: Unit): boolean {
@@ -108,11 +114,27 @@ export function updateBuildAbility(u: Unit): void {
   }
 }
 
-/** Fixed inventory slot for each resource type on storage units (0-indexed). */
-function storageSlot(itemTypeId: number): number {
-  if (itemTypeId === TRACK_PIECE_ID) return 0;
-  if (itemTypeId === WOOD_ID) return 1;
-  if (itemTypeId === STONE_ID) return 2;
+/**
+ * Where each resource sits on a storage unit, 0-indexed.
+ *
+ * Per CARRIER, not one layout for all of them: the order is simply the order
+ * that carrier's resources are listed in, so nothing reserves a slot for
+ * something the carrier cannot hold. The engine took wood and stone at 1 and 2
+ * -- reading as the second and third slots -- because slot 0 was being kept for
+ * track pieces it is not allowed to carry.
+ */
+function storageOrder(carrier: Unit): number[] {
+  if (isTrain(carrier)) return [WOOD_ID, STONE_ID];
+  if (isTrackWagon(carrier)) return [TRACK_PIECE_ID];
+  // The crate takes all three, and keeps tracks first.
+  return [TRACK_PIECE_ID, WOOD_ID, STONE_ID];
+}
+
+export function storageSlot(carrier: Unit, itemTypeId: number): number {
+  const order = storageOrder(carrier);
+  for (let i = 0; i < order.length; i++) {
+    if (order[i] === itemTypeId) return i;
+  }
   return 0;
 }
 
@@ -330,7 +352,7 @@ export function giveToStorage(giver: Unit, giverItem: Item, storage: Unit): bool
     if (newItem != null) {
       newItem.charges = toGive;
       UnitAddItem(storage.handle, newItem.handle);
-      UnitDropItemSlot(storage.handle, newItem.handle, storageSlot(itemType));
+      UnitDropItemSlot(storage.handle, newItem.handle, storageSlot(storage, itemType));
     }
   }
 
@@ -514,7 +536,7 @@ export function initItems(): void {
       }
     } else if (isStorage(unit) && pickedIsResource) {
       // Move to the correct fixed slot for this resource type
-      UnitDropItemSlot(unit.handle, picked.handle, storageSlot(pickedType));
+      UnitDropItemSlot(unit.handle, picked.handle, storageSlot(unit, pickedType));
     }
 
     // Update train production when the engine's or track wagon's inventory changes
