@@ -4,7 +4,7 @@ import { mercCampLevel } from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
 import {
   awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes,
-  grantUnsummonToAllPeasants, hasHeroes,
+  grantUnsummonToAllPeasants, hasHeroes, clearSpawnedHeroUnits,
 } from './heroes';
 import {
   SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, FILL_ABILITY_ID, BRIDGE_ABILITY_ID,
@@ -225,6 +225,10 @@ export function forceLevel3Camp(): boolean {
   const chosen = pool[seededInt(0, pool.length - 1)];
   if (!met.includes(chosen)) met.push(chosen);
   campIndex = chosen;
+  // The lobby is very likely measuring the camp this just replaced, so the
+  // measurement has to follow the camp. Here rather than at the call site, so a
+  // future way of changing the camp cannot forget to.
+  restartDPSTest();
   return true;
 }
 
@@ -494,11 +498,19 @@ export function scaleCreepStats(heroes: Unit[]): void {
 /** End the DPS test: measure damage, compute DPS, clean up all state.
  *  Safe to call at any point — handles the case where the timer hasn't started yet. */
 export function cancelDPSTest(): void {
+  teardownDPSTest(true);
+}
+
+/** Tear the match down. `record` says whether its numbers are worth keeping.
+ *
+ *  They are not, if the match was measuring a camp that is no longer the camp
+ *  you will face -- see restartDPSTest. */
+function teardownDPSTest(record: boolean): void {
   if (dpsTestTimer != null) {
     const elapsed = dpsTestTimer.elapsed;
     dpsTestTimer.destroy();
     dpsTestTimer = null;
-    if (elapsed > 0) {
+    if (record && elapsed > 0) {
       let totalDamageToCreeps = 0;
       for (const c of spawnedCreeps) {
         const maxHP = BlzGetUnitMaxHP(c.unit.handle);
@@ -532,9 +544,11 @@ export function cancelDPSTest(): void {
  *  outside instead of inferring it. */
 export function dpsTestStatus(): {
   mode: boolean; creeps: number; heroes: number; timer: boolean; elapsed: number;
+  campIndex: number;
 } {
   return {
     mode: dpsTestMode,
+    campIndex: campIndex ?? -1,
     creeps: spawnedCreeps.length,
     heroes: getSpawnedHeroes().length,
     timer: dpsTestTimer != null,
@@ -561,10 +575,41 @@ export function startDPSTest(): void {
   // Destroy cage → triggers creep spawn via registerCageTrigger
   cageDestructable.kill();
 
-  // Spawn heroes owned by DPS check player to the left of the 6x3 area
-  // spawnHeroes fires onHeroesSpawnedCallback after 1 frame → scaleCreepStats
-  const heroX = cageX - 4 * TRACK_SIZE;
-  spawnHeroes([getDPSCheckPlayer()], heroX, cageY);
+  fieldDPSHeroes(cageX, cageY);
+}
+
+/** Put the roster in against whatever creeps are standing, which is what
+ *  starts the clock: spawnHeroes fires onHeroesSpawned a frame later, and
+ *  scaleCreepStats is where the timer is created. */
+function fieldDPSHeroes(cx: number, cy: number): void {
+  // To the left of the 6x3 area.
+  spawnHeroes([getDPSCheckPlayer()], cx - 4 * TRACK_SIZE, cy);
+}
+
+/** Throw the current match away and run it again against the camp as it now
+ *  stands.
+ *
+ *  The match is a measurement OF A SPECIFIC CAMP -- it fights that camp's
+ *  creeps and scales the next round from the result. Anything that changes
+ *  which camp you will face therefore invalidates a match already in progress,
+ *  and one that has already finished: its numbers describe creeps you are no
+ *  longer going to meet.
+ *
+ *  The previous numbers are cleared rather than left standing, so a restart
+ *  that cannot proceed falls back to the estimate instead of scaling the new
+ *  camp by the old camp's measurement. */
+export function restartDPSTest(): void {
+  const origin = campOrigin;
+  teardownDPSTest(false);   // discard: they measured the camp you just replaced
+  measuredHeroDPS = 0;
+  measuredCreepDPS = 0;
+  clearSpawnedHeroUnits();
+
+  const camp = getCampData();
+  if (origin == null || camp == null || !hasHeroes()) return;
+  dpsTestMode = true;
+  spawnCreepsAt(origin.x, origin.y, camp);
+  fieldDPSHeroes(origin.x, origin.y);
 }
 
 // ---------------------------------------------------------------------------

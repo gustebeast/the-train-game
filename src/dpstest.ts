@@ -1,9 +1,10 @@
 import { registerTest, TestReporter } from './testkit';
-import { dpsTestStatus } from './creeps';
+import { dpsTestStatus, forceLevel3Camp, getCampData } from './creeps';
 import { loadInterRoundLobby, beginNewRun } from './terrain/load';
 import { purchaseSummonUpgrade, isSummonUpgradePurchased } from './summonUpgrade';
 import { refreshInterRoundLobbyRoster } from './interRoundLobbyRoster';
-import { hasHeroes, getChosenHeroCount } from './heroes';
+import { hasHeroes, getChosenHeroCount, revertHeroesToInterRoundLobbySnapshot } from './heroes';
+import { revertToInterRoundLobbySnapshot } from './save';
 
 /** Record a measurement AND hold it to an expected value, so a number nobody
  *  checks cannot drift. */
@@ -69,3 +70,92 @@ function runDpsTest(t: TestReporter): void {
 }
 
 registerTest('dps', runDpsTest);
+
+/** The match measures A SPECIFIC CAMP, so anything that changes which camp you
+ *  will face has to restart it.
+ *
+ *  Buying the Strange Meat swaps the next camp for a level 3 one. The lobby is
+ *  already sparring against the camp it replaced, and those numbers scale the
+ *  round you actually play -- so left alone, the meat calibrated you against
+ *  creeps you were never going to meet. */
+function runDpsCampSwapTest(t: TestReporter): void {
+  beginNewRun();
+  loadInterRoundLobby();
+
+  t.after(4, () => {
+    const before = dpsTestStatus();
+    t.report('campBefore', before.campIndex);
+    t.report('elapsedBefore', R2I(before.elapsed));
+    expect(t, 'matchRunningBefore', before.timer ? 1 : 0, 1);
+    if (before.elapsed < 1) t.fail('elapsedBefore', 'match had not started measuring');
+
+    // What buying the meat does.
+    const forced = forceLevel3Camp();
+    expect(t, 'meatChangedCamp', forced ? 1 : 0, 1);
+
+    t.after(2, () => {
+      const after = dpsTestStatus();
+      t.report('campAfter', after.campIndex);
+      const camp = getCampData();
+      t.report('campLevelAfter', camp != null ? camp.level : 0);
+      expect(t, 'campLevelAfter_is3', camp != null ? camp.level : 0, 3);
+
+      // The match must be running again, against the NEW camp, from zero --
+      // not still carrying the replaced camp's clock.
+      expect(t, 'matchRunningAfter', after.timer ? 1 : 0, 1);
+      expect(t, 'creepsMatchNewCamp', after.creeps, camp != null ? camp.creeps.length : -1);
+      if (after.elapsed >= before.elapsed) {
+        t.fail('clockRestarted',
+          'clock did not restart: ' + I2S(R2I(before.elapsed)) + 's -> ' + I2S(R2I(after.elapsed)) + 's');
+      }
+      t.report('elapsedAfter', R2I(after.elapsed));
+      t.done();
+    });
+  });
+}
+
+registerTest('dpscampswap', runDpsCampSwapTest);
+
+/** Reset Purchases, taken in the middle of a match.
+ *
+ *  It rewinds the lobby to the snapshot taken on entry -- including the camp,
+ *  if the Strange Meat had changed it -- and rebuilds the lobby. The rebuild is
+ *  what has to leave a match running against whatever camp the rewind restored,
+ *  rather than a half-finished one measuring the camp that was just undone. */
+function runDpsRevertTest(t: TestReporter): void {
+  beginNewRun();
+  loadInterRoundLobby();
+
+  t.after(4, () => {
+    const entry = dpsTestStatus();
+    t.report('campOnEntry', entry.campIndex);
+    expect(t, 'matchRunningOnEntry', entry.timer ? 1 : 0, 1);
+
+    // Change the camp mid-match, exactly as buying the meat does...
+    forceLevel3Camp();
+    const swapped = dpsTestStatus();
+    t.report('campAfterMeat', swapped.campIndex);
+
+    // ...then take Reset Purchases, which is meant to undo it.
+    revertToInterRoundLobbySnapshot();
+    revertHeroesToInterRoundLobbySnapshot();
+    loadInterRoundLobby();
+
+    t.after(4, () => {
+      const after = dpsTestStatus();
+      const camp = getCampData();
+      t.report('campAfterRevert', after.campIndex);
+      expect(t, 'matchRunningAfterRevert', after.timer ? 1 : 0, 1);
+      expect(t, 'creepsAfterRevert', after.creeps, camp != null ? camp.creeps.length : -1);
+      // A fresh lobby means a fresh clock, not the one that was interrupted.
+      if (after.elapsed > 4) {
+        t.fail('freshClockAfterRevert',
+          'clock carried over: ' + I2S(R2I(after.elapsed)) + 's');
+      }
+      t.report('elapsedAfterRevert', R2I(after.elapsed));
+      t.done();
+    });
+  });
+}
+
+registerTest('dpsrevert', runDpsRevertTest);
