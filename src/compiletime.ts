@@ -566,6 +566,10 @@ compiletime(({ objectData, constants }) => {
   // the only camp that can drop the Strange Key.
   const strangeMeat = objectData.items.get(constants.items.BloodfeathersHeart)!;
   strangeMeat.name = 'Strange Meat';
+  // The BASIC tooltip is what the shop button and command card show, and
+  // without it the item kept advertising the stock name it was built from --
+  // "Bloodfeather's Heart" -- while calling itself Strange Meat everywhere else.
+  strangeMeat.tooltipBasic = strangeMeat.name;
   strangeMeat.description = 'Something out there wants this badly enough to bring friends.';
   strangeMeat.tooltipExtended = 'Guarantees the next camp will be level 3.';
   strangeMeat.goldCost = 1;

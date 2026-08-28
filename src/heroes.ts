@@ -500,6 +500,20 @@ export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
 // End hero state — restore peasant control, remove heroes
 // ---------------------------------------------------------------------------
 
+/** Remove the units spawned by the last spawnHeroes() and forget them.
+ *
+ *  endHeroState cannot do this job: it only sweeps units owned by HUMAN
+ *  players, and the DPS test's heroes belong to the hidden check player. It
+ *  also clears the list, which the DPS timer's own teardown never did -- it
+ *  destroyed the units and left their entries behind, so a second spawn would
+ *  have appended to a list still holding dead handles. */
+export function clearSpawnedHeroUnits(): void {
+  for (const s of spawnedHeroes) {
+    if (GetUnitTypeId(s.unit.handle) !== 0) RemoveUnit(s.unit.handle);
+  }
+  spawnedHeroes = [];
+}
+
 /** End hero summoning: snapshot items, remove heroes and their summons,
  *  restore peasant ownership, remove unsummon ability from all peasants. */
 export function endHeroState(): void {
