@@ -260,6 +260,21 @@ function decodeMercs(raw: string): SavedMerc[] {
  *  remembered here and laid over what the disk says. */
 const writtenThisSession = new Map<number, SaveSlotInfo>();
 
+/**
+ * Everything written to each slot this session, key to value.
+ *
+ * The preload file on disk is not readable again from inside the same session:
+ * WC3 will not re-execute a Preloader file it has already run, so the game
+ * cache keeps whatever it was filled with the FIRST time the slot was read.
+ * Load a save, play two rounds, save, and reading that slot back hands you the
+ * run as it was when you loaded it -- the rounds are on disk, and the session
+ * cannot see them.
+ *
+ * So what is written is kept here as well, and preferred on read. Disk is for
+ * the next session; this is for this one.
+ */
+const sessionData = new Map<number, Map<string, string>>();
+
 /** Whether an already-opened slot cache holds the save format this build
  *  speaks. An unstamped save predates versioning entirely, and tonumber('')
  *  is nil rather than 0, so it fails this the same way a wrong number does. */
@@ -371,17 +386,25 @@ function writeSlot(slot: number, defeated: boolean): void {
   for (const info of listSaves(true)) {
     if (info.seq > highestSeq) highestSeq = info.seq;
   }
+  // Every value goes two places: into the file for the next session, and into
+  // sessionData for this one.
+  const record = new Map<string, string>();
+  const put = (key: string, value: string): void => {
+    record.set(key, value);
+    preloadStore(cacheFile, key, value);
+  };
   PreloadGenClear();
   PreloadGenStart();
-  preloadStore(cacheFile, 'core', encodeRecord(gameState as unknown as Record<string, number>, KEY_TO_SHORT));
+  put('core', encodeRecord(gameState as unknown as Record<string, number>, KEY_TO_SHORT));
   for (let i = 0; i < extraKeys.length; i++) {
     const encoded = extraEncoders[i]();
-    if (encoded !== '') preloadStore(cacheFile, extraKeys[i], encoded);
+    if (encoded !== '') put(extraKeys[i], encoded);
   }
-  preloadStore(cacheFile, KEY_VERSION, I2S(SAVE_VERSION)!);
-  preloadStore(cacheFile, KEY_SEQ, I2S(highestSeq + 1)!);
-  if (defeated) preloadStore(cacheFile, KEY_DEFEATED, DEFEATED_YES);
+  put(KEY_VERSION, I2S(SAVE_VERSION)!);
+  put(KEY_SEQ, I2S(highestSeq + 1)!);
+  if (defeated) put(KEY_DEFEATED, DEFEATED_YES);
   PreloadGenEnd(slotSaveFile(slot));
+  sessionData.set(slot, record);
 
   // Same picture the disk would give, so a save written this session describes
   // itself the way one read back from a file does.
@@ -454,6 +477,26 @@ export function loadFromFile(): boolean {
 
 /** Load gameState + extra segments from a slot's file. Returns true if successful. */
 function readSlotInto(slot: number): boolean {
+  // What this session wrote wins over what the game cache holds. The cache
+  // cannot be refreshed from disk mid-session -- see sessionData -- so for a
+  // slot saved since the map loaded, the file's contents are unreachable and
+  // the cache is stale by exactly the rounds that were played.
+  const session = sessionData.get(slot);
+  if (session != null) {
+    const rawSession = session.get('core') ?? '';
+    if (rawSession === '') return false;
+    const loadedSession = decodeRecord(rawSession, SHORT_TO_KEY);
+    if (loadedSession.round == null) return false;
+    const sessionSegments: string[] = [];
+    for (let i = 0; i < extraKeys.length; i++) {
+      sessionSegments.push(session.get(extraKeys[i]) ?? '');
+    }
+    applyStateBundle({
+      core: loadedSession as unknown as GameState, segments: sessionSegments,
+    });
+    return true;
+  }
+
   Preloader(slotSaveFile(slot));
   const gc = InitGameCache(slotCacheFile(slot));
   if (gc == null) return false;
