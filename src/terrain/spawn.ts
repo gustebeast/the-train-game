@@ -327,7 +327,13 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
 
         case Entity.CRITTER: {
           const critterType = CRITTER_TYPE_IDS[GetRandomInt(0, CRITTER_TYPE_IDS.length - 1)];
-          Unit.create(getNeutralPassive(), critterType, world.x, world.y, GetRandomReal(0, 360));
+          // Neutral EXTRA, not neutral passive. Players share vision with
+          // neutral passive so their own rail line and crates are visible, and
+          // critters owned there each became a permanent eye -- a round opened
+          // with wildlife-shaped patches of the map already uncovered instead of
+          // black. Neutral extra is allied without vision, which is what
+          // scenery wants.
+          Unit.create(getNeutralExtra(), critterType, world.x, world.y, GetRandomReal(0, 360));
           break;
         }
 
