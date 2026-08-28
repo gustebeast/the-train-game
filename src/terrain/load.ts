@@ -412,8 +412,9 @@ export function loadChooseSaveLobby(): void {
   setMusic('startLobby');
   SetTimeOfDay(12);
   spawnTerrain(generateChooseSaveLobby());
-  // Heroes stand in the middle of the floor, north of the circles.
-  openChooseSaveLobby(0, TRACK_SIZE);
+  // The party stands at the back, clear of the dancers: the guests now line up
+  // one tile north of centre, which is where this row used to be.
+  openChooseSaveLobby(0, 3 * TRACK_SIZE);
 }
 
 /** Load the boss battlefield: the arena floor and its lava surround, and

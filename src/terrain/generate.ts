@@ -757,15 +757,27 @@ function generateEmptyLobby(): Grid {
   return grid;
 }
 
-/** Move players 2-4 to the back row, where they stand as dancers. Used by the
- *  lobbies only the host acts in. */
-function parkTheGuests(grid: Grid): void {
+/**
+ * Stand everyone where the host lobbies want them: player 1 dead centre with
+ * the guests in a row directly behind, where they dance (see dance.ts).
+ *
+ *     .  4  3  2  .      <- guests, one tile north
+ *     .  .  1  .  .      <- the host, at the centre of the floor
+ *
+ * They keep a spawn rather than losing one: the point is that they have
+ * something to do while the host decides, not that they are absent.
+ *
+ * Every player spawn the lobby came with is cleared first, so this is the whole
+ * arrangement rather than an edit on top of one.
+ */
+function arrangeLobbyPlayers(grid: Grid): void {
   for (const cell of grid.cells) {
-    if (cell.entity >= Entity.PLAYER_2 && cell.entity <= Entity.PLAYER_4) cell.entity = Entity.NONE;
+    if (cell.entity >= Entity.PLAYER_1 && cell.entity <= Entity.PLAYER_4) cell.entity = Entity.NONE;
   }
-  grid.cells[idx(-2, 3)].entity = Entity.PLAYER_2;
-  grid.cells[idx(0, 3)].entity = Entity.PLAYER_3;
-  grid.cells[idx(2, 3)].entity = Entity.PLAYER_4;
+  grid.cells[idx(0, 0)].entity = Entity.PLAYER_1;
+  grid.cells[idx(1, 1)].entity = Entity.PLAYER_2;
+  grid.cells[idx(0, 1)].entity = Entity.PLAYER_3;
+  grid.cells[idx(-1, 1)].entity = Entity.PLAYER_4;
 }
 
 /**
@@ -802,10 +814,7 @@ export function generateDefeatLobby(): Grid {
  *  the three lobbies cannot drift apart in floor or boundary. */
 export function generateStartLobby(): Grid {
   const grid = generateEmptyLobby();
-  // Players 2-4 move to the back row and stay there as dancers (see dance.ts).
-  // They keep a spawn rather than losing one: the point is that they have
-  // something to do while the host decides, not that they are absent.
-  parkTheGuests(grid);
+  arrangeLobbyPlayers(grid);
   grid.cells[idx(-2, -3)].entity = Entity.TUTORIAL_CIRCLE;
   grid.cells[idx(0, -3)].entity = Entity.NEW_GAME_CIRCLE;
   grid.cells[idx(2, -3)].entity = Entity.LOAD_CIRCLE;
@@ -864,7 +873,7 @@ export function generateChooseSaveLobby(): Grid {
   // Built from the empty shell, not from the start lobby: a lobby places what
   // it wants rather than inheriting another's furniture and unpicking it.
   const grid = generateEmptyLobby();
-  parkTheGuests(grid);
+  arrangeLobbyPlayers(grid);
   // Older on the left, newer on the right, so paging right walks forward in
   // time the way a timeline reads.
   grid.cells[idx(-3, -3)].entity = Entity.BACK_CIRCLE;
