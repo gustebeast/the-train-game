@@ -253,7 +253,7 @@ export function initShop(): void {
       if (secondBuyer != null) effectTargets = [secondBuyer];
     } else if (itemTypeId === STRANGE_MEAT_ID) {
       if (forceLevel3Camp()) {
-        print('The meat is out. Something big is coming for it -- a level 3 camp waits on the next stretch of line.');
+        print('The meat is out. Something big is coming for it -- a level 3 camp awaits.');
       } else {
         print('Nothing came for the meat.');
       }
