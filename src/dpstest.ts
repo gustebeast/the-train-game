@@ -1,5 +1,10 @@
 import { registerTest, TestReporter } from './testkit';
-import { dpsTestStatus, forceLevel3Camp, getCampData, restartDPSTest } from './creeps';
+import {
+  dpsTestStatus, forceLevel3Camp, getCampData, restartDPSTest, measureFieldedForce,
+} from './creeps';
+import { spawnHeroes } from './heroes';
+import { spawnMercWithHeroes } from './mercenary';
+import { Players } from 'w3ts/globals';
 import { buyMercContract, hasActiveMerc } from './mercenary';
 import { getDPSCheckPlayer, toggleDPSVision } from './teams';
 import { getHumanPlayers } from './util';
@@ -235,3 +240,46 @@ function runDpsVisionTest(t: TestReporter): void {
 }
 
 registerTest('dpsvision', runDpsVisionTest);
+
+
+/** How much a mercenary moves the difficulty scaling.
+ *
+ *  Camp HP is pegged to the force's effective HP, and camp damage to its DPS.
+ *  Counting the mercenary raises both, so camps get tougher for anyone who owns
+ *  one -- this puts a number on "how much" rather than letting a balance change
+ *  land unmeasured.
+ *
+ *  Fields the force directly rather than through a summon, and outside the
+ *  lobby match, because that match rigs every combatant to 99999 HP and would
+ *  measure the rig instead of the units. */
+function runForceScaleTest(t: TestReporter): void {
+  beginNewRun();
+  expect(t, 'mercHired', buyMercContract() && hasActiveMerc() ? 1 : 0, 1);
+
+  const x = 0;
+  const y = 0;
+  spawnHeroes([Players[0]], x, y);
+  spawnMercWithHeroes(x, y - 96, [Players[0].id]);
+
+  // One frame, so hero tome bonuses have landed before anything is read.
+  t.after(1, () => {
+    const f = measureFieldedForce();
+    t.report('heroes', f.heroes);
+    t.report('mercs', f.mercs);
+    t.report('heroEHP', R2I(f.heroEHP));
+    t.report('mercEHP', R2I(f.mercEHP));
+    t.report('heroDPS', R2I(f.heroDPS));
+    t.report('mercDPS', R2I(f.mercDPS));
+    if (f.heroEHP > 0) {
+      // 100 = no change; 150 = camps get half again as much HP.
+      t.report('campHPPercentOfBefore', R2I((f.heroEHP + f.mercEHP) / f.heroEHP * 100));
+    }
+    if (f.heroDPS > 0) {
+      t.report('campDamagePercentOfBefore', R2I((f.heroDPS + f.mercDPS) / f.heroDPS * 100));
+    }
+    if (f.mercs === 0) t.fail('mercs', 'no mercenary fielded, nothing measured');
+    t.done();
+  });
+}
+
+registerTest('forcescale', runForceScaleTest);

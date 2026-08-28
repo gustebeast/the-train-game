@@ -377,7 +377,7 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
     dpsTestCreepStartHP = DPS_TEST_HP;
     // Mercenaries too: one that dies mid-match stops dealing damage and stops
     // taking it, quietly biasing both numbers.
-    for (const h of dpsCombatants()) {
+    for (const h of fieldedForce()) {
       BlzSetUnitMaxHP(h.handle, DPS_TEST_HP);
       SetUnitState(h.handle, UNIT_STATE_LIFE, DPS_TEST_HP);
     }
@@ -391,19 +391,53 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
     return { dpsScale: 1, ehpScale: 1 };
   }
 
-  let heroEHP = 0;
-  for (const h of heroes) {
-    heroEHP += getEffectiveHP(h.handle);
+  // Heroes AND mercenaries, on both axes. The measured DPS already covered the
+  // whole force -- it is taken from damage the creeps took, whoever dealt it --
+  // but EHP had no measured counterpart and was summed from the heroes alone,
+  // so a camp's HP was pegged to a force smaller than the one it would meet.
+  // That made every camp easier the better your mercenary was, on every round
+  // rather than only before the first measurement.
+  const force = fieldedForce();
+  let forceEHP = 0;
+  for (const h of force) {
+    forceEHP += getEffectiveHP(h.handle);
   }
-  let heroDPS = measuredHeroDPS;
-  if (heroDPS <= 0) {
-    for (const h of heroes) heroDPS += getDPS(h.handle);
+  let forceDPS = measuredHeroDPS;
+  if (forceDPS <= 0) {
+    for (const h of force) forceDPS += getDPS(h.handle);
   }
   const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
   const dpsAdvantage = isChallengeArmed(CH_TOUGH_CAMP) ? TOUGH_CAMP_DPS_ADVANTAGE : CREEP_DPS_ADVANTAGE;
   return {
-    dpsScale: effectiveCreepDPS > 0 ? (heroDPS * dpsAdvantage) / effectiveCreepDPS : 1,
-    ehpScale: creepEHP > 0 ? heroEHP / creepEHP : 1,
+    dpsScale: effectiveCreepDPS > 0 ? (forceDPS * dpsAdvantage) / effectiveCreepDPS : 1,
+    ehpScale: creepEHP > 0 ? forceEHP / creepEHP : 1,
+  };
+}
+
+/** The force's health and damage, split by kind. Diagnostics only: it exists so
+ *  a test can put a number on how much a mercenary changes the scaling, rather
+ *  than the change landing unmeasured. */
+export function measureFieldedForce(): {
+  heroes: number; mercs: number; heroEHP: number; mercEHP: number;
+  heroDPS: number; mercDPS: number;
+} {
+  let heroEHP = 0;
+  let heroDPS = 0;
+  const heroes = getSpawnedHeroes();
+  for (const h of heroes) {
+    heroEHP += getEffectiveHP(h.handle);
+    heroDPS += getDPS(h.handle);
+  }
+  let mercEHP = 0;
+  let mercDPS = 0;
+  const mercs = getSpawnedMercUnits();
+  for (const m of mercs) {
+    mercEHP += getEffectiveHP(m.handle);
+    mercDPS += getDPS(m.handle);
+  }
+  return {
+    heroes: heroes.length, mercs: mercs.length,
+    heroEHP, mercEHP, heroDPS, mercDPS,
   };
 }
 
@@ -522,7 +556,7 @@ function teardownDPSTest(record: boolean): void {
       measuredHeroDPS = totalDamageToCreeps / elapsed;
 
       let totalDamageToHeroes = 0;
-      for (const h of dpsCombatants()) {
+      for (const h of fieldedForce()) {
         const maxHP = BlzGetUnitMaxHP(h.handle);
         const currentHP = GetUnitState(h.handle, UNIT_STATE_LIFE);
         totalDamageToHeroes += maxHP - currentHP;
@@ -596,8 +630,12 @@ function fieldDPSHeroes(cx: number, cy: number): void {
   spawnMercWithHeroes(heroX, cy - 96, [getDPSCheckPlayer().id]);
 }
 
-/** Everyone fighting on our side of the sparring match. */
-function dpsCombatants(): Unit[] {
+/** Everyone fighting on our side: the summoned heroes and any mercenaries.
+ *
+ *  Difficulty scaling makes no distinction between them. A mercenary has health
+ *  and damage exactly as a hero does, and the camp has to get through all of it,
+ *  so counting only the heroes understated the force on both axes. */
+function fieldedForce(): Unit[] {
   const all = getSpawnedHeroes();
   for (const m of getSpawnedMercUnits()) all.push(m);
   return all;
