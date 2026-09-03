@@ -1,6 +1,7 @@
 import { registerTest, TestReporter } from './testkit';
 import {
   dpsTestStatus, forceLevel3Camp, getCampData, restartDPSTest, measureFieldedForce,
+  cancelDPSTest, checkPlayerUnitCount,
 } from './creeps';
 import { spawnHeroes } from './heroes';
 import { spawnMercWithHeroes } from './mercenary';
@@ -303,3 +304,38 @@ function runForceScaleTest(t: TestReporter): void {
 }
 
 registerTest('forcescale', runForceScaleTest);
+
+
+/** Nothing the match brought onto the field may outlive it.
+ *
+ *  Heroes and mercenaries were being removed by name, from the lists that
+ *  spawned them. Whatever they SUMMONED was not on any list, so a Far Seer's
+ *  wolves stayed behind -- and a restart, which is what rerolling does, began
+ *  the next match with the previous one's wolves still fighting in it. Sweeping
+ *  by owner is what closes that, so this counts units by owner too rather than
+ *  trusting the same lists that missed them.
+ *
+ *  Ends the match early rather than waiting out the full 30 seconds; the
+ *  teardown is the same either way, and the timer's own expiry runs it. */
+function runDpsFieldClearTest(t: TestReporter): void {
+  beginNewRun();
+  loadInterRoundLobby();
+
+  t.after(4, () => {
+    const during = checkPlayerUnitCount();
+    t.report('checkPlayerUnitsDuringMatch', during);
+    if (during === 0) {
+      t.fail('checkPlayerUnitsDuringMatch', 'nothing was fielded, so nothing is being tested');
+    }
+
+    cancelDPSTest();
+    t.after(1, () => {
+      const after = checkPlayerUnitCount();
+      t.report('checkPlayerUnitsAfterMatch', after);
+      expect(t, 'fieldClearedAfterMatch', after, 0);
+      t.done();
+    });
+  });
+}
+
+registerTest('dpsfieldclear', runDpsFieldClearTest);

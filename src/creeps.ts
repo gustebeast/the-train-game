@@ -373,7 +373,6 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
   }
 
   if (dpsTestMode) {
-    const DPS_TEST_HP = 99999;
     dpsTestCreepStartHP = DPS_TEST_HP;
     // Mercenaries too: one that dies mid-match stops dealing damage and stops
     // taking it, quietly biasing both numbers.
@@ -381,10 +380,12 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
       BlzSetUnitMaxHP(h.handle, DPS_TEST_HP);
       SetUnitState(h.handle, UNIT_STATE_LIFE, DPS_TEST_HP);
     }
+    // After the rigging above, so the first sample sees the rigged values
+    // rather than reading the jump from default HP as damage.
+    beginDPSSampling();
     dpsTestTimer = Timer.create();
     dpsTestTimer.start(DPS_TEST_DURATION, false, () => {
-      cancelDPSTest();
-      clearSpawnedHeroUnits();
+      cancelDPSTest();   // sweeps the field, summons included
     });
     // Factors are unused in test mode — scaleCreepStats splits
     // dpsTestCreepStartHP evenly and leaves creep damage at defaults.
@@ -424,8 +425,8 @@ export function dpsMeasurementReport(): string[] {
   const lines: string[] = [];
   lines.push('Our DPS (measured): ' + I2S(R2I(measuredHeroDPS)));
   lines.push('Creep DPS (measured): ' + I2S(R2I(measuredCreepDPS)));
-  lines.push('Damage dealt to creeps: ' + I2S(R2I(dpsDamageToCreeps)));
-  lines.push('Damage dealt by creeps: ' + I2S(R2I(dpsDamageByCreeps)));
+  lines.push('HP taken off the creeps: ' + I2S(R2I(creepHPLost)));
+  lines.push('HP taken off our side: ' + I2S(R2I(ourHPLost)));
   if (measuredCreepDPS > 0) {
     const scale = measuredHeroDPS * CREEP_DPS_ADVANTAGE / measuredCreepDPS;
     lines.push('=> creep damage scale: ' + I2S(R2I(scale * 100)) + '%');
@@ -433,6 +434,20 @@ export function dpsMeasurementReport(): string[] {
     lines.push('=> no creep DPS measured; scaling falls back to the estimate');
   }
   return lines;
+}
+
+/** How many units the check player still owns. Zero except while a match is
+ *  running: anything the match brings on -- heroes, mercenaries, and whatever
+ *  they summon -- belongs to it, so this is what "the field is clear" means. */
+export function checkPlayerUnitCount(): number {
+  let n = 0;
+  const g = CreateGroup()!;
+  GroupEnumUnitsOfPlayer(g, getDPSCheckPlayer().handle, null!);
+  ForGroup(g, () => {
+    if (GetEnumUnit() != null) n += 1;
+  });
+  DestroyGroup(g);
+  return n;
 }
 
 /** The force's health and damage, split by kind. Diagnostics only: it exists so
@@ -572,18 +587,23 @@ function teardownDPSTest(record: boolean): void {
     dpsTestTimer.destroy();
     dpsTestTimer = null;
     if (record && elapsed > 0) {
-      measuredHeroDPS = dpsDamageToCreeps / elapsed;
-      measuredCreepDPS = dpsDamageByCreeps / elapsed;
+      sampleDPS();   // bank whatever landed since the last sample
+      measuredHeroDPS = creepHPLost / elapsed;
+      measuredCreepDPS = ourHPLost / elapsed;
     }
   }
   // Clean up DPS test creeps so they don't linger into the next round
-  stopDPSDamageWatch();
+  stopDPSSampling();
   if (dpsTestMode) {
     for (const c of spawnedCreeps) {
       c.unit.destroy();
     }
     spawnedCreeps = [];
+    // Order matters: the mercenary's kit is snapshotted off its live unit, so
+    // that has to happen before the sweep removes it.
     removeSpawnedMercUnits();
+    clearSpawnedHeroUnits();
+    clearCheckPlayerUnits();
   }
   dpsTestMode = false;
 }
@@ -619,7 +639,6 @@ export function startDPSTest(): void {
   if (!hasHeroes()) return;
 
   dpsTestMode = true;
-  startDPSDamageWatch();
   const cageX = cageDestructable.x;
   const cageY = cageDestructable.y;
 
@@ -643,59 +662,117 @@ function fieldDPSHeroes(cx: number, cy: number): void {
   spawnMercsForOwner(getDPSCheckPlayer(), heroX, cy - 96);
 }
 
-/** Damage seen during the current match, in each direction. */
-let dpsDamageToCreeps = 0;
-let dpsDamageByCreeps = 0;
-let dpsDamageWatch: Trigger | null = null;
-
-function isSpawnedCreep(u: unit): boolean {
-  for (const c of spawnedCreeps) {
-    if (c.unit.handle === u) return true;
-  }
-  return false;
-}
-
-/** Count damage in both directions for as long as the match runs.
+/** Take EVERYTHING the check player owns off the field.
  *
- *  Replaces reading the survivors' missing HP at the end, which could not see
- *  past the units it knew about. Feral Spirit wolves are the case that exposed
- *  it: a Far Seer in the roster summons them, the creeps turn and attack THEM,
- *  and the old measurement got both halves wrong at once. Damage the wolves
- *  dealt counted -- creep HP does not care who took it off -- while damage they
- *  ABSORBED was invisible, because wolves are neither heroes nor mercenaries,
- *  and a wolf that dies takes its whole damage record with it.
+ *  Not just the heroes and mercenaries that were fielded: whatever they
+ *  SUMMONED belongs to the check player too, and nothing was removing it. A Far
+ *  Seer's Feral Spirit wolves outlived the match that summoned them, so a
+ *  restart -- which is what rerolling does -- began the next match with the
+ *  previous one's wolves still standing and still fighting, on top of the ones
+ *  the new roster would summon.
  *
- *  So our side looked stronger than it was and the creeps looked weaker, and
- *  dpsScale multiplies the first by the reciprocal of the second: both errors
- *  push creep damage up together. That is the 50-70 damage.
+ *  That is why a single clean match measured fine and a rerolled one did not:
+ *  the wolves only pile up across restarts, and entering a round wipes them
+ *  anyway when the terrain is rebuilt.
  *
- *  Counting the damage as it lands has no such blind spot. Whoever deals it and
- *  whoever absorbs it, alive or long dead, summoned mid-fight or fielded at the
- *  start -- if a creep dealt it or took it, it is in the total. */
-function startDPSDamageWatch(): void {
-  stopDPSDamageWatch();
-  dpsDamageToCreeps = 0;
-  dpsDamageByCreeps = 0;
-  const t = Trigger.create();
-  t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DAMAGED);
-  t.addAction(() => {
-    const amount = GetEventDamage();
-    if (amount <= 0) return;
-    const victim = GetTriggerUnit();
-    if (victim != null && isSpawnedCreep(victim)) {
-      dpsDamageToCreeps += amount;
-      return;
-    }
-    const source = GetEventDamageSource();
-    if (source != null && isSpawnedCreep(source)) dpsDamageByCreeps += amount;
+ *  Sweeping by OWNER rather than by list is what makes this hold: anything the
+ *  match brings onto the field is owned by the check player, whether or not
+ *  this file knew it would exist. */
+function clearCheckPlayerUnits(): void {
+  const checkId = GetPlayerId(getDPSCheckPlayer().handle);
+  const g = CreateGroup()!;
+  GroupEnumUnitsOfPlayer(g, getDPSCheckPlayer().handle, null!);
+  ForGroup(g, () => {
+    const u = GetEnumUnit();
+    if (u == null) return;
+    if (GetPlayerId(GetOwningPlayer(u)) !== checkId) return;
+    RemoveUnit(u);
   });
-  dpsDamageWatch = t;
+  DestroyGroup(g);
 }
 
-function stopDPSDamageWatch(): void {
-  if (dpsDamageWatch != null) {
-    DestroyTrigger(dpsDamageWatch.handle);
-    dpsDamageWatch = null;
+/** HP lost by each side so far, banked as it happens. */
+let creepHPLost = 0;
+let ourHPLost = 0;
+
+/** A unit being watched, with the HP it had at the last sample. */
+interface TrackedHP { unit: unit; lastHP: number; }
+let trackedCreeps: TrackedHP[] = [];
+let trackedOurs: TrackedHP[] = [];
+let dpsSampler: Timer | null = null;
+
+/** How often HP is sampled during the match. Often enough that a unit which
+ *  dies or expires between samples loses at most a fraction of a second of
+ *  contribution. */
+const DPS_SAMPLE_INTERVAL = 0.25;
+const DPS_TEST_HP = 99999;
+
+/** Rig a unit so the match cannot kill it, and start watching its HP. */
+function trackForDPS(list: TrackedHP[], u: unit, rig: boolean): void {
+  if (rig) {
+    BlzSetUnitMaxHP(u, DPS_TEST_HP);
+    SetUnitState(u, UNIT_STATE_LIFE, DPS_TEST_HP);
+  }
+  list.push({ unit: u, lastHP: GetUnitState(u, UNIT_STATE_LIFE) });
+}
+
+/** Sample both sides and bank what they lost since the last look.
+ *
+ *  HP lost rather than damage events, because HP is the number that has already
+ *  had armour taken out of it and regeneration put back in -- it is what the
+ *  fight actually cost. Banking it every quarter second rather than reading it
+ *  once at the end is what lets a unit die or expire without taking its
+ *  contribution with it.
+ *
+ *  Newly appeared units on our side are summons -- wolves, treants, beetles.
+ *  They are rigged and tracked the moment they show up, so they neither die
+ *  mid-match nor go uncounted. */
+function sampleDPS(): void {
+  for (const entry of trackedCreeps) {
+    if (GetUnitTypeId(entry.unit) === 0) continue;
+    const hp = GetUnitState(entry.unit, UNIT_STATE_LIFE);
+    creepHPLost += entry.lastHP - hp;
+    entry.lastHP = hp;
+  }
+  for (const entry of trackedOurs) {
+    if (GetUnitTypeId(entry.unit) === 0) continue;
+    const hp = GetUnitState(entry.unit, UNIT_STATE_LIFE);
+    ourHPLost += entry.lastHP - hp;
+    entry.lastHP = hp;
+  }
+  // Pick up anything the fight has summoned since the last sample.
+  const g = CreateGroup()!;
+  GroupEnumUnitsOfPlayer(g, getDPSCheckPlayer().handle, null!);
+  ForGroup(g, () => {
+    const u = GetEnumUnit();
+    if (u == null) return;
+    for (const e of trackedOurs) {
+      if (e.unit === u) return;
+    }
+    trackForDPS(trackedOurs, u, true);
+  });
+  DestroyGroup(g);
+}
+
+/** Begin watching, once both sides have their rigged HP. */
+function beginDPSSampling(): void {
+  stopDPSSampling();
+  creepHPLost = 0;
+  ourHPLost = 0;
+  trackedCreeps = [];
+  trackedOurs = [];
+  for (const c of spawnedCreeps) trackForDPS(trackedCreeps, c.unit.handle, false);
+  for (const h of fieldedForce()) trackForDPS(trackedOurs, h.handle, false);
+  const t = Timer.create();
+  t.start(DPS_SAMPLE_INTERVAL, true, () => sampleDPS());
+  dpsSampler = t;
+}
+
+function stopDPSSampling(): void {
+  if (dpsSampler != null) {
+    dpsSampler.pause();
+    dpsSampler.destroy();
+    dpsSampler = null;
   }
 }
 
@@ -727,13 +804,10 @@ export function restartDPSTest(): void {
   teardownDPSTest(false);   // discard: they measured the camp you just replaced
   measuredHeroDPS = 0;
   measuredCreepDPS = 0;
-  clearSpawnedHeroUnits();
-  removeSpawnedMercUnits();
 
   const camp = getCampData();
   if (origin == null || camp == null || !hasHeroes()) return;
   dpsTestMode = true;
-  startDPSDamageWatch();
   spawnCreepsAt(origin.x, origin.y, camp);
   fieldDPSHeroes(origin.x, origin.y);
 }
