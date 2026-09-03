@@ -341,6 +341,27 @@ function spawnMercUnit(sl: MercSlot, owner: MapPlayer, x: number, y: number): vo
   });
 }
 
+/** Field the mercenaries for one specific owner, for the DPS test.
+ *
+ *  Not spawnMercWithHeroes, which does three things the sparring match must not
+ *  do. It picks the owner itself via pickMercController -- always a HUMAN, so
+ *  the ids passed in were ignored and the match's mercenary ended up belonging
+ *  to player 1. It pans that owner's camera to the spawn, which is what yanked
+ *  the view across the lobby when the match began. And it registers the death
+ *  trigger that marks the slot dead and strips its kit, which a practice fight
+ *  has no business doing to the player's actual mercenary.
+ *
+ *  sl.unit is still set, so getSpawnedMercUnits finds them and the teardown
+ *  takes them off the field. */
+export function spawnMercsForOwner(owner: MapPlayer, x: number, y: number): void {
+  let i = 0;
+  for (const sl of livingSlots()) {
+    const u = spawnMercFromData(sl, owner, x + i * 96, y);
+    if (u != null) sl.unit = u;
+    i += 1;
+  }
+}
+
 /** Spawn every living mercenary alongside the heroes. */
 export function spawnMercWithHeroes(x: number, y: number, heroOwnerIds: number[]): void {
   currentHeroOwnerIds = heroOwnerIds;

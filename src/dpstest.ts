@@ -1,6 +1,7 @@
 import { registerTest, TestReporter } from './testkit';
 import {
   dpsTestStatus, forceLevel3Camp, getCampData, restartDPSTest, measureFieldedForce,
+  cancelDPSTest, checkPlayerUnitCount,
 } from './creeps';
 import { spawnHeroes } from './heroes';
 import { spawnMercWithHeroes } from './mercenary';
@@ -187,9 +188,29 @@ function runDpsMercTest(t: TestReporter): void {
     expect(t, 'matchRunning', a.timer ? 1 : 0, 1);
     expect(t, 'mercFieldedWithHeroes', a.mercs, 1);
 
-    // Restarting must re-field the same one, not accumulate.
+    // The match's mercenary must belong to the hidden check player, like its
+    // heroes. Owned by a human it would sit on that player's command card, be
+    // controllable, and -- because spawning one pans its owner's camera -- yank
+    // the view across the lobby the moment the match started.
+    const force = measureFieldedForce();
+    expect(t, 'noMatchMercOwnedByAHuman', force.mercsOwnedByHumans, 0);
+    const cameraX = GetCameraTargetPositionX();
+    const cameraY = GetCameraTargetPositionY();
+    t.report('cameraX', R2I(cameraX));
+    t.report('cameraY', R2I(cameraY));
+
+    // Restarting fields them again; the camera must stay where the player left
+    // it through that too.
     restartDPSTest();
     t.after(2, () => {
+      const moved = math.abs(GetCameraTargetPositionX() - cameraX)
+        + math.abs(GetCameraTargetPositionY() - cameraY);
+      t.report('cameraMovedOnRestart', R2I(moved));
+      if (moved > 64) {
+        t.fail('cameraMovedOnRestart', 'camera jumped ' + I2S(R2I(moved)) + ' units');
+      }
+      expect(t, 'stillNoMercOwnedByAHuman', measureFieldedForce().mercsOwnedByHumans, 0);
+      // Re-fielding must replace, not accumulate.
       const b = dpsTestStatus();
       t.report('heroesAfterRestart', b.heroes);
       t.report('mercsAfterRestart', b.mercs);
@@ -283,3 +304,38 @@ function runForceScaleTest(t: TestReporter): void {
 }
 
 registerTest('forcescale', runForceScaleTest);
+
+
+/** Nothing the match brought onto the field may outlive it.
+ *
+ *  Heroes and mercenaries were being removed by name, from the lists that
+ *  spawned them. Whatever they SUMMONED was not on any list, so a Far Seer's
+ *  wolves stayed behind -- and a restart, which is what rerolling does, began
+ *  the next match with the previous one's wolves still fighting in it. Sweeping
+ *  by owner is what closes that, so this counts units by owner too rather than
+ *  trusting the same lists that missed them.
+ *
+ *  Ends the match early rather than waiting out the full 30 seconds; the
+ *  teardown is the same either way, and the timer's own expiry runs it. */
+function runDpsFieldClearTest(t: TestReporter): void {
+  beginNewRun();
+  loadInterRoundLobby();
+
+  t.after(4, () => {
+    const during = checkPlayerUnitCount();
+    t.report('checkPlayerUnitsDuringMatch', during);
+    if (during === 0) {
+      t.fail('checkPlayerUnitsDuringMatch', 'nothing was fielded, so nothing is being tested');
+    }
+
+    cancelDPSTest();
+    t.after(1, () => {
+      const after = checkPlayerUnitCount();
+      t.report('checkPlayerUnitsAfterMatch', after);
+      expect(t, 'fieldClearedAfterMatch', after, 0);
+      t.done();
+    });
+  });
+}
+
+registerTest('dpsfieldclear', runDpsFieldClearTest);
