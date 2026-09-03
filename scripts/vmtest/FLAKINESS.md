@@ -128,3 +128,54 @@ then asserts on placement will pass and fail on the same code. Pin the inputs.
    so a derailed menu fails in seconds with "never left the menu" instead of
    timing out against a map that was never given a chance to load. This is a
    sharper failure, not a retry.
+
+---
+
+## Guest operations down: "Map never became ready" that is not the map
+
+**Symptom:** every run on every VM fails with `Map never became ready within
+45s`. A prewarmed run, a full revert and a rebuild of a commit that passed
+earlier all fail identically. The screenshot shows a game that IS running --
+usually the editor-placed units, no lobby -- which reads as "the map threw
+during init".
+
+**Cause:** the VMware guest-operations link is down. `vmrun` reports this by
+writing `Error: Unknown error` to stdout while still exiting 0, and the harness
+piped that to `Out-Null`. So:
+
+1. `Copy-MapToTestVm` no-ops. Nothing is uploaded and nothing says so.
+2. The guest's Download folder still holds whatever the snapshot had, so the
+   browser launches a stale map.
+3. `Test-TestVmFile` cannot read the guest either. It returned `$false`, which
+   the readiness loop cannot distinguish from "not written yet", so it polls a
+   dead channel for the full timeout.
+4. The run blames the map.
+
+**Telling it apart from a real map failure**, in the order that costs least:
+
+- `vmrun -T ws -gu wc3 -gp traintest fileExistsInGuest <vmx> C:\Windows\System32\cmd.exe`
+  -- if that errors, nothing about the map matters. Host-side ops
+  (`list`, `revertToSnapshot`, `start`) and VNC keep working throughout, so a
+  VM that screenshots fine can still be unreachable.
+- `vmrun -T ws checkToolsState <vmx>` reporting `running` does NOT clear it.
+  That is the vmtoolsd heartbeat; authenticated guest operations are a separate
+  path and fail independently.
+- `vmware.log` shows `Vix: [mainDispatch.c] VMAutomation: Connection Error (4)`
+  once per attempt.
+
+**Ruled out while chasing it once, so nobody repeats the work:** VMware version
+(unchanged since July), host services (`VMAuthdService` running), guest tools
+version (current), the guest clock (correct date; the taskbar reads the right
+day -- only the timezone differs from the host), a locked or logged-out guest
+session, and `tools.syncTime`.
+
+**Fix:** it is host-side and needs elevation -- restart `VMAuthdService`, or
+repair/reinstall VMware Tools in the guest and re-take the `create-game`
+snapshot. Neither is something a sub-agent can do.
+
+The harness now fails loudly at the upload instead: `Invoke-VmRunChecked`
+throws on any `Error:` in vmrun's output, the upload is read back to prove it
+landed, and `Test-TestVmFile` distinguishes "absent" from "unreachable". A dead
+link now surfaces in ~25s naming the guest-operations layer, rather than in 68s
+naming the map.
+
