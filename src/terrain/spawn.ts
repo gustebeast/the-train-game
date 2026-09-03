@@ -11,6 +11,7 @@ import { DEFAULT_TRACK, SKINS } from '../track/constants';
 
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
+import { TRACK_SIZE } from '../track/constants';
 import { registerStrangeRock } from '../bossrock';
 import { placedTracks, setVictoryTile, setBossVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
@@ -75,6 +76,29 @@ let bossSpot: GridPos | null = null;
 export function getBossHeroSpots(): ReadonlyArray<GridPos> { return bossHeroSpots; }
 export function getBossMercSpots(): ReadonlyArray<GridPos> { return bossMercSpots; }
 export function getBossSpot(): GridPos | null { return bossSpot; }
+
+/** How much less the water border should see: three tiles. */
+const WATER_SIGHT_REDUCTION = 3 * TRACK_SIZE;
+/** Never take it below a tile, or the border stops granting vision at all and
+ *  the shoreline goes dark instead of merely stopping short. */
+const MIN_WATER_SIGHT = TRACK_SIZE;
+
+/**
+ * Pull the water border's vision in by three tiles.
+ *
+ * Done to the UNIT rather than in object data, because the object data is not
+ * what the engine is using: the water block is authored at 180 sight by day --
+ * under a tile and a half -- and the border still shows the player the edge of
+ * the map, which breaks the illusion of open ocean. Something is raising it,
+ * so the only honest starting point is the radius the engine reports for the
+ * unit it just made, and three tiles comes off that.
+ */
+function shrinkWaterSight(u: Unit): void {
+  const current = BlzGetUnitRealField(u.handle, UNIT_RF_SIGHT_RADIUS);
+  const wanted = current - WATER_SIGHT_REDUCTION;
+  BlzSetUnitRealField(u.handle, UNIT_RF_SIGHT_RADIUS,
+    wanted > MIN_WATER_SIGHT ? wanted : MIN_WATER_SIGHT);
+}
 
 export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
   let engineUnit: Unit | null = null;
@@ -172,6 +196,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         case Entity.WATER_VISIBLE: {
           const wv = Unit.create(getTrainPlayer(), WATER_ID, world.x, world.y, 0)!;
           wv.invulnerable = true;
+          shrinkWaterSight(wv);
           break;
         }
 
