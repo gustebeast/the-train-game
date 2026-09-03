@@ -1,7 +1,7 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import {
-  mercCampLevel, spawnMercWithHeroes, getSpawnedMercUnits, removeSpawnedMercUnits,
+  mercCampLevel, spawnMercsForOwner, getSpawnedMercUnits, removeSpawnedMercUnits,
 } from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
 import {
@@ -419,7 +419,7 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
  *  than the change landing unmeasured. */
 export function measureFieldedForce(): {
   heroes: number; mercs: number; heroEHP: number; mercEHP: number;
-  heroDPS: number; mercDPS: number;
+  heroDPS: number; mercDPS: number; mercsOwnedByHumans: number;
 } {
   let heroEHP = 0;
   let heroDPS = 0;
@@ -435,9 +435,13 @@ export function measureFieldedForce(): {
     mercEHP += getEffectiveHP(m.handle);
     mercDPS += getDPS(m.handle);
   }
+  let mercsOwnedByHumans = 0;
+  for (const m of mercs) {
+    if (GetPlayerController(m.owner.handle) === MAP_CONTROL_USER) mercsOwnedByHumans += 1;
+  }
   return {
     heroes: heroes.length, mercs: mercs.length,
-    heroEHP, mercEHP, heroDPS, mercDPS,
+    heroEHP, mercEHP, heroDPS, mercDPS, mercsOwnedByHumans,
   };
 }
 
@@ -626,8 +630,8 @@ function fieldDPSHeroes(cx: number, cy: number): void {
   // Mercenaries fight alongside the heroes in a real round, so a measurement
   // taken without them understates the force the camp will actually face and
   // scales the next camp too easily. Owned by the check player like the heroes,
-  // so the same teardown reaches them.
-  spawnMercWithHeroes(heroX, cy - 96, [getDPSCheckPlayer().id]);
+  // so the same teardown reaches them and no human's camera is involved.
+  spawnMercsForOwner(getDPSCheckPlayer(), heroX, cy - 96);
 }
 
 /** Everyone fighting on our side: the summoned heroes and any mercenaries.

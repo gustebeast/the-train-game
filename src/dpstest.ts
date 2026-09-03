@@ -187,9 +187,29 @@ function runDpsMercTest(t: TestReporter): void {
     expect(t, 'matchRunning', a.timer ? 1 : 0, 1);
     expect(t, 'mercFieldedWithHeroes', a.mercs, 1);
 
-    // Restarting must re-field the same one, not accumulate.
+    // The match's mercenary must belong to the hidden check player, like its
+    // heroes. Owned by a human it would sit on that player's command card, be
+    // controllable, and -- because spawning one pans its owner's camera -- yank
+    // the view across the lobby the moment the match started.
+    const force = measureFieldedForce();
+    expect(t, 'noMatchMercOwnedByAHuman', force.mercsOwnedByHumans, 0);
+    const cameraX = GetCameraTargetPositionX();
+    const cameraY = GetCameraTargetPositionY();
+    t.report('cameraX', R2I(cameraX));
+    t.report('cameraY', R2I(cameraY));
+
+    // Restarting fields them again; the camera must stay where the player left
+    // it through that too.
     restartDPSTest();
     t.after(2, () => {
+      const moved = math.abs(GetCameraTargetPositionX() - cameraX)
+        + math.abs(GetCameraTargetPositionY() - cameraY);
+      t.report('cameraMovedOnRestart', R2I(moved));
+      if (moved > 64) {
+        t.fail('cameraMovedOnRestart', 'camera jumped ' + I2S(R2I(moved)) + ' units');
+      }
+      expect(t, 'stillNoMercOwnedByAHuman', measureFieldedForce().mercsOwnedByHumans, 0);
+      // Re-fielding must replace, not accumulate.
       const b = dpsTestStatus();
       t.report('heroesAfterRestart', b.heroes);
       t.report('mercsAfterRestart', b.mercs);
