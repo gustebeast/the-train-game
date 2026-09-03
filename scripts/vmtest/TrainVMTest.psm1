@@ -54,6 +54,27 @@ function Invoke-VmRun {
   & $script:VmRun @auth @Args 2>&1
 }
 
+# Guest operations fail SILENTLY unless their OUTPUT is read: vmrun writes
+# "Error: ..." to stdout, so a caller that pipes to Out-Null cannot tell a
+# completed upload from one that never happened.
+#
+# That is exactly how a dead guest-operations link presented as a map bug. The
+# upload no-opped, the guest kept whatever map the snapshot already held, the
+# harness launched THAT, and 45 seconds later blamed the map for not writing a
+# ready marker it was never going to write. An hour went into the map and the
+# test before anyone looked at the VM.
+function Invoke-VmRunChecked {
+  param([Parameter(Mandatory)][object]$Vm, [string]$What = 'guest operation',
+        [Parameter(ValueFromRemainingArguments)][string[]]$Args)
+  $out = Invoke-VmRun $Vm @Args
+  if ("$out" -match 'Error:') {
+    throw ("$What failed on $($Vm.Name): $("$out".Trim()) -- this is the VMware " +
+           'guest-operations link, NOT the map, the test or your code. Check ' +
+           "'vmrun -T ws checkToolsState' and the guest credentials in vms.json.")
+  }
+  return $out
+}
+
 <#
 .SYNOPSIS
   Resolve which VM to test on. Normally you pass nothing.
@@ -342,9 +363,17 @@ function Copy-MapToTestVm {
   # spawning a guest PowerShell to do it -- delete is recursive, and WC3 is
   # parked ABOVE Download (not holding it) so the delete succeeds.
   Invoke-VmRun $Vm deleteDirectoryInGuest $Vm.Vmx $dl 2>$null | Out-Null
-  Invoke-VmRun $Vm createDirectoryInGuest $Vm.Vmx $dl | Out-Null
+  Invoke-VmRunChecked $Vm -What 'create Download folder' createDirectoryInGuest $Vm.Vmx $dl | Out-Null
   $guestName = "ZZ$(Get-Random -Minimum 100000 -Maximum 999999).w3x"
-  Invoke-VmRun $Vm CopyFileFromHostToGuest $Vm.Vmx $Map "$dl\$guestName" | Out-Null
+  Invoke-VmRunChecked $Vm -What 'map upload' CopyFileFromHostToGuest $Vm.Vmx $Map "$dl\$guestName" | Out-Null
+  # Read it back. An upload that quietly does nothing leaves the browser showing
+  # whatever was there before, and the run then measures a map nobody built.
+  $landed = Invoke-VmRun $Vm fileExistsInGuest $Vm.Vmx "$dl\$guestName"
+  if ("$landed" -notmatch 'The file exists') {
+    throw ("map upload to $($Vm.Name) reported success but $guestName is not in " +
+           "the guest's Download folder ($("$landed".Trim())). The run would have " +
+           'launched a stale map.')
+  }
   return $guestName
 }
 
@@ -359,7 +388,13 @@ function Test-TestVmFile {
   if ($null -eq $Vm) { $Vm = Get-TestVm }
   $guestPath = "$($Vm.GuestHome)\Documents\Warcraft III\CustomMapData\TheTrainGame\$Name"
   $out = Invoke-VmRun $Vm fileExistsInGuest $Vm.Vmx $guestPath
-  return ("$out" -match 'The file exists')
+  if ("$out" -match 'The file exists') { return $true }
+  if ("$out" -match 'does not exist')  { return $false }
+  # Anything else means the guest link is down, which is NOT "the file is not
+  # there yet". Returning false here is what let a broken VM masquerade as a map
+  # that never finished initialising.
+  throw ("cannot reach $($Vm.Name)'s filesystem: $("$out".Trim()) -- VMware guest " +
+         'operations are down. The map and the test are not implicated.')
 }
 
 <#
