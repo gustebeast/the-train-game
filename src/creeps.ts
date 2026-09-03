@@ -414,6 +414,27 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
   };
 }
 
+/** What the last completed match measured, and what it is doing to the next
+ *  camp. Printed by -dpsnumbers.
+ *
+ *  scale is the multiplier applied to every creep's damage: 1 leaves them at
+ *  their ladder values, 3 triples them. A number far from 1 means the match
+ *  measured something lopsided. */
+export function dpsMeasurementReport(): string[] {
+  const lines: string[] = [];
+  lines.push('Our DPS (measured): ' + I2S(R2I(measuredHeroDPS)));
+  lines.push('Creep DPS (measured): ' + I2S(R2I(measuredCreepDPS)));
+  lines.push('Damage dealt to creeps: ' + I2S(R2I(dpsDamageToCreeps)));
+  lines.push('Damage dealt by creeps: ' + I2S(R2I(dpsDamageByCreeps)));
+  if (measuredCreepDPS > 0) {
+    const scale = measuredHeroDPS * CREEP_DPS_ADVANTAGE / measuredCreepDPS;
+    lines.push('=> creep damage scale: ' + I2S(R2I(scale * 100)) + '%');
+  } else {
+    lines.push('=> no creep DPS measured; scaling falls back to the estimate');
+  }
+  return lines;
+}
+
 /** The force's health and damage, split by kind. Diagnostics only: it exists so
  *  a test can put a number on how much a mercenary changes the scaling, rather
  *  than the change landing unmeasured. */
@@ -551,25 +572,12 @@ function teardownDPSTest(record: boolean): void {
     dpsTestTimer.destroy();
     dpsTestTimer = null;
     if (record && elapsed > 0) {
-      let totalDamageToCreeps = 0;
-      for (const c of spawnedCreeps) {
-        const maxHP = BlzGetUnitMaxHP(c.unit.handle);
-        const currentHP = GetUnitState(c.unit.handle, UNIT_STATE_LIFE);
-        totalDamageToCreeps += maxHP - currentHP;
-      }
-      measuredHeroDPS = totalDamageToCreeps / elapsed;
-
-      let totalDamageToHeroes = 0;
-      for (const h of fieldedForce()) {
-        const maxHP = BlzGetUnitMaxHP(h.handle);
-        const currentHP = GetUnitState(h.handle, UNIT_STATE_LIFE);
-        totalDamageToHeroes += maxHP - currentHP;
-      }
-      measuredCreepDPS = totalDamageToHeroes / elapsed;
-
+      measuredHeroDPS = dpsDamageToCreeps / elapsed;
+      measuredCreepDPS = dpsDamageByCreeps / elapsed;
     }
   }
   // Clean up DPS test creeps so they don't linger into the next round
+  stopDPSDamageWatch();
   if (dpsTestMode) {
     for (const c of spawnedCreeps) {
       c.unit.destroy();
@@ -611,6 +619,7 @@ export function startDPSTest(): void {
   if (!hasHeroes()) return;
 
   dpsTestMode = true;
+  startDPSDamageWatch();
   const cageX = cageDestructable.x;
   const cageY = cageDestructable.y;
 
@@ -632,6 +641,62 @@ function fieldDPSHeroes(cx: number, cy: number): void {
   // scales the next camp too easily. Owned by the check player like the heroes,
   // so the same teardown reaches them and no human's camera is involved.
   spawnMercsForOwner(getDPSCheckPlayer(), heroX, cy - 96);
+}
+
+/** Damage seen during the current match, in each direction. */
+let dpsDamageToCreeps = 0;
+let dpsDamageByCreeps = 0;
+let dpsDamageWatch: Trigger | null = null;
+
+function isSpawnedCreep(u: unit): boolean {
+  for (const c of spawnedCreeps) {
+    if (c.unit.handle === u) return true;
+  }
+  return false;
+}
+
+/** Count damage in both directions for as long as the match runs.
+ *
+ *  Replaces reading the survivors' missing HP at the end, which could not see
+ *  past the units it knew about. Feral Spirit wolves are the case that exposed
+ *  it: a Far Seer in the roster summons them, the creeps turn and attack THEM,
+ *  and the old measurement got both halves wrong at once. Damage the wolves
+ *  dealt counted -- creep HP does not care who took it off -- while damage they
+ *  ABSORBED was invisible, because wolves are neither heroes nor mercenaries,
+ *  and a wolf that dies takes its whole damage record with it.
+ *
+ *  So our side looked stronger than it was and the creeps looked weaker, and
+ *  dpsScale multiplies the first by the reciprocal of the second: both errors
+ *  push creep damage up together. That is the 50-70 damage.
+ *
+ *  Counting the damage as it lands has no such blind spot. Whoever deals it and
+ *  whoever absorbs it, alive or long dead, summoned mid-fight or fielded at the
+ *  start -- if a creep dealt it or took it, it is in the total. */
+function startDPSDamageWatch(): void {
+  stopDPSDamageWatch();
+  dpsDamageToCreeps = 0;
+  dpsDamageByCreeps = 0;
+  const t = Trigger.create();
+  t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DAMAGED);
+  t.addAction(() => {
+    const amount = GetEventDamage();
+    if (amount <= 0) return;
+    const victim = GetTriggerUnit();
+    if (victim != null && isSpawnedCreep(victim)) {
+      dpsDamageToCreeps += amount;
+      return;
+    }
+    const source = GetEventDamageSource();
+    if (source != null && isSpawnedCreep(source)) dpsDamageByCreeps += amount;
+  });
+  dpsDamageWatch = t;
+}
+
+function stopDPSDamageWatch(): void {
+  if (dpsDamageWatch != null) {
+    DestroyTrigger(dpsDamageWatch.handle);
+    dpsDamageWatch = null;
+  }
 }
 
 /** Everyone fighting on our side: the summoned heroes and any mercenaries.
@@ -668,6 +733,7 @@ export function restartDPSTest(): void {
   const camp = getCampData();
   if (origin == null || camp == null || !hasHeroes()) return;
   dpsTestMode = true;
+  startDPSDamageWatch();
   spawnCreepsAt(origin.x, origin.y, camp);
   fieldDPSHeroes(origin.x, origin.y);
 }
