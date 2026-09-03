@@ -1,6 +1,7 @@
 import { registerTest, TestReporter } from './testkit';
 import { gameState } from './state';
 import { getTrain, isBurning, isWrecked, extinguish } from './train';
+import { beginNewRun, loadTerrain } from './terrain/load';
 
 /** Verify the burning train's production lock and the wrecked end state.
  *
@@ -16,7 +17,19 @@ import { getTrain, isBurning, isWrecked, extinguish } from './train';
  *  Starts from a low max HP so the 1/second decay reaches the floor inside a
  *  test run rather than the ~100s a real fire would take. */
 function runBurnTest(t: TestReporter): void {
+  // There is only a train once a round is standing. The map boots into the
+  // start lobby, so without this getTrain() returns null and the very first
+  // line indexes it -- which is how this test died: "attempt to index a nil
+  // value (local 'train')", a crash rather than a readable failure.
+  beginNewRun();
+  loadTerrain(0);
+
   const train = getTrain();
+  if (train == null) {
+    t.fail('train', 'no train after loading a round');
+    t.done();
+    return;
+  }
 
   gameState.trainMaxHP = 4;
   BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);

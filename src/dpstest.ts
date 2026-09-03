@@ -1,13 +1,15 @@
 import { registerTest, TestReporter } from './testkit';
 import {
   dpsTestStatus, forceLevel3Camp, getCampData, restartDPSTest, measureFieldedForce,
-  cancelDPSTest, checkPlayerUnitCount,
+  cancelDPSTest, checkPlayerUnitCount, getCampOrigin,
 } from './creeps';
+import { Unit } from 'w3ts';
+import { getDPSCheckPlayer } from './teams';
 import { spawnHeroes } from './heroes';
 import { spawnMercWithHeroes } from './mercenary';
 import { Players } from 'w3ts/globals';
 import { buyMercContract, hasActiveMerc } from './mercenary';
-import { getDPSCheckPlayer, toggleDPSVision } from './teams';
+import { toggleDPSVision } from './teams';
 import { getHumanPlayers } from './util';
 import { loadInterRoundLobby, beginNewRun } from './terrain/load';
 import { purchaseSummonUpgrade, isSummonUpgradePurchased } from './summonUpgrade';
@@ -322,17 +324,32 @@ function runDpsFieldClearTest(t: TestReporter): void {
   loadInterRoundLobby();
 
   t.after(4, () => {
-    const during = checkPlayerUnitCount();
-    t.report('checkPlayerUnitsDuringMatch', during);
-    if (during === 0) {
-      t.fail('checkPlayerUnitsDuringMatch', 'nothing was fielded, so nothing is being tested');
+    const fielded = checkPlayerUnitCount();
+    t.report('unitsFieldedByMatch', fielded);
+    if (fielded === 0) {
+      t.fail('unitsFieldedByMatch', 'nothing was fielded, so nothing is being tested');
     }
+
+    // Stand in for a Feral Spirit wolf: a unit the match owns that no list
+    // knows about. Round-one heroes have not learned a summon yet, so without
+    // this the test would pass while proving nothing about the case that
+    // actually broke -- summons surviving a restart and fighting in the next
+    // match.
+    const origin = getCampOrigin();
+    const wolf = Unit.create(getDPSCheckPlayer(), FourCC('nwlt'),
+      origin != null ? origin.x : 0, origin != null ? origin.y : 0, 270);
+    expect(t, 'standInSummonCreated', wolf != null ? 1 : 0, 1);
+    const withSummon = checkPlayerUnitCount();
+    t.report('unitsWithSummon', withSummon);
+    expect(t, 'summonIsOwnedByTheMatch', withSummon - fielded, 1);
 
     cancelDPSTest();
     t.after(1, () => {
       const after = checkPlayerUnitCount();
-      t.report('checkPlayerUnitsAfterMatch', after);
-      expect(t, 'fieldClearedAfterMatch', after, 0);
+      t.report('unitsAfterMatch', after);
+      // Zero, summon included. Removing only the units on the spawn lists
+      // would leave this at 1 and is exactly what shipped.
+      expect(t, 'fieldClearedIncludingSummon', after, 0);
       t.done();
     });
   });
