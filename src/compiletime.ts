@@ -173,7 +173,9 @@ compiletime(({ objectData, constants }) => {
   // reading taken during the fade is a point on the way, not the night figure.
   // Three runs here gave 667, 757 and 624 for what should have been the same
   // number, which is what that looks like.
-  peasant.sightRadiusDay = 672;
+  // 672 was still a tile long once the water border stopped being suspect and
+  // the peasant could be judged on its own.
+  peasant.sightRadiusDay = 544;
 
   type ChannelAbility = NonNullable<ReturnType<typeof objectData.abilities.get>> & { targetType: number; options: number; followThroughTime: number; artDuration: number; baseOrderIDundefined: string };
 
