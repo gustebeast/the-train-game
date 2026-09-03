@@ -163,19 +163,39 @@ piped that to `Out-Null`. So:
 - `vmware.log` shows `Vix: [mainDispatch.c] VMAutomation: Connection Error (4)`
   once per attempt.
 
-**Ruled out while chasing it once, so nobody repeats the work:** VMware version
-(unchanged since July), host services (`VMAuthdService` running), guest tools
-version (current), the guest clock (correct date; the taskbar reads the right
-day -- only the timezone differs from the host), a locked or logged-out guest
-session, and `tools.syncTime`.
+**Root cause: the guest account's password expired.** Windows' default maximum
+password age is 42 days, and every clone was made from one base image, so all
+four inherited the same "password last set" date and expired on the SAME DAY:
 
-**Fix:** it is host-side and needs elevation -- restart `VMAuthdService`, or
-repair/reinstall VMware Tools in the guest and re-take the `create-game`
-snapshot. Neither is something a sub-agent can do.
+    Password last set    7/17/2026
+    Password expires     8/28/2026
 
-The harness now fails loudly at the upload instead: `Invoke-VmRunChecked`
-throws on any `Error:` in vmrun's output, the upload is read back to prove it
-landed, and `Test-TestVmFile` distinguishes "absent" from "unreachable". A dead
-link now surfaces in ~25s naming the guest-operations layer, rather than in 68s
-naming the map.
+The desktop session stays logged in, so the VM looks perfectly healthy over VNC
+-- it is sitting at CREATE GAME as always. Only authenticated guest operations
+fail. That is the whole reason this was hard to see: every signal that is easy
+to check said the VM was fine.
 
+Ruled out along the way, so nobody repeats it: VMware version (unchanged),
+`VMAuthdService` (running, and restarting it changes nothing), guest tools
+version and running state (`checkToolsState` says `running`, which proves
+nothing -- that is the vmtoolsd heartbeat, a separate path from guest ops), the
+guest clock (correct date; only the timezone differs from the host),
+`tools.syncTime`, a locked session, and networking (fails identically on a VM
+with no NIC).
+
+**The fix, per VM.** Guest ops are dead, so it has to be done through VNC:
+Win+R, `powershell`, Ctrl+Shift+Enter, accept UAC (wc3 is an admin, so it is a
+consent prompt, not a credential one), then
+
+    Set-LocalUser -Name wc3 -PasswordNeverExpires $true
+    net user wc3 traintest
+
+The reset is what clears the expired state; `-PasswordNeverExpires` is what
+stops it coming back in another 42 days. Then close the shell, click WC3 in the
+taskbar so it is foreground at CREATE GAME again, and **take a new snapshot** --
+the fix is on disk, so without a fresh snapshot every revert restores the
+expired password. That is what `create-game-v3` is.
+
+**If it ever recurs**, the account is the first thing to check, not the map:
+
+    net user wc3 | findstr /i expires

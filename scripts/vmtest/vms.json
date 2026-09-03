@@ -3,7 +3,7 @@
   "guestUser": "wc3",
   "guestPassword": "traintest",
   "vncPassword": "trainvm1",
-  "snapshot": "create-game",
+  "snapshot": "create-game-v3",
   "_guestMaxFpsComment": "WC3's maxfps in the guest's War3Preferences.txt. It caps how fast the guests render (and so how fast anything can watch them); vm-wall.ps1 defaults its capture rate to this. Change it here AND in each guest's War3Preferences.txt.",
   "guestMaxFps": 15,
   "_networkComment": "Per-VM networking. 'off' unplugs the virtual NIC on every start, resume and pre-warm; anything else (default) leaves it on the host-only network. Single-player tests need no network at all, and no cable is the strongest guarantee a run can never reach Battle.net, whose session token is shared across all the clones. Applied at runtime via disconnectNamedDevice, not in the vmx: these are live snapshots, so the adapter's connected state is restored from the saved memory state and ethernet0.startConnected does not decide it.",
@@ -131,5 +131,6 @@
         263
       ]
     }
-  }
+  },
+  "_snapshotComment": "create-game-v3 replaces create-game, which every clone shared and which carried an expired guest password. Windows' default 42-day maximum password age ran out on the account all four VMs were cloned with, so vmrun's authenticated guest operations failed on all of them at once while the VMs themselves looked perfectly healthy. v3 is the same parked create-game state with the password reset and set never to expire. The old snapshots are kept as a rollback and can be pruned once v3 has some mileage."
 }

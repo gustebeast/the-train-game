@@ -363,7 +363,11 @@ function Copy-MapToTestVm {
   # spawning a guest PowerShell to do it -- delete is recursive, and WC3 is
   # parked ABOVE Download (not holding it) so the delete succeeds.
   Invoke-VmRun $Vm deleteDirectoryInGuest $Vm.Vmx $dl 2>$null | Out-Null
-  Invoke-VmRunChecked $Vm -What 'create Download folder' createDirectoryInGuest $Vm.Vmx $dl | Out-Null
+  # Unchecked on purpose: this reports "The file already exists" when the delete
+  # above was a no-op, which is benign and not worth failing a run over. The
+  # upload itself is checked, and then read back, which is the proof that
+  # matters -- a folder that exists is fine, a map that is not in it is not.
+  Invoke-VmRun $Vm createDirectoryInGuest $Vm.Vmx $dl 2>$null | Out-Null
   $guestName = "ZZ$(Get-Random -Minimum 100000 -Maximum 999999).w3x"
   Invoke-VmRunChecked $Vm -What 'map upload' CopyFileFromHostToGuest $Vm.Vmx $Map "$dl\$guestName" | Out-Null
   # Read it back. An upload that quietly does nothing leaves the browser showing
