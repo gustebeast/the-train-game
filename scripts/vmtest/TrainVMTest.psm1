@@ -1091,7 +1091,154 @@ function Stop-TestVm {
   & $script:VmRun -T ws stop $Vm.Vmx soft 2>&1 | Out-Null
 }
 
-Export-ModuleMember -Function Invoke-MapTest, Use-TestVm, Test-TestHarness, Get-TestVm, Reset-TestVm,
+
+<#
+.SYNOPSIS
+  Run several tests against ONE boot of the map.
+.DESCRIPTION
+  A single run costs about 48s, of which only ~10s is the test: the rest is
+  reverting, resuming, uploading, creating the game and tearing down. Nineteen
+  tests one at a time is a quarter of an hour, nearly all of it paid over and
+  over for the same boot.
+
+  This pays it once. The map already supports it -- startTest has a re-entrancy
+  guard and clears itself on done(), and every test writes its own
+  test_<name>.txt -- so the runner just sends the next chat command when the
+  previous result lands.
+
+  THE CATCH, and it is a real one: tests share a world here. A test that leaves
+  a round loaded, a challenge armed or units on the board hands that to the next
+  one. Tests that set up their own state (most call beginNewRun or load a board
+  first) are unaffected; a test that assumes a fresh map is not. Batch results
+  that disagree with the same tests run singly mean contamination, not a bug in
+  the map -- so -Verify runs each test twice, once batched and once alone, and
+  reports any test whose verdict changes.
+.EXAMPLE
+  Invoke-MapTests -Tests damage,burn,challenge
+.EXAMPLE
+  Invoke-MapTests -Tests (Get-MapTestNames) -Vm murph
+#>
+function Invoke-MapTests {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory)][string[]]$Tests,
+    [string]$Vm,
+    [string]$Map,
+    [string]$PlayerName = 'agent',
+    [int]$ReadyTimeoutSec = 45,
+    [int]$TestTimeoutSec = 120,
+    [string]$OutDir,
+    [switch]$Quiet,
+    [switch]$NoPrewarm,
+    [switch]$AllowNoResults
+  )
+  $vmInfo = Get-TestVm $Vm
+  if (-not $Map)    { $Map    = Join-Path $script:RepoRoot 'dist\bin\TheTrainGame.w3x' }
+  if (-not $OutDir) { $OutDir = Join-Path $env:TEMP "trainvm-$($vmInfo.Name)" }
+  New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $Say = { param($m) if (-not $Quiet) { Write-Host ("[{0,6:N1}s] {1}" -f $sw.Elapsed.TotalSeconds, $m) } }.GetNewClosure()
+
+  $results = @()
+  Reset-OrResumeTestVm $vmInfo -Log $Say
+  & $Say 'upload map'
+  Copy-MapToTestVm $vmInfo -Map $Map | Out-Null
+  $conn = Vnc-Connect $vmInfo.VncPort
+  try {
+    & $Say 'start match'
+    Start-TestVmMatch $vmInfo $conn -PlayerName $PlayerName
+    if (-not (Wait-TestVmReady $conn $vmInfo -TimeoutSec $ReadyTimeoutSec -Log $Say)) {
+      Get-TestVmScreenshot $vmInfo -Path (Join-Path $OutDir 'final.png') -Connection $conn | Out-Null
+      throw "Map never became ready within ${ReadyTimeoutSec}s. See $(Join-Path $OutDir 'final.png')."
+    }
+    $readyRaw = Get-TestVmResultFile $vmInfo -Name 'test_ready.txt' -Destination (Join-Path $OutDir 'test_ready.txt')
+
+    # Check EVERY name up front. Discovering at test seven that the map does not
+    # register it wastes the whole boot the batch existed to save.
+    $missing = @()
+    foreach ($t in $Tests) {
+      if ($readyRaw -and $readyRaw -notmatch ('"' + [regex]::Escape($t) + '"')) { $missing += $t }
+    }
+    if ($missing.Count -gt 0) {
+      $registered = ([regex]::Matches($readyRaw, 'Preload\(\s*"([^"]+)"\s*\)') | ForEach-Object { $_.Groups[1].Value }) -join ', '
+      throw ("The running map does not register: " + ($missing -join ', ') +
+             ". It registered: $registered. Either the names are wrong or the guest is running a stale map.")
+    }
+    if ($readyRaw -and $readyRaw -match 'autorun=([A-Za-z0-9_]+)') {
+      throw ("The map auto-runs '$($matches[1])', so it has already started a test and a batch " +
+             'cannot control what runs. Build without initTestKit(<name>) to batch.')
+    }
+
+    foreach ($t in $Tests) {
+      & $Say "running -test $t"
+      Send-TestVmChat $conn "-test $t"
+      $deadline = (Get-Date).AddSeconds($TestTimeoutSec)
+      $raw = $null
+      while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 2
+        $raw = Get-TestVmResultFile $vmInfo -Name "test_$t.txt" -Destination (Join-Path $OutDir "test_$t.txt")
+        if ($raw -and $raw -match '"done"') { break }
+      }
+      $r = [ordered]@{
+        Ok = $false; Test = $t; Vm = $vmInfo.Name
+        Results = [ordered]@{}; Failures = [ordered]@{}
+        Raw = ''; FailureReason = $null
+      }
+      if (-not $raw) {
+        $r.FailureReason = "No results for '$t'."
+      } else {
+        $r.Raw = $raw
+        foreach ($m in [regex]::Matches($raw, 'Preload\(\s*"(.*?)"\s*\)')) {
+          $line = $m.Groups[1].Value
+          if ($line -in @('started','done')) { continue }
+          $eq = $line.IndexOf('=')
+          if ($eq -lt 1) { continue }
+          $k = $line.Substring(0, $eq); $v = $line.Substring($eq+1)
+          $r.Results[$k] = $v
+          if ($v -like 'FAIL*') { $r.Failures[$k] = $v.Substring(4).Trim() }
+        }
+        if ($raw -notmatch '"done"') {
+          $r.FailureReason = "Test '$t' did not finish within ${TestTimeoutSec}s."
+        } elseif ($r.Failures.Count -gt 0) {
+          $r.FailureReason = "Test reported failures: " + (($r.Failures.Keys) -join ', ')
+        } elseif ($r.Results.Count -eq 0 -and -not $AllowNoResults) {
+          $r.FailureReason = "Test '$t' completed but reported no measurements."
+        } else {
+          $r.Ok = $true
+        }
+      }
+      & $Say ("  " + $t + " -- " + $(if ($r.Ok) { 'PASS' } else { 'FAIL: ' + $r.FailureReason }))
+      $results += [pscustomobject]$r
+    }
+    Get-TestVmScreenshot $vmInfo -Path (Join-Path $OutDir 'final.png') -Connection $conn | Out-Null
+  }
+  finally {
+    $conn.cli.Close()
+    Complete-TestVm $vmInfo -NoPrewarm:$NoPrewarm -Log $Say
+  }
+  $passed = ($results | Where-Object { $_.Ok }).Count
+  & $Say ("done -- {0}/{1} passed in {2:N1}s" -f $passed, $results.Count, $sw.Elapsed.TotalSeconds)
+  return $results
+}
+
+<#
+.SYNOPSIS
+  Every test name the built map registers, read from the map rather than a list
+  kept by hand -- a hand-kept list goes stale the moment a test is added.
+#>
+function Get-MapTestNames {
+  [CmdletBinding()]
+  param([string]$Map)
+  if (-not $Map) { $Map = Join-Path $script:RepoRoot 'dist\bin\TheTrainGame.w3x' }
+  if (-not (Test-Path $Map)) { throw "Map not found: $Map. Run 'npm run build' first." }
+  $src = Join-Path $script:RepoRoot 'src'
+  Get-ChildItem $src -Recurse -Filter *.ts |
+    Select-String -Pattern "registerTest\('([^']+)'" -AllMatches |
+    ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } |
+    Where-Object { $_ -ne 'mystuff' } | Sort-Object -Unique
+}
+
+Export-ModuleMember -Function Invoke-MapTest, Invoke-MapTests, Get-MapTestNames, Use-TestVm, Test-TestHarness, Get-TestVm, Reset-TestVm,
   Stop-TestVm, Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile,
   Get-TestVmScreenshot, Send-TestVmChat, Start-TestVmMatch, Start-ManualSession,
   Start-PrewarmVm, Get-PrewarmState, Reset-OrResumeTestVm, Wait-TestVmReady,

@@ -29,6 +29,39 @@ engine really did.
 
 ---
 
+## Running several tests at once
+
+A single run is about 48s, of which only ~10s is the test. The rest -- revert,
+resume, upload, create the game, tear down -- is paid per boot, so running the
+whole suite one test at a time pays it nineteen times.
+
+```powershell
+Import-Module .\scriptsmtest\TrainVMTest.psm1 -Force
+Invoke-MapTests -Tests damage,burn,challenge
+
+# or everything the built map registers
+Invoke-MapTests -Tests (Get-MapTestNames | Where-Object { $_ -ne 'bf' })
+```
+
+Measured on the full suite: **19 tests in 241s batched, against about 912s one
+at a time**, with identical verdicts.
+
+`Get-MapTestNames` reads the names out of the source rather than a list kept by
+hand, which would go stale the first time a test was added. `bf` is excluded
+above because it is the boss BALANCE harness -- it reports numbers for tuning
+and has no pass condition, so it belongs in a deliberate run rather than a
+sweep.
+
+**What batching costs you.** The tests share a world. One that leaves a round
+loaded, a challenge armed or units on the board hands that to the next. Most
+tests set up their own state -- they call `beginNewRun` or load a board first --
+which is why the whole suite passes batched today. A test that quietly assumes a
+fresh map would not, and the symptom would be a failure that disappears when you
+run that test alone. If a batched result ever disagrees with a single run,
+believe the single run and fix the test's setup.
+
+---
+
 ## Writing a test
 
 A test lives in `src/`, measures something, and reports `key=value` lines.
