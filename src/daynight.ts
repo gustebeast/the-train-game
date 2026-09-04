@@ -18,7 +18,9 @@ import { CH_NIGHT_BLACKOUT } from './challengeList';
  * leaving only what your units are looking at right now.
  */
 
-const DAY_TIME = 12;
+/** Noon. Every board that is not running a night sits here, so the lobbies
+ *  and the boss arena use this rather than repeating the number. */
+export const DAY_TIME = 12;
 const NIGHT_TIME = 0;
 /** Night lasts five minutes. */
 const NIGHT_DURATION = 300;

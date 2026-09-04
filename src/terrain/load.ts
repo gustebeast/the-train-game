@@ -32,7 +32,9 @@ import { resetChallengeProgress } from '../challengeList';
 import { hideChallengeUI, hidePanel, showPanel } from '../challengeUI';
 import { startTutorialBoard, stopTutorialBoard, getTutorialBoardLines } from '../tutorialBoard';
 import { applyChallengeEffects, clearChallengeEffects } from '../challengeEffects';
-import { startDayNightForRound, stopDayNight } from '../daynight';
+import {
+  DAY_TIME, startDayNightForRound, stopDayNight,
+} from '../daynight';
 import { refreshInterRoundLobbyRoster, resetInterRoundLobbyRoster } from '../interRoundLobbyRoster';
 import { saveMercInterRoundLobbySnapshot } from '../mercenary';
 import { deriveSeed } from '../rng';
@@ -277,6 +279,23 @@ function setMusic(track: MusicTrack | null): void {
   if (handle != null) StartSound(handle);
 }
 
+/** Stand up a board that is NOT a round in progress: the five lobbies and the
+ *  boss arena.
+ *
+ *  All six wanted the same six things in the same order -- no challenge
+ *  overlay, no handicaps, no night timer, the board's own music, noon, then the
+ *  terrain. Six copies is six chances for one of them to keep a handicap or
+ *  come up in the dark, and coming up in the dark is exactly what the lobbies
+ *  did until the clock was frozen at init. */
+function enterBoard(track: MusicTrack | null, grid: Grid): SpawnedTrain {
+  hideChallengeUI();
+  clearChallengeEffects();
+  stopDayNight();
+  setMusic(track);
+  SetTimeOfDay(DAY_TIME);
+  return spawnTerrain(grid);
+}
+
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
 function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   setMusic(null);
@@ -344,14 +363,9 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
  *  the save is left alone rather than marked, because beating the boss is not
  *  something that should stop you loading the run again. */
 function loadVictoryLobby(): void {
-  hideChallengeUI();
-  clearChallengeEffects();
-  stopDayNight();
   // No victory track exists yet; the between-rounds one is the closest thing
   // to celebratory the map owns. Swap it the moment there is a real one.
-  setMusic('interRound');
-  SetTimeOfDay(12);
-  spawnTerrain(generateVictoryLobby());
+  enterBoard('interRound', generateVictoryLobby());
 }
 
 function loadDefeatLobby(): void {
@@ -359,12 +373,7 @@ function loadDefeatLobby(): void {
   // not deleted -- see markCurrentSaveDefeated. A session that never claimed a
   // slot (tutorial, cheat run) marks nothing.
   markCurrentSaveDefeated();
-  hideChallengeUI();
-  clearChallengeEffects();
-  stopDayNight();
-  setMusic('defeat');
-  SetTimeOfDay(12);
-  spawnTerrain(generateDefeatLobby());
+  enterBoard('defeat', generateDefeatLobby());
 }
 
 /** Beats per minute the dance clock counts at in the start lobby. The track
@@ -378,12 +387,7 @@ const START_LOBBY_BPM = 0;
  *  Deliberately spawns no train, shop or crate: nothing here is a game in
  *  progress, and nothing written from here can reach a save. */
 export function loadStartLobby(): void {
-  hideChallengeUI();
-  clearChallengeEffects();
-  stopDayNight();
-  setMusic('startLobby');
-  SetTimeOfDay(12);
-  spawnTerrain(generateStartLobby());
+  enterBoard('startLobby', generateStartLobby());
   // Everyone but the host becomes a dancer: immobile, with the dance spells on
   // the command card. 0 BPM until there is a lobby song to sync to, which makes
   // each dance fire on the keypress instead of on the beat.
@@ -400,12 +404,7 @@ export function loadStartLobby(): void {
 /** The save chooser. Same shell as the start lobby, with paging circles in
  *  place of the menu ones. */
 function loadChooseSaveLobby(): void {
-  hideChallengeUI();
-  clearChallengeEffects();
-  stopDayNight();
-  setMusic('startLobby');
-  SetTimeOfDay(12);
-  spawnTerrain(generateChooseSaveLobby());
+  enterBoard('startLobby', generateChooseSaveLobby());
   // The party stands at the back, clear of the dancers: the guests now line up
   // one tile north of centre, which is where this row used to be.
   openChooseSaveLobby(0, 3 * TRACK_SIZE);
@@ -419,12 +418,7 @@ function loadChooseSaveLobby(): void {
  *  the lava has none by design (its blockers are invisible destructables), so
  *  without this the surround would sit unexplored and render black. */
 export function loadBossBattlefield(): void {
-  hideChallengeUI();
-  clearChallengeEffects();
-  stopDayNight();
-  setMusic(null);
-  SetTimeOfDay(12);
-  spawnTerrain(generateBossBattlefield());
+  enterBoard(null, generateBossBattlefield());
 }
 
 /** Hand the inter-round lobby's scenery to the neutral player that shares NO
@@ -449,16 +443,12 @@ function giveLobbyPropsNoVision(spawned: SpawnedTrain): void {
 }
 
 export function loadInterRoundLobby(): void {
-  // No round in progress, so no challenge overlay, handicaps or night timer.
-  hideChallengeUI();
-  clearChallengeEffects();
-  stopDayNight();
+  // Snapshot before the board changes: this is the state Reset Purchases
+  // reverts to, and it must be what the player walked in with.
   saveInterRoundLobbySnapshot();
   saveHeroInterRoundLobbySnapshot();
   saveMercInterRoundLobbySnapshot();
-  setMusic('interRound');
-  SetTimeOfDay(12);
-  const spawned = spawnTerrain(generateInterRoundLobby());
+  const spawned = enterBoard('interRound', generateInterRoundLobby());
   if (spawned.engine != null && spawned.wagon != null) initInterRoundLobbyTrain(spawned.engine, spawned.wagon);
   giveLobbyPropsNoVision(spawned);
   loadCrateForInterRoundLobby();
