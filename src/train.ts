@@ -63,6 +63,28 @@ export function isWrecked(): boolean {
   return wrecked;
 }
 
+/** Stop the burn tick, if one is running. */
+function stopBurnTimer(): void {
+  if (burnTimer != null) {
+    burnTimer.destroy();
+    burnTimer = null;
+  }
+}
+
+/** Back to a train that is not on fire and not wrecked, with no flames showing
+ *  and no tick running.
+ *
+ *  Both the defeat path and the start of a round want exactly this, and both
+ *  used to spell it out. Four statements that have to travel together is four
+ *  chances to leave the tick running, which keeps eating max HP after the round
+ *  it belonged to has ended. */
+function clearBurnState(): void {
+  burning = false;
+  wrecked = false;
+  clearBurnVisuals();
+  stopBurnTimer();
+}
+
 /** The fire has consumed every point of max HP. Stop the decay and leave the
  *  train burning for good.
  *
@@ -72,10 +94,7 @@ export function isWrecked(): boolean {
 function wreckTrain(): void {
   if (wrecked) return;
   wrecked = true;
-  if (burnTimer != null) {
-    burnTimer.destroy();
-    burnTimer = null;
-  }
+  stopBurnTimer();
   print('The train is wrecked! It can no longer produce tracks.');
 }
 
@@ -90,10 +109,7 @@ export function extinguish(): void {
   if (wrecked) return;
   burning = false;
   clearBurnVisuals();
-  if (burnTimer != null) {
-    burnTimer.destroy();
-    burnTimer = null;
-  }
+  stopBurnTimer();
   BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
   SetUnitState(train.handle, UNIT_STATE_LIFE, train.maxLife);
   BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, TRAIN_HP_REGEN);
@@ -277,13 +293,7 @@ export function triggerDefeat(): void {
   crashDeadline = 0;
   // Stop the fire before leaving, or its timer keeps eating max HP while the
   // players stand in the defeat lobby.
-  burning = false;
-  wrecked = false;
-  clearBurnVisuals();
-  if (burnTimer != null) {
-    burnTimer.destroy();
-    burnTimer = null;
-  }
+  clearBurnState();
   setInGameplay(false);
   print('Defeat! The train ran out of track.');
   if (onDefeat != null) onDefeat();
@@ -339,13 +349,7 @@ export function initTrain(unit: Unit, wagon: Unit) {
   targetIdx = 1;
   crashDeadline = 0;
   gameOver = false;
-  burning = false;
-  wrecked = false;
-  clearBurnVisuals();
-  if (burnTimer != null) {
-    burnTimer.destroy();
-    burnTimer = null;
-  }
+  clearBurnState();
 
   // Destroy previous arrival infrastructure
   if (arrivalTrigger != null) arrivalTrigger.destroy();

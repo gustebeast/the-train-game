@@ -114,6 +114,21 @@ export function clearChallengePreview(): void {
   draw();
 }
 
+/** The overlay's multiboard, created on first use.
+ *
+ *  Null means the engine declined to make one, which both callers treat as
+ *  "draw nothing this frame". `fresh` says whether THIS call created it, so the
+ *  board is un-minimised exactly once -- doing it on every draw would fight a
+ *  player who has minimised it on purpose. */
+function ensureBoard(): { board: multiboard; fresh: boolean } | null {
+  if (board != null) return { board, fresh: false };
+  const made = CreateMultiboard();
+  if (made == null) return null;
+  board = made;
+  MultiboardSetColumnCount(board, 1);
+  return { board, fresh: true };
+}
+
 /** A board owned by something that is not a challenge -- currently the
  *  tutorial. Takes precedence over both the armed challenge and the preview,
  *  because during the tutorial neither exists.
@@ -139,15 +154,9 @@ function drawPanel(): void {
   const joined = table.concat(lines, ' | ');
   if (board != null && panel.title === lastTitle && joined === lastProgress) return;
 
-  let created = false;
-  if (board == null) {
-    const made = CreateMultiboard();
-    if (made == null) return;
-    board = made;
-    created = true;
-    MultiboardSetColumnCount(board, 1);
-  }
-  const b = board;
+  const ready = ensureBoard();
+  if (ready == null) return;
+  const b = ready.board;
   MultiboardSetRowCount(b, lines.length);
   MultiboardSetTitleText(b, panel.title);
   let longest = visibleLen(panel.title);
@@ -159,7 +168,7 @@ function drawPanel(): void {
   const width = wanted > MIN_WIDTH ? wanted : MIN_WIDTH;
   for (let i = 0; i < lines.length; i++) setRow(i, lines[i], width);
   MultiboardDisplay(b, true);
-  if (created) MultiboardMinimize(b, false);
+  if (ready.fresh) MultiboardMinimize(b, false);
   lastTitle = panel.title;
   lastName = '';
   lastProgress = joined;
@@ -186,15 +195,9 @@ function draw(): void {
       && progress === lastProgress) return;
 
   const rows = progress !== '' ? 2 : 1;
-  let created = false;
-  if (board == null) {
-    const made = CreateMultiboard();
-    if (made == null) return;
-    board = made;
-    created = true;
-    MultiboardSetColumnCount(board, 1);
-  }
-  const b = board;
+  const ready = ensureBoard();
+  if (ready == null) return;
+  const b = ready.board;
   MultiboardSetRowCount(b, rows);
   MultiboardSetTitleText(b, title);
   const width = widthFor(def.name, progress);
@@ -209,7 +212,7 @@ function draw(): void {
   // player owns the collapsed state, and re-asserting it here would spring the
   // board back open every time a challenge was bought.
   MultiboardDisplay(b, true);
-  if (created) MultiboardMinimize(b, false);
+  if (ready.fresh) MultiboardMinimize(b, false);
 
   lastTitle = title;
   lastName = def.name;
