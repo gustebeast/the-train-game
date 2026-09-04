@@ -336,7 +336,7 @@ function spawnMercUnit(sl: MercSlot, owner: MapPlayer, x: number, y: number): vo
   });
 }
 
-/** Field the mercenaries for one specific owner, for the DPS test.
+/** Field the mercenaries for one specific owner, for the sparring match.
  *
  *  Not spawnMercWithHeroes, which does three things the sparring match must not
  *  do. It picks the owner itself via pickMercController -- always a HUMAN, so
@@ -376,7 +376,7 @@ export function spawnMercWithHeroes(x: number, y: number, heroOwnerIds: number[]
 
 /** The mercenary units standing right now. Empty when none are fielded.
  *
- *  Exists for the DPS test, which fields the roster itself rather than through
+ *  Exists for the sparring match, which fields the roster itself rather than through
  *  the summon path, and so has to ask who else is on the field. */
 export function getSpawnedMercUnits(): Unit[] {
   const live: Unit[] = [];
@@ -390,7 +390,7 @@ export function getSpawnedMercUnits(): Unit[] {
  *
  *  releaseMercUnit snapshots and forgets them but leaves the units standing,
  *  because the callers it was written for (the unsummon sweep, the round reset)
- *  remove the units themselves straight afterwards. The DPS test has no such
+ *  remove the units themselves straight afterwards. The sparring match has no such
  *  sweep -- its combatants belong to a non-human player nothing else touches --
  *  so it needs the units gone as well. */
 export function removeSpawnedMercUnits(): void {

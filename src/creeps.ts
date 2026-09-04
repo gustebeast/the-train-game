@@ -22,26 +22,26 @@ import { forEachUnitOfPlayer } from './util';
 
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
-const DPS_TEST_DURATION = 30;
+const SPARRING_DURATION = 30;
 /** Creep DPS multiplier — scales creep output above measured hero DPS as a balance constant. */
 const CREEP_DPS_ADVANTAGE = 1.1;
 /** Creep DPS multiplier when the Tough Creep Camp challenge is armed. */
 const TOUGH_CAMP_DPS_ADVANTAGE = 1.5;
 
-/** Whether we're in DPS test mode (inter-round lobby sparring). */
-let dpsTestMode = false;
+/** Whether the inter-round lobby's sparring match is running. */
+let sparringActive = false;
 
-/** Measured hero DPS from the inter-round lobby DPS test. Used for gameplay scaling. */
+/** Measured hero DPS from the lobby's sparring match. Used for gameplay scaling. */
 let measuredHeroDPS = 0;
 
-/** Measured creep DPS from the inter-round lobby DPS test (accounts for hero stuns/spells). */
+/** Measured creep DPS from the lobby's sparring match (accounts for hero stuns/spells). */
 let measuredCreepDPS = 0;
 
-/** Active DPS test timer (so it can be cancelled early). */
-let dpsTestTimer: Timer | null = null;
+/** The running sparring match's timer, so it can be cancelled early. */
+let sparringTimer: Timer | null = null;
 
-/** HP each creep started the DPS test with. */
-let dpsTestCreepStartHP = 0;
+/** HP each creep started the sparring match with. */
+let sparringCreepStartHP = 0;
 
 // ---------------------------------------------------------------------------
 // Creep camp state — persisted as an index into the flat camp list
@@ -231,7 +231,7 @@ export function forceLevel3Camp(): boolean {
   // The lobby is very likely measuring the camp this just replaced, so the
   // measurement has to follow the camp. Here rather than at the call site, so a
   // future way of changing the camp cannot forget to.
-  restartDPSTest();
+  restartSparringMatch();
   return true;
 }
 
@@ -322,9 +322,9 @@ function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
 
 /** Remove all spawned creeps (and their corpses). Called when all heroes die,
  *  so the failed camp doesn't leave creeps roaming the map. Not used in DPS
- *  test mode — cancelDPSTest owns creep cleanup there. */
+ *  test mode — cancelSparringMatch owns creep cleanup there. */
 function removeSpawnedCreeps(): void {
-  if (dpsTestMode) return;
+  if (sparringActive) return;
   for (const c of spawnedCreeps) {
     if (GetUnitTypeId(c.unit.handle) !== 0) {
       RemoveUnit(c.unit.handle);
@@ -390,13 +390,13 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
     creepEHP += getEffectiveHP(c.unit.handle);
   }
 
-  if (dpsTestMode) {
-    dpsTestCreepStartHP = DPS_TEST_HP;
+  if (sparringActive) {
+    sparringCreepStartHP = SPARRING_HP;
     // Mercenaries too: one that dies mid-match stops dealing damage and stops
     // taking it, quietly biasing both numbers.
     for (const h of fieldedForce()) {
-      BlzSetUnitMaxHP(h.handle, DPS_TEST_HP);
-      SetUnitState(h.handle, UNIT_STATE_LIFE, DPS_TEST_HP);
+      BlzSetUnitMaxHP(h.handle, SPARRING_HP);
+      SetUnitState(h.handle, UNIT_STATE_LIFE, SPARRING_HP);
     }
     // Sampling does NOT start here. Only OUR side has been rigged at this
     // point; the creeps are still on their natural HP and do not get their
@@ -410,7 +410,7 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
     // startMatchSampling() is called at the end of scaleCreepStats instead,
     // once both sides are actually rigged.
     // Factors are unused in test mode -- scaleCreepStats splits
-    // dpsTestCreepStartHP evenly and leaves creep damage at defaults.
+    // sparringCreepStartHP evenly and leaves creep damage at defaults.
     return { dpsScale: 1, ehpScale: 1 };
   }
 
@@ -541,9 +541,9 @@ export function scaleCreepStats(heroes: Unit[]): void {
     const c = spawnedCreeps[i];
     const h = c.unit.handle;
 
-    if (dpsTestMode) {
+    if (sparringActive) {
       // High HP so heroes can't kill them; damage left at defaults to measure actual creep DPS
-      const scaledHP = math.max(1, math.floor(dpsTestCreepStartHP / spawnedCreeps.length));
+      const scaledHP = math.max(1, math.floor(sparringCreepStartHP / spawnedCreeps.length));
       BlzSetUnitMaxHP(h, scaledHP);
       SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
     } else {
@@ -568,7 +568,7 @@ export function scaleCreepStats(heroes: Unit[]): void {
     c.unit.invulnerable = false;
 
     // Register per-creep death trigger for XP award + item drops (gameplay only)
-    if (!dpsTestMode) {
+    if (!sparringActive) {
       const xpReward = creepXPRewards[i];
       const drops = c.campUnit.itemDrops;
       const deathTrig = Trigger.create();
@@ -604,37 +604,37 @@ export function scaleCreepStats(heroes: Unit[]): void {
 
   // Both sides are rigged now, so a baseline taken here is honest. Anything
   // earlier reads one side's rigging as the other side's damage.
-  if (dpsTestMode) startMatchSampling();
+  if (sparringActive) startMatchSampling();
 }
 
 // ---------------------------------------------------------------------------
-// DPS test — inter-round lobby sparring to measure real DPS
+// The sparring match: the inter-round lobby fight that measures real DPS
 // ---------------------------------------------------------------------------
 
-/** End the DPS test: measure damage, compute DPS, clean up all state.
+/** End the sparring match: measure damage, compute DPS, clean up all state.
  *  Safe to call at any point — handles the case where the timer hasn't started yet. */
-export function cancelDPSTest(): void {
-  teardownDPSTest(true);
+export function cancelSparringMatch(): void {
+  teardownSparringMatch(true);
 }
 
 /** Tear the match down. `record` says whether its numbers are worth keeping.
  *
  *  They are not, if the match was measuring a camp that is no longer the camp
- *  you will face -- see restartDPSTest. */
-function teardownDPSTest(record: boolean): void {
-  if (dpsTestTimer != null) {
-    const elapsed = dpsTestTimer.elapsed;
-    dpsTestTimer.destroy();
-    dpsTestTimer = null;
+ *  you will face -- see restartSparringMatch. */
+function teardownSparringMatch(record: boolean): void {
+  if (sparringTimer != null) {
+    const elapsed = sparringTimer.elapsed;
+    sparringTimer.destroy();
+    sparringTimer = null;
     if (record && elapsed > 0) {
       sampleDPS();   // bank whatever landed since the last sample
       measuredHeroDPS = creepHPLost / elapsed;
       measuredCreepDPS = ourHPLost / elapsed;
     }
   }
-  // Clean up DPS test creeps so they don't linger into the next round
+  // Clean up the sparring creeps so they don't linger into the next round
   stopDPSSampling();
-  if (dpsTestMode) {
+  if (sparringActive) {
     for (const c of spawnedCreeps) {
       c.unit.destroy();
     }
@@ -645,40 +645,41 @@ function teardownDPSTest(record: boolean): void {
     clearSpawnedHeroUnits();
     clearCheckPlayerUnits();
   }
-  dpsTestMode = false;
+  sparringActive = false;
 }
 
-/** What the DPS test is doing right now. Diagnostics only -- nothing in the
+/** What the sparring match is doing right now. Diagnostics only -- nothing in the
  *  game reads this; it exists so a test can watch the sparring match from the
  *  outside instead of inferring it. */
-export function getDpsTestStatus(): {
+export function getSparringStatus(): {
   mode: boolean; creeps: number; heroes: number; mercs: number; timer: boolean;
   elapsed: number; campIndex: number;
 } {
   return {
-    mode: dpsTestMode,
+    mode: sparringActive,
     campIndex: campIndex ?? -1,
     mercs: getSpawnedMercUnits().length,
     creeps: spawnedCreeps.length,
     heroes: getSpawnedHeroes().length,
-    timer: dpsTestTimer != null,
-    elapsed: dpsTestTimer != null ? dpsTestTimer.elapsed : 0,
+    timer: sparringTimer != null,
+    elapsed: sparringTimer != null ? sparringTimer.elapsed : 0,
   };
 }
 
-/** Start DPS test: destroy cage to spawn creeps, spawn heroes, let them fight.
+/** Start the sparring match: destroy the cage to spawn creeps, field the roster,
+ *  and let them fight.
  *  Called after inter-round lobby terrain is spawned. */
-export function startDPSTest(): void {
+export function startSparringMatch(): void {
   if (cageDestructable == null) return;
   // No roster means spawnHeroes produces nobody, and a match with no heroes is
   // worse than no match: scaleCreepStats bails on an empty hero list, so the
   // timer is never created, the creeps are never scaled or made vulnerable, and
-  // dpsTestMode stays true with them standing in the lobby until the next
+  // sparringActive stays true with them standing in the lobby until the next
   // rebuild. Reachable through -lobby, which jumps here without playing the
   // round that picks the roster.
   if (!hasHeroes()) return;
 
-  dpsTestMode = true;
+  sparringActive = true;
   const cageX = cageDestructable.x;
   const cageY = cageDestructable.y;
 
@@ -743,13 +744,13 @@ let dpsSampler: Timer | null = null;
  *  dies or expires between samples loses at most a fraction of a second of
  *  contribution. */
 const DPS_SAMPLE_INTERVAL = 0.25;
-const DPS_TEST_HP = 99999;
+const SPARRING_HP = 99999;
 
 /** Rig a unit so the match cannot kill it, and start watching its HP. */
 function trackForDPS(list: TrackedHP[], u: unit, rig: boolean): void {
   if (rig) {
-    BlzSetUnitMaxHP(u, DPS_TEST_HP);
-    SetUnitState(u, UNIT_STATE_LIFE, DPS_TEST_HP);
+    BlzSetUnitMaxHP(u, SPARRING_HP);
+    SetUnitState(u, UNIT_STATE_LIFE, SPARRING_HP);
   }
   // `rig` is only ever true for a unit that appeared mid-match, which on our
   // side means a summon. Remembered so the breakdown can say how much of our
@@ -801,9 +802,9 @@ function sampleDPS(): void {
  *  happened before the first reading. */
 function startMatchSampling(): void {
   beginDPSSampling();
-  dpsTestTimer = Timer.create();
-  dpsTestTimer.start(DPS_TEST_DURATION, false, () => {
-    cancelDPSTest();   // sweeps the field, summons included
+  sparringTimer = Timer.create();
+  sparringTimer.start(SPARRING_DURATION, false, () => {
+    cancelSparringMatch();   // sweeps the field, summons included
   });
 }
 
@@ -853,15 +854,15 @@ function fieldedForce(): Unit[] {
  *  The previous numbers are cleared rather than left standing, so a restart
  *  that cannot proceed falls back to the estimate instead of scaling the new
  *  camp by the old camp's measurement. */
-export function restartDPSTest(): void {
+export function restartSparringMatch(): void {
   const origin = campOrigin;
-  teardownDPSTest(false);   // discard: they measured the camp you just replaced
+  teardownSparringMatch(false);   // discard: they measured the camp you just replaced
   measuredHeroDPS = 0;
   measuredCreepDPS = 0;
 
   const camp = getCampData();
   if (origin == null || camp == null || !hasHeroes()) return;
-  dpsTestMode = true;
+  sparringActive = true;
   spawnCreepsAt(origin.x, origin.y, camp);
   fieldDPSHeroes(origin.x, origin.y);
 }

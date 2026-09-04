@@ -16,7 +16,7 @@ import { registerStrangeRock } from '../bossrock';
 import { placedTracks, setVictoryTile, setBossVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
 import { setCrate, setCrateStart } from '../items';
-import { setCage, registerCageTrigger, cleanupCage, cancelDPSTest } from '../creeps';
+import { setCage, registerCageTrigger, cleanupCage, cancelSparringMatch } from '../creeps';
 import { resetHeroState } from '../heroes';
 import { stockShop, registerDealer } from '../shop';
 import { destroyAllTimers } from '../timers';
@@ -112,7 +112,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
 
   if (!skipCleanup) {
     destroyAllTimers();
-    cancelDPSTest();
+    cancelSparringMatch();
     resetHeroState();
     cleanupReady();
     cleanupCage();

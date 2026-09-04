@@ -3,7 +3,7 @@ import { gameState, syncState } from './state';
 import { REROLL_ITEM_ID, REROLL_ABILITY_ID } from './constants';
 import { rerollInterRoundLobbyHero } from './heroes';
 import { rerollInterRoundLobbyMerc } from './mercenary';
-import { restartDPSTest } from './creeps';
+import { restartSparringMatch } from './creeps';
 import { nextFrame, forEachUnitInWorld } from './util';
 
 const REROLL_COST = 1;
@@ -62,7 +62,7 @@ export function initReroll(): void {
       // scales the round about to be played. Measuring the hero you rerolled
       // away is worse than not measuring at all, because the number looks
       // exactly like a good one.
-      restartDPSTest();
+      restartSparringMatch();
       // The cast is based on Wand of Illusion purely because it is an item
       // ability that always accepts a friendly unit -- Purge, the obvious
       // choice, refuses a target with nothing to dispel. Its actual effect is

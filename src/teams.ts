@@ -121,7 +121,7 @@ export function getTrainPlayer(): MapPlayer {
 /** Who has asked to watch the sparring match, by player id. */
 const dpsVision: boolean[] = [];
 
-/** Show or hide the DPS test for one player. Returns the new state.
+/** Show or hide the sparring match for one player. Returns the new state.
  *
  *  One-way on purpose: the check player shares its vision with the watcher,
  *  and nothing is shared back. Per player, so one person looking does not put

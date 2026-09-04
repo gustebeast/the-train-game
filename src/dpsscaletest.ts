@@ -1,5 +1,5 @@
 import { registerTest, TestReporter } from './testkit';
-import { getDpsMeasured, dpsSampleBreakdown, getDpsTestStatus } from './creeps';
+import { getDpsMeasured, dpsSampleBreakdown, getSparringStatus } from './creeps';
 import { beginNewRun, loadInterRoundLobby } from './terrain/load';
 import { buyMercContract } from './mercenary';
 
@@ -48,7 +48,7 @@ function runDpsScaleTest(t: TestReporter): void {
   buyMercContract();
   loadInterRoundLobby();
 
-  const started = getDpsTestStatus();
+  const started = getSparringStatus();
   t.report('matchStarted', started.timer ? 1 : 0);
   t.report('fieldedAtStart', started.heroes);
   t.report('creepsAtStart', started.creeps);

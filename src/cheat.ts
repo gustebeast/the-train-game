@@ -206,8 +206,8 @@ export function initCheat(): void {
     if (who == null) return;
     const on = toggleDPSVision(who);
     DisplayTimedTextToPlayer(who, 0, 0, 8, on
-      ? 'DPS test vision ON. -viewdps again to hide it.'
-      : 'DPS test vision OFF.');
+      ? 'Sparring vision ON. -viewdps again to hide it.'
+      : 'Sparring vision OFF.');
   });
 
   // What the last DPS match measured, and the multiplier it is about to apply

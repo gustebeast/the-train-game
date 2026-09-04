@@ -26,7 +26,7 @@ import {
   hasHeroes, initRandomHeroes, chooseHeroes,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
 } from '../heroes';
-import { startDPSTest } from '../creeps';
+import { startSparringMatch } from '../creeps';
 import { loadCrateForRound, loadCrateForInterRoundLobby } from '../items';
 import { resetChallengeProgress } from '../challengeList';
 import { hideChallengeUI, hidePanel, showPanel } from '../challengeUI';
@@ -467,5 +467,5 @@ export function loadInterRoundLobby(): void {
   // the previous inter-round lobby's display units, and their handles must not be reused.
   resetInterRoundLobbyRoster();
   refreshInterRoundLobbyRoster();
-  startDPSTest();
+  startSparringMatch();
 }

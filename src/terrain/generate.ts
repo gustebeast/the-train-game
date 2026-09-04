@@ -714,7 +714,7 @@ export function generateInterRoundLobby(): Grid {
   // minus the runway (the inter-round lobby train never moves)
   placeTrainStart(grid, -4, 0, false);
 
-  // DPS test area: 6x3 at far bottom-right of grid
+  // Sparring area: 6x3 at the far bottom-right of the grid
   // [N, N, N, N, N, N]
   // [N, N, N, N, C, N]
   // [N, N, N, N, N, N]

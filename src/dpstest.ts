@@ -1,7 +1,7 @@
 import { registerTest, TestReporter } from './testkit';
 import {
-  getDpsTestStatus, forceLevel3Camp, getCampData, restartDPSTest, measureFieldedForce,
-  cancelDPSTest, getCheckPlayerUnitCount, getCampOrigin,
+  getSparringStatus, forceLevel3Camp, getCampData, restartSparringMatch, measureFieldedForce,
+  cancelSparringMatch, getCheckPlayerUnitCount, getCampOrigin,
 } from './creeps';
 import { Unit } from 'w3ts';
 import { getDPSCheckPlayer } from './teams';
@@ -24,9 +24,9 @@ function expect(t: TestReporter, key: string, actual: number, want: number): voi
   if (actual !== want) t.fail(key, 'expected ' + I2S(want) + ', got ' + I2S(actual));
 }
 
-/** The DPS test itself, under test.
+/** The sparring match itself, under test.
  *
- *  The game's DPS test is the sparring match the inter-round lobby runs against
+ *  The sparring match is the fight the inter-round lobby runs against
  *  the next camp: heroes and creeps both rigged so neither can die, damage
  *  measured both ways for 30 seconds, and the result is what scales the next
  *  round's camp. Nothing about it is visible if it goes wrong -- it just leaves
@@ -40,7 +40,7 @@ function expect(t: TestReporter, key: string, actual: number, want: number): voi
  *  - buying Summon Heroes changes none of that. The upgrade gates casting the
  *    spell and showing the roster in the lobby corner, and nothing else.
  *
- *  Both halves are asserted rather than reported. Gating startDPSTest on the
+ *  Both halves are asserted rather than reported. Gating startSparringMatch on the
  *  purchase -- the regression this exists to catch -- fails the unbought half
  *  while the bought half still passes, which is that bug's fingerprint. */
 function runDpsTest(t: TestReporter): void {
@@ -54,7 +54,7 @@ function runDpsTest(t: TestReporter): void {
 
   loadInterRoundLobby();
   t.after(3, () => {
-    const a = getDpsTestStatus();
+    const a = getSparringStatus();
     expect(t, 'dpsRunsUnbought', a.timer ? 1 : 0, 1);
     expect(t, 'dpsHeroesUnbought', a.heroes, 2);
     t.report('dpsCreepsUnbought', a.creeps);
@@ -68,7 +68,7 @@ function runDpsTest(t: TestReporter): void {
     expect(t, 'chosenThisRoundBought', getChosenHeroCount(), 2);
     loadInterRoundLobby();
     t.after(3, () => {
-      const b = getDpsTestStatus();
+      const b = getSparringStatus();
       // Asserted, not merely reported: buying the upgrade must leave the
       // match exactly as it was, and a number nobody checks proves nothing.
       expect(t, 'dpsRunsBought', b.timer ? 1 : 0, 1);
@@ -94,7 +94,7 @@ function runDpsCampSwapTest(t: TestReporter): void {
   loadInterRoundLobby();
 
   t.after(4, () => {
-    const before = getDpsTestStatus();
+    const before = getSparringStatus();
     t.report('campBefore', before.campIndex);
     t.report('elapsedBefore', R2I(before.elapsed));
     expect(t, 'matchRunningBefore', before.timer ? 1 : 0, 1);
@@ -105,7 +105,7 @@ function runDpsCampSwapTest(t: TestReporter): void {
     expect(t, 'meatChangedCamp', forced ? 1 : 0, 1);
 
     t.after(2, () => {
-      const after = getDpsTestStatus();
+      const after = getSparringStatus();
       t.report('campAfter', after.campIndex);
       const camp = getCampData();
       t.report('campLevelAfter', camp != null ? camp.level : 0);
@@ -138,13 +138,13 @@ function runDpsRevertTest(t: TestReporter): void {
   loadInterRoundLobby();
 
   t.after(4, () => {
-    const entry = getDpsTestStatus();
+    const entry = getSparringStatus();
     t.report('campOnEntry', entry.campIndex);
     expect(t, 'matchRunningOnEntry', entry.timer ? 1 : 0, 1);
 
     // Change the camp mid-match, exactly as buying the meat does...
     forceLevel3Camp();
-    const swapped = getDpsTestStatus();
+    const swapped = getSparringStatus();
     t.report('campAfterMeat', swapped.campIndex);
 
     // ...then take Reset Purchases, which is meant to undo it.
@@ -153,7 +153,7 @@ function runDpsRevertTest(t: TestReporter): void {
     loadInterRoundLobby();
 
     t.after(4, () => {
-      const after = getDpsTestStatus();
+      const after = getSparringStatus();
       const camp = getCampData();
       t.report('campAfterRevert', after.campIndex);
       expect(t, 'matchRunningAfterRevert', after.timer ? 1 : 0, 1);
@@ -184,7 +184,7 @@ function runDpsMercTest(t: TestReporter): void {
   loadInterRoundLobby();
 
   t.after(4, () => {
-    const a = getDpsTestStatus();
+    const a = getSparringStatus();
     t.report('heroesInMatch', a.heroes);
     t.report('mercsInMatch', a.mercs);
     expect(t, 'matchRunning', a.timer ? 1 : 0, 1);
@@ -203,7 +203,7 @@ function runDpsMercTest(t: TestReporter): void {
 
     // Restarting fields them again; the camera must stay where the player left
     // it through that too.
-    restartDPSTest();
+    restartSparringMatch();
     t.after(2, () => {
       const moved = math.abs(GetCameraTargetPositionX() - cameraX)
         + math.abs(GetCameraTargetPositionY() - cameraY);
@@ -213,7 +213,7 @@ function runDpsMercTest(t: TestReporter): void {
       }
       expect(t, 'stillNoMercOwnedByAHuman', measureFieldedForce().mercsOwnedByHumans, 0);
       // Re-fielding must replace, not accumulate.
-      const b = getDpsTestStatus();
+      const b = getSparringStatus();
       t.report('heroesAfterRestart', b.heroes);
       t.report('mercsAfterRestart', b.mercs);
       expect(t, 'mercNotDuplicated', b.mercs, 1);
@@ -343,7 +343,7 @@ function runDpsFieldClearTest(t: TestReporter): void {
     t.report('unitsWithSummon', withSummon);
     expect(t, 'summonIsOwnedByTheMatch', withSummon - fielded, 1);
 
-    cancelDPSTest();
+    cancelSparringMatch();
     t.after(1, () => {
       const after = getCheckPlayerUnitCount();
       t.report('unitsAfterMatch', after);
