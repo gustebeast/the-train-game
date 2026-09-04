@@ -60,7 +60,6 @@ function stopBossArena(): void {
 function partyStanding(): boolean {
   let standing = false;
   for (const player of getHumanPlayers()) {
-    const g = CreateGroup()!;
     forEachUnitOfPlayer(player.handle, u => {
       if (standing) return;
       if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
@@ -143,7 +142,6 @@ export function startBossFight(): void {
     const heroHandles = getSpawnedHeroes().map(h => h.handle);
     let placed = 0;
     for (const player of getHumanPlayers()) {
-      const g = CreateGroup()!;
       forEachUnitOfPlayer(player.handle, u => {
         if (placed >= mercSpots.length) return;
         if (heroHandles.indexOf(u) >= 0) return;
