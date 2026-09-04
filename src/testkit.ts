@@ -70,7 +70,8 @@ export interface TestReporter {
    *  bought path did before it was asserted. */
   expect(key: string, actual: number | string, expected: number | string): void;
   /** Mark the run complete. The runner waits for this before reading results,
-   *  so a test that never calls done() will be reported as a timeout. */
+   *  and the map's own watchdog fails the test if it never arrives -- see
+   *  DEFAULT_TEST_BUDGET. Always finish, including on the failure paths. */
   done(): void;
   /** Run `fn` after `delay` seconds. Always prefer this over a raw Timer:
    *  WC3 silently swallows anything thrown inside a timer callback, so a bug
@@ -146,14 +147,28 @@ function createReporter(name: string): TestReporter {
 interface RegisteredTest {
   name: string;
   run: (this: void, reporter: TestReporter) => void;
+  /** Seconds this test may take before the watchdog fails it. */
+  budget: number;
 }
+
+/** How long an ordinary test may run before it is failed for stalling.
+ *
+ *  Generous against what tests actually take -- the slowest ordinary one is the
+ *  sparring match at roughly 40s -- because the point is to catch a test that
+ *  has stopped, not to police a slow one. The boss balance fights are the
+ *  exception and pass their own budget. */
+const DEFAULT_TEST_BUDGET = 90;
 
 const tests: RegisteredTest[] = [];
 let running: string | null = null;
 
 /** Register a test, runnable in-game via `-test <name>`. Call at module scope;
  *  import the module from main.ts so registration happens before initTestKit. */
-export function registerTest(name: string, run: (this: void, reporter: TestReporter) => void): void {
+export function registerTest(
+  name: string,
+  run: (this: void, reporter: TestReporter) => void,
+  budgetSeconds: number = DEFAULT_TEST_BUDGET,
+): void {
   // A duplicate name used to be silent, and `find` below returns whichever was
   // registered first -- so the second test simply never ran, while the runner
   // happily reported a PASS full of the FIRST test's measurements. That is the
@@ -163,7 +178,7 @@ export function registerTest(name: string, run: (this: void, reporter: TestRepor
       + 'or the second never runs, and its reported results are the first one instead.');
     return;
   }
-  tests.push({ name, run });
+  tests.push({ name, run, budget: budgetSeconds });
 }
 
 /** Start a registered test by name. Shared by the `-test` chat command and by
@@ -185,10 +200,35 @@ function startTest(name: string): void {
   running = name;
   const reporter = createReporter(name);
   const originalDone = reporter.done;
+  let watchdog: Timer | null = null;
   reporter.done = () => {
     originalDone();
     running = null;
+    if (watchdog != null) {
+      watchdog.destroy();
+      watchdog = null;
+    }
   };
+
+  // No test may run forever.
+  //
+  // A test that stalls without calling done() used to hold the runner for its
+  // whole host-side timeout AND take every test after it down with it: the
+  // re-entrancy guard above never clears, so startTest refuses each following
+  // name, and each one then waits out its own timeout having never run. One
+  // stalled test in a batch of nineteen is over half an hour of nothing.
+  //
+  // Failing here instead reports WHICH test stalled, releases the guard so the
+  // rest of the batch runs, and leaves whatever the test did measure before it
+  // stopped.
+  watchdog = Timer.create();
+  watchdog.start(test.budget, false, () => {
+    if (running !== name) return;
+    // It has fired, so done() below must not try to destroy it.
+    watchdog = null;
+    reporter.fail('timeout', 'no done() within ' + I2S(test.budget)! + 's -- the test stalled');
+    reporter.done();
+  });
   // WC3 swallows errors thrown inside trigger actions, which would leave the
   // harness waiting out its full timeout with no idea why. Turn a crash into a
   // reported failure instead.

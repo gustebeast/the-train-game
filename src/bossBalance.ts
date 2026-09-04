@@ -349,5 +349,7 @@ function runFight(comp: Comp, t: TestReporter): void {
 
 for (const comp of [STUN_COMP, CASTER_COMP, TANK_COMP, WEAK_COMP,
   LOCK_COMP, DPS_COMP, SUPPORT_COMP, SUMMON_COMP, MIXED_COMP, TAVERN_COMP]) {
-  registerTest('bf' + comp.name, (t: TestReporter) => runFight(comp, t));
+  // A fight runs to FIGHT_SECONDS before it calls the outcome, so its budget
+  // has to clear that with room for the setup either side of it.
+  registerTest('bf' + comp.name, (t: TestReporter) => runFight(comp, t), FIGHT_SECONDS + 60);
 }
