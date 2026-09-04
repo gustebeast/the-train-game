@@ -12,18 +12,29 @@ const CHANNEL_ORDER_ID = 852600;
 const SMART_ORDER_ID = 851971;
 const GIVE_TAKE_ABILITY_ID = FourCC(Abilities.Channel);
 
+/** The peasant that issued a give or take, or null if this order is not one.
+ *
+ *  Both the point and the target handler open with the same three questions,
+ *  and the refusal has to be SPOKEN as well as returned: a silently ignored
+ *  order reads as the spell being broken rather than as the rule it is. */
+function giveTakeCaster(): Unit | null {
+  if (GetIssuedOrderId() !== CHANNEL_ORDER_ID) return null;
+  const unit = Unit.fromEvent();
+  if (unit == null) return null;
+  if (!isInGameplay()) {
+    rejectOrder(unit.handle, 'Can only be used during gameplay!');
+    return null;
+  }
+  return unit;
+}
+
 export function initGiveTake(): void {
   // --- Intercept Channel spell point orders ---
   const pointOrder = Trigger.create();
   pointOrder.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
   pointOrder.addAction(() => {
-    if (GetIssuedOrderId() !== CHANNEL_ORDER_ID) return;
-    const unit = Unit.fromEvent();
+    const unit = giveTakeCaster();
     if (unit == null) return;
-    if (!isInGameplay()) {
-      rejectOrder(unit.handle, 'Can only be used during gameplay!');
-      return;
-    }
 
     const item = getSlot0Item(unit);
     if (item == null) return; // No item = nothing to drop at a point
@@ -39,13 +50,8 @@ export function initGiveTake(): void {
   const targetOrder = Trigger.create();
   targetOrder.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
   targetOrder.addAction(() => {
-    if (GetIssuedOrderId() !== CHANNEL_ORDER_ID) return;
-    const unit = Unit.fromEvent();
+    const unit = giveTakeCaster();
     if (unit == null) return;
-    if (!isInGameplay()) {
-      rejectOrder(unit.handle, 'Can only be used during gameplay!');
-      return;
-    }
 
     // Targeting an item on the ground — always pick it up
     const targetItem = GetOrderTargetItem();

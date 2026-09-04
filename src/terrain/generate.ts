@@ -6,6 +6,21 @@ import {
 import { isChallengeArmed } from '../challenges';
 import { CH_CRITTERPOCALYPSE } from '../challengeList';
 
+/** Run cb for every in-bounds orthogonal neighbour of a cell index.
+ *
+ *  The two flood fills below walked neighbours identically. Deliberately not
+ *  used by the first-match scan above them, which breaks out as soon as it
+ *  finds one and wants a different shape. */
+function forEachNeighbour(ci: number, cb: (this: void, ni: number) => void): void {
+  const coords = idxToCoords(ci);
+  for (const [dx, dy] of DIRS) {
+    const nx = coords.x + dx;
+    const ny = coords.y + dy;
+    if (!inBounds(nx, ny)) continue;
+    cb(idx(nx, ny));
+  }
+}
+
 
 // --- Grid creation ---
 
@@ -332,17 +347,12 @@ function placeGranite(grid: Grid, difficulty: number): void {
     openCount++;
 
     // Add newly-exposed granite neighbors to frontier
-    const coords = idxToCoords(ci);
-    for (const [dx, dy] of DIRS) {
-      const nx = coords.x + dx;
-      const ny = coords.y + dy;
-      if (!inBounds(nx, ny)) continue;
-      const ni = idx(nx, ny);
+    forEachNeighbour(ci, ni => {
       if (grid.cells[ni].entity === Entity.GRANITE && !inFrontier[ni]) {
         frontier.push(ni);
         inFrontier[ni] = true;
       }
-    }
+    });
   }
 }
 
@@ -477,17 +487,12 @@ function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
     const queue: number[] = [startIdx];
     while (queue.length > 0) {
       const ci = queue.pop()!;
-      const coords = idxToCoords(ci);
-      for (const [dx, dy] of DIRS) {
-        const nx = coords.x + dx;
-        const ny = coords.y + dy;
-        if (!inBounds(nx, ny)) continue;
-        const ni = idx(nx, ny);
-        if (reachable[ni]) continue;
-        if (grid.cells[ni].entity === Entity.GRANITE) continue;
+      forEachNeighbour(ci, ni => {
+        if (reachable[ni]) return;
+        if (grid.cells[ni].entity === Entity.GRANITE) return;
         reachable[ni] = true;
         queue.push(ni);
-      }
+      });
     }
 
     // Pick from reachable, non-reserved tiles in the valid range
