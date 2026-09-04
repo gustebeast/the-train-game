@@ -1,8 +1,6 @@
 import { Item, Trigger, Unit } from 'w3ts';
-import { findItemByType, registerPeasantTargetCheck, updateBuildAbility } from './items';
+import { findItemByType, refreshCarrierNextFrame, registerPeasantTargetCheck } from './items';
 import { BUCKET_ID, BUCKET_FULL_ID, WATER_ID, FILL_ABILITY_ID } from './constants';
-import { updateCarryingVisual } from './carrying';
-import { nextFrame } from './util';
 
 const FILL_ORDER_ID = 852527; // shadowstrike
 
@@ -28,13 +26,6 @@ export function initFill(): void {
     }
 
     // Defer ability/visual update so this spell's completion isn't interrupted
-    const uHandle = u.handle;
-    nextFrame(() => {
-      const deferred = Unit.fromHandle(uHandle);
-      if (deferred != null) {
-        updateBuildAbility(deferred);
-        updateCarryingVisual(deferred);
-      }
-    });
+    refreshCarrierNextFrame(u.handle);
   });
 }

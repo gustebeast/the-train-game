@@ -1,10 +1,8 @@
 import { Item, Trigger, Unit } from 'w3ts';
 import { getTrain, extinguish } from './train';
-import { isTrain, findItemByType, registerPeasantTargetCheck, updateBuildAbility } from './items';
+import { findItemByType, isTrain, refreshCarrierNextFrame, registerPeasantTargetCheck } from './items';
 import { BUCKET_ID, BUCKET_FULL_ID, WATER_TRAIN_ABILITY_ID } from './constants';
 import { noteWateredTrain } from './tutorialBoard';
-import { updateCarryingVisual } from './carrying';
-import { nextFrame } from './util';
 
 const WATER_TRAIN_ORDER_ID = 852585; // drunkenhaze
 
@@ -37,13 +35,6 @@ export function initWaterTrain(): void {
     UnitRemoveAbility(train.handle, WATER_TRAIN_ABILITY_ID);
     UnitRemoveBuffs(train.handle, false, true); // remove negative buffs
 
-    const uHandle = u.handle;
-    nextFrame(() => {
-      const deferred = Unit.fromHandle(uHandle);
-      if (deferred != null) {
-        updateBuildAbility(deferred);
-        updateCarryingVisual(deferred);
-      }
-    });
+    refreshCarrierNextFrame(u.handle);
   });
 }

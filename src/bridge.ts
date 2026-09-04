@@ -1,8 +1,7 @@
 import { Trigger, Unit } from 'w3ts';
-import { findItemByType, registerPeasantTargetCheck, updateBuildAbility } from './items';
+import { findItemByType, refreshCarrierNextFrame, registerPeasantTargetCheck } from './items';
 import { WOOD_ID, WATER_ID, BRIDGE_ABILITY_ID } from './constants';
 import { noteBuiltBridge } from './tutorialBoard';
-import { nextFrame } from './util';
 
 const BRIDGE_ORDER_ID = 852230; // fingerofdeath
 const TERRAIN_BRICKS = 'Zbkl'; // Dalaran Large Bricks
@@ -26,11 +25,7 @@ export function initBridge(): void {
       if (wood.charges <= 0) {
         RemoveItem(wood.handle);
       }
-      const uHandle = u.handle;
-      nextFrame(() => {
-        const deferred = Unit.fromHandle(uHandle);
-        if (deferred != null) updateBuildAbility(deferred);
-      });
+      refreshCarrierNextFrame(u.handle);
     }
 
     // Replace water with bridge tile

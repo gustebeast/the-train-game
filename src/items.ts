@@ -114,6 +114,30 @@ export function updateBuildAbility(u: Unit): void {
   }
 }
 
+/** An inventory changed: refresh what the unit can build AND what it looks like
+ *  carrying.
+ *
+ *  The two always belong together -- the contents decide the ability, slot 0
+ *  decides the visual -- and every caller wanted both. Calling only one is how a
+ *  peasant ends up still shouldering a log it has already spent, which is
+ *  exactly what building a bridge with your last wood used to do. */
+export function refreshCarrier(u: Unit): void {
+  updateBuildAbility(u);
+  updateCarryingVisual(u);
+}
+
+/** The same refresh, one frame later, addressed by handle.
+ *
+ *  Spells have to defer it: revoking an ability inside its own SPELL_EFFECT
+ *  cancels the cast that is running. The unit is re-resolved on the way in
+ *  because it can be gone by then. */
+export function refreshCarrierNextFrame(handle: unit): void {
+  nextFrame(() => {
+    const u = Unit.fromHandle(handle);
+    if (u != null) refreshCarrier(u);
+  });
+}
+
 /**
  * Where each resource sits on a storage unit, 0-indexed.
  *
@@ -431,10 +455,7 @@ export function initItems(): void {
       nextFrame(() => {
         pendingGivers.delete(droppedItem);
         const dropper = Unit.fromHandle(dropperHandle);
-        if (dropper != null) {
-          updateBuildAbility(dropper);
-          updateCarryingVisual(dropper);
-        }
+        if (dropper != null) refreshCarrier(dropper);
       });
     }
   });
@@ -544,7 +565,6 @@ export function initItems(): void {
       onTrainInventoryChanged();
     }
 
-    updateBuildAbility(unit);
-    updateCarryingVisual(unit);
+    refreshCarrier(unit);
   });
 }

@@ -2,23 +2,11 @@ import { noteLoadedMaterial } from './tutorialBoard';
 import { Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { nextFrame } from './util';
-import {
-  getSlot0Item,
-  giveToStorage,
-  isStorage,
-  isTrackWagon,
-  isTrain,
-  rejectOrder,
-  takeFromStorage,
-  updateBuildAbility,
-  validateGive,
-  validateTake,
-} from './items';
+import { getSlot0Item, giveToStorage, isStorage, isTrackWagon, isTrain, refreshCarrier, rejectOrder, takeFromStorage, validateGive, validateTake } from './items';
 import { TRACK_PIECE_ID } from './constants';
-import { updateCarryingVisual } from './carrying';
+
 import { isBurning } from './train';
 import { isInGameplay } from './state';
-
 
 const CHANNEL_ORDER_ID = 852600;
 const SMART_ORDER_ID = 851971;
@@ -130,7 +118,6 @@ export function initGiveTake(): void {
       if (isTrain(target)) noteLoadedMaterial(unit.owner.id);
       giveToStorage(unit, item, target);
     }
-    updateBuildAbility(unit);
-    updateCarryingVisual(unit);
+    refreshCarrier(unit);
   });
 }
