@@ -100,6 +100,36 @@ function shrinkWaterSight(u: Unit): void {
     wanted > MIN_WATER_SIGHT ? wanted : MIN_WATER_SIGHT);
 }
 
+/** The ready-zone circles.
+ *
+ *  Every one is the same Circle of Power differing only in what it says and
+ *  which zone it arms, so they are a table rather than ten cases that were
+ *  identical apart from two strings. `warning` tints it red: those are the
+ *  circles that undo or abandon something rather than move the run forward. */
+const READY_CIRCLES: { [entity: number]: { label: string; zone: string; warning?: boolean } } = {
+  [Entity.START_CIRCLE]:    { label: 'Next Round',      zone: 'start' },
+  [Entity.REVERT_CIRCLE]:   { label: 'Reset Purchases', zone: 'revert', warning: true },
+  [Entity.NEW_GAME_CIRCLE]: { label: 'New Game',        zone: 'newgame' },
+  [Entity.RESTART_CIRCLE]:  { label: 'Restart',         zone: 'restart', warning: true },
+  [Entity.LOAD_CIRCLE]:     { label: 'Load Save',       zone: 'loadsave' },
+  [Entity.BACK_CIRCLE]:     { label: 'Back',            zone: 'saveback' },
+  [Entity.PREV_CIRCLE]:     { label: 'Newer Save',      zone: 'saveprev' },
+  [Entity.NEXT_CIRCLE]:     { label: 'Older Save',      zone: 'savenext' },
+  [Entity.CONFIRM_CIRCLE]:  { label: 'Play This Save',  zone: 'saveconfirm' },
+  [Entity.TUTORIAL_CIRCLE]: { label: 'Tutorial',        zone: 'tutorial' },
+};
+
+/** Stand a ready-zone circle at a world position and arm its zone. */
+function spawnReadyCircle(
+  x: number, y: number, spec: { label: string; zone: string; warning?: boolean },
+): void {
+  const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), x, y, 0);
+  if (circle == null) return;
+  BlzSetUnitName(circle.handle, spec.label);
+  if (spec.warning === true) SetUnitVertexColor(circle.handle, 255, 180, 180, 255);
+  initReadyZone(x, y, spec.zone, circle);
+}
+
 export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
   let engineUnit: Unit | null = null;
   let wagonUnit: Unit | null = null;
@@ -142,6 +172,12 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
       paintTile(world.x, world.y, cell.terrain);
 
       // Spawn entity
+      const readyCircle = READY_CIRCLES[cell.entity];
+      if (readyCircle != null) {
+        spawnReadyCircle(world.x, world.y, readyCircle);
+        continue;
+      }
+
       switch (cell.entity) {
         case Entity.TREE: {
           const variation = GetRandomInt(0, 9);
@@ -275,78 +311,6 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
           const dealer = Unit.create(getNeutralPassive(), FourCC(Units.TombOfRelics), world.x, world.y, 270)!;
           dealer.invulnerable = true;
           registerDealer(dealer);
-          break;
-        }
-
-        case Entity.START_CIRCLE: {
-          const startCircle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(startCircle.handle, 'Next Round');
-          initReadyZone(world.x, world.y, 'start', startCircle);
-          break;
-        }
-
-        case Entity.REVERT_CIRCLE: {
-          const revertCircle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(revertCircle.handle, 'Reset Purchases');
-          SetUnitVertexColor(revertCircle.handle, 255, 180, 180, 255);
-          initReadyZone(world.x, world.y, 'revert', revertCircle);
-          break;
-        }
-
-        case Entity.NEW_GAME_CIRCLE: {
-          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(circle.handle, 'New Game');
-          initReadyZone(world.x, world.y, 'newgame', circle);
-          break;
-        }
-
-        case Entity.RESTART_CIRCLE: {
-          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(circle.handle, 'Restart');
-          SetUnitVertexColor(circle.handle, 255, 180, 180, 255);
-          initReadyZone(world.x, world.y, 'restart', circle);
-          break;
-        }
-
-        case Entity.LOAD_CIRCLE: {
-          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(circle.handle, 'Load Save');
-          initReadyZone(world.x, world.y, 'loadsave', circle);
-          break;
-        }
-
-        case Entity.BACK_CIRCLE: {
-          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(circle.handle, 'Back');
-          initReadyZone(world.x, world.y, 'saveback', circle);
-          break;
-        }
-
-        case Entity.PREV_CIRCLE: {
-          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(circle.handle, 'Newer Save');
-          initReadyZone(world.x, world.y, 'saveprev', circle);
-          break;
-        }
-
-        case Entity.NEXT_CIRCLE: {
-          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(circle.handle, 'Older Save');
-          initReadyZone(world.x, world.y, 'savenext', circle);
-          break;
-        }
-
-        case Entity.CONFIRM_CIRCLE: {
-          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(circle.handle, 'Play This Save');
-          initReadyZone(world.x, world.y, 'saveconfirm', circle);
-          break;
-        }
-
-        case Entity.TUTORIAL_CIRCLE: {
-          const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), world.x, world.y, 0)!;
-          BlzSetUnitName(circle.handle, 'Tutorial');
-          initReadyZone(world.x, world.y, 'tutorial', circle);
           break;
         }
 
