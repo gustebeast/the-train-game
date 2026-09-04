@@ -362,6 +362,23 @@ function getEffectiveHP(u: unit): number {
   return BlzGetUnitMaxHP(u) * (1 + 0.06 * armor);
 }
 
+/** Total effective HP and damage across a set of units.
+ *
+ *  One place that answers "how strong is this force", so the only question a
+ *  caller has to get right is WHICH units it passes. That is where the bug was
+ *  when EHP was summed from the heroes alone while DPS covered heroes and
+ *  mercenaries together: two copies of the same sum, disagreeing about the
+ *  force they were measuring. */
+function sumForce(units: Unit[]): { ehp: number; dps: number } {
+  let ehp = 0;
+  let dps = 0;
+  for (const u of units) {
+    ehp += getEffectiveHP(u.handle);
+    dps += getDPS(u.handle);
+  }
+  return { ehp, dps };
+}
+
 
 /** Compute DPS and EHP scale factors for creep stat scaling. */
 function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: number } {
@@ -398,15 +415,12 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
   // so a camp's HP was pegged to a force smaller than the one it would meet.
   // That made every camp easier the better your mercenary was, on every round
   // rather than only before the first measurement.
-  const force = fieldedForce();
-  let forceEHP = 0;
-  for (const h of force) {
-    forceEHP += getEffectiveHP(h.handle);
-  }
-  let forceDPS = measuredHeroDPS;
-  if (forceDPS <= 0) {
-    for (const h of force) forceDPS += getDPS(h.handle);
-  }
+  const fielded = sumForce(fieldedForce());
+  const forceEHP = fielded.ehp;
+  // The measured figure when there is one: it is taken from damage the creeps
+  // took, so it already covers whoever dealt it. Before the first match there
+  // is nothing to measure, and the units' own damage stands in.
+  const forceDPS = measuredHeroDPS > 0 ? measuredHeroDPS : fielded.dps;
   const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
   const dpsAdvantage = isChallengeArmed(CH_TOUGH_CAMP) ? TOUGH_CAMP_DPS_ADVANTAGE : CREEP_DPS_ADVANTAGE;
   return {
@@ -457,27 +471,19 @@ export function measureFieldedForce(): {
   heroes: number; mercs: number; heroEHP: number; mercEHP: number;
   heroDPS: number; mercDPS: number; mercsOwnedByHumans: number;
 } {
-  let heroEHP = 0;
-  let heroDPS = 0;
   const heroes = getSpawnedHeroes();
-  for (const h of heroes) {
-    heroEHP += getEffectiveHP(h.handle);
-    heroDPS += getDPS(h.handle);
-  }
-  let mercEHP = 0;
-  let mercDPS = 0;
   const mercs = getSpawnedMercUnits();
-  for (const m of mercs) {
-    mercEHP += getEffectiveHP(m.handle);
-    mercDPS += getDPS(m.handle);
-  }
+  const heroTotals = sumForce(heroes);
+  const mercTotals = sumForce(mercs);
   let mercsOwnedByHumans = 0;
   for (const m of mercs) {
     if (GetPlayerController(m.owner.handle) === MAP_CONTROL_USER) mercsOwnedByHumans += 1;
   }
   return {
     heroes: heroes.length, mercs: mercs.length,
-    heroEHP, mercEHP, heroDPS, mercDPS, mercsOwnedByHumans,
+    heroEHP: heroTotals.ehp, mercEHP: mercTotals.ehp,
+    heroDPS: heroTotals.dps, mercDPS: mercTotals.dps,
+    mercsOwnedByHumans,
   };
 }
 
