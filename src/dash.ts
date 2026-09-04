@@ -93,15 +93,6 @@ function startCooldown(h: unit): void {
   });
 }
 
-// Diagnostics, read through a function: TSTL importers snapshot a mutable
-// `export let`, so an exported variable would always read its initial value.
-// events = flare order events seen, atQueue/atExec = how many of those arrived
-// with the dash still queued vs already current.
-const dbg = { tx: -99999, ty: -99999, events: 0, atQueue: 0, atExec: 0, started: 0 };
-export function getDashDebug(): number[] {
-  return [dbg.tx, dbg.ty, dbg.events, dbg.atQueue, dbg.atExec, dbg.started];
-}
-
 /** End the dash: restore the unit's normal speed. Issues NO order — a 'stop'
  *  here would discard whatever the player queued behind the dash. */
 function endDash(h: unit): void {
@@ -125,7 +116,6 @@ function startDash(h: unit): void {
   const baseSpeed = existing != null ? existing.baseSpeed : GetUnitMoveSpeed(h);
   if (existing != null) existing.timer.destroy();
 
-  dbg.started = dbg.started + 1;
   startCooldown(h);
   SetUnitMoveSpeed(h, DASH_SPEED);
   AddUnitAnimationProperties(h, 'alternate', true);
@@ -145,12 +135,9 @@ export function initDash(): void {
     const u = Unit.fromEvent();
     if (u == null || u.typeId !== PEASANT_ID) return;
     const h = u.handle;
-    dbg.tx = GetOrderPointX(); dbg.ty = GetOrderPointY();
-    dbg.events = dbg.events + 1;
     // Still sitting in the queue behind something else: the event will come
     // round again when the peasant actually starts heading for the point.
-    if (GetUnitCurrentOrder(h) !== flare) { dbg.atQueue = dbg.atQueue + 1; return; }
-    dbg.atExec = dbg.atExec + 1;
+    if (GetUnitCurrentOrder(h) !== flare) return;
     startDash(h);
   });
 

@@ -45,7 +45,6 @@ import './dpstest'; // watch the lobby DPS sparring match
 import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included
 import './dashfieldstest'; // asks the engine about A000's button data
-import './inputwatchtest'; // observes a real VNC-driven input sequence
 import { loadStartLobby } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
