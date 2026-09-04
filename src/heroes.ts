@@ -6,7 +6,7 @@ import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants'
 import { createPlaceholder } from './placeholder';
 import { seededValueAt, deriveSeed } from './rng';
 import { gameState } from './state';
-import { getNeutralPassive } from './teams';
+import { getNeutralExtra } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
 import { getHumanPlayers, nextFrame, forEachUnitInWorld, getInventoryItemIds } from './util';
 import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
@@ -625,6 +625,12 @@ export function syncInterRoundLobbyHeroes(positions: Array<{ x: number; y: numbe
   }
 }
 
+/** The display units currently standing in the inter-round lobby. For tests,
+ *  which need to ask who owns them and where they stand. */
+export function getInterRoundLobbyHeroUnits(): Unit[] {
+  return lobbyHeroes.map(e => e.unit);
+}
+
 /** Whether this roster slot holds someone the player has rolled but not yet
  *  met, and so is displayed as a question mark.
  *
@@ -644,7 +650,13 @@ function heroConcealed(dataIdx: number): boolean {
  *  The placeholder still carries the kit. What a reroll keeps is information
  *  the player is entitled to -- it is WHO they got that is being withheld. */
 function createRosterHeroUnit(dataIdx: number, x: number, y: number): Unit | null {
-  const owner = getNeutralPassive();
+  // Neutral EXTRA, not neutral passive. Both are allied to the humans, and the
+  // only difference between them is shared vision -- which passive has. Owning
+  // the display roster by passive therefore lit the whole lobby through six
+  // heroes' sight radii, giving away ground the players' own units had not
+  // walked. Extra is what the water border and the circles already use for
+  // exactly this reason.
+  const owner = getNeutralExtra();
   if (!heroConcealed(dataIdx)) {
     const hero = spawnHeroUnit(dataIdx, owner, x, y);
     if (hero != null) hero.invulnerable = true;

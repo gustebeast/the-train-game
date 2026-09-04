@@ -380,14 +380,18 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
       BlzSetUnitMaxHP(h.handle, DPS_TEST_HP);
       SetUnitState(h.handle, UNIT_STATE_LIFE, DPS_TEST_HP);
     }
-    // After the rigging above, so the first sample sees the rigged values
-    // rather than reading the jump from default HP as damage.
-    beginDPSSampling();
-    dpsTestTimer = Timer.create();
-    dpsTestTimer.start(DPS_TEST_DURATION, false, () => {
-      cancelDPSTest();   // sweeps the field, summons included
-    });
-    // Factors are unused in test mode — scaleCreepStats splits
+    // Sampling does NOT start here. Only OUR side has been rigged at this
+    // point; the creeps are still on their natural HP and do not get their
+    // 99999-between-them pool until scaleCreepStats applies it, a hundred
+    // lines below. Baselining them here recorded a creep at, say, 500 HP and
+    // then read the jump to 33000 as 32500 HP of damage DEALT -- per creep,
+    // in the first quarter-second. That made measuredHeroDPS large and
+    // NEGATIVE, and since the camp's damage multiplier is
+    // (our DPS x advantage) / creep DPS, it came out negative too and every
+    // creep in the next round was floored at minimum damage.
+    // startMatchSampling() is called at the end of scaleCreepStats instead,
+    // once both sides are actually rigged.
+    // Factors are unused in test mode -- scaleCreepStats splits
     // dpsTestCreepStartHP evenly and leaves creep damage at defaults.
     return { dpsScale: 1, ehpScale: 1 };
   }
@@ -415,18 +419,47 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
   };
 }
 
+/** What the last match's sampling actually saw, in raw HP.
+ *
+ *  measuredCreepDPS is the denominator of the whole difficulty scale, so when a
+ *  camp comes out absurdly hard or absurdly soft this is where the answer is:
+ *  how much of our side's HP loss was taken by the force, and how much by
+ *  summons standing in front of it. */
+export function dpsSampleBreakdown(): {
+  creepHPLost: number; ourHPLost: number; summonHPLost: number;
+  trackedOurs: number; trackedSummons: number; trackedCreeps: number;
+} {
+  let summons = 0;
+  for (const e of trackedOurs) if (e.summon) summons += 1;
+  return {
+    creepHPLost, ourHPLost, summonHPLost,
+    trackedOurs: trackedOurs.length,
+    trackedSummons: summons,
+    trackedCreeps: trackedCreeps.length,
+  };
+}
+
 /** What the last completed match measured, and what it is doing to the next
  *  camp. Printed by -dpsnumbers.
  *
  *  scale is the multiplier applied to every creep's damage: 1 leaves them at
  *  their ladder values, 3 triples them. A number far from 1 means the match
  *  measured something lopsided. */
+export function dpsMeasured(): { heroDPS: number; creepDPS: number; scale: number } {
+  return {
+    heroDPS: measuredHeroDPS,
+    creepDPS: measuredCreepDPS,
+    scale: measuredCreepDPS > 0 ? measuredHeroDPS * CREEP_DPS_ADVANTAGE / measuredCreepDPS : 0,
+  };
+}
+
 export function dpsMeasurementReport(): string[] {
   const lines: string[] = [];
   lines.push('Our DPS (measured): ' + I2S(R2I(measuredHeroDPS)));
   lines.push('Creep DPS (measured): ' + I2S(R2I(measuredCreepDPS)));
   lines.push('HP taken off the creeps: ' + I2S(R2I(creepHPLost)));
-  lines.push('HP taken off our side: ' + I2S(R2I(ourHPLost)));
+  lines.push('HP taken off our side: ' + I2S(R2I(ourHPLost))
+    + ' (of which summons took ' + I2S(R2I(summonHPLost)) + ')');
   if (measuredCreepDPS > 0) {
     const scale = measuredHeroDPS * CREEP_DPS_ADVANTAGE / measuredCreepDPS;
     lines.push('=> creep damage scale: ' + I2S(R2I(scale * 100)) + '%');
@@ -565,6 +598,10 @@ export function scaleCreepStats(heroes: Unit[]): void {
       });
     }
   }
+
+  // Both sides are rigged now, so a baseline taken here is honest. Anything
+  // earlier reads one side's rigging as the other side's damage.
+  if (dpsTestMode) startMatchSampling();
 }
 
 // ---------------------------------------------------------------------------
@@ -694,9 +731,12 @@ function clearCheckPlayerUnits(): void {
 /** HP lost by each side so far, banked as it happens. */
 let creepHPLost = 0;
 let ourHPLost = 0;
+/** The part of ourHPLost that summons took, rather than the fielded force.
+ *  Diagnostic only -- nothing scales off it. */
+let summonHPLost = 0;
 
 /** A unit being watched, with the HP it had at the last sample. */
-interface TrackedHP { unit: unit; lastHP: number; }
+interface TrackedHP { unit: unit; lastHP: number; summon: boolean; }
 let trackedCreeps: TrackedHP[] = [];
 let trackedOurs: TrackedHP[] = [];
 let dpsSampler: Timer | null = null;
@@ -713,7 +753,10 @@ function trackForDPS(list: TrackedHP[], u: unit, rig: boolean): void {
     BlzSetUnitMaxHP(u, DPS_TEST_HP);
     SetUnitState(u, UNIT_STATE_LIFE, DPS_TEST_HP);
   }
-  list.push({ unit: u, lastHP: GetUnitState(u, UNIT_STATE_LIFE) });
+  // `rig` is only ever true for a unit that appeared mid-match, which on our
+  // side means a summon. Remembered so the breakdown can say how much of our
+  // side's HP loss was taken by summons rather than by the force itself.
+  list.push({ unit: u, lastHP: GetUnitState(u, UNIT_STATE_LIFE), summon: rig });
 }
 
 /** Sample both sides and bank what they lost since the last look.
@@ -737,7 +780,9 @@ function sampleDPS(): void {
   for (const entry of trackedOurs) {
     if (GetUnitTypeId(entry.unit) === 0) continue;
     const hp = GetUnitState(entry.unit, UNIT_STATE_LIFE);
-    ourHPLost += entry.lastHP - hp;
+    const lost = entry.lastHP - hp;
+    ourHPLost += lost;
+    if (entry.summon) summonHPLost += lost;
     entry.lastHP = hp;
   }
   // Pick up anything the fight has summoned since the last sample.
@@ -754,11 +799,27 @@ function sampleDPS(): void {
   DestroyGroup(g);
 }
 
+/** Open the match: baseline both sides and start the clock that ends it.
+ *
+ *  Called from the END of scaleCreepStats, once the creeps have their pool.
+ *  The order matters more than it looks: the sampler banks the DIFFERENCE
+ *  between consecutive HP readings, so any HP change that is not damage --
+ *  rigging included -- is indistinguishable from damage unless it has already
+ *  happened before the first reading. */
+function startMatchSampling(): void {
+  beginDPSSampling();
+  dpsTestTimer = Timer.create();
+  dpsTestTimer.start(DPS_TEST_DURATION, false, () => {
+    cancelDPSTest();   // sweeps the field, summons included
+  });
+}
+
 /** Begin watching, once both sides have their rigged HP. */
 function beginDPSSampling(): void {
   stopDPSSampling();
   creepHPLost = 0;
   ourHPLost = 0;
+  summonHPLost = 0;
   trackedCreeps = [];
   trackedOurs = [];
   for (const c of spawnedCreeps) trackForDPS(trackedCreeps, c.unit.handle, false);

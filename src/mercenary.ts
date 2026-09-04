@@ -2,7 +2,7 @@ import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { registerSaveSegment, parseFields } from './save';
 import { getHumanPlayers, getInventoryItemIds, forEachInventoryItem } from './util';
-import { getNeutralPassive } from './teams';
+import { getNeutralExtra } from './teams';
 import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creep_camps';
 import { UNKNOWN_UNIT_ID } from './constants';
@@ -480,11 +480,18 @@ export function syncInterRoundLobbyMercs(positions: Array<{ x: number; y: number
     // the way it will carry it in the round -- in an inventory, not on the
     // floor. The concealed case shows the question mark instead, holding the
     // same items, so the lobby still says what a reroll would keep.
-    const u = spawnMercFromData({ typeId, items: sl.items }, getNeutralPassive(), pos.x, pos.y);
+    // Neutral extra owns the display roster so it grants no vision -- see
+    // createRosterHeroUnit in heroes.ts.
+    const u = spawnMercFromData({ typeId, items: sl.items }, getNeutralExtra(), pos.x, pos.y);
     if (u == null) continue;
     u.invulnerable = true;
     lobbyMercs.push({ unit: u, slotIndex: i });
   }
+}
+
+/** The mercenary display units standing in the inter-round lobby. For tests. */
+export function getInterRoundLobbyMercUnits(): Unit[] {
+  return lobbyMercs.map(e => e.unit);
 }
 
 /** Reroll the inter-round lobby mercenary under `unitHandle`: a new type, keeping its kit.
@@ -507,7 +514,7 @@ export function rerollInterRoundLobbyMerc(unitHandle: unit): boolean {
 
   // Concealed by construction: the type just changed.
   const replacementType = mercConcealed(entry.slotIndex) ? UNKNOWN_UNIT_ID : slot.typeId;
-  const replacement = Unit.create(getNeutralPassive(), replacementType, x, y, 270);
+  const replacement = Unit.create(getNeutralExtra(), replacementType, x, y, 270);
   if (replacement != null) {
     replacement.invulnerable = true;
     for (const itemId of slot.items) {

@@ -42,6 +42,8 @@ import './challengetest'; // challenge sequencing and payouts
 import './fogtest'; // blackout must give the map back at dawn
 import './bossbalance'; // final boss balance harness
 import './dpstest'; // watch the lobby DPS sparring match
+import './lobbyvisiontest'; // lobby scenery must not hand out vision
+import './dpsscaletest'; // what the DPS match actually measures, in raw HP
 import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included
 import './dashfieldstest'; // asks the engine about A000's button data

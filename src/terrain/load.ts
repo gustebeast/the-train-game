@@ -16,7 +16,8 @@ import {
 import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
 import { resetBossKey } from '../bosskey';
-import { isBossVictory } from '../track/state';
+import { isBossVictory, placedTracks } from '../track/state';
+import { getNeutralExtra } from '../teams';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';
 import { getCampData } from '../creeps';
 import { gameState } from '../state';
@@ -433,6 +434,27 @@ export function loadBossBattlefield(): void {
   spawnTerrain(generateBossBattlefield());
 }
 
+/** Hand the inter-round lobby's scenery to the neutral player that shares NO
+ *  vision.
+ *
+ *  spawnTerrain owns the train, its wagon and the starting track by neutral
+ *  passive, because in a ROUND those are things you must be able to see -- the
+ *  train is the thing you are protecting and the line is where you are going.
+ *  In the lobby they are furniture: the train never moves, and the two track
+ *  tiles under it go nowhere. Left on neutral passive they each threw 400 units
+ *  of sight across the floor, which is vision the players did nothing to earn.
+ *
+ *  Only the lobby is re-owned; the round's copies are untouched. What keeps the
+ *  lobby lit is deliberate and elsewhere: the inner ring of WATER_VISIBLE tiles
+ *  (train player, sight deliberately shrunk) plus the players' own peasants.
+ */
+function giveLobbyPropsNoVision(spawned: SpawnedTrain): void {
+  const blind = getNeutralExtra();
+  if (spawned.engine != null) spawned.engine.owner = blind;
+  if (spawned.wagon != null) spawned.wagon.owner = blind;
+  for (const t of placedTracks) t.owner = blind;
+}
+
 export function loadInterRoundLobby(): void {
   // No round in progress, so no challenge overlay, handicaps or night timer.
   hideChallengeUI();
@@ -445,8 +467,9 @@ export function loadInterRoundLobby(): void {
   SetTimeOfDay(12);
   const spawned = spawnTerrain(generateInterRoundLobby());
   if (spawned.engine != null && spawned.wagon != null) initInterRoundLobbyTrain(spawned.engine, spawned.wagon);
+  giveLobbyPropsNoVision(spawned);
   loadCrateForInterRoundLobby();
-  // Heroes and mercenaries stand together in the south-east corner, so the one
+  // Heroes and mercenaries stand in one column down the east edge, so the one
   // Reroll item can target either. Reset first: spawnTerrain has just removed
   // the previous inter-round lobby's display units, and their handles must not be reused.
   resetInterRoundLobbyRoster();
