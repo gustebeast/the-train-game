@@ -303,47 +303,30 @@ compiletime(({ objectData, constants }) => {
   const Modification = require('mdx-m3-viewer-th/dist/cjs/parsers/w3x/w3u/modification').default;
   const ModifiedObject = require('mdx-m3-viewer-th/dist/cjs/parsers/w3x/w3u/modifiedobject').default;
   // Forced mods: fields whose real WC3 default differs from what the library stores
+  //
+  // Every spell repurposed as a trigger-only cast wants the same four things
+  // off: it is a button that raises an event, so mana, cooldown, duration and
+  // area are all in the way. Five abilities spelled that out identically.
+  // Shared safely because the consumer only READS these into fresh
+  // Modification objects; it never writes back through them.
+  const zeroedSpellCost = [
+    { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
+    { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
+    { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
+    { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
+    { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
+  ];
   const forcedMods: { [rawcode: string]: { id: string; variableType: number; dataPointer: number; value: number }[] } = {
     ANcl: [ // Channel
       { id: 'Ncl1', variableType: 2, dataPointer: 1, value: 0 }, // followThroughTime
       { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
       { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
     ],
-    Afod: [ // FingerOfDeath neutral hostile (bridge spell)
-      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
-      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
-      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
-      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
-      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
-    ],
-    Acdh: [ // DrunkenHaze Chen (water train spell)
-      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
-      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
-      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
-      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
-      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
-    ],
-    Aroa: [ // Roar (summon heroes spell)
-      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
-      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
-      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
-      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
-      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
-    ],
-    ACro: [ // RoarNeutralHostile (unsummon heroes spell)
-      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
-      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
-      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
-      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
-      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
-    ],
-    ACss: [ // ShadowStrike neutral hostile (fill bucket spell)
-      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
-      { id: 'acdn', variableType: 2, dataPointer: 0, value: 0 }, // cooldown
-      { id: 'adur', variableType: 2, dataPointer: 0, value: 0 }, // duration
-      { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
-      { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
-    ],
+    Afod: zeroedSpellCost, // FingerOfDeath neutral hostile (bridge spell)
+    Acdh: zeroedSpellCost, // DrunkenHaze Chen (water train spell)
+    Aroa: zeroedSpellCost, // Roar (summon heroes spell)
+    ACro: zeroedSpellCost, // RoarNeutralHostile (unsummon heroes spell)
+    ACss: zeroedSpellCost, // ShadowStrike neutral hostile (fill bucket spell)
     // NOTE: there was an Aihn (UnitInventoryHuman) block here configuring
     // "mercenary inventory, no drop on death". It was dead: no unit anywhere
     // carries Aihn. The mercenary is given AInv (InventoryHero) instead -- see
