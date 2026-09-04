@@ -34,23 +34,23 @@ function runFogTest(t: TestReporter): void {
     }
     t.after(1, () => {
       // Explored, no longer visible: fogged, not masked.
-      t.report('maskedAfterExplore', IsMaskedToPlayer(x, y, p) ? 1 : 0);
-      t.report('foggedAfterExplore', IsFoggedToPlayer(x, y, p) ? 1 : 0);
+      t.expect('maskedAfterExplore', IsMaskedToPlayer(x, y, p) ? 1 : 0, 0);
+      t.expect('foggedAfterExplore', IsFoggedToPlayer(x, y, p) ? 1 : 0, 1);
 
       armChallenge(CH_NIGHT_BLACKOUT);
       beginNight();
       t.after(2, () => {
-        t.report('isNight', isNight() ? 1 : 0);
-        t.report('maskedDuringNight', IsMaskedToPlayer(x, y, p) ? 1 : 0);
+        t.expect('isNight', isNight() ? 1 : 0, 1);
+        t.expect('maskedDuringNight', IsMaskedToPlayer(x, y, p) ? 1 : 0, 1);
 
         endNight();
         // The dawn restore flashes visibility and clears it a frame later, so
         // give it time to settle before reading the fog back.
         t.after(3, () => {
-          t.report('isNightAfterDawn', isNight() ? 1 : 0);
+          t.expect('isNightAfterDawn', isNight() ? 1 : 0, 0);
           // The point of the whole test: exploration survived the blackout.
-          t.report('maskedAfterDawn', IsMaskedToPlayer(x, y, p) ? 1 : 0);
-          t.report('foggedAfterDawn', IsFoggedToPlayer(x, y, p) ? 1 : 0);
+          t.expect('maskedAfterDawn', IsMaskedToPlayer(x, y, p) ? 1 : 0, 0);
+          t.expect('foggedAfterDawn', IsFoggedToPlayer(x, y, p) ? 1 : 0, 1);
           clearChallenges();
           t.done();
         });
@@ -66,20 +66,20 @@ registerTest('fog', runFogTest);
  *  running so the victory lap is never run in the dark. */
 function runNightRulesTest(t: TestReporter): void {
   startDayNightForRound();
-  t.report('startsInDay', isNight() ? 0 : 1);
+  t.expect('startsInDay', isNight() ? 0 : 1, 1);
 
   beginNight();
-  t.report('nightBegan', isNight() ? 1 : 0);
+  t.expect('nightBegan', isNight() ? 1 : 0, 1);
 
   // Victory during night must return to day immediately.
   cancelNightForVictory();
-  t.report('dayAfterVictory', isNight() ? 0 : 1);
+  t.expect('dayAfterVictory', isNight() ? 0 : 1, 1);
 
   // And a victory before nightfall must leave the round in day for good.
   startDayNightForRound();
   cancelNightForVictory();
   t.after(2, () => {
-    t.report('stillDayAfterCancel', isNight() ? 0 : 1);
+    t.expect('stillDayAfterCancel', isNight() ? 0 : 1, 1);
     t.done();
   });
 }

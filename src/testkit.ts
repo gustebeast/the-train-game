@@ -61,6 +61,14 @@ export interface TestReporter {
   report(key: string, value: string | number): void;
   /** Record a failure for one key and keep going. */
   fail(key: string, reason: string): void;
+  /** Record a measurement AND hold it to a value. Reports either way, so a
+   *  failure still shows what was actually seen.
+   *
+   *  Prefer this to report() for anything the test has an opinion about. A
+   *  reported number nobody checks is a test that cannot fail, which reads as a
+   *  pass forever -- the way `fog` and `night` did, and the way dpsprobe's
+   *  bought path did before it was asserted. */
+  expect(key: string, actual: number | string, expected: number | string): void;
   /** Mark the run complete. The runner waits for this before reading results,
    *  so a test that never calls done() will be reported as a timeout. */
   done(): void;
@@ -72,6 +80,12 @@ export interface TestReporter {
   /** Wrap a callback (trigger action, etc.) so a throw inside it is reported
    *  rather than silently swallowed. */
   guard(fn: (this: void) => void): (this: void) => void;
+}
+
+/** How a measurement is written down. Shared by report and expect so a value
+ *  and the expectation it failed against are always formatted the same way. */
+function asText(value: number | string): string {
+  return typeof value === 'number' ? string.format('%.2f', value) : value;
 }
 
 function createReporter(name: string): TestReporter {
@@ -92,11 +106,15 @@ function createReporter(name: string): TestReporter {
   };
 
   const reporter: TestReporter = {
-    report: (key, value) => {
-      const text = typeof value === 'number' ? string.format('%.2f', value) : value;
-      push(key + '=' + text);
-    },
+    report: (key, value) => push(key + '=' + asText(value)),
     fail: (key, reason) => push(key + '=FAIL ' + reason),
+    expect: (key, actual, expected) => {
+      if (asText(actual) === asText(expected)) {
+        reporter.report(key, actual);
+        return;
+      }
+      reporter.fail(key, 'expected ' + asText(expected) + ', got ' + asText(actual));
+    },
     done: () => {
       if (finished) return;
       lines.push('done');
