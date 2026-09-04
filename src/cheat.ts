@@ -19,6 +19,7 @@ import { getNeutralPassive, toggleDPSVision } from './teams';
 import { getDpsMeasurementReport } from './creeps';
 import { makeDancer } from './dance';
 import { spawnBoss } from './boss';
+import { forEachUnitOfPlayer } from './util';
 
 /** Register a chat command (exact match, any player) with its action. */
 function onChatCommand(command: string, action: () => void): void {
@@ -95,14 +96,10 @@ export function initCheat(): void {
   // Make your first peasant dash east on command — handy for eyeballing the
   // dash and for checking a queued follow-up order still runs.
   onChatCommand('-dashnow', () => {
-    const g = CreateGroup()!;
-    GroupEnumUnitsOfPlayer(g, Players[0].handle, undefined);
     let pe: unit | undefined;
-    ForGroup(g, () => {
-      const u = GetEnumUnit();
-      if (pe == null && u != null && GetUnitTypeId(u) === PEASANT_ID) pe = u;
+    forEachUnitOfPlayer(Players[0].handle, u => {
+      if (pe == null && GetUnitTypeId(u) === PEASANT_ID) pe = u;
     });
-    DestroyGroup(g);
     if (pe == null) { print('rollnow: no peasant'); return; }
     const p = pe;
     PanCameraToTimed(GetUnitX(p), GetUnitY(p), 0);

@@ -38,6 +38,22 @@ export function forEachUnitInWorld(cb: (u: unit) => void): void {
   DestroyGroup(g);
 }
 
+/** Run cb for every unit a player owns.
+ *
+ *  The group is created, enumerated and destroyed here, and cb only ever sees a
+ *  live handle. Ten call sites were repeating that dance, and disagreeing about
+ *  it: some passed the filter as `undefined` and some as `null!`, and each one
+ *  had to remember DestroyGroup. */
+export function forEachUnitOfPlayer(owner: player, cb: (this: void, u: unit) => void): void {
+  const g = CreateGroup()!;
+  GroupEnumUnitsOfPlayer(g, owner, undefined);
+  ForGroup(g, () => {
+    const u = GetEnumUnit();
+    if (u != null) cb(u);
+  });
+  DestroyGroup(g);
+}
+
 /** WC3 inventories are six slots wide. */
 const INVENTORY_SLOTS = 6;
 

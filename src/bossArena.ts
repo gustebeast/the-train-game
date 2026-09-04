@@ -5,7 +5,7 @@ import { dealPartyForHumans } from './bossParty';
 import { spawnHeroes, getSpawnedHeroes, endHeroState, chooseAllHeroes } from './heroes';
 import { spawnMercWithHeroes, getLivingMercCount } from './mercenary';
 import { getBossHeroSpots, getBossMercSpots, getBossSpot } from './terrain/spawn';
-import { getHumanPlayers } from './util';
+import { forEachUnitOfPlayer, getHumanPlayers } from './util';
 
 /**
  * The boss fight itself: who stands where, and how it ends.
@@ -61,15 +61,12 @@ function partyStanding(): boolean {
   let standing = false;
   for (const player of getHumanPlayers()) {
     const g = CreateGroup()!;
-    GroupEnumUnitsOfPlayer(g, player.handle, undefined);
-    ForGroup(g, () => {
-      const u = GetEnumUnit();
-      if (standing || u == null) return;
+    forEachUnitOfPlayer(player.handle, u => {
+      if (standing) return;
       if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
       if (GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
       standing = true;
     });
-    DestroyGroup(g);
     if (standing) return true;
   }
   return false;
@@ -147,15 +144,12 @@ export function startBossFight(): void {
     let placed = 0;
     for (const player of getHumanPlayers()) {
       const g = CreateGroup()!;
-      GroupEnumUnitsOfPlayer(g, player.handle, undefined);
-      ForGroup(g, () => {
-        const u = GetEnumUnit();
-        if (u == null || placed >= mercSpots.length) return;
+      forEachUnitOfPlayer(player.handle, u => {
+        if (placed >= mercSpots.length) return;
         if (heroHandles.indexOf(u) >= 0) return;
         SetUnitPosition(u, mercSpots[placed].x, mercSpots[placed].y);
         placed += 1;
       });
-      DestroyGroup(g);
     }
   }
 

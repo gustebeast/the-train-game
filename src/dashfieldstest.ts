@@ -3,20 +3,17 @@ import { Players } from 'w3ts/globals';
 import { PEASANT_ID, DASH_ABILITY_ID } from './constants';
 import { Abilities } from '@objectdata/abilities';
 import { registerTest, TestReporter } from './testkit';
+import { forEachUnitOfPlayer } from './util';
 
 // Asks the ENGINE what it thinks A000's command-card data is, bypassing the
 // object-data files entirely. If the button position reads 0,0 the map's data
 // never reached the game; if it reads 2,1 the data is fine and something else
 // hides the button. Then tries setting it at runtime as a possible fix.
 function run(t: TestReporter): void {
-  const g = CreateGroup()!;
-  GroupEnumUnitsOfPlayer(g, Players[0].handle, undefined);
   let ax = 0; let ay = 0; let found = false;
-  ForGroup(g, () => {
-    const u = GetEnumUnit();
-    if (!found && u != null && GetUnitTypeId(u) === PEASANT_ID) { ax = GetUnitX(u); ay = GetUnitY(u); found = true; }
+  forEachUnitOfPlayer(Players[0].handle, u => {
+    if (!found && GetUnitTypeId(u) === PEASANT_ID) { ax = GetUnitX(u); ay = GetUnitY(u); found = true; }
   });
-  DestroyGroup(g);
   if (!found) { t.fail('anchor', 'no peasant'); t.done(); return; }
 
   const p = Unit.create(Players[0], PEASANT_ID, ax, ay, 0)!;

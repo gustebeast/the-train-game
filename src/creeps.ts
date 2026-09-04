@@ -18,6 +18,7 @@ import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { onCampCleared } from './bosskey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
+import { forEachUnitOfPlayer } from './util';
 
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
@@ -489,12 +490,7 @@ export function getDpsMeasurementReport(): string[] {
  *  they summon -- belongs to it, so this is what "the field is clear" means. */
 export function getCheckPlayerUnitCount(): number {
   let n = 0;
-  const g = CreateGroup()!;
-  GroupEnumUnitsOfPlayer(g, getDPSCheckPlayer().handle, null!);
-  ForGroup(g, () => {
-    if (GetEnumUnit() != null) n += 1;
-  });
-  DestroyGroup(g);
+  forEachUnitOfPlayer(getDPSCheckPlayer().handle, () => { n += 1; });
   return n;
 }
 
@@ -724,15 +720,10 @@ function fieldDPSHeroes(cx: number, cy: number): void {
  *  this file knew it would exist. */
 function clearCheckPlayerUnits(): void {
   const checkId = GetPlayerId(getDPSCheckPlayer().handle);
-  const g = CreateGroup()!;
-  GroupEnumUnitsOfPlayer(g, getDPSCheckPlayer().handle, null!);
-  ForGroup(g, () => {
-    const u = GetEnumUnit();
-    if (u == null) return;
+  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
     if (GetPlayerId(GetOwningPlayer(u)) !== checkId) return;
     RemoveUnit(u);
   });
-  DestroyGroup(g);
 }
 
 /** HP lost by each side so far, banked as it happens. */
@@ -793,17 +784,12 @@ function sampleDPS(): void {
     entry.lastHP = hp;
   }
   // Pick up anything the fight has summoned since the last sample.
-  const g = CreateGroup()!;
-  GroupEnumUnitsOfPlayer(g, getDPSCheckPlayer().handle, null!);
-  ForGroup(g, () => {
-    const u = GetEnumUnit();
-    if (u == null) return;
+  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
     for (const e of trackedOurs) {
       if (e.unit === u) return;
     }
     trackForDPS(trackedOurs, u, true);
   });
-  DestroyGroup(g);
 }
 
 /** Open the match: baseline both sides and start the clock that ends it.

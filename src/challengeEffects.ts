@@ -3,7 +3,7 @@ import { onGlobalTick } from './globalTick';
 import { isInGameplay } from './state';
 import { isChallengeArmed } from './challenges';
 import { CH_NO_UI, CH_SHOULDER_CAM } from './challengeList';
-import { getHumanPlayers } from './util';
+import { forEachUnitOfPlayer, getHumanPlayers } from './util';
 import { PEASANT_ID } from './constants';
 
 /**
@@ -75,16 +75,12 @@ let otsActive = false;
 /** The unit the camera should sit behind for a player: their first peasant. */
 function chaseTargetFor(playerHandle: player): Unit | null {
   let found: Unit | null = null;
-  const g = CreateGroup()!;
-  GroupEnumUnitsOfPlayer(g, playerHandle, null!);
-  ForGroup(g, () => {
-    const u = GetEnumUnit();
-    if (found != null || u == null) return;
+  forEachUnitOfPlayer(playerHandle, u => {
+    if (found != null) return;
     if (GetUnitTypeId(u) !== PEASANT_ID) return;
     if (GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
     found = Unit.fromHandle(u) ?? null;
   });
-  DestroyGroup(g);
   return found;
 }
 

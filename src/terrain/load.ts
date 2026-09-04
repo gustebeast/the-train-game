@@ -6,7 +6,7 @@ import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictor
 import { registerReadyZone } from '../ready';
 import { Unit } from 'w3ts';
 import { PEASANT_ID } from '../constants';
-import { getHumanPlayers, getWorldBounds } from '../util';
+import { forEachUnitOfPlayer, getHumanPlayers, getWorldBounds } from '../util';
 import { makeDancer, startDanceClock } from '../dance';
 import {
   closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,
@@ -390,13 +390,10 @@ export function loadStartLobby(): void {
   startDanceClock(START_LOBBY_BPM);
   for (const player of getHumanPlayers()) {
     if (player.id === 0) continue;
-    const group = CreateGroup()!;
-    GroupEnumUnitsOfPlayer(group, player.handle, undefined);
-    ForGroup(group, () => {
-      const u = Unit.fromHandle(GetEnumUnit());
+    forEachUnitOfPlayer(player.handle, handle => {
+      const u = Unit.fromHandle(handle);
       if (u != null && u.typeId === PEASANT_ID) makeDancer(u);
     });
-    DestroyGroup(group);
   }
 }
 
