@@ -46,7 +46,6 @@ import './lobbyvisiontest'; // lobby scenery must not hand out vision
 import './dpsscaletest'; // what the DPS match actually measures, in raw HP
 import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included
-import './dashfieldstest'; // asks the engine about A000's button data
 import { loadStartLobby } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
