@@ -15,7 +15,7 @@ import {
 } from '../chooseSaveLobby';
 import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
-import { resetBossKey } from '../bosskey';
+import { resetBossKey } from '../bossKey';
 import { isBossVictory, placedTracks } from '../track/state';
 import { getNeutralExtra } from '../teams';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';

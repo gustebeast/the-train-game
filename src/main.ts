@@ -13,7 +13,7 @@ import { initGiveTake } from './givetake';
 import { initCheat } from './cheat';
 import { initDayNight } from './daynight';
 import { initBridge } from './bridge';
-import { initBossRock } from './bossrock';
+import { initBossRock } from './bossRock';
 import { initFill } from './fill';
 import { initWaterTrain } from './water';
 import { initShop, initDealerOffer } from './shop';
@@ -40,7 +40,7 @@ import './burntest'; // burning train: production lock and wrecked end state
 import './shoptest'; // Repair Train purchase effect
 import './challengetest'; // challenge sequencing and payouts
 import './fogtest'; // blackout must give the map back at dawn
-import './bossbalance'; // final boss balance harness
+import './bossBalance'; // final boss balance harness
 import './dpstest'; // watch the lobby DPS sparring match
 import './lobbyvisiontest'; // lobby scenery must not hand out vision
 import './dpsscaletest'; // what the DPS match actually measures, in raw HP

@@ -12,7 +12,7 @@ import { DEFAULT_TRACK, SKINS } from '../track/constants';
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { TRACK_SIZE } from '../track/constants';
-import { registerStrangeRock } from '../bossrock';
+import { registerStrangeRock } from '../bossRock';
 import { placedTracks, setVictoryTile, setBossVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
 import { setCrate, setCrateStart } from '../items';

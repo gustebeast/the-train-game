@@ -1,5 +1,5 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
-import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
+import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creepCamps';
 import {
   getMercCampLevel, spawnMercsForOwner, getSpawnedMercUnits, removeSpawnedMercUnits,
 } from './mercenary';
@@ -15,7 +15,7 @@ import {
 import { isChallengeArmed, completeChallenge } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
-import { onCampCleared } from './bosskey';
+import { onCampCleared } from './bossKey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
 import { forEachUnitOfPlayer } from './util';

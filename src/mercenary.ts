@@ -4,7 +4,7 @@ import { registerSaveSegment, parseFields } from './save';
 import { forEachInventoryItem, getHumanPlayers, getInventoryItemIds, giveItems } from './util';
 import { getNeutralExtra } from './teams';
 import { seededInt } from './rng';
-import { CREEP_CAMPS } from './creep_camps';
+import { CREEP_CAMPS } from './creepCamps';
 import { UNKNOWN_UNIT_ID } from './constants';
 
 /** Hero-style inventory (the same ability the peasant carries tools with). It

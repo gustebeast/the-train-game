@@ -675,7 +675,7 @@ compiletime(({ objectData, constants }) => {
   // Health is granite's, so ordinary attacks can chip at it forever and never
   // break it. Breaking it is not a matter of damage at all: a peasant holding
   // the Strange Key drops its health to 1 by ordering an attack on it, and the
-  // swing that follows finishes it (see bossrock.ts).
+  // swing that follows finishes it (see bossRock.ts).
   //
   // Targeted as debris, which is what makes it attackable at all -- the same
   // setting the trees use. It is a different rawcode from either resource, so

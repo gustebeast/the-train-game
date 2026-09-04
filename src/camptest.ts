@@ -1,5 +1,5 @@
 import { registerTest, TestReporter } from './testkit';
-import { CREEP_CAMPS } from './creep_camps';
+import { CREEP_CAMPS } from './creepCamps';
 import { rollCreepCamp, getCampData, getCampIndex, clearCampRotation } from './creeps';
 
 /** The camp rotation: an even split across levels, and a lap per level.
