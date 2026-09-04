@@ -150,23 +150,6 @@ export function initReadyZone(cx: number, cy: number, id: string, marker: Unit |
   }
 }
 
-/** Remove one ready zone for good: its triggers, its region, and the circle
- *  the player walks onto. Used to retire the Reset Purchases circle once a
- *  random outcome has been taken, so a roll cannot be undone and re-rolled. */
-export function removeReadyZone(id: string): void {
-  const zone = activeZones.get(id);
-  if (zone == null) return;
-  cancelCountdown(zone);
-  zone.enterTrigger.destroy();
-  zone.leaveTrigger.destroy();
-  zone.region.destroy();
-  zone.rect.destroy();
-  if (zone.marker != null && GetUnitTypeId(zone.marker.handle) !== 0) {
-    RemoveUnit(zone.marker.handle);
-  }
-  activeZones.delete(id);
-}
-
 /** Destroy all ready zones and triggers. */
 export function cleanupReady(): void {
   for (const [, zone] of activeZones) {

@@ -223,11 +223,6 @@ function rollMercType(maxLevel: number): number {
 // Purchases
 // ---------------------------------------------------------------------------
 
-/** Whether any mercenary has ever been hired. */
-export function isMercUpgradeBought(): boolean {
-  return slots.some(sl => sl.typeId !== 0);
-}
-
 /** Whether at least one mercenary is alive. */
 export function hasActiveMerc(): boolean {
   return livingMercCount() > 0;

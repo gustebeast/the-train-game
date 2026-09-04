@@ -71,12 +71,6 @@ export function startDanceClock(bpm: number): void {
   songClock.start(3600, false, () => {});
 }
 
-export function stopDanceClock(): void {
-  if (songClock != null) songClock.destroy();
-  songClock = null;
-  beatPeriod = 0;
-}
-
 /** How long until the next beat, or 0 when there is no song to sync to. */
 function untilNextBeat(): number {
   if (beatPeriod <= 0 || songClock == null) return 0;

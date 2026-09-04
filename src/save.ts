@@ -373,11 +373,6 @@ export function claimNewSlot(): number {
   return currentSlot;
 }
 
-/** The slot the session is playing, 0 if none claimed. */
-export function getCurrentSlot(): number {
-  return currentSlot;
-}
-
 /** Write the session's state into `slot`, stamping it as the newest save.
  *  `defeated` hides it from the chooser without destroying it. */
 function writeSlot(slot: number, defeated: boolean): void {

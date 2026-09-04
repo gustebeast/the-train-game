@@ -102,11 +102,6 @@ export function getDashDebug(): number[] {
   return [dbg.tx, dbg.ty, dbg.events, dbg.atQueue, dbg.atExec, dbg.started];
 }
 
-/** True while the unit is mid-dash. */
-export function isDashing(h: unit): boolean {
-  return dashing.has(h);
-}
-
 /** End the dash: restore the unit's normal speed. Issues NO order — a 'stop'
  *  here would discard whatever the player queued behind the dash. */
 function endDash(h: unit): void {

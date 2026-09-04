@@ -50,10 +50,6 @@ import { advanceChallengeOffer } from '../challenges';
  *  its own slot, so nothing here can reach one. */
 let inTutorial = false;
 
-export function isInTutorial(): boolean {
-  return inTutorial;
-}
-
 /** Leave the tutorial: back to the start lobby, with the session wiped so
  *  nothing the tutorial did can follow the player into a real run. */
 function endTutorial(): void {

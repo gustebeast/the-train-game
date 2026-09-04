@@ -38,12 +38,6 @@ export function resetBossKey(): void {
   keyDropped = false;
 }
 
-/** True if the key has been handed out this round (whether or not it is still
- *  being carried). */
-export function isBossKeyDropped(): boolean {
-  return keyDropped;
-}
-
 /** Every summoned hero still standing? */
 function allHeroesAlive(): boolean {
   for (const hero of getSpawnedHeroes()) {

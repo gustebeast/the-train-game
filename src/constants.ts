@@ -20,10 +20,9 @@ export const UNKNOWN_UNIT_ID = FourCC('qmrk');
 export const BOSS_KEY_ITEM_ID = FourCC(Items.KeyOfThreeMoons);
 export const BOSS_ID = FourCC('ubos');
 export const BOSS_ADD_ID = FourCC('uinl');
-/** The boss's Inferno (a Tichondrius-campaign copy) and the add's Thunder Clap
- *  (a copy with the hero flag cleared). */
+/** The boss's Inferno: a Tichondrius-campaign copy, so the Dreadlord's is
+ *  untouched. */
 export const BOSS_INFERNO_ABILITY_ID = FourCC('A010');
-export const BOSS_ADD_CLAP_ABILITY_ID = FourCC('A011');
 
 // Critters: the wandering-animal set from classic 1v1 melee maps
 export const CRITTER_TYPE_IDS: ReadonlyArray<number> = [

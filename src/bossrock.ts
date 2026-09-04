@@ -75,11 +75,6 @@ export function registerStrangeRock(rock: destructable): void {
   });
 }
 
-/** Forget the current rock -- the terrain it stood on is being torn down. */
-export function forgetStrangeRock(): void {
-  watched = null;
-}
-
 /** Tell a player why the rock will not budge, the moment they try it. */
 export function initBossRock(): void {
   const onAttack = Trigger.create();
