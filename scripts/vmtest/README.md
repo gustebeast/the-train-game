@@ -36,7 +36,7 @@ resume, upload, create the game, tear down -- is paid per boot, so running the
 whole suite one test at a time pays it nineteen times.
 
 ```powershell
-Import-Module .\scriptsmtest\TrainVMTest.psm1 -Force
+Import-Module .\scripts\vmtest\TrainVMTest.psm1 -Force
 Invoke-MapTests -Tests damage,burn,challenge
 
 # or everything the built map registers
