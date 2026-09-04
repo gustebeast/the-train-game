@@ -16,7 +16,7 @@ import {
 import { applyTrackShapes } from './challengeList';
 import { beginNight, endNight, isNight } from './daynight';
 import { getNeutralPassive, toggleDPSVision } from './teams';
-import { dpsMeasurementReport } from './creeps';
+import { getDpsMeasurementReport } from './creeps';
 import { makeDancer } from './dance';
 import { spawnBoss } from './boss';
 
@@ -216,7 +216,7 @@ export function initCheat(): void {
   // What the last DPS match measured, and the multiplier it is about to apply
   // to the next camp's damage. For checking a suspicious camp without guessing.
   onChatCommand('-dpsnumbers', () => {
-    for (const line of dpsMeasurementReport()) print(line);
+    for (const line of getDpsMeasurementReport()) print(line);
   });
 
   // Drive the defeat path without having to actually run the train out of

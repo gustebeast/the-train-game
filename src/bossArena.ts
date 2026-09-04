@@ -3,7 +3,7 @@ import { BOSS_ADD_ID, BOSS_ID } from './constants';
 import { spawnBoss, stopBoss } from './boss';
 import { dealPartyForHumans } from './bossParty';
 import { spawnHeroes, getSpawnedHeroes, endHeroState, chooseAllHeroes } from './heroes';
-import { spawnMercWithHeroes, livingMercCount } from './mercenary';
+import { spawnMercWithHeroes, getLivingMercCount } from './mercenary';
 import { getBossHeroSpots, getBossMercSpots, getBossSpot } from './terrain/spawn';
 import { getHumanPlayers } from './util';
 
@@ -111,7 +111,7 @@ export function startBossFight(): void {
   const mercSpots = getBossMercSpots();
   // Everybody comes to this one, not the usual two.
   chooseAllHeroes();
-  const deal = dealPartyForHumans(heroSpots.length, livingMercCount());
+  const deal = dealPartyForHumans(heroSpots.length, getLivingMercCount());
 
   // spawnHeroes takes one owner per hero in roster order, which is exactly the
   // shape the deal produces.

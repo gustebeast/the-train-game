@@ -1,7 +1,7 @@
 import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creep_camps';
 import {
-  mercCampLevel, spawnMercsForOwner, getSpawnedMercUnits, removeSpawnedMercUnits,
+  getMercCampLevel, spawnMercsForOwner, getSpawnedMercUnits, removeSpawnedMercUnits,
 } from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
 import {
@@ -170,7 +170,7 @@ export function rollCreepCamp(): void {
   if (camps.length === 0) return;
   // One camp level per living mercenary: none -> 1, one -> 2, both -> 3.
   // Losing one really does close its camps again.
-  const maxLevel = mercCampLevel();
+  const maxLevel = getMercCampLevel();
 
   // Draw the LEVEL first, then a camp within it, rather than drawing flat from
   // every eligible camp. The catalogue is lopsided -- far more level 2 camps
@@ -421,7 +421,7 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
  *  scale is the multiplier applied to every creep's damage: 1 leaves them at
  *  their ladder values, 3 triples them. A number far from 1 means the match
  *  measured something lopsided. */
-export function dpsMeasurementReport(): string[] {
+export function getDpsMeasurementReport(): string[] {
   const lines: string[] = [];
   lines.push('Our DPS (measured): ' + I2S(R2I(measuredHeroDPS)));
   lines.push('Creep DPS (measured): ' + I2S(R2I(measuredCreepDPS)));
@@ -439,7 +439,7 @@ export function dpsMeasurementReport(): string[] {
 /** How many units the check player still owns. Zero except while a match is
  *  running: anything the match brings on -- heroes, mercenaries, and whatever
  *  they summon -- belongs to it, so this is what "the field is clear" means. */
-export function checkPlayerUnitCount(): number {
+export function getCheckPlayerUnitCount(): number {
   let n = 0;
   const g = CreateGroup()!;
   GroupEnumUnitsOfPlayer(g, getDPSCheckPlayer().handle, null!);
@@ -611,7 +611,7 @@ function teardownDPSTest(record: boolean): void {
 /** What the DPS test is doing right now. Diagnostics only -- nothing in the
  *  game reads this; it exists so a test can watch the sparring match from the
  *  outside instead of inferring it. */
-export function dpsTestStatus(): {
+export function getDpsTestStatus(): {
   mode: boolean; creeps: number; heroes: number; mercs: number; timer: boolean;
   elapsed: number; campIndex: number;
 } {

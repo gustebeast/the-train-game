@@ -1,7 +1,7 @@
 import { Timer } from 'w3ts';
 import { BOSS_KEY_ITEM_ID } from './constants';
 import { getSpawnedHeroes } from './heroes';
-import { livingMercCount } from './mercenary';
+import { getLivingMercCount } from './mercenary';
 
 /**
  * The Strange Key: the way in to the final boss.
@@ -53,7 +53,7 @@ function allHeroesAlive(): boolean {
 function campClearEarnsKey(campLevel: number): boolean {
   if (keyDropped) return false;
   if (campLevel < KEY_CAMP_LEVEL) return false;
-  if (livingMercCount() < MERCS_REQUIRED) return false;
+  if (getLivingMercCount() < MERCS_REQUIRED) return false;
   return allHeroesAlive();
 }
 

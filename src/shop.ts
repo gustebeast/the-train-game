@@ -13,7 +13,7 @@ import {
 import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
 import {
   isMercDead, buyMercContract, buySecondContract,
-  canBuyMercContract, canBuySecondContract, livingMercCount,
+  canBuyMercContract, canBuySecondContract, getLivingMercCount,
 } from './mercenary';
 import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
 import { forceLevel3Camp } from './creeps';
@@ -101,7 +101,7 @@ export function stockShop(shop: Unit): void {
     // the same thing as "the second contract is bought and neither has been
     // lost", and also exactly the condition under which a level 3 camp can
     // appear at all. Buying bait for a camp that cannot spawn would be a trap.
-    if (livingMercCount() >= 2) {
+    if (getLivingMercCount() >= 2) {
       AddItemToStock(shop.handle, STRANGE_MEAT_ID, 10, 10);
     }
     // Rerolls only make sense when there is someone standing here to reroll

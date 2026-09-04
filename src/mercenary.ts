@@ -67,14 +67,14 @@ function livingSlots(): MercSlot[] {
 }
 
 /** How many mercenaries are alive right now (0-2). */
-export function livingMercCount(): number {
+export function getLivingMercCount(): number {
   return livingSlots().length;
 }
 
 /** Highest creep camp level unlocked: one per living mercenary, above the
  *  level 1 baseline. Losing a mercenary really does cost you the camps. */
-export function mercCampLevel(): number {
-  return 1 + livingMercCount();
+export function getMercCampLevel(): number {
+  return 1 + getLivingMercCount();
 }
 
 // ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ function rollMercType(maxLevel: number): number {
 
 /** Whether at least one mercenary is alive. */
 export function hasActiveMerc(): boolean {
-  return livingMercCount() > 0;
+  return getLivingMercCount() > 0;
 }
 
 /** Whether a slot that once held a mercenary is empty because it died, so the
@@ -236,13 +236,13 @@ export function isMercDead(): boolean {
 
 /** The Mercenary Contract is on the shelf whenever none are alive. */
 export function canBuyMercContract(): boolean {
-  return livingMercCount() === 0;
+  return getLivingMercCount() === 0;
 }
 
 /** The Second Contract is on the shelf only with exactly one alive: it is the
  *  step from one mercenary to two, and from level 2 camps to level 3. */
 export function canBuySecondContract(): boolean {
-  return livingMercCount() === 1;
+  return getLivingMercCount() === 1;
 }
 
 /** Fill the lowest empty slot with a freshly rolled mercenary, handing back the
@@ -496,7 +496,7 @@ export function rerollInterRoundLobbyMerc(unitHandle: unit): boolean {
   // the player may have handed it something since the inter-round lobby was built.
   slot.items = getInventoryItemIds(entry.unit.handle);
   // Excludes every mercenary in play, so a reroll is always something new.
-  const rolled = rollMercType(mercCampLevel());
+  const rolled = rollMercType(getMercCampLevel());
   if (rolled !== 0) slot.typeId = rolled;
   RemoveUnit(entry.unit.handle);
 

@@ -48,7 +48,7 @@ function line(label: string, done: Set<number>, total: number): string {
 }
 
 /** The board's contents, rebuilt on each redraw. */
-export function tutorialBoardLines(): string[] {
+export function getTutorialBoardLines(): string[] {
   const total = getHumanPlayers().length;
   return [
     line('Chopped a tree', chopped, total),

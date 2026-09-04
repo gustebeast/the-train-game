@@ -69,11 +69,11 @@ export function setStorageItem(target: Unit, itemTypeId: number, charges: number
 export function loadCrateForRound(): void {
   if (crateStart == null) return;
   setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateTrackCount,
-    storageSlot(crateStart, TRACK_PIECE_ID));
+    getStorageSlot(crateStart, TRACK_PIECE_ID));
   setStorageItem(crateStart, WOOD_ID, gameState.crateWoodCount,
-    storageSlot(crateStart, WOOD_ID));
+    getStorageSlot(crateStart, WOOD_ID));
   setStorageItem(crateStart, STONE_ID, gameState.crateStoneCount,
-    storageSlot(crateStart, STONE_ID));
+    getStorageSlot(crateStart, STONE_ID));
   gameState.crateTrackCount = 0;
   gameState.crateWoodCount = 0;
   gameState.crateStoneCount = 0;
@@ -83,11 +83,11 @@ export function loadCrateForRound(): void {
 export function loadCrateForInterRoundLobby(): void {
   if (crateStart == null) return;
   setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateMaxStack,
-    storageSlot(crateStart, TRACK_PIECE_ID));
+    getStorageSlot(crateStart, TRACK_PIECE_ID));
   setStorageItem(crateStart, WOOD_ID, gameState.crateMaxStack,
-    storageSlot(crateStart, WOOD_ID));
+    getStorageSlot(crateStart, WOOD_ID));
   setStorageItem(crateStart, STONE_ID, gameState.crateMaxStack,
-    storageSlot(crateStart, STONE_ID));
+    getStorageSlot(crateStart, STONE_ID));
 }
 
 function isCrate(u: Unit): boolean {
@@ -130,7 +130,7 @@ function storageOrder(carrier: Unit): number[] {
   return [TRACK_PIECE_ID, WOOD_ID, STONE_ID];
 }
 
-export function storageSlot(carrier: Unit, itemTypeId: number): number {
+export function getStorageSlot(carrier: Unit, itemTypeId: number): number {
   const order = storageOrder(carrier);
   for (let i = 0; i < order.length; i++) {
     if (order[i] === itemTypeId) return i;
@@ -352,7 +352,7 @@ export function giveToStorage(giver: Unit, giverItem: Item, storage: Unit): bool
     if (newItem != null) {
       newItem.charges = toGive;
       UnitAddItem(storage.handle, newItem.handle);
-      UnitDropItemSlot(storage.handle, newItem.handle, storageSlot(storage, itemType));
+      UnitDropItemSlot(storage.handle, newItem.handle, getStorageSlot(storage, itemType));
     }
   }
 
@@ -536,7 +536,7 @@ export function initItems(): void {
       }
     } else if (isStorage(unit) && pickedIsResource) {
       // Move to the correct fixed slot for this resource type
-      UnitDropItemSlot(unit.handle, picked.handle, storageSlot(unit, pickedType));
+      UnitDropItemSlot(unit.handle, picked.handle, getStorageSlot(unit, pickedType));
     }
 
     // Update train production when the engine's or track wagon's inventory changes

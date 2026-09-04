@@ -84,7 +84,7 @@ function refresh(): void {
 
 /** How many saves the chooser is currently offering. Paging through one save,
  *  or none, has nothing to page to. */
-export function offeredSaveCount(): number {
+export function getOfferedSaveCount(): number {
   return offered.length;
 }
 

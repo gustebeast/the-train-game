@@ -11,7 +11,7 @@ import { makeDancer, startDanceClock } from '../dance';
 import {
   closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,
   selectNewerSave, selectOlderSave,
-  offeredSaveCount,
+  getOfferedSaveCount,
 } from '../chooseSaveLobby';
 import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
@@ -29,7 +29,7 @@ import { startDPSTest } from '../creeps';
 import { loadCrateForRound, loadCrateForInterRoundLobby } from '../items';
 import { resetChallengeProgress } from '../challengeList';
 import { hideChallengeUI, hidePanel, showPanel } from '../challengeUI';
-import { startTutorialBoard, stopTutorialBoard, tutorialBoardLines } from '../tutorialBoard';
+import { startTutorialBoard, stopTutorialBoard, getTutorialBoardLines } from '../tutorialBoard';
 import { applyChallengeEffects, clearChallengeEffects } from '../challengeEffects';
 import { startDayNightForRound, stopDayNight } from '../daynight';
 import { refreshInterRoundLobbyRoster, resetInterRoundLobbyRoster } from '../interRoundLobbyRoster';
@@ -127,7 +127,7 @@ registerReadyZone('tutorial', 'Starting the tutorial', () => {
   // After the load: loadGameplay hides the overlay on its way through, so the
   // board has to be put up once the round is standing.
   startTutorialBoard();
-  showPanel('Tutorial', tutorialBoardLines);
+  showPanel('Tutorial', getTutorialBoardLines);
 });
 registerReadyZone('loadsave', 'Opening saved games', () => loadChooseSaveLobby(),
   () => (listSaves().length === 0 ? 'There are no saved games to load.' : null));
@@ -138,7 +138,7 @@ registerReadyZone('saveback', 'Going back', () => {
 // Paging does NOT reload the lobby: only the displayed heroes and the label
 // change, so the circles the player is standing among stay put.
 const nothingToPage = (): string | null => {
-  const count = offeredSaveCount();
+  const count = getOfferedSaveCount();
   if (count === 0) return 'There are no saved games.';
   return count === 1 ? 'This is the only saved game.' : null;
 };

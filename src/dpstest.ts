@@ -1,7 +1,7 @@
 import { registerTest, TestReporter } from './testkit';
 import {
-  dpsTestStatus, forceLevel3Camp, getCampData, restartDPSTest, measureFieldedForce,
-  cancelDPSTest, checkPlayerUnitCount, getCampOrigin,
+  getDpsTestStatus, forceLevel3Camp, getCampData, restartDPSTest, measureFieldedForce,
+  cancelDPSTest, getCheckPlayerUnitCount, getCampOrigin,
 } from './creeps';
 import { Unit } from 'w3ts';
 import { getDPSCheckPlayer } from './teams';
@@ -54,7 +54,7 @@ function runDpsTest(t: TestReporter): void {
 
   loadInterRoundLobby();
   t.after(3, () => {
-    const a = dpsTestStatus();
+    const a = getDpsTestStatus();
     expect(t, 'dpsRunsUnbought', a.timer ? 1 : 0, 1);
     expect(t, 'dpsHeroesUnbought', a.heroes, 2);
     t.report('dpsCreepsUnbought', a.creeps);
@@ -68,7 +68,7 @@ function runDpsTest(t: TestReporter): void {
     expect(t, 'chosenThisRoundBought', getChosenHeroCount(), 2);
     loadInterRoundLobby();
     t.after(3, () => {
-      const b = dpsTestStatus();
+      const b = getDpsTestStatus();
       // Asserted, not merely reported: buying the upgrade must leave the
       // match exactly as it was, and a number nobody checks proves nothing.
       expect(t, 'dpsRunsBought', b.timer ? 1 : 0, 1);
@@ -94,7 +94,7 @@ function runDpsCampSwapTest(t: TestReporter): void {
   loadInterRoundLobby();
 
   t.after(4, () => {
-    const before = dpsTestStatus();
+    const before = getDpsTestStatus();
     t.report('campBefore', before.campIndex);
     t.report('elapsedBefore', R2I(before.elapsed));
     expect(t, 'matchRunningBefore', before.timer ? 1 : 0, 1);
@@ -105,7 +105,7 @@ function runDpsCampSwapTest(t: TestReporter): void {
     expect(t, 'meatChangedCamp', forced ? 1 : 0, 1);
 
     t.after(2, () => {
-      const after = dpsTestStatus();
+      const after = getDpsTestStatus();
       t.report('campAfter', after.campIndex);
       const camp = getCampData();
       t.report('campLevelAfter', camp != null ? camp.level : 0);
@@ -138,13 +138,13 @@ function runDpsRevertTest(t: TestReporter): void {
   loadInterRoundLobby();
 
   t.after(4, () => {
-    const entry = dpsTestStatus();
+    const entry = getDpsTestStatus();
     t.report('campOnEntry', entry.campIndex);
     expect(t, 'matchRunningOnEntry', entry.timer ? 1 : 0, 1);
 
     // Change the camp mid-match, exactly as buying the meat does...
     forceLevel3Camp();
-    const swapped = dpsTestStatus();
+    const swapped = getDpsTestStatus();
     t.report('campAfterMeat', swapped.campIndex);
 
     // ...then take Reset Purchases, which is meant to undo it.
@@ -153,7 +153,7 @@ function runDpsRevertTest(t: TestReporter): void {
     loadInterRoundLobby();
 
     t.after(4, () => {
-      const after = dpsTestStatus();
+      const after = getDpsTestStatus();
       const camp = getCampData();
       t.report('campAfterRevert', after.campIndex);
       expect(t, 'matchRunningAfterRevert', after.timer ? 1 : 0, 1);
@@ -184,7 +184,7 @@ function runDpsMercTest(t: TestReporter): void {
   loadInterRoundLobby();
 
   t.after(4, () => {
-    const a = dpsTestStatus();
+    const a = getDpsTestStatus();
     t.report('heroesInMatch', a.heroes);
     t.report('mercsInMatch', a.mercs);
     expect(t, 'matchRunning', a.timer ? 1 : 0, 1);
@@ -213,7 +213,7 @@ function runDpsMercTest(t: TestReporter): void {
       }
       expect(t, 'stillNoMercOwnedByAHuman', measureFieldedForce().mercsOwnedByHumans, 0);
       // Re-fielding must replace, not accumulate.
-      const b = dpsTestStatus();
+      const b = getDpsTestStatus();
       t.report('heroesAfterRestart', b.heroes);
       t.report('mercsAfterRestart', b.mercs);
       expect(t, 'mercNotDuplicated', b.mercs, 1);
@@ -324,7 +324,7 @@ function runDpsFieldClearTest(t: TestReporter): void {
   loadInterRoundLobby();
 
   t.after(4, () => {
-    const fielded = checkPlayerUnitCount();
+    const fielded = getCheckPlayerUnitCount();
     t.report('unitsFieldedByMatch', fielded);
     if (fielded === 0) {
       t.fail('unitsFieldedByMatch', 'nothing was fielded, so nothing is being tested');
@@ -339,13 +339,13 @@ function runDpsFieldClearTest(t: TestReporter): void {
     const wolf = Unit.create(getDPSCheckPlayer(), FourCC('nwlt'),
       origin != null ? origin.x : 0, origin != null ? origin.y : 0, 270);
     expect(t, 'standInSummonCreated', wolf != null ? 1 : 0, 1);
-    const withSummon = checkPlayerUnitCount();
+    const withSummon = getCheckPlayerUnitCount();
     t.report('unitsWithSummon', withSummon);
     expect(t, 'summonIsOwnedByTheMatch', withSummon - fielded, 1);
 
     cancelDPSTest();
     t.after(1, () => {
-      const after = checkPlayerUnitCount();
+      const after = getCheckPlayerUnitCount();
       t.report('unitsAfterMatch', after);
       // Zero, summon included. Removing only the units on the spawn lists
       // would leave this at 1 and is exactly what shipped.
