@@ -50,7 +50,7 @@ function allHeroesAlive(): boolean {
 
 /** Whether this camp clear has earned the key. Public so the caller can say
  *  why nothing dropped, and so it can be exercised on its own. */
-export function campClearEarnsKey(campLevel: number): boolean {
+function campClearEarnsKey(campLevel: number): boolean {
   if (keyDropped) return false;
   if (campLevel < KEY_CAMP_LEVEL) return false;
   if (livingMercCount() < MERCS_REQUIRED) return false;

@@ -171,7 +171,7 @@ export function registerPeasantTargetCheck(
 }
 
 /** Show a floating text message above a unit. */
-export function showFloatingText(unitHandle: unit, msg: string): void {
+function showFloatingText(unitHandle: unit, msg: string): void {
   const tt = CreateTextTag();
   if (tt != null) {
     SetTextTagText(tt, msg, 0.024);
@@ -208,7 +208,7 @@ export function getMaxStack(u: Unit, itemTypeId?: number): number {
 
 /** Re-exported so existing callers keep working; the definition lives with the
  *  rest of the item classification in itemRules.ts. */
-export function isResource(itemTypeId: number): boolean {
+function isResource(itemTypeId: number): boolean {
   return isResourceItem(itemTypeId);
 }
 
@@ -236,7 +236,7 @@ export function findItemByType(u: Unit, itemTypeId: number): Item | null {
 }
 
 /** Find any item in a unit's inventory. */
-export function findAnyItem(u: Unit): Item | null {
+function findAnyItem(u: Unit): Item | null {
   for (let slot = 0; slot < 6; slot++) {
     const it = u.getItemInSlot(slot);
     if (it != null) return it;

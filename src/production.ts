@@ -98,7 +98,7 @@ function stopProduction(): void {
  * Called whenever the train's inventory changes (item added/removed/charges changed).
  * Re-evaluates whether production should be running.
  */
-export function updateProduction(): void {
+function updateProduction(): void {
   const shouldProduce = canProduce() && !paused;
 
   if (shouldProduce && !producing) {

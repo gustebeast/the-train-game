@@ -69,7 +69,7 @@ export function deriveSeed(streamId: number): number {
 /** Give the run a seed if it has none. Old saves predate the field, and a save
  *  written before this existed decodes it as 0 -- so mint one on the spot and
  *  carry on; the save picks it up the next time it is written. */
-export function ensureSeed(): void {
+function ensureSeed(): void {
   if (gameState.randomSeed !== 0) return;
   gameState.randomSeed = GetRandomInt(1, M - 1);
   gameState.randomDraws = 0;

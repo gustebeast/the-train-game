@@ -368,7 +368,7 @@ function allocateSlot(): number {
 
 /** Begin a fresh run in its own slot, so it cannot overwrite an existing save.
  *  Call before the first saveToFile of a new game. */
-export function claimNewSlot(): number {
+function claimNewSlot(): number {
   currentSlot = allocateSlot();
   return currentSlot;
 }

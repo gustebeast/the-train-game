@@ -28,7 +28,7 @@ export function isResourceItem(itemTypeId: number): boolean {
 }
 
 /** Peasant tools (and the bucket in both states). */
-export function isToolItem(itemTypeId: number): boolean {
+function isToolItem(itemTypeId: number): boolean {
   return itemTypeId === AXE_ID || itemTypeId === PICKAXE_ID
     || itemTypeId === BUCKET_ID || itemTypeId === BUCKET_FULL_ID;
 }
@@ -36,7 +36,7 @@ export function isToolItem(itemTypeId: number): boolean {
 /** Consumed the moment it is acquired (shop.ts turns the pickup into the
  *  upgrade), so it is never really carried and everyone may accept one --
  *  otherwise buying an upgrade would be rejected before it could apply. */
-export function isShopUpgrade(itemTypeId: number): boolean {
+function isShopUpgrade(itemTypeId: number): boolean {
   for (const id of SHOP_UPGRADE_ITEM_IDS) {
     if (id === itemTypeId) return true;
   }
@@ -49,7 +49,7 @@ export function isShopUpgrade(itemTypeId: number): boolean {
  *  Being on this list is what keeps the key off the engine, the wagon and the
  *  crate -- each of those accepts only its own resources -- and out of hero and
  *  mercenary hands, since anything not listed here counts as hero loot. */
-export function isPeasantUtility(itemTypeId: number): boolean {
+function isPeasantUtility(itemTypeId: number): boolean {
   return itemTypeId === REROLL_ITEM_ID || itemTypeId === BOSS_KEY_ITEM_ID;
 }
 
@@ -57,18 +57,18 @@ export function isPeasantUtility(itemTypeId: number): boolean {
  *  rings, tomes — the creep-camp drop pools). Defaulting this way means a new
  *  drop is automatically hero-only rather than silently becoming carryable by
  *  a peasant. */
-export function isHeroItem(itemTypeId: number): boolean {
+function isHeroItem(itemTypeId: number): boolean {
   return !isResourceItem(itemTypeId) && !isToolItem(itemTypeId)
     && !isShopUpgrade(itemTypeId) && !isPeasantUtility(itemTypeId);
 }
 
 // --- carriers -------------------------------------------------------------
 
-export function isPeasantUnit(u: Unit): boolean {
+function isPeasantUnit(u: Unit): boolean {
   return u.typeId === PEASANT_ID;
 }
 
-export function isHeroUnit(u: Unit): boolean {
+function isHeroUnit(u: Unit): boolean {
   return IsUnitType(u.handle, UNIT_TYPE_HERO);
 }
 

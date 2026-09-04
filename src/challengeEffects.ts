@@ -132,7 +132,7 @@ export function isShoulderCamActive(): boolean {
  *  distance, angle and position are re-applied every OTS_INTERVAL, so wheeling
  *  out or scrolling away snaps back within a frame or two rather than letting a
  *  player escape the handicap. */
-export function setShoulderCam(active: boolean): void {
+function setShoulderCam(active: boolean): void {
   if (otsActive === active) return;
   otsActive = active;
   if (active) {

@@ -172,7 +172,7 @@ export function onTrackPlaced(): void {
 }
 
 /** Re-issue the train's current move order (call after programmatic inventory changes). */
-export function reissueMoveOrder(): void {
+function reissueMoveOrder(): void {
   // Inventory changes also happen in the inter-round lobby (capacity display items) —
   // never issue move orders there; the stored points are from the last round
   if (!isInGameplay()) return;

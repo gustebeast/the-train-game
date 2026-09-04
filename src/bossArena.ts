@@ -51,7 +51,7 @@ export function setBossArenaCallbacks(defeat: () => void, victory: () => void): 
 
 /** Stop watching. Safe to call repeatedly, and called on the way out however
  *  the fight ended. */
-export function stopBossArena(): void {
+function stopBossArena(): void {
   if (watcher != null) { watcher.destroy(); watcher = null; }
   stopBoss();
 }

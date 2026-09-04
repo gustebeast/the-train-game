@@ -45,7 +45,7 @@ function shuffled<T>(source: ReadonlyArray<T>): T[] {
  * Pure: give it the same inputs and the only variation is the shuffle, which
  * is the point. No units, no map, no side effects.
  */
-export function dealParty(
+function dealParty(
   playerIds: ReadonlyArray<number>, heroCount: number, mercCount: number,
 ): PartyAssignment {
   const heroOwners: number[] = [];

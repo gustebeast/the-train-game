@@ -342,7 +342,7 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
 /** The run is over and won. Same shape as the defeat lobby, on its own board:
  *  the save is left alone rather than marked, because beating the boss is not
  *  something that should stop you loading the run again. */
-export function loadVictoryLobby(): void {
+function loadVictoryLobby(): void {
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
@@ -353,7 +353,7 @@ export function loadVictoryLobby(): void {
   spawnTerrain(generateVictoryLobby());
 }
 
-export function loadDefeatLobby(): void {
+function loadDefeatLobby(): void {
   // The run is over: mark its save so the chooser stops offering it. Marked,
   // not deleted -- see markCurrentSaveDefeated. A session that never claimed a
   // slot (tutorial, cheat run) marks nothing.
@@ -401,7 +401,7 @@ export function loadStartLobby(): void {
 
 /** The save chooser. Same shell as the start lobby, with paging circles in
  *  place of the menu ones. */
-export function loadChooseSaveLobby(): void {
+function loadChooseSaveLobby(): void {
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();

@@ -293,7 +293,7 @@ export function getCampOrigin(): { x: number; y: number } | null {
   return campOrigin;
 }
 
-export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
+function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
   campOrigin = { x: cx, y: cy };
   const owner = getNeutralAggressive();
   spawnedCreeps = [];
@@ -322,7 +322,7 @@ export function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
 /** Remove all spawned creeps (and their corpses). Called when all heroes die,
  *  so the failed camp doesn't leave creeps roaming the map. Not used in DPS
  *  test mode — cancelDPSTest owns creep cleanup there. */
-export function removeSpawnedCreeps(): void {
+function removeSpawnedCreeps(): void {
   if (dpsTestMode) return;
   for (const c of spawnedCreeps) {
     if (GetUnitTypeId(c.unit.handle) !== 0) {
