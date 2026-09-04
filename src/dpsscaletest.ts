@@ -13,8 +13,7 @@ function atLeast(t: TestReporter, key: string, actual: number, floor: number): v
 }
 
 /**
- * A diagnostic, not a gate: run one whole 30-second sparring match and report
- * everything the measurement saw.
+ * Run one whole 30-second sparring match and check the arithmetic it produces.
  *
  * The camp's damage multiplier is (our DPS x advantage) / measured creep DPS,
  * so measured creep DPS is the denominator of the entire difficulty curve.
@@ -48,26 +47,17 @@ function runDpsScaleTest(t: TestReporter): void {
   buyMercContract();
   loadInterRoundLobby();
 
-  const started = getSparringStatus();
-  t.report('matchStarted', started.timer ? 1 : 0);
-  t.report('fieldedAtStart', started.heroes);
-  t.report('creepsAtStart', started.creeps);
-
   // Mid-match, while the sampler is still running: this is the only moment the
   // tracked lists can be looked at, since teardown clears the field.
   t.after(20, () => {
     const mid = dpsSampleBreakdown();
+    // The only moment the tracked lists can be looked at: teardown clears the
+    // field, so a summon that fought is invisible by the time the match ends.
     t.report('midTrackedOurs', mid.trackedOurs);
     t.report('midTrackedSummons', mid.trackedSummons);
     // The regression, caught at the sign: rigging must never be banked as
     // damage, in either direction.
     atLeast(t, 'midCreepHPLost', mid.creepHPLost, 0);
-    t.report('midOurHPLost', mid.ourHPLost);
-    t.report('midSummonHPLost', mid.summonHPLost);
-    // What share of the damage our side took landed on summons rather than on
-    // the heroes and mercenaries the camp will actually have to fight.
-    t.report('midSummonSharePct',
-      mid.ourHPLost > 0 ? R2I(mid.summonHPLost / mid.ourHPLost * 100) : 0);
 
     // After the match ends, the banked totals become the two DPS figures and
     // the scale the next camp is built from.
@@ -77,8 +67,6 @@ function runDpsScaleTest(t: TestReporter): void {
       atLeast(t, 'finalCreepHPLost', final.creepHPLost, 0);
       t.report('finalOurHPLost', final.ourHPLost);
       t.report('finalSummonHPLost', final.summonHPLost);
-      t.report('finalSummonSharePct',
-        final.ourHPLost > 0 ? R2I(final.summonHPLost / final.ourHPLost * 100) : 0);
       atLeast(t, 'measuredOurDPS', m.heroDPS, 1);
       t.report('measuredCreepDPS', m.creepDPS);
       atLeast(t, 'creepDamageScalePct', R2I(m.scale * 100), 1);
