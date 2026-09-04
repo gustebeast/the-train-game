@@ -15,13 +15,10 @@
 // Run from the project root:  node scripts/fix-roll-geosets.js
 
 const fs = require('fs');
-const base = 'mdx-m3-viewer-th/dist/cjs';
-const Model = require(base + '/parsers/mdlx/model').default;
+const { Model, TARGET, load, save } = require('./peasant-model');
 
-const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 
-const m = new Model();
-m.load(new Uint8Array(fs.readFileSync(TARGET)));
+const m = load();
 
 // The sequence is called "Walk Alternate" once roll-anim-to-alternate-walk.js
 // has re-tagged it; accept the pre-rename name too so this still works on a
@@ -58,14 +55,12 @@ for (const g of m.geosetAnimations) {
 if (patched === 0) {
   console.log('nothing to patch — geoset alpha already keyed in the Roll range');
 } else {
-  const out = m.saveMdx();
-  fs.writeFileSync(TARGET, Buffer.from(out.buffer, out.byteOffset, out.byteLength));
+  save(m);
   console.log(`patched ${patched} geoset-animation alpha tracks: hidden during Roll [${rs}-${re}]`);
 }
 
 // Round-trip validation.
-const check = new Model();
-check.load(new Uint8Array(fs.readFileSync(TARGET)));
+const check = load();
 for (const g of check.geosetAnimations) {
   const track = g.animations && g.animations[0];
   if (track == null || track.name !== 'KGAO') continue;

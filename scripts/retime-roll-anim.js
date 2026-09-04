@@ -22,15 +22,12 @@
 // Run from the project root:  node scripts/retime-roll-anim.js
 
 const fs = require('fs');
-const base = 'mdx-m3-viewer-th/dist/cjs';
-const Model = require(base + '/parsers/mdlx/model').default;
+const { Model, TARGET, load, save } = require('./peasant-model');
 
-const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 const SEQ_NAME = 'Walk Alternate';
 const TARGET_MS = 2334; // twice the transplanted roll's natural 1167ms
 
-const model = new Model();
-model.load(fs.readFileSync(TARGET));
+const model = load();
 
 const seq = model.sequences.find((s) => s.name === SEQ_NAME);
 if (seq == null) {
@@ -86,10 +83,9 @@ for (const ev of model.eventObjects) {
 }
 
 seq.interval[1] = newEnd;
-fs.writeFileSync(TARGET, Buffer.from(model.saveMdx()));
+save(model);
 
-const check = new Model();
-check.load(fs.readFileSync(TARGET));
+const check = load();
 const out = check.sequences.find((s) => s.name === SEQ_NAME);
 if (out == null || out.interval[1] - out.interval[0] !== TARGET_MS) {
   throw new Error('retime did not survive the round trip');

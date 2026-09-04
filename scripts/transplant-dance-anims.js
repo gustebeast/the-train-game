@@ -32,12 +32,10 @@
 // Run from the project root:  node scripts/transplant-dance-anims.js
 
 const fs = require('fs');
-const base = 'mdx-m3-viewer-th/dist/cjs';
-const Model = require(base + '/parsers/mdlx/model').default;
+const { Model, TARGET, load, save } = require('./peasant-model');
 const Sequence = require(base + '/parsers/mdlx/sequence').default;
 
 const SOURCE = 'C:/Users/gus/Downloads/Villager 255 Animations/Villager255.MDX';
-const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 /** Well clear of the peasant's own keyframes AND of the roll at 200000-202334. */
 let nextStart = 210000;
 /** Gap between transplanted ranges so no two can interpolate into each other. */
@@ -64,10 +62,8 @@ function nodesByName(model) {
   return out;
 }
 
-const villager = new Model();
-villager.load(new Uint8Array(fs.readFileSync(SOURCE)));
-const peasant = new Model();
-peasant.load(new Uint8Array(fs.readFileSync(TARGET)));
+const villager = load(SOURCE);
+const peasant = load();
 
 // Start after everything already in the model, whatever that is.
 for (const s of peasant.sequences) {
@@ -156,11 +152,9 @@ if (added === 0) {
   process.exit(0);
 }
 
-const out = peasant.saveMdx();
-fs.writeFileSync(TARGET, Buffer.from(out.buffer, out.byteOffset, out.byteLength));
+save(peasant);
 
-const check = new Model();
-check.load(new Uint8Array(fs.readFileSync(TARGET)));
+const check = load();
 console.log('--- sequences now in the peasant ---');
 check.sequences.forEach((s, i) => {
   if (DANCES.some((d) => d.name === s.name) || s.name === 'Walk Alternate') {

@@ -12,12 +12,9 @@
 //   node scripts/transplant-dance-anims.js
 //   node scripts/fix-dance-anims.js
 const fs = require('fs');
-const base = 'mdx-m3-viewer-th/dist/cjs';
-const Model = require(base + '/parsers/mdlx/model').default;
-const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
+const { Model, TARGET, load, save } = require('./peasant-model');
 
-const m = new Model();
-m.load(new Uint8Array(fs.readFileSync(TARGET)));
+const m = load();
 const doomed = m.sequences.filter((s) => s.name.indexOf('Dance ') === 0);
 if (doomed.length === 0) { console.log('nothing to strip'); process.exit(0); }
 const ranges = doomed.map((s) => [s.interval[0], s.interval[1]]);
@@ -56,9 +53,7 @@ for (const obj of animated) {
 for (const ev of m.eventObjects) ev.tracks = ev.tracks.filter((f) => !inDoomed(f));
 m.sequences = m.sequences.filter((s) => s.name.indexOf('Dance ') !== 0);
 
-const out = m.saveMdx();
-fs.writeFileSync(TARGET, Buffer.from(out.buffer, out.byteOffset, out.byteLength));
+save(m);
 console.log(`stripped ${doomed.length} sequences, ${dropped} keyframes, ${emptied} emptied tracks`);
-const check = new Model();
-check.load(new Uint8Array(fs.readFileSync(TARGET)));
+const check = load();
 check.sequences.forEach((s, i) => console.log('  ' + i + ' ' + JSON.stringify(s.name)));

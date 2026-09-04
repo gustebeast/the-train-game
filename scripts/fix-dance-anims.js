@@ -22,10 +22,8 @@
 // Run from the project root:  node scripts/fix-dance-anims.js
 
 const fs = require('fs');
-const base = 'mdx-m3-viewer-th/dist/cjs';
-const Model = require(base + '/parsers/mdlx/model').default;
+const { Model, TARGET, load, save } = require('./peasant-model');
 
-const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 
 /** Source names, in the order transplant-dance-anims.js appends them. */
 const SOURCE_NAMES = [
@@ -46,8 +44,7 @@ const WORDS = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', '
  *  engine picks among variants at random. */
 const safeName = (i) => `Dance ${WORDS[i]}`;
 
-const m = new Model();
-m.load(new Uint8Array(fs.readFileSync(TARGET)));
+const m = load();
 
 let renamed = 0;
 for (let i = 0; i < SOURCE_NAMES.length; i++) {
@@ -93,13 +90,11 @@ if (renamed === 0 && patched === 0) {
   process.exit(0);
 }
 
-const out = m.saveMdx();
-fs.writeFileSync(TARGET, Buffer.from(out.buffer, out.byteOffset, out.byteLength));
+save(m);
 console.log(`renamed ${renamed} sequences, patched ${patched} geoset alpha ranges`);
 
 // Round-trip validation: the names are gone and every dance range is keyed.
-const check = new Model();
-check.load(new Uint8Array(fs.readFileSync(TARGET)));
+const check = load();
 for (const name of SOURCE_NAMES) {
   if (check.sequences.some((s) => s.name === name || s.name.indexOf('Dance - ') === 0)) {
     throw new Error(`sequence "${name}" survived the rename`);

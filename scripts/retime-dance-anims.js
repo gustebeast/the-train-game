@@ -29,10 +29,8 @@
 //   node scripts/retime-dance-anims.js
 
 const fs = require('fs');
-const base = 'mdx-m3-viewer-th/dist/cjs';
-const Model = require(base + '/parsers/mdlx/model').default;
+const { Model, TARGET, load, save } = require('./peasant-model');
 
-const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 
 /** Dances to retime: name -> { speed, natural }.
  *
@@ -46,8 +44,7 @@ const RETIMED = {
   'Dance Two': { speed: 1.15, natural: 1667 },  // Attack Morph - 31, played on E
 };
 
-const model = new Model();
-model.load(new Uint8Array(fs.readFileSync(TARGET)));
+const model = load();
 
 let changed = 0;
 for (const [name, { speed, natural }] of Object.entries(RETIMED)) {
@@ -131,15 +128,13 @@ if (changed === 0) {
   process.exit(0);
 }
 
-const out = model.saveMdx();
-fs.writeFileSync(TARGET, Buffer.from(out.buffer, out.byteOffset, out.byteLength));
+save(model);
 
 // Round trip: the lengths survived the save, and every dance is still keyed for
 // geoset alpha across its NEW range -- the keys fix-dance-anims.js wrote sit at
 // the old range ends, and a retime that left one outside would put the cargo
 // geosets back on the dancer.
-const check = new Model();
-check.load(new Uint8Array(fs.readFileSync(TARGET)));
+const check = load();
 for (const [name, { speed, natural }] of Object.entries(RETIMED)) {
   const seq = check.sequences.find((s) => s.name === name);
   const target = Math.round(natural / speed);

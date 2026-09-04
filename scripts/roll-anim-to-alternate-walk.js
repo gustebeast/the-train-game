@@ -21,16 +21,13 @@
 // Run from the project root:  node scripts/roll-anim-to-alternate-walk.js
 
 const fs = require('fs');
-const base = 'mdx-m3-viewer-th/dist/cjs';
-const Model = require(base + '/parsers/mdlx/model').default;
+const { Model, TARGET, load, save } = require('./peasant-model');
 
-const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 const OLD_NAME = 'Roll';
 const NEW_NAME = 'Walk Alternate';
 const MOVE_SPEED = 500;
 
-const model = new Model();
-model.load(fs.readFileSync(TARGET));
+const model = load();
 
 const roll = model.sequences.find((s) => s.name === NEW_NAME || s.name === OLD_NAME);
 const wasNamed = roll == null ? '' : roll.name;
@@ -49,10 +46,9 @@ roll.name = NEW_NAME;
 roll.moveSpeed = MOVE_SPEED;
 roll.nonLooping = 0; // a dash longer than one roll should keep rolling
 
-fs.writeFileSync(TARGET, Buffer.from(model.saveMdx()));
+save(model);
 
-const check = new Model();
-check.load(fs.readFileSync(TARGET));
+const check = load();
 const out = check.sequences.find((s) => s.name === NEW_NAME);
 if (out == null) throw new Error('rename did not survive the round trip');
 console.log(

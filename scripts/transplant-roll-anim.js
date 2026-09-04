@@ -21,7 +21,6 @@ const Sequence = require(base + '/parsers/mdlx/sequence').default;
 const SOURCE_MAP = 'C:/Users/gus/Downloads/ShootingGay_0.6_english.w3x';
 const SOURCE_MODEL = 'war3mapImported\\Villager255.mdx';
 const SOURCE_SEQ_NAME = 'Attack Morph - 19';
-const TARGET = 'maps/TheTrainGame.w3x/war3mapImported/WeaponlessPeasant.mdx';
 // Named "Roll" here, then re-tagged to "Walk Alternate" by
 // roll-anim-to-alternate-walk.js -- run that next. The rename is what lets the
 // engine play it during movement instead of trigger code fighting the walk.
@@ -49,8 +48,7 @@ function findAnim(node, tag) {
 }
 
 const villager = loadVillager();
-const peasant = new Model();
-peasant.load(new Uint8Array(fs.readFileSync(TARGET)));
+const peasant = load();
 
 const srcSeq = villager.sequences.find((s) => s.name === SOURCE_SEQ_NAME);
 if (srcSeq == null) throw new Error('source sequence not found');
@@ -136,12 +134,10 @@ for (const [name, pNode] of pNodes) {
   }
 }
 
-const out = peasant.saveMdx();
-fs.writeFileSync(TARGET, Buffer.from(out.buffer, out.byteOffset, out.byteLength));
+save(peasant);
 
 // Validate round-trip
-const check = new Model();
-check.load(new Uint8Array(fs.readFileSync(TARGET)));
+const check = load();
 const got = check.sequences[newIndex];
 if (got == null || got.name !== NEW_NAME) throw new Error('validation failed');
 console.log(`OK: sequence "${NEW_NAME}" at index ${newIndex} [${NEW_START}-${NEW_END}]`);
