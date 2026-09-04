@@ -1,5 +1,6 @@
 import { MapPlayer, Unit } from 'w3ts';
 import { UNKNOWN_UNIT_ID } from './constants';
+import { giveItems } from './util';
 
 /** Create a concealed stand-in at (x, y), carrying `items`.
  *
@@ -16,9 +17,6 @@ export function createPlaceholder(
   const u = Unit.create(owner, UNKNOWN_UNIT_ID, x, y, 270);
   if (u == null) return null;
   u.invulnerable = true;
-  for (const itemId of items) {
-    const it = CreateItem(itemId, u.x, u.y);
-    if (it != null) UnitAddItem(u.handle, it);
-  }
+  giveItems(u, items);
   return u;
 }

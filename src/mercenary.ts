@@ -1,7 +1,7 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { registerSaveSegment, parseFields } from './save';
-import { getHumanPlayers, getInventoryItemIds, forEachInventoryItem } from './util';
+import { forEachInventoryItem, getHumanPlayers, getInventoryItemIds, giveItems } from './util';
 import { getNeutralExtra } from './teams';
 import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creep_camps';
@@ -304,10 +304,7 @@ export function spawnMercFromData(
   const u = Unit.create(owner, data.typeId, x, y, 270);
   if (u == null) return null;
   UnitAddAbility(u.handle, MERC_INVENTORY_ABILITY_ID);
-  for (const itemId of data.items) {
-    const it = CreateItem(itemId, u.x, u.y);
-    if (it != null) UnitAddItem(u.handle, it);
-  }
+  giveItems(u, data.items);
   return u;
 }
 
@@ -512,10 +509,7 @@ export function rerollInterRoundLobbyMerc(unitHandle: unit): boolean {
   const replacement = Unit.create(getNeutralExtra(), replacementType, x, y, 270);
   if (replacement != null) {
     replacement.invulnerable = true;
-    for (const itemId of slot.items) {
-      const it = CreateItem(itemId, replacement.x, replacement.y);
-      if (it != null) UnitAddItem(replacement.handle, it);
-    }
+    giveItems(replacement, slot.items);
     entry.unit = replacement;
   }
   return true;

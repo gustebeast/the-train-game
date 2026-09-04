@@ -8,7 +8,7 @@ import { seededValueAt, deriveSeed } from './rng';
 import { gameState } from './state';
 import { getNeutralExtra } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
-import { getHumanPlayers, nextFrame, forEachUnitInWorld, getInventoryItemIds } from './util';
+import { forEachUnitInWorld, getHumanPlayers, getInventoryItemIds, giveItems, nextFrame } from './util';
 import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
 
 /** All standard WC3 heroes available for random selection. */
@@ -445,9 +445,7 @@ export function spawnHeroFromData(
   if (hero == null) return null;
   if (data.xp > 0) SetHeroXP(hero.handle, data.xp, true);
   applySpells(hero, data.skills);
-  for (const itemId of data.items) {
-    UnitAddItem(hero.handle, CreateItem(itemId, hero.x, hero.y)!);
-  }
+  giveItems(hero, data.items);
   nextFrame(() => {
     const h = hero.handle;
     if (GetUnitTypeId(h) === 0) return; // removed before the frame elapsed

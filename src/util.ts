@@ -1,4 +1,4 @@
-import { MapPlayer, Timer } from 'w3ts';
+import { MapPlayer, Timer, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 
 /** Get all human players currently in the game (playing + user-controlled). */
@@ -62,6 +62,19 @@ export function forEachInventoryItem(handle: unit, cb: (this: void, it: item) =>
   for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
     const it = UnitItemInSlot(handle, slot);
     if (it != null) cb(it);
+  }
+}
+
+/** Give a unit one of each item id, created at its feet.
+ *
+ *  Four places restored a kit this way -- a hero, a mercenary, a rerolled
+ *  mercenary and a concealed placeholder -- and they did not agree on how.
+ *  Three tested CreateItem's result; the hero path asserted it with `!`, which
+ *  hands UnitAddItem a null the one time the engine declines. */
+export function giveItems(u: Unit, itemIds: ReadonlyArray<number>): void {
+  for (const id of itemIds) {
+    const it = CreateItem(id, u.x, u.y);
+    if (it != null) UnitAddItem(u.handle, it);
   }
 }
 
