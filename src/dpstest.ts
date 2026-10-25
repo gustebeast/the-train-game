@@ -83,93 +83,75 @@ function runDpsTest(t: TestReporter): void {
 registerTest('dps', runDpsTest);
 
 /** The match measures A SPECIFIC CAMP, so anything that changes which camp you
- *  will face has to restart it.
+ *  will face has to restart it against the new one, from zero.
  *
- *  Buying the Strange Meat swaps the next camp for a level 3 one. The lobby is
- *  already sparring against the camp it replaced, and those numbers scale the
- *  round you actually play -- so left alone, the meat calibrated you against
- *  creeps you were never going to meet. */
-function runDpsCampSwapTest(t: TestReporter): void {
+ *  Two things change it, and they were two tests until they were read side by
+ *  side: buying the Strange Meat swaps the next camp for a level 3 one, and
+ *  Reset Purchases rewinds the lobby to the snapshot taken on entry -- undoing
+ *  that swap and rebuilding the lobby around it. Both leave the lobby sparring
+ *  against a camp that is no longer the one you will play, and those numbers
+ *  scale the round you actually play.
+ *
+ *  One test, because it is one invariant and the second trigger only makes
+ *  sense after the first has fired. The keys stay per-trigger -- meat*, revert*
+ *  -- so a failure still says WHICH of the two stopped restarting.
+ */
+function runDpsRestartTest(t: TestReporter): void {
   beginNewRun();
   loadInterRoundLobby();
 
   t.after(4, () => {
     const before = getSparringStatus();
-    t.report('campBefore', before.campIndex);
-    t.report('elapsedBefore', R2I(before.elapsed));
-    expect(t, 'matchRunningBefore', before.timer ? 1 : 0, 1);
-    if (before.elapsed < 1) t.fail('elapsedBefore', 'match had not started measuring');
+    t.report('campOnEntry', before.campIndex);
+    t.report('elapsedOnEntry', R2I(before.elapsed));
+    expect(t, 'matchRunningOnEntry', before.timer ? 1 : 0, 1);
+    if (before.elapsed < 1) t.fail('elapsedOnEntry', 'match had not started measuring');
 
-    // What buying the meat does.
-    const forced = forceLevel3Camp();
-    expect(t, 'meatChangedCamp', forced ? 1 : 0, 1);
+    // --- trigger 1: the Strange Meat swaps the camp ---
+    expect(t, 'meatChangedCamp', forceLevel3Camp() ? 1 : 0, 1);
 
     t.after(2, () => {
-      const after = getSparringStatus();
-      t.report('campAfter', after.campIndex);
-      const camp = getCampData();
-      t.report('campLevelAfter', camp != null ? camp.level : 0);
-      expect(t, 'campLevelAfter_is3', camp != null ? camp.level : 0, 3);
-
-      // The match must be running again, against the NEW camp, from zero --
-      // not still carrying the replaced camp's clock.
-      expect(t, 'matchRunningAfter', after.timer ? 1 : 0, 1);
-      expect(t, 'creepsMatchNewCamp', after.creeps, camp != null ? camp.creeps.length : -1);
-      if (after.elapsed >= before.elapsed) {
-        t.fail('clockRestarted',
-          'clock did not restart: ' + I2S(R2I(before.elapsed)) + 's -> ' + I2S(R2I(after.elapsed)) + 's');
+      const swapped = getSparringStatus();
+      const meatCamp = getCampData();
+      t.report('meatCampIndex', swapped.campIndex);
+      expect(t, 'meatCampLevelIs3', meatCamp != null ? meatCamp.level : 0, 3);
+      expect(t, 'meatMatchRunning', swapped.timer ? 1 : 0, 1);
+      expect(t, 'meatCreepsMatchNewCamp', swapped.creeps,
+        meatCamp != null ? meatCamp.creeps.length : -1);
+      // The clock must have restarted, not carried the replaced camp's on.
+      t.report('meatElapsed', R2I(swapped.elapsed));
+      if (swapped.elapsed >= before.elapsed) {
+        t.fail('meatClockRestarted', 'clock did not restart: '
+          + I2S(R2I(before.elapsed)) + 's -> ' + I2S(R2I(swapped.elapsed)) + 's');
       }
-      t.report('elapsedAfter', R2I(after.elapsed));
-      t.done();
+
+      // --- trigger 2: Reset Purchases undoes it and rebuilds the lobby ---
+      revertToInterRoundLobbySnapshot();
+      revertHeroesToInterRoundLobbySnapshot();
+      loadInterRoundLobby();
+
+      t.after(4, () => {
+        const after = getSparringStatus();
+        const revertCamp = getCampData();
+        // The camp the reset restored must be the one you walked in with --
+        // checkable only now that both triggers live in one run, and the point
+        // of Reset Purchases rather than a side effect of it.
+        expect(t, 'revertCampIndex', after.campIndex, before.campIndex);
+        expect(t, 'revertMatchRunning', after.timer ? 1 : 0, 1);
+        expect(t, 'revertCreepsMatchCamp', after.creeps,
+          revertCamp != null ? revertCamp.creeps.length : -1);
+        // A rebuilt lobby means a fresh clock, not the interrupted one.
+        t.report('revertElapsed', R2I(after.elapsed));
+        if (after.elapsed > 4) {
+          t.fail('revertFreshClock', 'clock carried over: ' + I2S(R2I(after.elapsed)) + 's');
+        }
+        t.done();
+      });
     });
   });
 }
 
-registerTest('dpscampswap', runDpsCampSwapTest);
-
-/** Reset Purchases, taken in the middle of a match.
- *
- *  It rewinds the lobby to the snapshot taken on entry -- including the camp,
- *  if the Strange Meat had changed it -- and rebuilds the lobby. The rebuild is
- *  what has to leave a match running against whatever camp the rewind restored,
- *  rather than a half-finished one measuring the camp that was just undone. */
-function runDpsRevertTest(t: TestReporter): void {
-  beginNewRun();
-  loadInterRoundLobby();
-
-  t.after(4, () => {
-    const entry = getSparringStatus();
-    t.report('campOnEntry', entry.campIndex);
-    expect(t, 'matchRunningOnEntry', entry.timer ? 1 : 0, 1);
-
-    // Change the camp mid-match, exactly as buying the meat does...
-    forceLevel3Camp();
-    const swapped = getSparringStatus();
-    t.report('campAfterMeat', swapped.campIndex);
-
-    // ...then take Reset Purchases, which is meant to undo it.
-    revertToInterRoundLobbySnapshot();
-    revertHeroesToInterRoundLobbySnapshot();
-    loadInterRoundLobby();
-
-    t.after(4, () => {
-      const after = getSparringStatus();
-      const camp = getCampData();
-      t.report('campAfterRevert', after.campIndex);
-      expect(t, 'matchRunningAfterRevert', after.timer ? 1 : 0, 1);
-      expect(t, 'creepsAfterRevert', after.creeps, camp != null ? camp.creeps.length : -1);
-      // A fresh lobby means a fresh clock, not the one that was interrupted.
-      if (after.elapsed > 4) {
-        t.fail('freshClockAfterRevert',
-          'clock carried over: ' + I2S(R2I(after.elapsed)) + 's');
-      }
-      t.report('elapsedAfterRevert', R2I(after.elapsed));
-      t.done();
-    });
-  });
-}
-
-registerTest('dpsrevert', runDpsRevertTest);
+registerTest('dpsrestart', runDpsRestartTest);
 
 
 /** Mercenaries fight beside the heroes in a real round, so the match has to
