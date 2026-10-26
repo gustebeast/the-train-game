@@ -1228,7 +1228,9 @@ function Invoke-MapTests {
     $conn.cli.Close()
     Complete-TestVm $vmInfo -NoPrewarm:$NoPrewarm -Log $Say
   }
-  $passed = ($results | Where-Object { $_.Ok }).Count
+  # @() so one passing result still has a Count: PS 5.1 gives a lone
+  # pscustomobject none, and the summary printed "done -- /1 passed".
+  $passed = @($results | Where-Object { $_.Ok }).Count
   & $Say ("done -- {0}/{1} passed in {2:N1}s" -f $passed, $results.Count, $sw.Elapsed.TotalSeconds)
   return $results
 }
