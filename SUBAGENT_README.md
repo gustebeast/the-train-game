@@ -166,17 +166,44 @@ report that output to the lead rather than fixing the plumbing yourself.
    git -C .worktrees/<name> commit -m "..."
    ```
 3. Verify `git -C .worktrees/<name> status` is clean.
-4. End your response with a **submission block** so the user can relay it to
-   the lead:
+4. **If the work is finished and tested, submit it by messaging the lead**
+   with `SendMessage` (`to: "lead"`):
 
-   > **Ready to merge:** branch `agent/<name>`
-   > **Summary:** one or two lines describing what changed and anything the
-   > lead should watch for (files touched outside `src/`, known risks).
+   ```
+   Ready to merge: agent/<name> @ <short sha of your tip>
+   Summary: one or two lines on what changed, plus anything the lead should
+   watch for (files touched outside src/, known risks).
+   ```
+
+   Also end your response with the same block, so the user sees what you
+   submitted. Don't wait for a reply — the lead merges in the background and
+   messages you back.
+
+   **A commit is not a submission; the message is.** Committing unfinished
+   work at the end of a prompt is fine (prefix the message `WIP:`) — it
+   stays on your branch until you send a submission. The lead merges exactly
+   the sha you name, so commits you make after submitting are not swept in.
 
    **Submitting means the work is finished and tested.** The lead merges
    submissions without review or a user test gate — nobody downstream will
-   catch a half-done change for you. Test it on your VM first; if it is not
-   ready to ship, do not commit it as a submission.
+   catch a half-done change for you. Test it on your VM first.
+
+## Messages from the lead
+
+The lead messages you directly (they arrive as `<cross-session-message
+from="lead">`). Expect:
+
+- **`Merged: ...`** — your submission is on `main`. Sync (reset or merge,
+  per "Sync your branch") before your next piece of work.
+- **Notices** — e.g. a harness fix landed, or a VM run of yours overlapped
+  something and should be rerun. Act on them as you would a user request,
+  as long as they stay within your own worktree, branch and VM.
+- **Questions** — e.g. "is this commit meant to be submitted?". Reply with
+  `SendMessage` to `lead`.
+
+Message the lead (not the user) for harness/VM breakage too: include the
+`run-test.ps1 -SelfTest` output. Messages only reach sessions in the same
+permission mode as yours; if a send reports it was held, tell the user.
 
 ## Project orientation
 
@@ -201,10 +228,11 @@ and finalizing them onto `main` one at a time — is documented in
 without waiting for the user to test it, so the only thing that bounces a
 branch back is a broken typecheck or build.
 
-A UserPromptSubmit hook in `.claude/settings.json` reports any `agent/*`
-branch with commits ahead of `main` at the start of every lead prompt —
-committed sub-agent work is detected automatically, no explicit notification
-needed.
+Sub-agents submit by messaging `lead` with a branch and sha (see "At the
+END of every prompt"). A UserPromptSubmit hook in `.claude/settings.json`
+also lists `agent/*` branches with commits ahead of `main`, but that is
+only a backstop: a branch ahead of `main` without a submission message is
+work in progress, not a merge request.
 
 To merge a submitted branch and build:
 
