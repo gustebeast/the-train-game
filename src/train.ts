@@ -373,7 +373,7 @@ export function initTrain(unit: Unit, wagon: Unit) {
 
   // Trigger fires when the train enters the arrival region
   arrivalTrigger = Trigger.create();
-  arrivalTrigger.registerEnterRegion(arrivalRegion.handle, undefined);
+  arrivalTrigger.registerEnterRegion(arrivalRegion, undefined);
   arrivalTrigger.addAction(() => {
     const entering = Unit.fromEvent();
     if (entering == null || entering.handle !== train.handle) {

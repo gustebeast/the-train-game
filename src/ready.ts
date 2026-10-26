@@ -156,7 +156,7 @@ export function initReadyZone(
     membersInside: new Set(),
   };
 
-  zone.enterTrigger.registerEnterRegion(region.handle, undefined);
+  zone.enterTrigger.registerEnterRegion(region, undefined);
   zone.enterTrigger.addAction(() => {
     const u = Unit.fromEvent();
     if (u == null) return;
@@ -171,7 +171,7 @@ export function initReadyZone(
     checkAllReady(zone);
   });
 
-  zone.leaveTrigger.registerLeaveRegion(region.handle, undefined);
+  zone.leaveTrigger.registerLeaveRegion(region, undefined);
   zone.leaveTrigger.addAction(() => {
     const u = Unit.fromEvent();
     if (u == null) return;
