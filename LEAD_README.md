@@ -16,7 +16,19 @@ sub-agent sessions on `agent/*` branches (see `SUBAGENT_README.md`).
 
 ## How you learn about incoming work
 
-Two channels:
+**Submissions arrive as messages.** A sub-agent finishes, then sends
+`SendMessage` to `lead` (`Ready to merge: agent/<name> @ <sha>` plus a
+summary). It reaches you as a `<cross-session-message>` — mid-turn, or as a
+new turn if you are idle. That message is the merge request; merge exactly
+the sha it names (`git merge --no-ff <sha>`), so commits the agent made
+after submitting aren't swept in. Sessions only exchange messages when
+their permission modes match (all five run bypass); a mismatched send is
+held for the user to approve.
+
+A branch ahead of `main` **without** a submission is work in progress —
+commits are not submissions. If one looks finished but no message came,
+ask the agent rather than merging it. The two branch watchers below are
+the backstop for a lost message:
 
 1. **Prompt-time hook** — a `UserPromptSubmit` hook (in
    `.claude/settings.json`) runs at every user prompt and reports any
@@ -41,9 +53,9 @@ Two channels:
    ```
    It emits a line only for branches genuinely **ahead of main**, so an
    agent merging `main` into their own branch no longer wakes you, and a
-   branch going quiet after you merge it is silent too. If the monitor
-   ever dies, the prompt-time hook above is the backstop — you lose
-   latency, not the signal.
+   branch going quiet after you merge it is silent too. Treat a line from
+   it as "check whether a submission message came", not as a merge
+   request.
 
    **You are the only role that runs one.** A persistent monitor shows up
    as a permanently "running task" and makes its chat look busy forever,
@@ -86,10 +98,13 @@ current request:
    git branch -d testing
    git push origin main
    ```
-   The hook + each agent's own `main` monitor then tell the other
-   sub-agents to sync. They merge `main` into their branch **themselves**,
-   with their own context — do NOT merge into their worktrees yourself.
-3. **Tell the user what landed** — one or two lines per bundle: what
+   The prompt-time hook tells the other sub-agents to sync. They merge
+   `main` into their branch **themselves**, with their own context — do
+   NOT merge into their worktrees yourself.
+3. **Confirm to the agent** with `SendMessage`: `Merged: "<summary>" is
+   on main as <sha>. Sync before your next piece of work.` A failed
+   typecheck/build goes back the same way, with the error output.
+4. **Tell the user what landed** — one or two lines per bundle: what
    changed, and anything new they can look at in-game. This is a report,
    not a request for approval; the merge is already done.
    `BuildAndLaunch.bat` always has the latest build.
@@ -112,6 +127,10 @@ resolve against the real `main`).
 - `git status` before any destructive git command — the user's
   `feedback.txt` is habitually dirty in the working tree and must never be
   committed or clobbered.
+- **Push notices to agents directly** with `SendMessage` (`ListAgents`
+  shows the roster): harness fixes they should pick up, VM runs of theirs
+  you may have disturbed, questions about an unsubmitted branch. Don't
+  route these through the user.
 - Sub-agents should not merge the `testing` branch (it's throwaway);
   point them at `main` or the other agent's branch instead.
 

@@ -55,5 +55,8 @@ Explicit `== null` / `!= null` checks — never `!var` truthiness for null tests
 ## Ending every prompt
 
 Typecheck (`npx tsc -p tsconfig.json --noEmit` from your worktree), fix errors,
-commit everything, verify `git status` is clean, then end with the submission
-block from the README (`**Ready to merge:** branch agent/<name>` + summary).
+commit everything, verify `git status` is clean. If the work is finished and
+tested, **submit by `SendMessage` to `lead`** (`Ready to merge: agent/<name> @
+<sha>` + summary) and repeat that block at the end of your response. A commit
+alone is not a submission. Messages from `lead` (merge confirmations, notices)
+arrive as cross-session messages — see "Messages from the lead" in the README.
