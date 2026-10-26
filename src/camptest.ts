@@ -1,4 +1,7 @@
 import { registerTest, TestReporter } from './testkit';
+import { difficultyForRound, loadTerrain } from './terrain/load';
+import { GRANITE_RAW } from './terrain/constants';
+import { getTrain } from './train';
 import { CREEP_CAMPS } from './creepCamps';
 import { rollCreepCamp, getCampData, getCampIndex, clearCampRotation } from './creeps';
 
@@ -46,3 +49,35 @@ function runCampTest(t: TestReporter): void {
 }
 
 registerTest('camps', runCampTest);
+
+/** Map difficulty by round: 0 on the first round (gameState.round 0), 100 on
+ *  round 25 (gameState.round 24), and held at 100 after. */
+registerTest('difficulty', t => {
+  const at = (round: number): number => R2I(difficultyForRound(round) + 0.5);
+  t.report('round1', at(0));
+  t.report('round13', at(12));
+  t.report('round25', at(24));
+  t.report('round40', at(39));
+  if (at(0) !== 0) t.fail('round1', 'expected 0');
+  if (at(12) !== 50) t.fail('round13', 'expected 50');
+  if (at(24) !== 100) t.fail('round25', 'expected 100');
+  if (at(39) !== 100) t.fail('round40', 'expected 100 (capped)');
+
+  // Full-difficulty maps must still generate, and two capped rounds must not
+  // be the same map: the seed follows the round, not the (now flat) difficulty.
+  const graniteAt = (round: number): number => {
+    loadTerrain(round);
+    let n = 0;
+    EnumDestructablesInRect(GetWorldBounds()!, null!, () => {
+      if (GetDestructableTypeId(GetEnumDestructable()!) === FourCC(GRANITE_RAW)) n += 1;
+    });
+    return n;
+  };
+  const g25 = graniteAt(24);
+  const g26 = graniteAt(25);
+  t.report('granite_round25', g25);
+  t.report('granite_round26', g26);
+  t.report('trainAtRound26', getTrain() != null ? 1 : 0);
+  if (g25 === 0) t.fail('granite_round25', 'no granite at full difficulty');
+  t.done();
+});

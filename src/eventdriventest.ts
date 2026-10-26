@@ -7,7 +7,8 @@ import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
 import { challengeUIState, initChallengeUI } from './challengeUI';
 import { isBossFightWatched, startBossFight } from './bossArena';
 import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer } from './util';
-import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID } from './constants';
+import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID,
+  TRAIN_ID, TRACK_WAGON_ID } from './constants';
 import { Item, Unit } from 'w3ts';
 import { cargoShowing } from './cargoVisuals';
 import { spawnStrangeRock } from './bossRock';
@@ -464,6 +465,19 @@ function runStrangeKey(t: TestReporter): void {
   beginNewRun();
   loadTerrain(0);
   const me = getHumanPlayers()[0];
+  // The board is random, so clear the patch the test stands on: a rock or a
+  // peasant dropped onto water or granite gets shoved aside, and the throw then
+  // fails for reasons that have nothing to do with the key.
+  const area = Rect(-200, -300, 700, 400)!;
+  EnumDestructablesInRect(area, null!, () => RemoveDestructable(GetEnumDestructable()!));
+  const clear = CreateGroup()!;
+  GroupEnumUnitsInRect(clear, area, null!);
+  ForGroup(clear, () => {
+    const u = GetEnumUnit()!;
+    if (GetUnitTypeId(u) !== TRAIN_ID && GetUnitTypeId(u) !== TRACK_WAGON_ID) RemoveUnit(u);
+  });
+  DestroyGroup(clear);
+  RemoveRect(area);
   const rock = spawnStrangeRock(400, 0);
   expect(t, 'rockSpawned', rock != null ? 1 : 0, 1);
   if (rock == null) { t.done(); return; }

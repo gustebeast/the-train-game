@@ -328,21 +328,39 @@ function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
 /** Stream id for map generation (see rng.deriveSeed). */
 const TERRAIN_STREAM = 2;
 
-export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRID_MAX_X): SpawnedTrain {
+/** The round, counted from 1, at which the map reaches full difficulty. */
+const MAX_DIFFICULTY_ROUND = 25;
+
+/** How hard a round's MAP is, 0 to 100: granite, water and spare resources all
+ *  scale off this (generate.ts). Even steps from 0 on the first round to 100 on
+ *  round 25, then held there. It used to be the raw round number, so full
+ *  difficulty took 100 rounds, and nothing stopped it running past 100 --
+ *  where the formulas extrapolate into fewer resources than a map needs.
+ *
+ *  `round` is gameState.round, which is 0 for the first round played. */
+export function difficultyForRound(round: number): number {
+  const d = round * 100 / (MAX_DIFFICULTY_ROUND - 1);
+  return d > 100 ? 100 : d;
+}
+
+/** Lay out and enter round `round`'s map (gameState.round: 0 is the first). */
+export function loadTerrain(round: number, skipCleanup = false, exitX = GRID_MAX_X): SpawnedTrain {
   // Map generation is hundreds of draws deep (corridors, blobs, tree and rock
   // scatter, camp placement), so rather than thread a seeded RNG through all of
   // generate.ts, point WC3's own generator at a reproducible starting point
   // first. Same save and same round therefore lay out the same map, which is
   // what stops a player rerolling the terrain by reloading.
   //
-  // Keyed on the round as well as the seed, so consecutive rounds differ.
-  SetRandomSeed(deriveSeed(TERRAIN_STREAM) + difficulty);
+  // Keyed on the ROUND as well as the seed, so consecutive rounds differ. Not
+  // on the difficulty: that stops rising at round 25, and every round after it
+  // would otherwise lay out the very same map.
+  SetRandomSeed(deriveSeed(TERRAIN_STREAM) + round);
   // A level 3 camp is the only one that can drop the key, so it is also the
   // only round that gets a second exit -- the two arrive together or not at all.
   const camp = getCampData();
   const bossRound = camp != null && camp.level >= 3;
   const biome = biomeForCampLevel(camp != null ? camp.level : null);
-  return loadGameplay(generateTerrain(difficulty, exitX, bossRound, biome), skipCleanup);
+  return loadGameplay(generateTerrain(difficultyForRound(round), exitX, bossRound, biome), skipCleanup);
 }
 
 /** -cheatmode drops straight into gameplay without passing a start lobby, so
