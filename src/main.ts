@@ -14,6 +14,7 @@ import { initCheat } from './cheat';
 import { initDayNight } from './daynight';
 import { initBridge } from './bridge';
 import { initBossRock } from './bossRock';
+import { initBossKey } from './bossKey';
 import { initFill } from './fill';
 import { initWaterTrain } from './water';
 import { initShop, initDealerOffer } from './shop';
@@ -70,6 +71,7 @@ function tsMain() {
     initGiveTake();
     initBridge();
     initBossRock();
+    initBossKey();
     initFill();
     initWaterTrain();
     // Before anything can show a sky: outside a round the map is permanently
