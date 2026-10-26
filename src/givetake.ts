@@ -123,7 +123,7 @@ export function initGiveTake(): void {
       // Give item to storage — re-validate in case order-time rejection lost the race
       if (validateGive(item.typeId, target) != null) return;
       if (isTrain(target)) noteLoadedMaterial(unit.owner.id);
-      giveToStorage(unit, item, target);
+      giveToStorage(item, target);
     }
     refreshCarrier(unit);
   });

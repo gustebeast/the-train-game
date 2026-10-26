@@ -105,28 +105,24 @@ worktree has uncommitted changes from a previous prompt, commit them first.
 ## Building & testing your branch
 
 You **can** build your own branch to test it in-game — the old "never build"
-rule was overbroad. The build is entirely **cwd-relative** (`scripts/utils.ts`:
-`path.resolve()` off `process.cwd()`, `fs.removeSync("./dist")`, output to
-`./dist/bin`, tsconfig rewrite to `./tsconfig.json`), so running it **with your
-worktree as the current directory writes only inside your worktree** and never
-touches the main checkout's `dist/bin` or `tsconfig.json`. Verified: a worktree
-build leaves the main checkout's map byte-identical.
+rule was overbroad. The build is entirely **cwd-relative** (`scripts/utils.ts`
+cleans and writes `./dist`, and the war3-transformer paths in `tsconfig.json`
+are relative), so running it **with your worktree as the current directory
+writes only inside your worktree** and never touches the main checkout's
+`dist/bin`. The build no longer rewrites `tsconfig.json`, so there is nothing
+to restore afterwards.
 
 ```powershell
 # ALWAYS cd into your worktree first — never build from the main checkout.
 cd .worktrees/<name>
 npm run build          # writes .worktrees/<name>/dist/bin/TheTrainGame.w3x
-git checkout -- tsconfig.json   # undo the build's cwd-relative rewrite
 ```
 
 Rules that keep this safe:
 
 - **cd into your worktree before building.** The build keys off the current
   directory; run it from the main checkout and you overwrite the lead's
-  `dist/` and `tsconfig.json`.
-- **Never commit `tsconfig.json`.** The build rewrites it with absolute paths;
-  restore it afterward (`git checkout -- tsconfig.json`). `dist/` and `*.log`
-  are already git-ignored, so those leave no trace.
+  `dist/`. `dist/` and `*.log` are git-ignored, so a build leaves no trace.
 - **Never launch WC3 on the host** (`BuildAndLaunch.bat`, or the game
   executable) — that steals the developer's desktop. Test through your VM
   instead.
@@ -240,8 +236,6 @@ To merge a submitted branch and build:
 git merge --no-ff agent/<name> -m "Merge agent/<name>: <summary>"
 npm run build          # or double-click BuildAndLaunch.bat to build + launch
 ```
-
-If `tsconfig.json` conflicts, keep `main`'s version.
 
 To retire an agent, remove the junction FIRST (with `cmd /c rmdir`, which
 deletes only the link — recursive deletes follow it and destroy the real

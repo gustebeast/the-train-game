@@ -1,4 +1,4 @@
-import { MapPlayer, Trigger, Unit } from 'w3ts';
+import { MapPlayer, Trigger } from 'w3ts';
 import { BOSS_ADD_ID, BOSS_ID } from './constants';
 import { spawnBoss, stopBoss } from './boss';
 import { dealPartyForHumans } from './bossParty';

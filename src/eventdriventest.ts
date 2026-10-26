@@ -222,7 +222,7 @@ function runCargoEvents(t: TestReporter): void {
     const stone = Item.create(STONE_ID, peasant.x, peasant.y)!;
     stone.charges = 2;
     UnitAddItem(peasant.handle, stone.handle);
-    expect(t, 'giveAccepted', giveToStorage(peasant, stone, train) ? 1 : 0, 1);
+    expect(t, 'giveAccepted', giveToStorage(stone, train) ? 1 : 0, 1);
     // In: setStorageItem on the engine.
     setStorageItem(train, WOOD_ID, 1);
     t.after(wait, () => {

@@ -12,27 +12,24 @@ function setAllianceBoth(a: MapPlayer, b: MapPlayer, state: number): void {
   SetPlayerAllianceStateBJ(b.handle, a.handle, state);
 }
 
-export function initTeams() {
+export function initTeams(): void {
   const humanPlayers = getHumanPlayers();
-
-  const neutralPassive = MapPlayer.fromIndex(PLAYER_NEUTRAL_PASSIVE);
-  const neutralExtra = MapPlayer.fromIndex(bj_PLAYER_NEUTRAL_EXTRA);
-  const enemy = MapPlayer.fromIndex(PLAYER_NEUTRAL_AGGRESSIVE);
+  const neutralPassive = getNeutralPassive();
+  const neutralExtra = getNeutralExtra();
+  const enemy = getNeutralAggressive();
+  const dpsCheckPlayer = getDPSCheckPlayer();
+  const trainPlayer = getTrainPlayer();
 
   humanPlayers.forEach((p: MapPlayer) => {
     SetPlayerTeam(p.handle, 0);
     SetPlayerController(p.handle, MAP_CONTROL_USER);
+    // Wood is a carried item, never a player resource; gold is set from
+    // gameState by syncGold.
+    p.setState(PLAYER_STATE_RESOURCE_LUMBER, 0);
   });
 
-  // All team members: humans + neutral passive (tracks/crates) + neutral extra (trees/rocks/water)
-  const teamAllied: MapPlayer[] = [...humanPlayers];
-  if (neutralPassive) teamAllied.push(neutralPassive);
-  if (neutralExtra) teamAllied.push(neutralExtra);
-
-  // Full allied vision between humans and neutral passive
-  const visionGroup: MapPlayer[] = [...humanPlayers];
-  if (neutralPassive) visionGroup.push(neutralPassive);
-
+  // Full allied vision between humans and neutral passive (tracks/crates)
+  const visionGroup: MapPlayer[] = [...humanPlayers, neutralPassive];
   visionGroup.forEach(p => {
     visionGroup.forEach(q => {
       if (p !== q) {
@@ -41,59 +38,41 @@ export function initTeams() {
     });
   });
 
-  // Neutral extra: allied (no vision) with all team members
-  if (neutralExtra) {
-    SetPlayerTeam(neutralExtra.handle, 0);
-    for (const p of humanPlayers) {
-      setAllianceBoth(p, neutralExtra, bj_ALLIANCE_ALLIED);
-    }
-    if (neutralPassive) {
-      setAllianceBoth(neutralPassive, neutralExtra, bj_ALLIANCE_ALLIED);
-    }
+  // Neutral extra (trees/rocks/water): allied, without vision, with the team
+  SetPlayerTeam(neutralExtra.handle, 0);
+  for (const p of humanPlayers) {
+    setAllianceBoth(p, neutralExtra, bj_ALLIANCE_ALLIED);
   }
+  setAllianceBoth(neutralPassive, neutralExtra, bj_ALLIANCE_ALLIED);
 
-  if (enemy) {
-    SetPlayerTeam(enemy.handle, 1);
+  SetPlayerTeam(enemy.handle, 1);
+
+  // DPS check player -- computer-controlled, allied (no vision) with humans.
+  // Allied but WITHOUT vision, for everyone. The first human used to be given
+  // vision of the sparring match as a special case, which meant one player
+  // watched the lobby's corner light up while the others saw nothing, and it
+  // was not a choice anybody made. -viewdps hands it to whoever asks instead.
+  SetPlayerTeam(dpsCheckPlayer.handle, 0);
+  SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
+  for (const p of humanPlayers) {
+    setAllianceBoth(dpsCheckPlayer, p, bj_ALLIANCE_ALLIED);
   }
+  // DPS check heroes must be enemies with neutral aggressive
+  SetPlayerAlliance(dpsCheckPlayer.handle, enemy.handle, ALLIANCE_PASSIVE, false);
+  SetPlayerAlliance(enemy.handle, dpsCheckPlayer.handle, ALLIANCE_PASSIVE, false);
+  StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\common.ai');
 
-  // DPS check player — computer-controlled, allied (no vision) with humans
-  const dpsCheckPlayer = MapPlayer.fromIndex(DPS_CHECK_PLAYER_INDEX);
-  if (dpsCheckPlayer) {
-    SetPlayerTeam(dpsCheckPlayer.handle, 0);
-    SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
-    // Allied but WITHOUT vision, for everyone. The first human used to be given
-    // vision of the sparring match as a special case, which meant one player
-    // watched the lobby's corner light up while the others saw nothing, and it
-    // was not a choice anybody made. -viewdps hands it to whoever asks instead.
-    for (const p of humanPlayers) {
-      setAllianceBoth(dpsCheckPlayer, p, bj_ALLIANCE_ALLIED);
-    }
-    // DPS check heroes must be enemies with neutral aggressive
-    SetPlayerAlliance(dpsCheckPlayer.handle, enemy!.handle, ALLIANCE_PASSIVE, false);
-    SetPlayerAlliance(enemy!.handle, dpsCheckPlayer.handle, ALLIANCE_PASSIVE, false);
-    StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\common.ai');
-  }
-
-  // Train owner — no AI, allied with vision to humans and neutral passive
-  const trainPlayer = MapPlayer.fromIndex(TRAIN_PLAYER_INDEX);
-  if (trainPlayer) {
-    SetPlayerTeam(trainPlayer.handle, 0);
-    SetPlayerController(trainPlayer.handle, MAP_CONTROL_NONE);
-    for (const p of [...humanPlayers, neutralPassive, neutralExtra].filter((p): p is MapPlayer => p != null)) {
-      setAllianceBoth(trainPlayer, p, bj_ALLIANCE_ALLIED_VISION);
-    }
+  // Train owner -- no AI, allied with vision to humans and the neutrals
+  SetPlayerTeam(trainPlayer.handle, 0);
+  SetPlayerController(trainPlayer.handle, MAP_CONTROL_NONE);
+  for (const p of [...humanPlayers, neutralPassive, neutralExtra]) {
+    setAllianceBoth(trainPlayer, p, bj_ALLIANCE_ALLIED_VISION);
   }
 
   // Make creeps ignore tracks (neutralPassive) and the train (trainPlayer)
-  // by allying enemy → those players. They remain vulnerable to hero attacks.
-  if (enemy) {
-    if (neutralPassive) {
-      SetPlayerAllianceStateBJ(enemy.handle, neutralPassive.handle, bj_ALLIANCE_ALLIED);
-    }
-    if (trainPlayer) {
-      SetPlayerAllianceStateBJ(enemy.handle, trainPlayer.handle, bj_ALLIANCE_ALLIED);
-    }
-  }
+  // by allying enemy -> those players. They remain vulnerable to hero attacks.
+  SetPlayerAllianceStateBJ(enemy.handle, neutralPassive.handle, bj_ALLIANCE_ALLIED);
+  SetPlayerAllianceStateBJ(enemy.handle, trainPlayer.handle, bj_ALLIANCE_ALLIED);
 
   // No kill bounty from anyone. Gold here is gameState.gold, copied onto native
   // gold by syncGold, and earned from rounds and challenges -- never from kills.
@@ -104,12 +83,6 @@ export function initTeams() {
   for (let i = 0; i < bj_MAX_PLAYER_SLOTS; i++) {
     SetPlayerState(Player(i)!, PLAYER_STATE_GIVES_BOUNTY, 0);
   }
-
-  humanPlayers.forEach((p: MapPlayer) => {
-    SetCameraFieldForPlayer(p.handle, CAMERA_FIELD_TARGET_DISTANCE, 2500, 0);
-    p.setState(PLAYER_STATE_RESOURCE_GOLD, 500);
-    p.setState(PLAYER_STATE_RESOURCE_LUMBER, 500);
-  });
 }
 
 export function getNeutralPassive(): MapPlayer {

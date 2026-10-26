@@ -1,13 +1,14 @@
-import { onGlobalTick } from './globalTick';
+import { Trigger } from 'w3ts';
+import { onGlobalTick, TICK_INTERVAL } from './globalTick';
 import { isInGameplay } from './state';
 import { isChallengeArmed } from './challenges';
 import {
   CH_BRINK, CH_SOLO_TOOLS, BRINK_TRACKS,
-  noteBrinkSecond, resetBrinkSeconds, noteToolSharingBroken,
+  noteBrinkTime, resetBrinkTime, noteToolSharingBroken,
 } from './challengeList';
 import { getTracksRemaining } from './train';
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, BUCKET_FULL_ID } from './constants';
-import { forEachUnitInWorld, nextFrame } from './util';
+import { forEachInventoryItem, forEachUnitInWorld, nextFrame } from './util';
 
 /**
  * The two challenges nobody else can report on.
@@ -27,10 +28,6 @@ import { forEachUnitInWorld, nextFrame } from './util';
  * lobby needs nothing: rounds start with every tool on the ground.
  */
 
-/** Global tick is 0.5s; the brink challenge counts whole seconds. */
-const TICKS_PER_SECOND = 2;
-let brinkTicks = 0;
-
 /** A full bucket and an empty one are the same tool for this purpose -- passing
  *  a bucket around by filling it would otherwise dodge the restriction. */
 function toolKey(itemTypeId: number): number | null {
@@ -48,15 +45,12 @@ function checkToolSharing(): void {
   forEachUnitInWorld(u => {
     if (broken) return;
     const held: number[] = [];
-    for (let slot = 0; slot < 6; slot++) {
-      const item = UnitItemInSlot(u, slot);
-      if (item == null) continue;
+    forEachInventoryItem(u, item => {
       const key = toolKey(GetItemTypeId(item));
-      if (key == null) continue;
       // Two of the same tool on ONE unit is still one holder, so only count a
       // given tool type once per unit.
-      if (!held.includes(key)) held.push(key);
-    }
+      if (key != null && !held.includes(key)) held.push(key);
+    });
     for (const key of held) {
       if (seen.includes(key)) {
         broken = true;
@@ -73,18 +67,12 @@ function tick(): void {
 
   if (isChallengeArmed(CH_BRINK)) {
     if (getTracksRemaining() <= BRINK_TRACKS) {
-      brinkTicks += 1;
-      if (brinkTicks >= TICKS_PER_SECOND) {
-        brinkTicks = 0;
-        noteBrinkSecond();
-      }
+      noteBrinkTime(TICK_INTERVAL);
     } else {
       // Left the danger window: the streak has to be unbroken, so start over.
-      brinkTicks = 0;
-      resetBrinkSeconds();
+      resetBrinkTime();
     }
   }
-
 }
 
 /** Check Union Rules now, if it is in play. */
@@ -96,11 +84,9 @@ export function checkUnionRules(): void {
 export function initChallengeWatch(): void {
   onGlobalTick(() => tick());
 
-  const pickup = CreateTrigger();
-  for (let i = 0; i < bj_MAX_PLAYER_SLOTS; i++) {
-    TriggerRegisterPlayerUnitEvent(pickup, Player(i)!, EVENT_PLAYER_UNIT_PICKUP_ITEM, null!);
-  }
-  TriggerAddAction(pickup, () => {
+  const pickup = Trigger.create();
+  pickup.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
+  pickup.addAction(() => {
     if (toolKey(GetItemTypeId(GetManipulatedItem()!)) == null) return;
     // A frame later, so a give/take that removes from one unit and adds to
     // another has finished both halves before the inventories are read.

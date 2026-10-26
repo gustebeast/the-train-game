@@ -853,8 +853,9 @@ export function initHeroes(): void {
     endHeroState();
   });
 
-  // XP is granted by the creep camp system via scaleCreepStats / creep death triggers.
-  // Native WC3 auto-XP is suspended on heroes when they spawn (see spawnHeroes).
+  // XP is granted by the creep camp system via scaleCreepStats / creep death
+  // triggers. Native kill XP is off map-wide: GrantNormalXP=0 in the gameplay
+  // constants (war3mapMisc.txt).
 
   // Track hero skill learns
   const skillTrigger = Trigger.create();

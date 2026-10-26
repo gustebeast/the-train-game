@@ -55,7 +55,8 @@ let curvedCount = 0;
 let trackBaseline = 0;
 
 let dashCount = 0;
-let brinkSeconds = 0;
+/** Unbroken time spent near the end of the line, in seconds. */
+let brinkTime = 0;
 let soloToolsBroken = false;
 
 /** Clear every counter. Called when a round starts -- AFTER the terrain has
@@ -65,7 +66,7 @@ export function resetChallengeProgress(): void {
   straightRun = 0;
   curvedCount = 0;
   dashCount = 0;
-  brinkSeconds = 0;
+  brinkTime = 0;
   soloToolsBroken = false;
   boardChanged();
 }
@@ -131,7 +132,7 @@ defineChallenge({
   name: 'Living Dangerously',
   description: 'Keep the train within ' + BRINK_TRACKS + ' tracks of the end '
     + 'of the line for ' + BRINK_SECONDS + ' seconds.',
-  progress: () => 'Near the end ' + I2S(brinkSeconds) + ' / ' + I2S(BRINK_SECONDS) + 's',
+  progress: () => 'Near the end ' + I2S(R2I(brinkTime)) + ' / ' + I2S(BRINK_SECONDS) + 's',
 });
 
 defineChallenge({
@@ -261,18 +262,20 @@ export function noteToolSharingBroken(): void {
   boardChanged();
 }
 
-/** One second passed with the train inside the danger window. */
-export function noteBrinkSecond(): void {
+/** `seconds` more passed with the train inside the danger window. The board
+ *  counts whole seconds, so it is only redrawn when one ticks over. */
+export function noteBrinkTime(seconds: number): void {
   if (!isChallengeArmed(CH_BRINK)) return;
-  brinkSeconds += 1;
-  boardChanged();
-  if (brinkSeconds >= BRINK_SECONDS) completeChallenge(CH_BRINK);
+  const before = R2I(brinkTime);
+  brinkTime += seconds;
+  if (R2I(brinkTime) !== before) boardChanged();
+  if (brinkTime >= BRINK_SECONDS) completeChallenge(CH_BRINK);
 }
 
 /** The train left the danger window, so the streak restarts. */
-export function resetBrinkSeconds(): void {
-  if (brinkSeconds === 0) return;
-  brinkSeconds = 0;
+export function resetBrinkTime(): void {
+  if (brinkTime === 0) return;
+  brinkTime = 0;
   boardChanged();
 }
 

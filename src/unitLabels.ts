@@ -36,6 +36,9 @@ const labels = new Map<unit, Label>();
 const marks = new Map<unit, effect>();
 let hooked = false;
 let deathTrigger: trigger | null = null;
+/** Units the death trigger already listens to. A trigger cannot forget a
+ *  registration, so relabelling or re-marking must not add another one. */
+const watched = new Set<unit>();
 
 /** Text size, in the units SetTextTagText takes. */
 const LABEL_SIZE = 0.024;
@@ -59,6 +62,20 @@ function dropMark(u: unit): void {
   marks.delete(u);
 }
 
+/** The unit has left the world: take everything that belongs to it. */
+function release(u: unit): void {
+  dropLabel(u);
+  dropMark(u);
+  watched.delete(u);
+}
+
+/** Make sure the death trigger hears about `u`, once. */
+function watch(u: unit): void {
+  if (deathTrigger == null || watched.has(u)) return;
+  watched.add(u);
+  TriggerRegisterUnitEvent(deathTrigger, u, EVENT_UNIT_DEATH);
+}
+
 /** Wrap RemoveUnit, and set up the death trigger, once.
  *
  *  Done on first use rather than at module load: natives are not reliable at
@@ -69,13 +86,13 @@ function install(): void {
   hooked = true;
   const nativeRemoveUnit = _G.RemoveUnit;
   _G.RemoveUnit = (u: unit) => {
-    if (u != null) { dropLabel(u); dropMark(u); }
+    if (u != null) release(u);
     nativeRemoveUnit(u);
   };
   deathTrigger = CreateTrigger();
   TriggerAddAction(deathTrigger, () => {
     const u = GetTriggerUnit();
-    if (u != null) { dropLabel(u); dropMark(u); }
+    if (u != null) release(u);
   });
 }
 
@@ -92,12 +109,7 @@ export function markUnit(u: unit, model: string, point: string, scale: number): 
   const unitScale = BlzGetUnitRealField(u, UNIT_RF_SCALING_VALUE);
   BlzSetSpecialEffectScale(fx, scale / (unitScale > 0 ? unitScale : 1));
   marks.set(u, fx);
-  if (deathTrigger != null) TriggerRegisterUnitEvent(deathTrigger, u, EVENT_UNIT_DEATH);
-}
-
-/** How many marks exist. For tests: a mark outliving its unit is a leak. */
-export function unitMarkCount(): number {
-  return marks.size;
+  watch(u);
 }
 
 /** Float `text` over `u` for as long as `u` exists. */
@@ -114,7 +126,7 @@ export function labelUnit(u: unit, text: string, red: number, green: number, blu
   const width = string.len(text) * CHAR_WIDTH;
   SetTextTagPos(tag, GetUnitX(u) - width / 2, GetUnitY(u) - 12, 0);
   labels.set(u, { tag });
-  if (deathTrigger != null) TriggerRegisterUnitEvent(deathTrigger, u, EVENT_UNIT_DEATH);
+  watch(u);
 }
 
 /** How many labels exist, and how many of those have lost their unit. The
@@ -130,7 +142,7 @@ export function unitLabelStats(): { total: number; orphaned: number } {
   for (const [u] of labels) {
     total += 1;
     GroupClear(probe);
-    GroupEnumUnitsInRange(probe, GetUnitX(u), GetUnitY(u), 32, null!);
+    GroupEnumUnitsInRange(probe, GetUnitX(u), GetUnitY(u), 32, undefined);
     if (!IsUnitInGroup(u, probe) || GetWidgetLife(u) <= 0.405) orphaned += 1;
   }
   DestroyGroup(probe);
