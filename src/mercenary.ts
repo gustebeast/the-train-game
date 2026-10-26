@@ -1,11 +1,11 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
-import { registerSaveSegment, parseFields } from './save';
+import { registerSaveSegment, parseFields, MERC_SAVE_KEY } from './save';
 import { forEachInventoryItem, getHumanPlayers, getInventoryItemIds, giveItems } from './util';
 import { getNeutralExtra } from './teams';
 import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creepCamps';
-import { UNKNOWN_UNIT_ID } from './constants';
+import { UNKNOWN_UNIT_ID, MAX_MERCS } from './constants';
 
 /** Hero-style inventory (the same ability the peasant carries tools with). It
  *  is BAKED onto every merc-able creep type in object data (see compiletime.ts):
@@ -52,14 +52,18 @@ interface MercSlot {
   deathTrig: Trigger | null;
 }
 
-const MAX_MERCS = 2;
-
 function emptySlot(): MercSlot {
   return { typeId: 0, dead: false, items: [], unit: null, deathTrig: null };
 }
 
+function emptySlots(): MercSlot[] {
+  const out: MercSlot[] = [];
+  for (let i = 0; i < MAX_MERCS; i++) out.push(emptySlot());
+  return out;
+}
+
 /** Slots in hire order. A slot with typeId 0 was never hired. */
-let slots: MercSlot[] = [emptySlot(), emptySlot()];
+let slots: MercSlot[] = emptySlots();
 
 /** Slots holding a mercenary that is hired and not dead. */
 function livingSlots(): MercSlot[] {
@@ -104,8 +108,7 @@ let controlSeq = 0;
 const lastControlled: number[] = [0, 0, 0, 0];
 
 // Save segment. One group of fields per slot, numbered: t1/d1/i1, t2/d2/i2.
-// Old saves wrote a single unnumbered mercenary (t/d/it) and read into slot 0.
-registerSaveSegment('mm',
+registerSaveSegment(MERC_SAVE_KEY,
   () => {
     const parts: string[] = [];
     for (let i = 0; i < MAX_MERCS; i++) {
@@ -127,27 +130,17 @@ registerSaveSegment('mm',
       }
       return out;
     };
-    for (const [key, val] of pairs(parseFields(raw))) {
-      if (key === 't1' || key === 't') {
-        slots[0].typeId = tonumber(val) ?? 0;
-      } else if (key === 'd1' || key === 'd') {
-        slots[0].dead = val === '1';
-      } else if (key === 'i1' || key === 'it') {
-        slots[0].items = readItems(val as string);
-      } else if (key === 't2') {
-        slots[1].typeId = tonumber(val) ?? 0;
-      } else if (key === 'd2') {
-        slots[1].dead = val === '1';
-      } else if (key === 'i2') {
-        slots[1].items = readItems(val as string);
-      }
-      // 'b' (the old "contract bought" flag) is deliberately ignored: whether a
-      // mercenary exists is now simply whether its slot has a type.
+    const fields = parseFields(raw);
+    for (let i = 0; i < MAX_MERCS; i++) {
+      const n = tostring(i + 1);
+      slots[i].typeId = tonumber(fields['t' + n] ?? '') ?? 0;
+      slots[i].dead = fields['d' + n] === '1';
+      slots[i].items = readItems(fields['i' + n] ?? '');
     }
   },
   // Reset-then-apply baseline: no contracts, no mercenaries, no kit
   () => {
-    slots = [emptySlot(), emptySlot()];
+    slots = emptySlots();
     currentHeroOwnerIds = [];
     controlSeq = 0;
     for (let i = 0; i < 4; i++) lastControlled[i] = 0;

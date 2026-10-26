@@ -1,8 +1,8 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { isInGameplay } from './state';
-import { registerSaveSegment, parseFields } from './save';
-import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID } from './constants';
+import { registerSaveSegment, parseFields, heroSaveKey } from './save';
+import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID, HERO_SLOTS } from './constants';
 import { createPlaceholder } from './placeholder';
 import { seededValueAt, deriveSeed } from './rng';
 import { gameState } from './state';
@@ -73,7 +73,8 @@ function emptyHero(): HeroData {
 }
 
 /** The 4 heroes available across rounds. Persisted via save segments. */
-const allHeroes: HeroData[] = [emptyHero(), emptyHero(), emptyHero(), emptyHero()];
+const allHeroes: HeroData[] = [];
+for (let i = 0; i < HERO_SLOTS; i++) allHeroes.push(emptyHero());
 
 /** Encode one hero's data as "t=FourCC;x=XP;ts=1;ta=2;ti=0;it=id1,id2,...;abilId=level;...". */
 function encodeHero(hero: HeroData): string {
@@ -122,11 +123,11 @@ export function decodeHero(raw: string): HeroData {
   return hero;
 }
 
-// Register save segments h1–h4. Reset restores the uninitialized-hero
+// One save segment per roster slot. Reset restores the uninitialized-hero
 // baseline (round-0 saves omit hN), letting initRandomHeroes re-roll.
-for (let i = 0; i < 4; i++) {
+for (let i = 0; i < HERO_SLOTS; i++) {
   const idx = i;
-  registerSaveSegment('h' + (idx + 1),
+  registerSaveSegment(heroSaveKey(idx + 1),
     () => encodeHero(allHeroes[idx]),
     (raw) => { allHeroes[idx] = decodeHero(raw); },
     () => { allHeroes[idx] = emptyHero(); },
@@ -287,10 +288,10 @@ export function hasHeroes(): boolean {
 // Hero selection
 // ---------------------------------------------------------------------------
 
-/** Pick 4 unique random heroes, populate allHeroes, and choose initial 2. Called once at game start. */
+/** Fill the roster with unique random heroes and choose the first two. Called once at game start. */
 export function initRandomHeroes(): void {
   const available = [...HERO_POOL];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < HERO_SLOTS; i++) {
     const idx = GetRandomInt(0, available.length - 1);
     allHeroes[i] = emptyHero();
     allHeroes[i].typeId = FourCC(available[idx]);

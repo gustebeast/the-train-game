@@ -49,6 +49,7 @@ import './eventdriventest'; // board, dealer, boss ending and Union Rules react 
 import './dpsscaletest'; // what the DPS match actually measures, in raw HP
 import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included
+import './savetest'; // a save round trip, as the chooser and -load read it
 import { loadStartLobby } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 

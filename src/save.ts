@@ -1,4 +1,5 @@
 import { DEFAULT_STATE, GameState, gameState, applyState } from './state';
+import { HERO_SLOTS, MAX_MERCS } from './constants';
 
 // One file per save slot, so several runs can be resumed independently: host a
 // game, quit in the inter-round lobby, host another, and both are still there.
@@ -38,6 +39,16 @@ const DEFEATED_YES = 'yes';
 const KEY_VICTORIOUS = 'VICTORIOUS';
 const VICTORIOUS_YES = 'yes';
 const KEY_VERSION = 'VERSION';
+
+/** The segment holding hero slot n (1-based); heroes.ts registers one per slot.
+ *  Built with tostring, not I2S: the registrations run at module load, where
+ *  I2S does not work, and a key that differs between write and read loses the
+ *  hero silently. */
+export function heroSaveKey(n: number): string {
+  return 'h' + tostring(n);
+}
+/** The segment holding the mercenaries; mercenary.ts registers it. */
+export const MERC_SAVE_KEY = 'mm';
 
 /**
  * The save format this build reads and writes.
@@ -92,7 +103,7 @@ export interface SaveSlotInfo {
 }
 
 /** Short keys for core state encoding. */
-const KEY_TO_SHORT: Record<string, string> = {
+const KEY_TO_SHORT: Record<keyof GameState, string> = {
   round: 'r',
   gold: 'g',
   trainCargoMaxStack: 'tc',
@@ -227,8 +238,6 @@ export function revertToInterRoundLobbySnapshot(): boolean {
   return true;
 }
 
-/** Living mercenary type ids out of the 'mm' segment (see mercenary.ts:
- *  t1/t2 are the types, d1/d2 the death flags). */
 /** A mercenary as a save describes it: what it is and what it is holding. The
  *  kit matters because the chooser stands these up through the ordinary
  *  mercenary spawner, which shows what a save would actually resume. */
@@ -237,17 +246,18 @@ export interface SavedMerc {
   items: number[];
 }
 
+/** The living mercenaries in an 'mm' segment (mercenary.ts writes it: per slot
+ *  n, tn is the type, dn the death flag, in the kit). */
 function decodeMercs(raw: string): SavedMerc[] {
   const out: SavedMerc[] = [];
   if (raw === '') return out;
   const fields = parseFields(raw);
-  for (let i = 1; i <= 2; i++) {
-    const n = I2S(i)!;
-    const typeId = tonumber(fields['t' + n] ?? '');
+  for (let n = 1; n <= MAX_MERCS; n++) {
+    const typeId = tonumber(fields['t' + tostring(n)] ?? '');
     if (typeId == null || typeId === 0) continue;
-    if ((fields['d' + n] ?? '0') === '1') continue;
+    if ((fields['d' + tostring(n)] ?? '0') === '1') continue;
     const items: number[] = [];
-    for (const [idStr] of string.gmatch(fields['i' + n] ?? '', '([^,]+)')) {
+    for (const [idStr] of string.gmatch(fields['i' + tostring(n)] ?? '', '([^,]+)')) {
       const id = tonumber(idStr) ?? 0;
       if (id !== 0) items.push(id);
     }
@@ -255,18 +265,6 @@ function decodeMercs(raw: string): SavedMerc[] {
   }
   return out;
 }
-
-/** What this session has written, by slot.
- *
- *  Re-reading a save file the same session that wrote it does NOT come back
- *  changed -- measured in game: a slot marked defeated was still offered, and
- *  still read as undefeated, immediately afterwards. Preloader does not pick up
- *  a file it has already read this session.
- *
- *  That is precisely the flow that matters: lose a run, restart, and the
- *  chooser must not still be offering the save you just lost. So writes are
- *  remembered here and laid over what the disk says. */
-const writtenThisSession = new Map<number, SaveSlotInfo>();
 
 /**
  * Everything written to each slot this session, key to value.
@@ -276,52 +274,72 @@ const writtenThisSession = new Map<number, SaveSlotInfo>();
  * cache keeps whatever it was filled with the FIRST time the slot was read.
  * Load a save, play two rounds, save, and reading that slot back hands you the
  * run as it was when you loaded it -- the rounds are on disk, and the session
- * cannot see them.
+ * cannot see them. (Measured in game: a slot marked defeated was still offered,
+ * and still read as undefeated, immediately afterwards.)
  *
- * So what is written is kept here as well, and preferred on read. Disk is for
- * the next session; this is for this one.
+ * So what is written is kept here as well, and preferred on every read. Disk is
+ * for the next session; this is for this one.
  */
 const sessionData = new Map<number, Map<string, string>>();
 
-/** Whether an already-opened slot cache holds the save format this build
- *  speaks. An unstamped save predates versioning entirely, and tonumber('')
- *  is nil rather than 0, so it fails this the same way a wrong number does. */
-function versionMatches(gc: gamecache): boolean {
-  return tonumber(GetStoredString(gc, CACHE_CAT, KEY_VERSION) ?? '') === SAVE_VERSION;
-}
+/** A slot's stored values, key to string ('' when absent). */
+type SlotReader = (key: string) => string;
 
-/** Read what a slot advertises WITHOUT applying any of it: the chooser has to
- *  describe every save on offer, and loading each one to read it would trample
- *  the session. Returns null for an empty or unreadable slot. */
-function readSlotInfo(slot: number): SaveSlotInfo | null {
+/** Read a slot through `read`, from this session's writes if it has any and
+ *  from the file otherwise. Every read of a save goes through here, so the two
+ *  sources can never be interpreted differently. Returns null when the slot's
+ *  file cannot be opened. */
+function withSlot<T>(slot: number, read: (get: SlotReader) => T): T | null {
+  const session = sessionData.get(slot);
+  if (session != null) return read(key => session.get(key) ?? '');
   Preloader(slotSaveFile(slot));
   const gc = InitGameCache(slotCacheFile(slot));
   if (gc == null) return null;
-  const stored = (key: string) => GetStoredString(gc, CACHE_CAT, key) ?? '';
+  const result = read(key => GetStoredString(gc, CACHE_CAT, key) ?? '');
+  FlushGameCache(gc);
+  return result;
+}
+
+/** Whether a slot holds the save format this build speaks. An unstamped save
+ *  predates versioning entirely, and tonumber('') is nil rather than 0, so it
+ *  fails this the same way a wrong number does. */
+function versionMatches(get: SlotReader): boolean {
+  return tonumber(get(KEY_VERSION)) === SAVE_VERSION;
+}
+
+/** The core record, or null when there is none or it is unreadable. */
+function readCore(get: SlotReader): GameState | null {
+  const raw = get('core');
+  if (raw === '') return null;
+  const core = decodeRecord(raw, SHORT_TO_KEY);
+  if (core.round == null) return null;
+  return core as unknown as GameState;
+}
+
+/** What a slot advertises, read WITHOUT applying any of it: the chooser has to
+ *  describe every save on offer, and loading each one to read it would trample
+ *  the session. Returns null for an empty slot. */
+function describeSlot(slot: number, get: SlotReader): SaveSlotInfo | null {
   // No core record at all is an EMPTY slot -- there is no save here to speak of.
-  // Core present but unreadable is a MALFORMED save, which is a different thing
-  // and handled below.
-  const raw = stored('core');
-  if (raw === '') { FlushGameCache(gc); return null; }
+  if (get('core') === '') return null;
   // Something is written here, but not in a format this build speaks. Report it
   // the way a defeated run is reported: it holds its slot and stays out of the
   // chooser, rather than vanishing and letting the next run land on top of it
   // the moment one is started. Nothing inside is trusted, so nothing inside is
   // read -- seq 0 puts it first in line for reuse once slots run short.
-  if (!versionMatches(gc)) {
-    FlushGameCache(gc);
+  if (!versionMatches(get)) {
     return {
       slot, seq: 0, round: 0, defeated: true, victorious: false,
       heroTypeIds: [], heroRecords: [], mercs: [],
     };
   }
-  const core = decodeRecord(raw, SHORT_TO_KEY);
-  if (core.round == null) { FlushGameCache(gc); return null; }
+  const core = readCore(get);
+  if (core == null) return null;
 
   const heroTypeIds: number[] = [];
   const heroRecords: string[] = [];
-  for (let i = 1; i <= 4; i++) {
-    const heroRaw = stored('h' + I2S(i)!);
+  for (let n = 1; n <= HERO_SLOTS; n++) {
+    const heroRaw = get(heroSaveKey(n));
     if (heroRaw === '') continue;
     const typeId = tonumber(parseFields(heroRaw)['t'] ?? '');
     if (typeId != null && typeId !== 0) {
@@ -329,18 +347,16 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
       heroRecords.push(heroRaw);
     }
   }
-  const info: SaveSlotInfo = {
+  return {
     slot,
-    seq: tonumber(stored(KEY_SEQ)) ?? 0,
+    seq: tonumber(get(KEY_SEQ)) ?? 0,
     round: core.round,
-    defeated: stored(KEY_DEFEATED) === DEFEATED_YES,
-    victorious: stored(KEY_VICTORIOUS) === VICTORIOUS_YES,
+    defeated: get(KEY_DEFEATED) === DEFEATED_YES,
+    victorious: get(KEY_VICTORIOUS) === VICTORIOUS_YES,
     heroTypeIds,
     heroRecords,
-    mercs: decodeMercs(stored('mm')),
+    mercs: decodeMercs(get(MERC_SAVE_KEY)),
   };
-  FlushGameCache(gc);
-  return writtenThisSession.get(slot) ?? info;
 }
 
 /** Every save that exists, newest first. Defeated saves are included only when
@@ -349,7 +365,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
 export function listSaves(includeDefeated = false): SaveSlotInfo[] {
   const found: SaveSlotInfo[] = [];
   for (let slot = 1; slot <= SLOT_COUNT; slot++) {
-    const info = readSlotInfo(slot) ?? writtenThisSession.get(slot) ?? null;
+    const info = withSlot(slot, get => describeSlot(slot, get));
     if (info == null) continue;
     if (info.defeated && !includeDefeated) continue;
     found.push(info);
@@ -359,9 +375,9 @@ export function listSaves(includeDefeated = false): SaveSlotInfo[] {
 }
 
 /** The slot a new run should claim: a free one, else the oldest finished one
- *  -- defeated or victorious, since neither can be played again -- else the
- *  oldest of all. A slot holding a save this build cannot read counts as free
- *  -- readSlotInfo returns nothing for it. */
+ *  -- defeated or victorious, since neither can be played again, and a save
+ *  this build cannot read reports itself as defeated -- else the oldest of
+ *  all. */
 function allocateSlot(): number {
   const used = listSaves(true);
   for (let slot = 1; slot <= SLOT_COUNT; slot++) {
@@ -412,26 +428,6 @@ function writeSlot(slot: number, defeated: boolean, victorious = false): void {
   if (victorious) put(KEY_VICTORIOUS, VICTORIOUS_YES);
   PreloadGenEnd(slotSaveFile(slot));
   sessionData.set(slot, record);
-
-  // Same picture the disk would give, so a save written this session describes
-  // itself the way one read back from a file does.
-  const heroTypeIds: number[] = [];
-  const heroRecords: string[] = [];
-  let mercs: SavedMerc[] = [];
-  for (let i = 0; i < extraKeys.length; i++) {
-    const encoded = extraEncoders[i]();
-    if (extraKeys[i] === 'mm') { mercs = decodeMercs(encoded); continue; }
-    if (extraKeys[i] !== 'h' + I2S(heroTypeIds.length + 1)!) continue;
-    const typeId = tonumber(parseFields(encoded)['t'] ?? '');
-    if (typeId != null && typeId !== 0) {
-      heroTypeIds.push(typeId);
-      heroRecords.push(encoded);
-    }
-  }
-  writtenThisSession.set(slot, {
-    slot, seq: highestSeq + 1, round: gameState.round, defeated, victorious,
-    heroTypeIds, heroRecords, mercs,
-  });
 }
 
 /** Write current gameState + extra segments to the session's save slot. */
@@ -465,12 +461,12 @@ export function markCurrentSaveVictorious(): void {
  *  point, loading a save and immediately starting a new game cannot write over
  *  the save that was loaded. */
 export function resetToNewRun(): void {
-  // Deliberately NOT clearing writtenThisSession: what is on disk is on disk,
-  // and a new run must still see the saves the session has already written.
+  // Deliberately NOT clearing sessionData: what is on disk is on disk, and a
+  // new run must still see the saves the session has already written.
   for (const reset of extraResets) {
     if (reset != null) reset();
   }
-  applyState({ ...DEFAULT_STATE });
+  applyState(DEFAULT_STATE);
   currentSlot = 0;
 }
 
@@ -490,60 +486,15 @@ export function loadFromFile(): boolean {
   return loadFromSlot(saves[0].slot);
 }
 
-/** Load gameState + extra segments from a slot's file. Returns true if successful. */
+/** Load gameState + extra segments from a slot. Returns true if successful. */
 function readSlotInto(slot: number): boolean {
-  // What this session wrote wins over what the game cache holds. The cache
-  // cannot be refreshed from disk mid-session -- see sessionData -- so for a
-  // slot saved since the map loaded, the file's contents are unreachable and
-  // the cache is stale by exactly the rounds that were played.
-  const session = sessionData.get(slot);
-  if (session != null) {
-    const rawSession = session.get('core') ?? '';
-    if (rawSession === '') return false;
-    const loadedSession = decodeRecord(rawSession, SHORT_TO_KEY);
-    if (loadedSession.round == null) return false;
-    const sessionSegments: string[] = [];
-    for (let i = 0; i < extraKeys.length; i++) {
-      sessionSegments.push(session.get(extraKeys[i]) ?? '');
-    }
-    applyStateBundle({
-      core: loadedSession as unknown as GameState, segments: sessionSegments,
-    });
-    return true;
-  }
-
-  Preloader(slotSaveFile(slot));
-  const gc = InitGameCache(slotCacheFile(slot));
-  if (gc == null) return false;
-  if (!versionMatches(gc)) { FlushGameCache(gc); return false; }
-
-  // Load core state
-  const raw = GetStoredString(gc, CACHE_CAT, 'core');
-  if (raw == null || raw === '') {
-    FlushGameCache(gc);
-    return false;
-  }
-  const loaded = decodeRecord(raw, SHORT_TO_KEY);
-  if (loaded.round == null) {
-    FlushGameCache(gc);
-    return false;
-  }
-
-  // Read all extra segments, then restore through the shared bundle path
-  const segments: string[] = [];
-  for (let i = 0; i < extraKeys.length; i++) {
-    segments.push(GetStoredString(gc, CACHE_CAT, extraKeys[i]) ?? '');
-  }
-  FlushGameCache(gc);
-  applyStateBundle({ core: loaded as unknown as GameState, segments });
+  const bundle = withSlot(slot, (get): StateBundle | null => {
+    if (!versionMatches(get)) return null;
+    const core = readCore(get);
+    if (core == null) return null;
+    return { core, segments: extraKeys.map(key => get(key)) };
+  });
+  if (bundle == null) return false;
+  applyStateBundle(bundle);
   return true;
-}
-
-/** Erase a slot by writing an empty preload file over it. Nothing calls this in
- *  normal play -- defeat marks a save rather than removing it -- but it is the
- *  only way to genuinely clear one. */
-export function deleteSave(slot: number = currentSlot): void {
-  PreloadGenClear();
-  PreloadGenStart();
-  PreloadGenEnd(slotSaveFile(slot));
 }
