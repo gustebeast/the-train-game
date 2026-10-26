@@ -1,7 +1,7 @@
 import { Grid, GRID_MAX_X, biomeForCampLevel } from './constants';
 import { stopPregameMusic } from '../lobbyMusic';
 import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateVictoryLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
-import { spawnTerrain, SpawnedTrain } from './spawn';
+import { spawnTerrain, spawnReadyCircle, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { Unit } from 'w3ts';
@@ -101,13 +101,21 @@ setVictoryCallback(() => {
 
 // How the boss fight ends. Losing costs the attempt, not the run: it lands
 // exactly where an ordinary victory would, because the round was already won.
+// Winning goes quiet and leaves one unmarked circle in the middle of the
+// arena. Everyone who survived the fight has to stand on it -- every hero and
+// mercenary still alive, not one unit per player -- and that is what takes the
+// party to the victory lobby.
 setBossArenaCallbacks(
   () => {
     advanceChallengeOffer();
     loadInterRoundLobby();
   },
-  () => loadVictoryLobby(),
+  survivors => {
+    setMusic('silence');
+    spawnReadyCircle(0, 0, { label: '', zone: 'bossexit' }, survivors);
+  },
 );
+registerReadyZone('bossexit', '', () => loadVictoryLobby());
 setDefeatCallback(() => {
   if (inTutorial) { endTutorial(); return; }
   loadDefeatLobby();
@@ -202,8 +210,9 @@ const TRACK_FILES = {
 
 type MusicTrack = keyof typeof TRACK_FILES;
 
-/** Which track SHOULD be playing, or null for none. */
-let currentTrack: MusicTrack | null = null;
+/** Which track SHOULD be playing: one of ours, 'silence' for nothing at all,
+ *  or null for Warcraft's own playlist. */
+let currentTrack: MusicTrack | 'silence' | null = null;
 /** Built on first play and kept, so a track that stops can start again
  *  without re-reading the file. Keyed off TRACK_FILES, so adding a track is
  *  one line up there and nothing else. */
@@ -233,12 +242,12 @@ const trackHandles: { [K in MusicTrack]?: sound } = {};
  * Asking for null does NOT mean silence -- it means "this is not one of our
  * scenes", and Warcraft's own playlist takes the channel back. That playlist is
  * the one war3map.lua sets up in main(), so restoring it is a matter of asking
- * for it again by the same name.
+ * for it again by the same name. Real silence is asked for by name: 'silence'.
  *
  * Why sound handles and not PlayMusic: the music channel loops by restarting
  * the file and cannot do it seamlessly. A sound handle loops internally.
  */
-function setMusic(track: MusicTrack | null): void {
+function setMusic(track: MusicTrack | 'silence' | null): void {
   if (track === currentTrack) return;   // already in the requested state
 
   // Our own handles first. StopMusic does not touch them, and whichever way
@@ -263,10 +272,12 @@ function setMusic(track: MusicTrack | null): void {
     return;
   }
 
-  // One of ours is taking over, so silence the engine's playlist. Without this
-  // the two stack: StartSound does not stop what the music channel is doing.
+  // One of ours is taking over, or nothing is, so silence the engine's
+  // playlist. Without this the two stack: StartSound does not stop what the
+  // music channel is doing.
   StopMusic(false);
   ClearMapMusic();
+  if (track === 'silence') return;
 
   let handle = trackHandles[track] ?? null;
   if (handle == null) {

@@ -126,20 +126,26 @@ const READY_CIRCLES: { [entity: number]: { label: string; zone: string; warning?
   [Entity.TUTORIAL_CIRCLE]: { label: 'Tutorial',        zone: 'tutorial' },
 };
 
-/** Stand a ready-zone circle at a world position and arm its zone. */
-function spawnReadyCircle(
+/** Stand a ready-zone circle at a world position and arm its zone. An empty
+ *  label makes an unmarked circle: no floating text, and no name when it is
+ *  selected. `members` makes it wait for those units rather than for a peasant
+ *  from every player (see initReadyZone). */
+export function spawnReadyCircle(
   x: number, y: number, spec: { label: string; zone: string; warning?: boolean },
+  members: unit[] | null = null,
 ): void {
   const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), x, y, 0);
   if (circle == null) return;
   // The name stays: it is what selecting the circle shows. The floating label
-  // says the same thing without having to click.
-  BlzSetUnitName(circle.handle, spec.label);
+  // says the same thing without having to click. An unmarked circle is named a
+  // single space, which shows as nothing: an EMPTY name crashes the game
+  // outright (measured -- BlzSetUnitName with '' never returns).
+  BlzSetUnitName(circle.handle, spec.label === '' ? ' ' : spec.label);
   // White for every circle. The warning circles are already told apart by the
   // red tint on the circle itself.
-  labelUnit(circle.handle, spec.label, 255, 255, 255);
+  if (spec.label !== '') labelUnit(circle.handle, spec.label, 255, 255, 255);
   if (spec.warning === true) SetUnitVertexColor(circle.handle, 255, 180, 180, 255);
-  initReadyZone(x, y, spec.zone, circle);
+  initReadyZone(x, y, spec.zone, circle, members);
 }
 
 export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
