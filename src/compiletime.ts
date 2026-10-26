@@ -752,6 +752,10 @@ compiletime(({ objectData, constants }) => {
     sealRock.tintingColor2Greenundefined = 40;
     sealRock.tintingColor3Blueundefined = 40;
     sealRock.unitClassification = 'ancient';
+    // The selection ring is the Barracks', sized for a building several tiles
+    // across, and SetUnitScale shrinks the model but not the ring. Sized to
+    // the rock as it is actually drawn (granite's scale, bossRock.ts).
+    sealRock.selectionScale = 1.5;
     sealRock.normal = '';
     sealRock.unitsTrained = '';
     sealRock.researchesAvailable = '';
