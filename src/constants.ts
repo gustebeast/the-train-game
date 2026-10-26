@@ -27,6 +27,18 @@ export const BOSS_ADD_ID = FourCC('uinl');
 /** The boss's Inferno: a Tichondrius-campaign copy, so the Dreadlord's is
  *  untouched. */
 export const BOSS_INFERNO_ABILITY_ID = FourCC('A010');
+/** The gold trophy over a party that beat the boss: "Golden Cup" from Reward
+ *  Trophies by stan0033 (Hive Workshop), reworked with a deeper gold and an
+ *  environment-mapped shine. It reads its texture from
+ *  war3mapImported\TrophyGold.blp, which has to keep that name.
+ *
+ *  Worn through markUnit, so it is one size on every unit. It still takes on
+ *  a tinted creep's colour: the engine multiplies everything attached to a
+ *  unit by that unit's tint, and nothing set on the effect undoes it. */
+export const TROPHY_MODEL = 'war3mapImported\\Trophy.mdx';
+/** The worn trophy's size in the world -- what it measured on a hero, where it
+ *  looked right. */
+export const TROPHY_SCALE = 0.6;
 
 // Critters: the wandering-animal set from classic 1v1 melee maps
 export const CRITTER_TYPE_IDS: ReadonlyArray<number> = [

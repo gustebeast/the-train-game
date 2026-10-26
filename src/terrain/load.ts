@@ -1,17 +1,18 @@
-import { Grid, GRID_MAX_X, biomeForCampLevel } from './constants';
+import { Grid, GRID_MAX_X, biomeForCampLevel, gridToWorld } from './constants';
 import { stopPregameMusic } from '../lobbyMusic';
 import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateVictoryLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
-import { spawnTerrain, SpawnedTrain } from './spawn';
+import { spawnTerrain, spawnReadyCircle, addBoardEffect, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { Unit } from 'w3ts';
-import { PEASANT_ID } from '../constants';
+import { PEASANT_ID, TROPHY_MODEL, TROPHY_SCALE } from '../constants';
+import { markUnit } from '../unitLabels';
 import { forEachUnitOfPlayer, getHumanPlayers, getWorldBounds } from '../util';
 import { makeDancer, startDanceClock } from '../dance';
 import {
   closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,
   selectNewerSave, selectOlderSave,
-  getOfferedSaveCount,
+  getOfferedSaveCount, isSelectedSaveVictorious,
 } from '../chooseSaveLobby';
 import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
@@ -21,9 +22,9 @@ import { getNeutralExtra } from '../teams';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';
 import { getCampData } from '../creeps';
 import { gameState } from '../state';
-import { loadFromSlot, listSaves, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
+import { loadFromSlot, listSaves, markCurrentSaveDefeated, markCurrentSaveVictorious, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
-  hasHeroes, initRandomHeroes, chooseHeroes,
+  hasHeroes, initRandomHeroes, chooseHeroes, getInterRoundLobbyHeroUnits,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
 } from '../heroes';
 import { startSparringMatch } from '../creeps';
@@ -36,7 +37,7 @@ import {
   DAY_TIME, startDayNightForRound, stopDayNight,
 } from '../daynight';
 import { refreshInterRoundLobbyRoster, resetInterRoundLobbyRoster } from '../interRoundLobbyRoster';
-import { saveMercInterRoundLobbySnapshot } from '../mercenary';
+import { saveMercInterRoundLobbySnapshot, getInterRoundLobbyMercUnits } from '../mercenary';
 import { deriveSeed } from '../rng';
 import { advanceChallengeOffer } from '../challenges';
 
@@ -101,13 +102,24 @@ setVictoryCallback(() => {
 
 // How the boss fight ends. Losing costs the attempt, not the run: it lands
 // exactly where an ordinary victory would, because the round was already won.
+// Winning goes quiet and leaves one unmarked circle in the middle of the
+// arena. Everyone who survived the fight has to stand on it -- every hero and
+// mercenary still alive, not one unit per player -- and that is what takes the
+// party to the victory lobby.
 setBossArenaCallbacks(
   () => {
     advanceChallengeOffer();
     loadInterRoundLobby();
   },
-  () => loadVictoryLobby(),
+  survivors => {
+    // On disk the moment the boss falls, not when the party walks out: the
+    // run is won whether or not anyone ever reaches the circle.
+    markCurrentSaveVictorious();
+    setMusic('silence');
+    spawnReadyCircle(0, 0, { label: '', zone: 'bossexit' }, survivors);
+  },
 );
+registerReadyZone('bossexit', '', () => loadVictoryLobby());
 setDefeatCallback(() => {
   if (inTutorial) { endTutorial(); return; }
   loadDefeatLobby();
@@ -165,10 +177,11 @@ registerReadyZone('saveconfirm', 'Loading the selected save', () => {
   // taken -- shop, roster and all. Dropping straight into gameplay skipped the
   // half of the round the save was standing in.
   loadInterRoundLobby();
-});
+}, () => (isSelectedSaveVictorious() ? 'This save is already victorious and cannot be loaded' : null));
 registerReadyZone('restart', 'Returning to the start lobby', () => {
-  // The run is already marked defeated (loadDefeatLobby did that on the way
-  // in), so this only has to put the session back to how it boots.
+  // The run is already marked finished -- defeated by loadDefeatLobby, or
+  // victorious when the boss fell -- so this only has to put the session back
+  // to how it boots.
   beginNewRun();
   loadStartLobby();
 });
@@ -196,12 +209,15 @@ const TRACK_FILES = {
   startLobby: 'war3mapImported\\StartLobby.wav',
   interRound: 'war3mapImported\\InterRoundLobby.wav',
   defeat: 'war3mapImported\\Purgatory.wav',
+  boss: 'war3mapImported\\BossBattle.wav',
+  victory: 'war3mapImported\\VictoryLobby.wav',
 };
 
 type MusicTrack = keyof typeof TRACK_FILES;
 
-/** Which track SHOULD be playing, or null for none. */
-let currentTrack: MusicTrack | null = null;
+/** Which track SHOULD be playing: one of ours, 'silence' for nothing at all,
+ *  or null for Warcraft's own playlist. */
+let currentTrack: MusicTrack | 'silence' | null = null;
 /** Built on first play and kept, so a track that stops can start again
  *  without re-reading the file. Keyed off TRACK_FILES, so adding a track is
  *  one line up there and nothing else. */
@@ -231,12 +247,12 @@ const trackHandles: { [K in MusicTrack]?: sound } = {};
  * Asking for null does NOT mean silence -- it means "this is not one of our
  * scenes", and Warcraft's own playlist takes the channel back. That playlist is
  * the one war3map.lua sets up in main(), so restoring it is a matter of asking
- * for it again by the same name.
+ * for it again by the same name. Real silence is asked for by name: 'silence'.
  *
  * Why sound handles and not PlayMusic: the music channel loops by restarting
  * the file and cannot do it seamlessly. A sound handle loops internally.
  */
-function setMusic(track: MusicTrack | null): void {
+function setMusic(track: MusicTrack | 'silence' | null): void {
   if (track === currentTrack) return;   // already in the requested state
 
   // Our own handles first. StopMusic does not touch them, and whichever way
@@ -261,10 +277,12 @@ function setMusic(track: MusicTrack | null): void {
     return;
   }
 
-  // One of ours is taking over, so silence the engine's playlist. Without this
-  // the two stack: StartSound does not stop what the music channel is doing.
+  // One of ours is taking over, or nothing is, so silence the engine's
+  // playlist. Without this the two stack: StartSound does not stop what the
+  // music channel is doing.
   StopMusic(false);
   ClearMapMusic();
+  if (track === 'silence') return;
 
   let handle = trackHandles[track] ?? null;
   if (handle == null) {
@@ -378,13 +396,30 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
  *  cannot overwrite the inter-round lobby state a later session would load.
  *
  *  Contrast loadInterRoundLobby(), which is the victory path and rebuilds everything. */
-/** The run is over and won. Same shape as the defeat lobby, on its own board:
- *  the save is left alone rather than marked, because beating the boss is not
- *  something that should stop you loading the run again. */
+/** The run is over and won: the defeat lobby's floor, with the whole party
+ *  standing on it -- peasants, and the heroes and mercenaries in the
+ *  inter-round lobby's roster column -- every one of them under a trophy.
+ *  The save was already marked victorious when the boss fell. */
 function loadVictoryLobby(): void {
-  // No victory track exists yet; the between-rounds one is the closest thing
-  // to celebratory the map owns. Swap it the moment there is a real one.
-  enterBoard('interRound', generateVictoryLobby());
+  // Snapshot first, as the inter-round lobby does: the roster hides anyone who
+  // differs from the last snapshot behind a "?", and a hero rolled in the last
+  // lobby has been met since -- in the boss fight -- so nobody here is a secret.
+  saveHeroInterRoundLobbySnapshot();
+  saveMercInterRoundLobbySnapshot();
+  enterBoard('victory', generateVictoryLobby());
+  resetInterRoundLobbyRoster();
+  refreshInterRoundLobbyRoster();
+  const winners: unit[] = [];
+  for (const h of getInterRoundLobbyHeroUnits()) winners.push(h.handle);
+  for (const m of getInterRoundLobbyMercUnits()) winners.push(m.handle);
+  for (const p of getHumanPlayers()) {
+    forEachUnitOfPlayer(p.handle, u => { if (GetUnitTypeId(u) === PEASANT_ID) winners.push(u); });
+  }
+  for (const u of winners) markUnit(u, TROPHY_MODEL, 'overhead', TROPHY_SCALE);
+  // And the trophy itself, life-size on the top middle grass tile -- the
+  // square the inter-round lobby gives to the shop.
+  const top = gridToWorld({ x: 0, y: 3 });
+  addBoardEffect(TROPHY_MODEL, top.x, top.y, 1.6);
 }
 
 function loadDefeatLobby(): void {
@@ -437,7 +472,7 @@ function loadChooseSaveLobby(): void {
  *  the lava has none by design (its blockers are invisible destructables), so
  *  without this the surround would sit unexplored and render black. */
 export function loadBossBattlefield(): void {
-  enterBoard(null, generateBossBattlefield());
+  enterBoard('boss', generateBossBattlefield());
 }
 
 /** Hand the inter-round lobby's scenery to the neutral player that shares NO

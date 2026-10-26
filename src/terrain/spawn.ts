@@ -75,6 +75,20 @@ export interface SpawnedTrain {
 /** Where the arena template said the party and the boss go, in world
  *  coordinates. Filled while the grid is walked and read by loadBossBattlefield
  *  -- the template marks the places, the arena decides who fills them. */
+/** Free-standing models dressing the current board. Special effects are not
+ *  units, destructables or items, so the board sweep would leave them behind;
+ *  registering one here means it goes with the board. */
+const boardEffects: effect[] = [];
+
+/** Stand a model on the board as scenery, removed with the board. */
+export function addBoardEffect(model: string, x: number, y: number, scale: number): effect | null {
+  const fx = AddSpecialEffect(model, x, y);
+  if (fx == null) return null;
+  BlzSetSpecialEffectScale(fx, scale);
+  boardEffects.push(fx);
+  return fx;
+}
+
 let bossHeroSpots: GridPos[] = [];
 let bossMercSpots: GridPos[] = [];
 let bossSpot: GridPos | null = null;
@@ -125,20 +139,26 @@ const READY_CIRCLES: { [entity: number]: { label: string; zone: string; warning?
   [Entity.TUTORIAL_CIRCLE]: { label: 'Tutorial',        zone: 'tutorial' },
 };
 
-/** Stand a ready-zone circle at a world position and arm its zone. */
-function spawnReadyCircle(
+/** Stand a ready-zone circle at a world position and arm its zone. An empty
+ *  label makes an unmarked circle: no floating text, and no name when it is
+ *  selected. `members` makes it wait for those units rather than for a peasant
+ *  from every player (see initReadyZone). */
+export function spawnReadyCircle(
   x: number, y: number, spec: { label: string; zone: string; warning?: boolean },
+  members: unit[] | null = null,
 ): void {
   const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), x, y, 0);
   if (circle == null) return;
   // The name stays: it is what selecting the circle shows. The floating label
-  // says the same thing without having to click.
-  BlzSetUnitName(circle.handle, spec.label);
+  // says the same thing without having to click. An unmarked circle is named a
+  // single space, which shows as nothing: an EMPTY name crashes the game
+  // outright (measured -- BlzSetUnitName with '' never returns).
+  BlzSetUnitName(circle.handle, spec.label === '' ? ' ' : spec.label);
   // White for every circle. The warning circles are already told apart by the
   // red tint on the circle itself.
-  labelUnit(circle.handle, spec.label, 255, 255, 255);
+  if (spec.label !== '') labelUnit(circle.handle, spec.label, 255, 255, 255);
   if (spec.warning === true) SetUnitVertexColor(circle.handle, 255, 180, 180, 255);
-  initReadyZone(x, y, spec.zone, circle);
+  initReadyZone(x, y, spec.zone, circle, members);
 }
 
 export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
@@ -162,6 +182,8 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
     EnumDestructablesInRect(getWorldBounds(), null!, () => RemoveDestructable(GetEnumDestructable()!));
     forEachUnitInWorld(u => RemoveUnit(u));
     EnumItemsInRect(getWorldBounds(), null!, () => RemoveItem(GetEnumItem()!));
+    for (const fx of boardEffects) DestroyEffect(fx);
+    boardEffects.length = 0;
     resumeResourceDrops();
     placedTracks.length = 0;
     resetVictoryTriggered();
