@@ -13,7 +13,6 @@ import { initGiveTake } from './givetake';
 import { initCheat } from './cheat';
 import { initDayNight } from './daynight';
 import { initBridge } from './bridge';
-import { initBossRock } from './bossRock';
 import { initBossKey } from './bossKey';
 import { initFill } from './fill';
 import { initWaterTrain } from './water';
@@ -72,7 +71,6 @@ function tsMain() {
     initItems();
     initGiveTake();
     initBridge();
-    initBossRock();
     initBossKey();
     initFill();
     initWaterTrain();

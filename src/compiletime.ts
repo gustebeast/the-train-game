@@ -738,8 +738,9 @@ compiletime(({ objectData, constants }) => {
   // Classified ANCIENT so the key can target it and nothing else: the key's
   // targets are "ancient structure", and this is the only one in the map.
   //
-  // 999999 HP, so ordinary attacks chip at it forever. Transmute does not deal
-  // damage, it kills, so the HP is no obstacle to the key.
+  // Made invulnerable when spawned (bossRock.ts), like the water tiles: no
+  // health bar, and attacks get the engine's refusal. The 999999 HP is only a
+  // backstop. Transmute kills rather than damages, invulnerable or not.
   const sealRock = objectData.units.copy(constants.units.Barracks, STRANGE_ROCK_UNIT);
   if (sealRock != null) {
     sealRock.name = 'Strange Rock';

@@ -480,12 +480,18 @@ function runStrangeKey(t: TestReporter): void {
   expect(t, 'refusedOnSelf', UnitUseItemTarget(p, key, p) ? 1 : 0, 0);
   expect(t, 'keyKeptAfterRefusals', holdsKey(p) ? 1 : 0, 1);
 
-  // Attacks do nothing to it.
+  // Invulnerable, as water is: no health bar, and a player's attack on it is
+  // refused when clicked. (A SCRIPT order skips that click-time check, so it
+  // cannot be asserted here -- checked with real clicks instead.)
+  expect(t, 'invulnerable', BlzIsUnitInvulnerable(rock) ? 1 : 0, 1);
+
+  // Damage does nothing to it either.
   UnitDamageTarget(p, rock, 5000, true, false,
     ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
   expect(t, 'survivesHeavyHit', GetWidgetLife(rock) > 0.405 ? 1 : 0, 1);
 
   const gold0 = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD);
+  t.after(ONE_FRAME * 4, () => {
   expect(t, 'throwAccepted', UnitUseItemTarget(p, key, rock) ? 1 : 0, 1);
   t.after(0.1, () => {
     // The missile is still in the air: thrown, not instant.
@@ -503,6 +509,7 @@ function runStrangeKey(t: TestReporter): void {
       expect(t, 'creepUntouched', GetWidgetLife(kobold) > 0.405 ? 1 : 0, 1);
       t.done();
     });
+  });
   });
 }
 registerTest('strangekey', runStrangeKey);
