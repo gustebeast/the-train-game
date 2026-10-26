@@ -132,7 +132,12 @@ export function initReadyZone(
   cx: number, cy: number, id: string, marker: Unit | null = null, members: unit[] | null = null,
 ): void {
   const config = zoneConfigs.get(id);
-  if (config == null) return;
+  if (config == null) {
+    // Loud rather than a circle that silently does nothing: an unregistered id
+    // is a typo or a board loaded before initBoardFlow.
+    print('|cffff4040ready: no zone registered as "' + id + '"|r');
+    return;
+  }
 
   const rect = Rectangle.create(
     cx - REGION_HALF, cy - REGION_HALF,

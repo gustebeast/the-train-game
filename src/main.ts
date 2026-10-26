@@ -3,7 +3,7 @@ import { W3TS_HOOK, addScriptHook } from 'w3ts/hooks';
 import './compiletime';
 // Must be imported for its side effect: it wraps the engine's config(), which
 // runs while the pre-game lobby is open, long before tsMain.
-import './lobbyMusic';
+import './music';
 import { initTeams } from './teams';
 import { initTrackBuildTrigger } from './track/build';
 import { initTrackDestroyTrigger } from './track/destroy';
@@ -50,7 +50,7 @@ import './dpsscaletest'; // what the DPS match actually measures, in raw HP
 import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included
 import './savetest'; // a save round trip, as the chooser and -load read it
-import { loadStartLobby } from './terrain/load';
+import { initBoardFlow, loadStartLobby } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
 function tsMain() {
@@ -69,6 +69,7 @@ function tsMain() {
     // chooses there whether to start a run, play the tutorial or load a save.
     // No train exists yet, so nothing here may assume one -- initTrain runs
     // when a round actually loads.
+    initBoardFlow();
     loadStartLobby();
 
     initTeams();

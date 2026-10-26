@@ -1,5 +1,6 @@
 import { MapPlayer, Timer, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
+import { PEASANT_ID } from './constants';
 
 /** Get all human players currently in the game (playing + user-controlled). */
 export function getHumanPlayers(): MapPlayer[] {
@@ -52,6 +53,13 @@ export function forEachUnitOfPlayer(owner: player, cb: (this: void, u: unit) => 
     if (u != null) cb(u);
   });
   DestroyGroup(g);
+}
+
+/** Run cb for every peasant a player owns. */
+export function forEachPeasantOf(owner: player, cb: (this: void, u: Unit) => void): void {
+  forEachUnitOfPlayer(owner, handle => {
+    if (GetUnitTypeId(handle) === PEASANT_ID) cb(Unit.fromHandle(handle)!);
+  });
 }
 
 /** Register a chat command (exact match, any player) with its action. */

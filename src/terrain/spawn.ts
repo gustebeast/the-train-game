@@ -7,11 +7,10 @@ import {
   ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, ROCK_MODEL_SCALES, GridPos,
   idx, gridToWorld,
 } from './constants';
-import { DEFAULT_TRACK, skinFor } from '../track/constants';
+import { DEFAULT_TRACK, TRACK_SIZE, skinFor } from '../track/constants';
 
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
-import { TRACK_SIZE } from '../track/constants';
 import { spawnStrangeRock } from '../bossRock';
 import { placedTracks, setVictoryTile, setBossVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
@@ -23,10 +22,6 @@ import { stockShop, registerDealer } from '../shop';
 import { destroyAllTimers } from '../timers';
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID, CRITTER_TYPE_IDS } from '../constants';
 import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
-
-// Per-variation scales to normalize rock/granite models to a consistent 128-unit footprint.
-// Both LTrt (rock) and LTrc (granite) use the same base model with 6 variations.
-// Footprints at scale 1.0: [210, 230, 204, 206, 210, 171]
 
 // --- Terrain tile FourCCs ---
 // GRASS, GRASSY_DIRT and POOL depend on the biome; see tileFor.
@@ -71,10 +66,6 @@ export interface SpawnedTrain {
   wagon: Unit | null;
 }
 
-/** Create all WC3 objects and paint terrain from the generated grid. Returns the train units if any were spawned. */
-/** Where the arena template said the party and the boss go, in world
- *  coordinates. Filled while the grid is walked and read by loadBossBattlefield
- *  -- the template marks the places, the arena decides who fills them. */
 /** Free-standing models dressing the current board. Special effects are not
  *  units, destructables or items, so the board sweep would leave them behind;
  *  registering one here means it goes with the board. */
@@ -89,6 +80,9 @@ export function addBoardEffect(model: string, x: number, y: number, scale: numbe
   return fx;
 }
 
+/** Where the arena template said the party and the boss go, in grid
+ *  coordinates. Filled while the grid is walked and read by bossArena.ts --
+ *  the template marks the places, the arena decides who fills them. */
 let bossHeroSpots: GridPos[] = [];
 let bossMercSpots: GridPos[] = [];
 let bossSpot: GridPos | null = null;
@@ -161,40 +155,51 @@ export function spawnReadyCircle(
   initReadyZone(x, y, spec.zone, circle, members);
 }
 
-export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
-  let engineUnit: Unit | null = null;
-  let wagonUnit: Unit | null = null;
+/** Take the current board down completely: every unit, destructable, item and
+ *  board effect, every board-tracked timer (timers.ts), and the per-board state
+ *  of the systems that keep any, in the order they need it -- the sparring
+ *  match before the heroes it fields, resource drops paused so clearing the
+ *  trees does not rain wood. Then the fog goes back to unexplored.
+ *
+ *  Everything a board leaves behind has to be undone here or by its owner on
+ *  the way out; spawnTerrain calls this first, so anything set up BEFORE
+ *  spawnTerrain on the way into a board is set up on the old one. */
+function clearBoard(): void {
+  destroyAllTimers();
+  cancelSparringMatch();
+  resetHeroState();
+  cleanupReady();
+  cleanupCage();
+  pauseResourceDrops();
+  EnumDestructablesInRect(getWorldBounds(), undefined, () => RemoveDestructable(GetEnumDestructable()!));
+  forEachUnitInWorld(u => RemoveUnit(u));
+  EnumItemsInRect(getWorldBounds(), undefined, () => RemoveItem(GetEnumItem()!));
+  for (const fx of boardEffects) DestroyEffect(fx);
+  boardEffects.length = 0;
+  resumeResourceDrops();
+  placedTracks.length = 0;
+  resetVictoryTriggered();
   bossHeroSpots = [];
   bossMercSpots = [];
   bossSpot = null;
 
+  for (const p of getHumanPlayers()) {
+    const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_MASKED, getWorldBounds(), true, false)!;
+    FogModifierStart(fog);
+    DestroyFogModifier(fog);
+  }
+}
+
+/** Replace the board: clear the old one (clearBoard), then paint the grid's
+ *  terrain and create everything it places. Returns the train units if the
+ *  grid has a train. */
+export function spawnTerrain(grid: Grid): SpawnedTrain {
+  clearBoard();
+  let engineUnit: Unit | null = null;
+  let wagonUnit: Unit | null = null;
+
   // Resolve human players once for PLAYER_1..4 spawning
   const humanPlayers = getHumanPlayers();
-
-  if (!skipCleanup) {
-    destroyAllTimers();
-    cancelSparringMatch();
-    resetHeroState();
-    cleanupReady();
-    cleanupCage();
-    pauseResourceDrops();
-    // Remove all destructables, units, and items before respawning
-    EnumDestructablesInRect(getWorldBounds(), null!, () => RemoveDestructable(GetEnumDestructable()!));
-    forEachUnitInWorld(u => RemoveUnit(u));
-    EnumItemsInRect(getWorldBounds(), null!, () => RemoveItem(GetEnumItem()!));
-    for (const fx of boardEffects) DestroyEffect(fx);
-    boardEffects.length = 0;
-    resumeResourceDrops();
-    placedTracks.length = 0;
-    resetVictoryTriggered();
-
-    // Reset fog of war to unexplored for all human players
-    for (const p of humanPlayers) {
-      const fog = CreateFogModifierRect(p.handle, FOG_OF_WAR_MASKED, getWorldBounds(), true, false)!;
-      FogModifierStart(fog);
-      DestroyFogModifier(fog);
-    }
-  }
 
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
