@@ -4,7 +4,7 @@ import { REROLL_ITEM_ID, REROLL_ABILITY_ID } from './constants';
 import { rerollInterRoundLobbyHero } from './heroes';
 import { rerollInterRoundLobbyMerc } from './mercenary';
 import { restartSparringMatch } from './creeps';
-import { nextFrame, forEachUnitInWorld } from './util';
+import { nextFrame, forEachUnitInWorld, unitExists } from './util';
 import { REROLL_COST } from './sharedData';
 
 
@@ -81,7 +81,7 @@ export function initReroll(): void {
       // hand a fresh one back
       print('Hero Reroll can only target the heroes in the inter-round lobby.');
       const caster = GetTriggerUnit();
-      if (caster != null && GetUnitTypeId(caster) !== 0) {
+      if (caster != null && unitExists(caster)) {
         UnitAddItem(caster, CreateItem(REROLL_ITEM_ID, GetUnitX(caster), GetUnitY(caster))!);
       }
     }

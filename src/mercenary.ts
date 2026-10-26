@@ -1,7 +1,7 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { registerSaveSegment, parseFields, MERC_SAVE_KEY } from './save';
-import { forEachInventoryItem, getHumanPlayers, getInventoryItemIds, giveItems } from './util';
+import { forEachInventoryItem, getHumanPlayers, getInventoryItemIds, giveItems, unitExists } from './util';
 import { getNeutralExtra } from './teams';
 import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creepCamps';
@@ -385,7 +385,7 @@ export function spawnMercWithHeroes(x: number, y: number, heroOwnerIds: number[]
 export function getSpawnedMercUnits(): Unit[] {
   const live: Unit[] = [];
   for (const sl of slots) {
-    if (sl.unit != null && GetUnitTypeId(sl.unit.handle) !== 0) live.push(sl.unit);
+    if (sl.unit != null && unitExists(sl.unit.handle)) live.push(sl.unit);
   }
   return live;
 }
@@ -401,7 +401,7 @@ export function removeSpawnedMercUnits(): void {
   const live = getSpawnedMercUnits();
   releaseMercUnit();   // snapshots kit first, then drops the references
   for (const u of live) {
-    if (GetUnitTypeId(u.handle) !== 0) RemoveUnit(u.handle);
+    if (unitExists(u.handle)) RemoveUnit(u.handle);
   }
 }
 
@@ -409,7 +409,7 @@ export function removeSpawnedMercUnits(): void {
  *  before the unsummon sweep / round reset removes the units themselves. */
 export function releaseMercUnit(): void {
   for (const sl of slots) {
-    if (sl.unit != null && GetUnitTypeId(sl.unit.handle) !== 0) {
+    if (sl.unit != null && unitExists(sl.unit.handle)) {
       sl.items = getInventoryItemIds(sl.unit.handle);
     }
     clearMercDeathTrigger(sl);

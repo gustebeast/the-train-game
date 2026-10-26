@@ -5,7 +5,7 @@ import { dealPartyForHumans } from './bossParty';
 import { spawnHeroes, getSpawnedHeroes, endHeroState, chooseAllHeroes } from './heroes';
 import { spawnMercWithHeroes, getLivingMercCount } from './mercenary';
 import { getBossHeroSpots, getBossMercSpots, getBossSpot } from './terrain/spawn';
-import { forEachUnitOfPlayer, getHumanPlayers, nextFrame } from './util';
+import { forEachUnitOfPlayer, getHumanPlayers, nextFrame, isAlive } from './util';
 
 /**
  * The boss fight itself: who stands where, and how it ends.
@@ -69,7 +69,7 @@ function partyStanding(): boolean {
     forEachUnitOfPlayer(player.handle, u => {
       if (standing) return;
       if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
-      if (GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
+      if (!isAlive(u)) return;
       standing = true;
     });
     if (standing) return true;
@@ -88,7 +88,7 @@ function enemiesRemain(): boolean {
     const id = GetUnitTypeId(u);
     if (id !== BOSS_ID && id !== BOSS_ADD_ID) return;
     if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
-    if (GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
+    if (!isAlive(u)) return;
     remain = true;
   });
   DestroyGroup(g);
@@ -199,7 +199,7 @@ function survivors(): unit[] {
   const all: unit[] = [];
   for (const player of getHumanPlayers()) {
     forEachUnitOfPlayer(player.handle, u => {
-      if (IsUnitType(u, UNIT_TYPE_DEAD) || GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
+      if (!isAlive(u)) return;
       all.push(u);
     });
   }

@@ -1,7 +1,7 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { DASH_ABILITY_ID } from './constants';
-import { getHumanPlayers } from './util';
+import { getHumanPlayers, unitExists } from './util';
 
 // Something for the other players to do while the host picks what to play.
 //
@@ -115,7 +115,7 @@ export function initDance(): void {
       key.addAction(() => {
         const caster = GetTriggerPlayer()!;
         const h = dancers.get(GetPlayerId(caster));
-        if (h == null || GetUnitTypeId(h) === 0) return;
+        if (h == null || !unitExists(h)) return;
         // Only while the player has the dancer selected. These are ten plain
         // letter keys with no modifier, and a key event fires wherever the
         // player's attention is -- so without this, anyone reading the lobby or
@@ -129,7 +129,7 @@ export function initDance(): void {
         const beat = Timer.create();
         beat.start(wait, false, () => {
           beat.destroy();
-          if (GetUnitTypeId(h) !== 0) play(h, sequence);
+          if (unitExists(h)) play(h, sequence);
         });
       });
     }

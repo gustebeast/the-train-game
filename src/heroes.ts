@@ -8,7 +8,7 @@ import { seededValueAt, deriveSeed } from './rng';
 import { gameState } from './state';
 import { getNeutralExtra } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
-import { forEachUnitInWorld, getHumanPlayers, getInventoryItemIds, giveItems, nextFrame } from './util';
+import { forEachUnitInWorld, getHumanPlayers, getInventoryItemIds, giveItems, nextFrame, isAlive, unitExists } from './util';
 import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
 
 /** Convert a FourCC integer to a 4-character string. */
@@ -373,7 +373,7 @@ export function awardHeroXP(xp: number): void {
  *  jumps straight to max level. */
 function syncHeroXP(): void {
   for (const { unit, dataIdx } of spawnedHeroes) {
-    if (unit.handle == null || GetUnitTypeId(unit.handle) === 0) continue;
+    if (unit.handle == null || !unitExists(unit.handle)) continue;
     const current = GetHeroXP(unit.handle);
     const target = allHeroes[dataIdx].xp;
     const delta = target - current;
@@ -476,7 +476,7 @@ export function spawnHeroFromData(
   giveItems(hero, data.items);
   nextFrame(() => {
     const h = hero.handle;
-    if (GetUnitTypeId(h) === 0) return; // removed before the frame elapsed
+    if (!unitExists(h)) return; // removed before the frame elapsed
     if (data.tomeStr !== 0) SetHeroStr(h, GetHeroStr(h, false) + data.tomeStr, true);
     if (data.tomeAgi !== 0) SetHeroAgi(h, GetHeroAgi(h, false) + data.tomeAgi, true);
     if (data.tomeInt !== 0) SetHeroInt(h, GetHeroInt(h, false) + data.tomeInt, true);
@@ -514,7 +514,7 @@ export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
       entry.deathTrig = deathTrig;
       deathTrig.addAction(() => {
         // Check if all heroes are dead
-        if (spawnedHeroes.every(s => GetUnitState(s.unit.handle, UNIT_STATE_LIFE) <= 0)) {
+        if (spawnedHeroes.every(s => !isAlive(s.unit.handle))) {
           endHeroState();
           if (onAllHeroesDeadCallback != null) onAllHeroesDeadCallback();
         }
@@ -537,7 +537,7 @@ export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
  *  have appended to a list still holding dead handles. */
 export function clearSpawnedHeroUnits(): void {
   for (const s of spawnedHeroes) {
-    if (GetUnitTypeId(s.unit.handle) !== 0) RemoveUnit(s.unit.handle);
+    if (unitExists(s.unit.handle)) RemoveUnit(s.unit.handle);
   }
   forgetSpawnedHeroes();
 }
@@ -566,7 +566,7 @@ export function endHeroState(): void {
 
   // Restore peasant ownership and pan cameras back for players regaining peasant control
   for (const [peasantHandle, originalOwner] of peasantOwnerMap) {
-    if (GetUnitTypeId(peasantHandle) !== 0) { // unit still exists
+    if (unitExists(peasantHandle)) { // unit still exists
       if (originalOwner.slotState === PLAYER_SLOT_STATE_PLAYING) {
         SetUnitOwner(peasantHandle, originalOwner.handle, true);
         PanCameraToTimedForPlayer(originalOwner.handle, GetUnitX(peasantHandle), GetUnitY(peasantHandle), 0.5);

@@ -2,6 +2,7 @@ import { Timer, Trigger } from 'w3ts';
 import { BOSS_KEY_ITEM_ID, PEASANT_ID } from './constants';
 import { getSpawnedHeroes } from './heroes';
 import { getLivingMercCount } from './mercenary';
+import { isAlive } from './util';
 
 /**
  * The Strange Key: the way in to the final boss.
@@ -88,9 +89,7 @@ export function initBossKey(): void {
 /** Every summoned hero still standing? */
 function allHeroesAlive(): boolean {
   for (const hero of getSpawnedHeroes()) {
-    if (GetUnitTypeId(hero.handle) === 0) return false;
-    if (IsUnitType(hero.handle, UNIT_TYPE_DEAD)) return false;
-    if (GetUnitState(hero.handle, UNIT_STATE_LIFE) <= 0) return false;
+    if (!isAlive(hero.handle)) return false;
   }
   return true;
 }

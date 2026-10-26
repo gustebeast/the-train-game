@@ -1,3 +1,4 @@
+import { isAlive } from './util';
 /**
  * Floating text that belongs to a unit, and goes when the unit goes.
  *
@@ -143,7 +144,7 @@ export function unitLabelStats(): { total: number; orphaned: number } {
     total += 1;
     GroupClear(probe);
     GroupEnumUnitsInRange(probe, GetUnitX(u), GetUnitY(u), 32, undefined);
-    if (!IsUnitInGroup(u, probe) || GetWidgetLife(u) <= 0.405) orphaned += 1;
+    if (!IsUnitInGroup(u, probe) || !isAlive(u)) orphaned += 1;
   }
   DestroyGroup(probe);
   return { total, orphaned };

@@ -2,6 +2,7 @@ import { Timer, Trigger, Unit } from 'w3ts';
 import { DASH_ABILITY_ID, PEASANT_ID } from './constants';
 import { noteDash } from './challengeList';
 import { MAX_MOVE_SPEED } from './sharedData';
+import { unitExists } from './util';
 
 // Dash = a normal move at boosted speed, so WC3's own pathing handles all
 // collision (including the moving train, which hand-rolled collision could not
@@ -103,7 +104,7 @@ function endDash(h: unit): void {
   if (s == null) return;
   s.timer.destroy();
   dashing.delete(h);
-  if (GetUnitTypeId(h) === 0) return; // unit removed mid-dash
+  if (!unitExists(h)) return; // unit removed mid-dash
   SetUnitMoveSpeed(h, s.baseSpeed);
   AddUnitAnimationProperties(h, 'alternate', false);
 }

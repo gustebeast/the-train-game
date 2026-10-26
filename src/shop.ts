@@ -21,7 +21,7 @@ import {
   canBuyMercContract, canBuySecondContract, getLivingMercCount,
 } from './mercenary';
 import { forceLevel3Camp } from './creeps';
-import { forEachUnitInWorld, nextFrame, getHumanPlayers } from './util';
+import { forEachUnitInWorld, nextFrame, getHumanPlayers, unitExists } from './util';
 import { armChallenge, getOfferedChallenge } from './challenges';
 import { showChallengePreview, clearChallengePreview } from './challengeUI';
 import { refreshInterRoundLobbyRoster, hasInterRoundLobbyRerollTargets } from './interRoundLobbyRoster';
@@ -46,7 +46,7 @@ let currentShop: Unit | null = null;
 
 /** The current shop, if it is still standing. */
 function liveShop(): Unit | null {
-  if (currentShop == null || GetUnitTypeId(currentShop.handle) === 0) return null;
+  if (currentShop == null || !unitExists(currentShop.handle)) return null;
   return currentShop;
 }
 
@@ -283,7 +283,7 @@ export function registerDealer(dealer: Unit): void {
 /** True while any player has the dealer selected. */
 function dealerIsSelected(): boolean {
   const d = dealerUnit;
-  if (d == null || GetUnitTypeId(d.handle) === 0) return false;
+  if (d == null || !unitExists(d.handle)) return false;
   for (const p of getHumanPlayers()) {
     if (IsUnitSelected(d.handle, p.handle)) return true;
   }

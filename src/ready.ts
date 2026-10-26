@@ -1,7 +1,7 @@
 import { MapPlayer, Rectangle, Region, Timer, Trigger, Unit } from 'w3ts';
 import { READY_ORB } from './sharedData';
 import { PEASANT_ID } from './constants';
-import { getHumanPlayers } from './util';
+import { getHumanPlayers, isAlive } from './util';
 
 const READY_ORB_ABILITY_ID = FourCC(READY_ORB.ability);
 const REGION_HALF = 128; // 2x2 grid cells = 256 world units, half = 128
@@ -49,7 +49,7 @@ function isMember(zone: ActiveZone, u: unit): boolean {
 }
 
 function membersReady(zone: ActiveZone): boolean {
-  const living = zone.members!.filter(u => GetWidgetLife(u) > 0.405);
+  const living = zone.members!.filter(u => isAlive(u));
   return living.length > 0 && living.every(u => zone.membersInside.has(u));
 }
 
@@ -197,7 +197,7 @@ export function initReadyZone(
   // only fires on the way in -- so count whoever is on the spot now.
   if (members != null) {
     for (const u of members) {
-      if (GetWidgetLife(u) > 0.405 && IsUnitInRegion(region.handle, u)) {
+      if (isAlive(u) && IsUnitInRegion(region.handle, u)) {
         zone.membersInside.add(u);
         UnitAddAbility(u, READY_ORB_ABILITY_ID);
       }

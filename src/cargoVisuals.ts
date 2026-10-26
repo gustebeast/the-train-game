@@ -2,7 +2,7 @@ import { Unit } from 'w3ts';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 import { STONE_MODEL, WOOD_MODEL, SMALL_TRACK_MODEL } from './sharedData';
 import { findItemByType } from './items';
-import { nextFrame } from './util';
+import { nextFrame, unitExists } from './util';
 import { getTrain, getTrackWagon } from './train';
 
 /**
@@ -64,7 +64,7 @@ function hasCargo(u: Unit, itemTypeId: number): boolean {
 
 /** Create/destroy the visual's effect to match the unit's current cargo. */
 function syncVisual(v: CargoVisual, u: Unit): void {
-  const alive = u != null && GetUnitTypeId(u.handle) !== 0;
+  const alive = u != null && unitExists(u.handle);
   const show = alive && hasCargo(u, v.itemTypeId);
 
   if (v.effect != null && (!show || v.attachedTo !== u.handle)) {

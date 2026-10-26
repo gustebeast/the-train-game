@@ -2,6 +2,7 @@ import { Timer, Trigger, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { BOSS_ADD_ID, BOSS_ID, BOSS_INFERNO_ABILITY_ID } from './constants';
 import { getNeutralAggressive } from './teams';
+import { isAlive } from './util';
 
 /**
  * The final boss: an oversized Infernal that calls down lesser infernals.
@@ -104,7 +105,7 @@ function driveInferno(boss: Unit): void {
   castLoops.push(timer);
   timer.start(CAST_CHECK_SECONDS, true, () => {
     const h = boss.handle;
-    if (GetUnitTypeId(h) === 0 || IsUnitType(h, UNIT_TYPE_DEAD)) {
+    if (!isAlive(h)) {
       // This boss's loop only: another may still be fighting.
       castLoops = castLoops.filter(l => l !== timer);
       timer.destroy();
@@ -134,7 +135,7 @@ function nearestEnemy(boss: Unit): { x: number; y: number } {
     const e = GetEnumUnit();
     if (e == null) return;
     if (!IsUnitEnemy(e, owner)) return;
-    if (IsUnitType(e, UNIT_TYPE_DEAD) || GetUnitTypeId(e) === 0) return;
+    if (!isAlive(e)) return;
     if (IsUnitType(e, UNIT_TYPE_STRUCTURE)) return;
     const dx = GetUnitX(e) - boss.x;
     const dy = GetUnitY(e) - boss.y;

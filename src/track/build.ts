@@ -1,5 +1,5 @@
 import { Unit, Trigger } from 'w3ts';
-import { nextFrame } from '../util';
+import { nextFrame, onSpellEffect } from '../util';
 import {
   skinFor, OPPOSITE, TRACK_UNIT_TYPES, DIRECTIONS, TRACK_SIZE,
   Direction, toOrientationKey,
@@ -8,7 +8,7 @@ import { reskinTrack, replaceTrack } from './helpers';
 import {
   placedTracks, isVictoryTriggered, getVictoryTile, getBossVictoryTile, markBossVictory,
 } from './state';
-import { findItemByType, updateBuildAbility } from '../items';
+import { spendCharge, updateBuildAbility } from '../items';
 import { TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID } from '../constants';
 import { onTrackPlaced } from '../train';
 import { triggerVictory } from '../victory';
@@ -103,24 +103,10 @@ export function initTrackBuildTrigger() {
   const trackFourCCs = TRACK_UNIT_TYPES.map(t => FourCC(t));
 
   // SPELL_EFFECT fires right before CONSTRUCT_START and gives us the peasant
-  const spellTrigger = Trigger.create();
-  spellTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
-  spellTrigger.addAction(() => {
-    if (GetSpellAbilityId() !== BUILD_TRACK_ABILITY_ID) return;
-    const u = Unit.fromHandle(GetTriggerUnit());
-    if (u == null) return;
-
+  onSpellEffect(BUILD_TRACK_ABILITY_ID, u => {
     // Only consume a track piece if the placement is valid
     if (!isValidPlacement(GetSpellTargetX(), GetSpellTargetY())) return;
-
-    const trackItem = findItemByType(u, TRACK_PIECE_ID);
-    if (trackItem != null) {
-      trackItem.charges -= 1;
-      if (trackItem.charges <= 0) {
-        RemoveItem(trackItem.handle);
-      }
-      updateBuildAbility(u);
-    }
+    if (spendCharge(u, TRACK_PIECE_ID)) updateBuildAbility(u);
   });
 
   const trigger = Trigger.create();

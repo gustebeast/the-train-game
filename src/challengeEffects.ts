@@ -3,7 +3,7 @@ import { onGlobalTick, TICK_INTERVAL } from './globalTick';
 import { isInGameplay } from './state';
 import { isChallengeArmed } from './challenges';
 import { CH_NO_UI, CH_SHOULDER_CAM } from './challengeList';
-import { forEachUnitOfPlayer, getHumanPlayers } from './util';
+import { forEachUnitOfPlayer, getHumanPlayers, isAlive } from './util';
 import { PEASANT_ID } from './constants';
 
 /**
@@ -77,7 +77,7 @@ function chaseTargetFor(playerHandle: player): Unit | null {
   forEachUnitOfPlayer(playerHandle, u => {
     if (found != null) return;
     if (GetUnitTypeId(u) !== PEASANT_ID) return;
-    if (GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
+    if (!isAlive(u)) return;
     found = Unit.fromHandle(u) ?? null;
   });
   return found;

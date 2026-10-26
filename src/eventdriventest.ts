@@ -6,7 +6,7 @@ import { armChallenge, clearChallenges, isChallengeArmed, getArmedChallenge } fr
 import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
 import { challengeUIState, initChallengeUI } from './challengeUI';
 import { isBossFightWatched, startBossFight } from './bossArena';
-import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer } from './util';
+import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer, isAlive } from './util';
 import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID,
   TRAIN_ID, TRACK_WAGON_ID } from './constants';
 import { Item, Unit } from 'w3ts';
@@ -111,7 +111,7 @@ registerTest('dealerselect', runDealerSelect);
 
 function killAll(filter: (u: unit) => boolean): number {
   const doomed: unit[] = [];
-  forEachUnitInWorld(u => { if (filter(u) && GetWidgetLife(u) > 0.405) doomed.push(u); });
+  forEachUnitInWorld(u => { if (filter(u) && isAlive(u)) doomed.push(u); });
   for (const u of doomed) {
     SetUnitInvulnerable(u, false);
     KillUnit(u);
@@ -420,7 +420,7 @@ function runTransmuteGold(t: TestReporter): void {
   const ordered = IssueTargetOrder(alchemist, 'transmute', creep);
   expect(t, 'orderAccepted', ordered ? 1 : 0, 1);
   t.after(4, () => {
-    expect(t, 'creepTransmuted', GetWidgetLife(creep) <= 0.405 ? 1 : 0, 1);
+    expect(t, 'creepTransmuted', !isAlive(creep) ? 1 : 0, 1);
     const nativeGain = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - nativeBefore;
     t.report('stateGoldGain', gameState.gold - stateBefore);
     expect(t, 'nativeGoldGain', nativeGain, 0);
@@ -442,7 +442,7 @@ function runKillBounty(t: TestReporter): void {
   UnitDamageTarget(killer, creep, 100000, true, false,
     ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
   t.after(1, () => {
-    expect(t, 'creepKilled', GetWidgetLife(creep) <= 0.405 ? 1 : 0, 1);
+    expect(t, 'creepKilled', !isAlive(creep) ? 1 : 0, 1);
     expect(t, 'nativeGoldFromPlainKill', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - before, 0);
     t.done();
   });
@@ -502,16 +502,16 @@ function runStrangeKey(t: TestReporter): void {
   // Damage does nothing to it either.
   UnitDamageTarget(p, rock, 5000, true, false,
     ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
-  expect(t, 'survivesHeavyHit', GetWidgetLife(rock) > 0.405 ? 1 : 0, 1);
+  expect(t, 'survivesHeavyHit', isAlive(rock) ? 1 : 0, 1);
 
   const gold0 = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD);
   t.after(ONE_FRAME * 4, () => {
   expect(t, 'throwAccepted', UnitUseItemTarget(p, key, rock) ? 1 : 0, 1);
   t.after(0.1, () => {
     // The missile is still in the air: thrown, not instant.
-    t.report('rockAliveWhileInFlight', GetWidgetLife(rock) > 0.405 ? 1 : 0);
+    t.report('rockAliveWhileInFlight', isAlive(rock) ? 1 : 0);
     t.after(3, () => {
-      expect(t, 'rockBrokenOnImpact', GetWidgetLife(rock) > 0.405 ? 1 : 0, 0);
+      expect(t, 'rockBrokenOnImpact', isAlive(rock) ? 1 : 0, 0);
       expect(t, 'keySpent', holdsKey(p) ? 1 : 0, 0);
       let keysOnGround = 0;
       EnumItemsInRect(GetWorldBounds()!, null!, () => {
@@ -520,7 +520,7 @@ function runStrangeKey(t: TestReporter): void {
       });
       expect(t, 'keyNotLeftOnGround', keysOnGround, 0);
       expect(t, 'noGoldFromThrow', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - gold0, 0);
-      expect(t, 'creepUntouched', GetWidgetLife(kobold) > 0.405 ? 1 : 0, 1);
+      expect(t, 'creepUntouched', isAlive(kobold) ? 1 : 0, 1);
       t.done();
     });
   });

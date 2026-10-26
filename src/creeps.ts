@@ -20,7 +20,7 @@ import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { onCampCleared, onCampFightStarted } from './bossKey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
-import { forEachUnitOfPlayer } from './util';
+import { forEachUnitOfPlayer, isAlive, unitExists } from './util';
 
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
@@ -416,7 +416,7 @@ function placeCamp(cx: number, cy: number, camp: CreepCamp): void {
 function removeSpawnedCreeps(): void {
   if (sparringActive) return;
   for (const c of spawnedCreeps) {
-    if (GetUnitTypeId(c.unit.handle) !== 0) {
+    if (unitExists(c.unit.handle)) {
       RemoveUnit(c.unit.handle);
     }
   }
@@ -686,7 +686,7 @@ export function scaleCreepStats(heroes: Unit[]): void {
           }
         }
         // Check if all creeps are dead — grant Unsummon Heroes to peasants
-        if (spawnedCreeps.every(s => GetUnitState(s.unit.handle, UNIT_STATE_LIFE) <= 0)) {
+        if (spawnedCreeps.every(s => !isAlive(s.unit.handle))) {
           grantUnsummonToAllPeasants();
           completeChallenge(CH_TOUGH_CAMP);
           // A flawless level 3 clear leaves the Strange Key where the cage was.
@@ -940,13 +940,13 @@ function trackForDPS(list: TrackedHP[], u: unit, rig: boolean): void {
  *  mid-match nor go uncounted. */
 function sampleDPS(): void {
   for (const entry of trackedCreeps) {
-    if (GetUnitTypeId(entry.unit) === 0) continue;
+    if (!unitExists(entry.unit)) continue;
     const hp = GetUnitState(entry.unit, UNIT_STATE_LIFE);
     creepHPLost += entry.lastHP - hp;
     entry.lastHP = hp;
   }
   for (const entry of trackedOurs) {
-    if (GetUnitTypeId(entry.unit) === 0) continue;
+    if (!unitExists(entry.unit)) continue;
     const hp = GetUnitState(entry.unit, UNIT_STATE_LIFE);
     const lost = entry.lastHP - hp;
     ourHPLost += lost;

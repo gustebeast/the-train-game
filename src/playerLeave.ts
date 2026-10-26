@@ -1,12 +1,12 @@
 import { MapPlayer, Trigger } from 'w3ts';
-import { forEachUnitOfPlayer, getHumanPlayers, nextFrame } from './util';
+import { forEachUnitOfPlayer, getHumanPlayers, nextFrame, isAlive } from './util';
 
 /** Kill every living unit owned by the given player. Uses KillUnit (not
  *  RemoveUnit) so normal death triggers fire — e.g. the hero death trigger
  *  that ends hero state and removes the creep camp. */
 function killAllOwnedUnits(p: player): void {
   forEachUnitOfPlayer(p, u => {
-    if (GetUnitState(u, UNIT_STATE_LIFE) > 0) KillUnit(u);
+    if (isAlive(u)) KillUnit(u);
   });
 }
 
