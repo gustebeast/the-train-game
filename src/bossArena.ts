@@ -55,11 +55,31 @@ export function setBossArenaCallbacks(
   onVictory = victory;
 }
 
+/** The endings currently installed, so a test can swap in its own to see which
+ *  fired and then put these back. */
+export function getBossArenaCallbacks(): {
+  defeat: (() => void) | null; victory: ((this: void, survivors: unit[]) => void) | null;
+} {
+  return { defeat: onDefeat, victory: onVictory };
+}
+
 /** Stop watching. Safe to call repeatedly, and called on the way out however
  *  the fight ended. */
 function stopBossArena(): void {
   if (watcher != null) { watcher.destroy(); watcher = null; }
   stopBoss();
+}
+
+/** A boss or lesser infernal the party has taken over with Charm.
+ *
+ *  It belongs to a player now, but it is not one of the party: it must not keep
+ *  a wiped party "standing", walk out of the arena with the winners, or count
+ *  as an enemy still to beat. Every check below leaves it out. */
+function isCharmedBossUnit(u: unit): boolean {
+  const id = GetUnitTypeId(u);
+  if (id !== BOSS_ID && id !== BOSS_ADD_ID) return false;
+  const owner = GetOwningPlayer(u);
+  return getHumanPlayers().some(p => p.handle === owner);
 }
 
 /** Is anything the party owns still standing? */
@@ -68,6 +88,7 @@ function partyStanding(): boolean {
   for (const player of getHumanPlayers()) {
     forEachUnitOfPlayer(player.handle, u => {
       if (standing) return;
+      if (isCharmedBossUnit(u)) return;
       if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
       if (!isAlive(u)) return;
       standing = true;
@@ -87,7 +108,10 @@ function enemiesRemain(): boolean {
     if (remain || u == null) return;
     const id = GetUnitTypeId(u);
     if (id !== BOSS_ID && id !== BOSS_ADD_ID) return;
-    if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
+    // Matched by type, so one the party has charmed has to be left out by
+    // owner: it is theirs now, and waiting for it to die stalled the win for
+    // up to its three-minute life.
+    if (isCharmedBossUnit(u)) return;
     if (!isAlive(u)) return;
     remain = true;
   });
@@ -164,6 +188,12 @@ export function startBossFight(): void {
   const trig = Trigger.create();
   watcher = trig;
   trig.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DEATH);
+  // Charm ends a fight as surely as a death -- the last hostile infernal
+  // changing hands leaves nothing to beat -- but it is no death, so it needs
+  // its own event. The boss's side is registered explicitly: registering for
+  // "any unit" covers the player slots, not neutral.
+  trig.registerAnyUnitEvent(EVENT_PLAYER_UNIT_CHANGE_OWNER);
+  trig.registerPlayerUnitEvent(MapPlayer.fromIndex(PLAYER_NEUTRAL_AGGRESSIVE)!, EVENT_PLAYER_UNIT_CHANGE_OWNER, undefined);
   for (const p of getHumanPlayers()) trig.registerPlayerEvent(p, EVENT_PLAYER_LEAVE);
   // A frame later: inside the death event the dying unit can still read as
   // alive to the checks below, and judging it standing would miss the ending.
@@ -200,6 +230,7 @@ function survivors(): unit[] {
   for (const player of getHumanPlayers()) {
     forEachUnitOfPlayer(player.handle, u => {
       if (!isAlive(u)) return;
+      if (isCharmedBossUnit(u)) return;
       all.push(u);
     });
   }
