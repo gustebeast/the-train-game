@@ -7,16 +7,24 @@ import {
 } from './challengeList';
 import { getTracksRemaining } from './train';
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, BUCKET_FULL_ID } from './constants';
-import { forEachUnitInWorld } from './util';
+import { forEachUnitInWorld, nextFrame } from './util';
 
 /**
  * The two challenges nobody else can report on.
  *
  * Everything else is completed by the system that owns the event — a track
- * being laid, a dash cast, the last creep dying. These two are *states* rather
- * than events, so they have to be sampled: "the train has been near the end of
- * the line for N seconds", and "no two peasants are holding the same tool".
- * Both ride the shared global tick rather than starting timers of their own.
+ * being laid, a dash cast, the last creep dying.
+ *
+ * Living Dangerously counts SECONDS spent near the end of the line, so it rides
+ * the shared global tick.
+ *
+ * Union Rules does not need to. Two units can only come to hold the same tool
+ * at the moment one of them GAINS one: dropping a tool or dying can only
+ * reduce sharing, never create it. So it is checked on item pickup -- which
+ * covers a ground pickup, a hand-off between units, and script UnitAddItem.
+ * The one other way in is arming it mid-round (the -challenge cheat), with
+ * tools already in hand; that path checks once itself. A wager bought in the
+ * lobby needs nothing: rounds start with every tool on the ground.
  */
 
 /** Global tick is 0.5s; the brink challenge counts whole seconds. */
@@ -32,12 +40,8 @@ function toolKey(itemTypeId: number): number | null {
   return null;
 }
 
-/** Sample the world for two units holding the same tool type.
- *
- *  Checked continuously rather than on pickup: a tool can change hands by being
- *  dropped, by a unit dying, or by the give/take system, and watching one event
- *  would miss the others. Once broken it stays broken for the round, so this
- *  stops looking. */
+/** Look at the world for two units holding the same tool type. Once broken it
+ *  stays broken for the round, so a caller can stop asking. */
 function checkToolSharing(): void {
   const seen: number[] = [];
   let broken = false;
@@ -81,9 +85,25 @@ function tick(): void {
     }
   }
 
-  if (isChallengeArmed(CH_SOLO_TOOLS)) checkToolSharing();
+}
+
+/** Check Union Rules now, if it is in play. */
+export function checkUnionRules(): void {
+  if (!isInGameplay() || !isChallengeArmed(CH_SOLO_TOOLS)) return;
+  checkToolSharing();
 }
 
 export function initChallengeWatch(): void {
   onGlobalTick(() => tick());
+
+  const pickup = CreateTrigger();
+  for (let i = 0; i < bj_MAX_PLAYER_SLOTS; i++) {
+    TriggerRegisterPlayerUnitEvent(pickup, Player(i)!, EVENT_PLAYER_UNIT_PICKUP_ITEM, null!);
+  }
+  TriggerAddAction(pickup, () => {
+    if (toolKey(GetItemTypeId(GetManipulatedItem()!)) == null) return;
+    // A frame later, so a give/take that removes from one unit and adds to
+    // another has finished both halves before the inventories are read.
+    nextFrame(() => checkUnionRules());
+  });
 }

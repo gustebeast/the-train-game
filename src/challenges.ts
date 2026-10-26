@@ -1,4 +1,5 @@
 import { gameState, syncGold } from './state';
+import { boardChanged } from './boardSignal';
 import { registerSaveSegment, parseFields } from './save';
 import { deriveSeed } from './rng';
 
@@ -85,12 +86,14 @@ export function getArmedChallenge(): ChallengeDef | null {
 
 export function armChallenge(id: string): void {
   armedId = id;
+  boardChanged();
 }
 
 /** Disarm without paying. Segment reset, and how a lost wager is spent at the
  *  end of a round so it never reaches the save. */
 export function clearChallenges(): void {
   armedId = null;
+  boardChanged();
 }
 
 /** Pay out the armed challenge and consume it. Safe to call for a challenge
@@ -99,6 +102,7 @@ export function completeChallenge(id: string): void {
   if (armedId !== id) return;
   const def = findDef(id);
   armedId = null;
+  boardChanged();
   gameState.gold += CHALLENGE_BONUS;
   syncGold();
   print('Challenge complete: ' + (def != null ? def.name : id)
