@@ -16,9 +16,8 @@ this skill only bootstraps you into the role and does not restate it.
    already reported any `agent/*` branch ahead of `main` at the top of this
    prompt. If branches are pending, note them but do not start merging until
    you have read the protocol.
-3. **Arm the intake monitor** with the `Monitor` tool, `persistent: true`
-   (command is in `LEAD_README.md`, "Intake monitor"). It never exits, so
-   arm it once per session — there is nothing to re-arm.
+3. **Don't arm a watcher.** Submissions arrive as `SendMessage` messages,
+   which wake you even when idle.
 4. **Confirm the working tree is clean-ish.** Run `git status`. The user's
    `feedback.txt` is habitually dirty — never commit or clobber it. Check this
    before *any* destructive git command.
