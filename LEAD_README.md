@@ -86,6 +86,11 @@ resolve against the real `main`).
 
 ## Housekeeping you own
 
+- **A map for the user to host goes through `npm run build:release`**, which
+  leaves out the chat cheats and the `-test` runner (src/buildFlags.ts), so no
+  player in a hosted game can wreck the run with them. Every other build --
+  yours, the agents', the VM runs -- keeps them.
+
 - **After a branch is merged**, you may retire it when the user agrees the
   agent is done — see "retire an agent" in `SUBAGENT_README.md`
   (⚠️ junction removal order matters: `cmd /c rmdir` the worktree's

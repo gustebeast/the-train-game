@@ -32,6 +32,7 @@ import { initCameraLock } from './cameraLock';
 import { initCargoVisuals } from './cargoVisuals';
 import { syncGold } from './state';
 import { log } from './debug';
+import { DEV_TOOLS } from './buildFlags';
 
 import { initTestKit } from './testkit';
 import './damagetest'; // registers the 'damage' test; add further test modules here
@@ -79,7 +80,7 @@ function tsMain() {
     initBossKey();
     initFill();
     initWaterTrain();
-    initCheat();
+    if (DEV_TOOLS) initCheat();
     initShop();
     initDealerOffer();
     initReroll();
@@ -96,7 +97,7 @@ function tsMain() {
     initDance();
     // Last: writes the ready marker the VM test runner polls for, so it only
     // appears once every other system has initialised without throwing.
-    initTestKit();
+    if (DEV_TOOLS) initTestKit();
 
     syncGold();
 

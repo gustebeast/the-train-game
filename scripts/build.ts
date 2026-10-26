@@ -5,7 +5,14 @@ import { compileMap, getFilesInDirectory, loadJsonFile, logger, toArrayBuffer, I
 
 function main() {
   const config: IProjectConfig = loadJsonFile("config.json");
-  const minify = process.argv[2] === '-minify' || config.minifyScript
+  const args = process.argv.slice(2);
+  const minify = args.includes('-minify') || config.minifyScript
+
+  // A release map leaves out the cheats and the test runner (src/buildFlags.ts).
+  if (args.includes('-release')) {
+    process.env.TRAIN_RELEASE = '1';
+    logger.info('Release build: no cheats, no test runner.');
+  }
 
   if(minify !== config.minifyScript){
     logger.warn(`minifyScript has been overridden by command line argument "-minify"`)
