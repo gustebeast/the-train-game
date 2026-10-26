@@ -197,6 +197,7 @@ const TRACK_FILES = {
   interRound: 'war3mapImported\\InterRoundLobby.wav',
   defeat: 'war3mapImported\\Purgatory.wav',
   boss: 'war3mapImported\\BossBattle.wav',
+  victory: 'war3mapImported\\VictoryLobby.wav',
 };
 
 type MusicTrack = keyof typeof TRACK_FILES;
@@ -365,9 +366,7 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
  *  the save is left alone rather than marked, because beating the boss is not
  *  something that should stop you loading the run again. */
 function loadVictoryLobby(): void {
-  // No victory track exists yet; the between-rounds one is the closest thing
-  // to celebratory the map owns. Swap it the moment there is a real one.
-  enterBoard('interRound', generateVictoryLobby());
+  enterBoard('victory', generateVictoryLobby());
 }
 
 function loadDefeatLobby(): void {
