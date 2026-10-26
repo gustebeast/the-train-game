@@ -1,4 +1,5 @@
 import { Timer, Trigger, Unit } from 'w3ts';
+import { Units } from '@objectdata/units';
 import { BOSS_ADD_ID, BOSS_ID, BOSS_INFERNO_ABILITY_ID } from './constants';
 import { getNeutralAggressive } from './teams';
 
@@ -34,7 +35,7 @@ export function spawnBoss(x: number, y: number): Unit | null {
 }
 
 /** The stock Infernal the meteor drops, which we swap out for ours. */
-const STOCK_INFERNAL_ID = FourCC('ninf');
+const STOCK_INFERNAL_ID = FourCC(Units.Infernal);
 /** How long a summoned infernal lives, matching the ability's own duration. */
 const ADD_LIFETIME = 180;
 /** Buff id every timed-life summon uses. */

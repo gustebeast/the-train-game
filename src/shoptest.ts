@@ -1,7 +1,8 @@
 import { Item, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { registerTest, TestReporter } from './testkit';
-import { gameState, TRAIN_INITIAL_MAX_HP } from './state';
+import { gameState } from './state';
+import { TRAIN_INITIAL_MAX_HP } from './sharedData';
 import { RESTORE_HP_ID, FLAME_RESISTANCE_ID, PEASANT_ID } from './constants';
 import { getWorldBounds } from './util';
 

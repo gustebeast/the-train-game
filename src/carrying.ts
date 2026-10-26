@@ -1,12 +1,14 @@
 import { Unit } from 'w3ts';
-import { Abilities } from '@objectdata/abilities';
-import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID, PEASANT_ID } from './constants';
+import { STONE_ID, WOOD_ID, PEASANT_ID } from './constants';
+import { CARRIED_TOOLS } from './sharedData';
 
-const AXE_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus7);
-const PICK_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus8);
-const TRACK_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus10);
-const BUCKET_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus2);
-const BUCKET_FULL_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus4);
+/** The ability that shows each tool in a peasant's hand, by item type id. The
+ *  pairs are sharedData's CARRIED_TOOLS, the same table the build authors the
+ *  abilities from. */
+const TOOL_ABILITIES = new Map<number, number>();
+for (const [item, attachment] of Object.entries(CARRIED_TOOLS)) {
+  TOOL_ABILITIES.set(FourCC(item), FourCC(attachment.ability));
+}
 
 /** Update the peasant's carrying visual based on their slot 0 item. */
 export function updateCarryingVisual(u: Unit): void {
@@ -14,31 +16,21 @@ export function updateCarryingVisual(u: Unit): void {
   const h = u.handle;
 
   // Clear previous state
-  UnitRemoveAbility(h, AXE_ABILITY_ID);
-  UnitRemoveAbility(h, PICK_ABILITY_ID);
-  UnitRemoveAbility(h, TRACK_ABILITY_ID);
-  UnitRemoveAbility(h, BUCKET_ABILITY_ID);
-  UnitRemoveAbility(h, BUCKET_FULL_ABILITY_ID);
+  for (const [, abilityId] of TOOL_ABILITIES) UnitRemoveAbility(h, abilityId);
   AddUnitAnimationProperties(h, 'gold', false);
   AddUnitAnimationProperties(h, 'lumber', false);
 
   const item = u.getItemInSlot(0);
   if (item == null) return;
 
+  // Wood and stone use the peasant's own carry animations; tools are models.
   const typeId = item.typeId;
   if (typeId === STONE_ID) {
     AddUnitAnimationProperties(h, 'gold', true);
   } else if (typeId === WOOD_ID) {
     AddUnitAnimationProperties(h, 'lumber', true);
-  } else if (typeId === AXE_ID) {
-    UnitAddAbility(h, AXE_ABILITY_ID);
-  } else if (typeId === PICKAXE_ID) {
-    UnitAddAbility(h, PICK_ABILITY_ID);
-  } else if (typeId === TRACK_PIECE_ID) {
-    UnitAddAbility(h, TRACK_ABILITY_ID);
-  } else if (typeId === BUCKET_ID) {
-    UnitAddAbility(h, BUCKET_ABILITY_ID);
-  } else if (typeId === BUCKET_FULL_ID) {
-    UnitAddAbility(h, BUCKET_FULL_ABILITY_ID);
+  } else {
+    const abilityId = TOOL_ABILITIES.get(typeId);
+    if (abilityId != null) UnitAddAbility(h, abilityId);
   }
 }

@@ -1,5 +1,5 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
-import { Units } from '@objectdata/units';
+import { HERO_POOL } from './sharedData';
 import { isInGameplay } from './state';
 import { registerSaveSegment, parseFields, heroSaveKey } from './save';
 import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID, HERO_SLOTS } from './constants';
@@ -10,21 +10,6 @@ import { getNeutralExtra } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
 import { forEachUnitInWorld, getHumanPlayers, getInventoryItemIds, giveItems, nextFrame } from './util';
 import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
-
-/** All standard WC3 heroes available for random selection. */
-const HERO_POOL: string[] = [
-  // Human
-  Units.Paladin, Units.Archmage, Units.MountainKing, Units.BloodMage,
-  // Orc
-  Units.Blademaster, Units.FarSeer, Units.TaurenChieftain, Units.ShadowHunter,
-  // Undead
-  Units.DeathKnight, Units.Lich, Units.Dreadlord, Units.CryptLord,
-  // Night Elf
-  Units.DemonHunter, Units.KeeperOfTheGrove, Units.PriestessOfTheMoon, Units.Warden,
-  // Tavern
-  Units.Beastmaster, Units.DarkRanger, Units.PitLord, Units.Tinker,
-  Units.Firelord, Units.Alchemist, Units.Brewmaster, Units.SeaWitch,
-];
 
 /** Convert a FourCC integer to a 4-character string. */
 function fourCCStr(id: number): string {

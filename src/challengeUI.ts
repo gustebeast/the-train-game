@@ -1,4 +1,5 @@
-import { getArmedChallenge, ChallengeDef, CHALLENGE_COST } from './challenges';
+import { getArmedChallenge, ChallengeDef } from './challenges';
+import { CHALLENGE_COST } from './sharedData';
 import { onBoardChanged } from './boardSignal';
 import { getHumanPlayers } from './util';
 

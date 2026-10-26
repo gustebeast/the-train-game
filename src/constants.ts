@@ -2,6 +2,10 @@ import { Abilities } from '@objectdata/abilities';
 import { Items } from '@objectdata/items';
 import { Units } from '@objectdata/units';
 import { Upgrades } from '@objectdata/upgrades';
+import {
+  UNKNOWN_UNIT, STRANGE_ROCK, DASH_ABILITY, KEY_THROW_ABILITY, BOSS_UNIT, BOSS_ADD_UNIT,
+  BOSS_INFERNO_ABILITY, CRITTER_TYPES,
+} from './sharedData';
 
 // Units
 export const PEASANT_ID = FourCC(Units.Peasant);
@@ -10,23 +14,17 @@ export const TRACK_WAGON_ID = FourCC(Units.Wagon);
 export const CRATE_ID = FourCC(Units.GrainWarehouse);
 export const WATER_ID = FourCC(Units.Burrow);
 
-/** The "?" placeholder for a hero or mercenary you have rolled but not yet seen.
- *  A custom unit authored in compiletime.ts (copied from the peasant); the
- *  rawcode is duplicated there as UNKNOWN_UNIT_RAWCODE. */
-export const UNKNOWN_UNIT_ID = FourCC('qmrk');
-/** The final boss and the lesser infernals it calls down, both minted in
- *  compiletime.ts. */
+// The objects compiletime.ts mints; their rawcodes live in sharedData.ts.
+export const UNKNOWN_UNIT_ID = FourCC(UNKNOWN_UNIT);
+export const STRANGE_ROCK_ID = FourCC(STRANGE_ROCK);
+export const KEY_THROW_ABILITY_ID = FourCC(KEY_THROW_ABILITY);
+export const BOSS_ID = FourCC(BOSS_UNIT);
+export const BOSS_ADD_ID = FourCC(BOSS_ADD_UNIT);
+export const BOSS_INFERNO_ABILITY_ID = FourCC(BOSS_INFERNO_ABILITY);
+export const DASH_ABILITY_ID = FourCC(DASH_ABILITY);
+
 /** Dropped by a flawless level 3 camp; opens the way to the boss. */
 export const BOSS_KEY_ITEM_ID = FourCC(Items.KeyOfThreeMoons);
-/** The Strange Key's throw: a copy of Transmute (compiletime.ts). */
-export const KEY_THROW_ABILITY_ID = FourCC('A012');
-/** The Strange Rock sealing the boss exit -- a unit, so the key can target it. */
-export const STRANGE_ROCK_ID = FourCC('srok');
-export const BOSS_ID = FourCC('ubos');
-export const BOSS_ADD_ID = FourCC('uinl');
-/** The boss's Inferno: a Tichondrius-campaign copy, so the Dreadlord's is
- *  untouched. */
-export const BOSS_INFERNO_ABILITY_ID = FourCC('A010');
 /** The gold trophy over a party that beat the boss: "Golden Cup" from Reward
  *  Trophies by stan0033 (Hive Workshop), reworked with a deeper gold and an
  *  environment-mapped shine. It reads its texture from
@@ -45,15 +43,7 @@ export const HERO_SLOTS = 4;
 /** How many mercenaries can be hired at once. */
 export const MAX_MERCS = 2;
 
-// Critters: the wandering-animal set from classic 1v1 melee maps
-export const CRITTER_TYPE_IDS: ReadonlyArray<number> = [
-  FourCC(Units.Rabbit),
-  FourCC(Units.Stag),
-  FourCC(Units.Sheep),
-  FourCC(Units.Pig),
-  FourCC(Units.Chicken),
-  FourCC(Units.Raccoon),
-];
+export const CRITTER_TYPE_IDS: ReadonlyArray<number> = CRITTER_TYPES.map(id => FourCC(id));
 
 // Abilities
 export const SUMMON_ABILITY_ID = FourCC(Abilities.Roar);
@@ -62,13 +52,9 @@ export const BUILD_TRACK_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
 export const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
 export const FILL_ABILITY_ID = FourCC(Abilities.UndefinedNeutralHostile);
 export const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
-// A000: a Channel copy authored in the world editor (no generated constant).
-// Keep in step with DASH_ABILITY in compiletime.ts.
-export const DASH_ABILITY_ID = FourCC('A000');
-// Dance spells for the idle players in the start lobby. Minted in
-// compiletime.ts as Channel copies -- keep the two lists in step.
-// Wand of Negation repurposed as the Hero Reroll cast (its native purge is
-// irrelevant — the target is replaced the moment the spell lands)
+// The Wand of Illusion's ability repurposed as the Hero Reroll cast (its
+// native illusion is irrelevant -- the target is replaced the moment the spell
+// lands)
 export const REROLL_ABILITY_ID = FourCC(Abilities.ItemIllusions);
 
 // Upgrades

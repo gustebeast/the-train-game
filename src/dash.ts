@@ -1,6 +1,7 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import { DASH_ABILITY_ID, PEASANT_ID } from './constants';
 import { noteDash } from './challengeList';
+import { MAX_MOVE_SPEED } from './sharedData';
 
 // Dash = a normal move at boosted speed, so WC3's own pathing handles all
 // collision (including the moving train, which hand-rolled collision could not
@@ -27,7 +28,9 @@ import { noteDash } from './challengeList';
 // waiting behind other orders and the unit's current order is something else; at
 // execution time the current order IS the dash. That comparison is the whole
 // trick.
-const DASH_SPEED = 522; // WC3's default max move speed (peasant base is ~190)
+/** As fast as a unit can go (the peasant's base is ~190). The build sets the
+ *  peasant's own maximum to the same ceiling, which SetUnitMoveSpeed is clamped to. */
+const DASH_SPEED = MAX_MOVE_SPEED;
 const DASH_DURATION = 0.6; // seconds of boosted speed
 // Timed from the moment the boost starts, because the engine would otherwise
 // start it when the spell FIRES -- and this spell fires on arrival. Dash

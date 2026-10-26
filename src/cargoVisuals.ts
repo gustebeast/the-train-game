@@ -1,5 +1,6 @@
 import { Unit } from 'w3ts';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
+import { STONE_MODEL, WOOD_MODEL, SMALL_TRACK_MODEL } from './sharedData';
 import { findItemByType } from './items';
 import { nextFrame } from './util';
 import { getTrain, getTrackWagon } from './train';
@@ -25,7 +26,7 @@ interface CargoVisual {
 const engineVisuals: CargoVisual[] = [
   {
     itemTypeId: STONE_ID,
-    model: 'Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_Rock6.mdx',
+    model: STONE_MODEL,
     attachPoint: 'sprite first',
     scale: 0.275,
     effect: null,
@@ -33,7 +34,7 @@ const engineVisuals: CargoVisual[] = [
   },
   {
     itemTypeId: WOOD_ID,
-    model: 'Doodads\\Felwood\\Props\\FelwoodLogStraight\\FelwoodLogStraight.mdx',
+    model: WOOD_MODEL,
     attachPoint: 'sprite second',
     scale: 0.275,
     effect: null,
@@ -44,7 +45,7 @@ const engineVisuals: CargoVisual[] = [
 const wagonVisuals: CargoVisual[] = [
   {
     itemTypeId: TRACK_PIECE_ID,
-    model: 'war3mapImported\\OmniTrackSmall.mdx',
+    model: SMALL_TRACK_MODEL,
     // TrackWagon.mdx's chest ref was repurposed as the cargo anchor: its
     // pivot is patched to the wagon's rear center at bed height (-85, 0, 75)
     // via scripts/patch-attachment-pivot.js. (The stock chest position sat

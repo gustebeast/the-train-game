@@ -1,7 +1,7 @@
 import { Unit, Trigger } from 'w3ts';
 import { nextFrame } from '../util';
 import {
-  SKINS, OPPOSITE, TRACK_UNIT_TYPES, DIRECTIONS, TRACK_SIZE,
+  skinFor, OPPOSITE, TRACK_UNIT_TYPES, DIRECTIONS, TRACK_SIZE,
   Direction, toOrientationKey,
 } from './constants';
 import { reskinTrack, replaceTrack } from './helpers';
@@ -65,13 +65,13 @@ function onTrackBuilt() {
 
     // Update track1's skin now that we know both its neighbors
     const orientationKey1 = toOrientationKey(dirFromTrack1ToTrack0, dirToTrack2);
-    const type1 = SKINS[orientationKey1] ?? SKINS.EW;
+    const type1 = skinFor(orientationKey1);
     reskinTrack(track1, type1);
     track1.invulnerable = true;
 
     // Replace track0 (Farm/solid) with a ScoutTower (walkable) at the snap position
     const orientationKey0 = toOrientationKey(dirToTrack1, OPPOSITE[dirToTrack1]);
-    const type0 = SKINS[orientationKey0] ?? SKINS.EW;
+    const type0 = skinFor(orientationKey0);
     const newTrack = replaceTrack(track0, type0, snapX, snapY);
     placedTracks.push(newTrack);
     // The line has changed shape: the piece before this one has just gained its

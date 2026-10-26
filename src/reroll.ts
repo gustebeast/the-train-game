@@ -5,8 +5,8 @@ import { rerollInterRoundLobbyHero } from './heroes';
 import { rerollInterRoundLobbyMerc } from './mercenary';
 import { restartSparringMatch } from './creeps';
 import { nextFrame, forEachUnitInWorld } from './util';
+import { REROLL_COST } from './sharedData';
 
-const REROLL_COST = 1;
 
 /** Classic tome-consume burst: the tome item model's death animation. */
 const TOME_EFFECT = 'Objects\\InventoryItems\\TomeRed\\TomeRed.mdl';

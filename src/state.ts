@@ -1,4 +1,5 @@
 import { getHumanPlayers } from './util';
+import { TRAIN_INITIAL_MAX_HP } from './sharedData';
 
 export interface GameState {
   round: number;
@@ -24,9 +25,6 @@ export interface GameState {
   heroQueuePos: number;
 }
 
-/** The train's max HP at the start of a run. The Restore Lost HP item resets to
- *  exactly this, so Flame Resistance upgrades bought earlier are not refunded. */
-export const TRAIN_INITIAL_MAX_HP = 100;
 
 export const DEFAULT_STATE: GameState = {
   round: 0,

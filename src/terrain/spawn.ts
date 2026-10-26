@@ -7,7 +7,7 @@ import {
   ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, ROCK_MODEL_SCALES, GridPos,
   idx, gridToWorld,
 } from './constants';
-import { DEFAULT_TRACK, SKINS } from '../track/constants';
+import { DEFAULT_TRACK, skinFor } from '../track/constants';
 
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
@@ -60,7 +60,7 @@ function paintTile(worldX: number, worldY: number, terrain: Terrain, biome: Biom
 /** Spawn an initial E-W track piece and register it in placedTracks. */
 function spawnStartingTrack(worldX: number, worldY: number): void {
   const track = Unit.create(getNeutralPassive(), FourCC(DEFAULT_TRACK), worldX, worldY, 0)!;
-  track.skin = FourCC(SKINS.EW);
+  track.skin = FourCC(skinFor('EW'));
   track.invulnerable = true;
   placedTracks.push(track);
 }

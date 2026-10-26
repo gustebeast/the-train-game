@@ -2,6 +2,7 @@ import { gameState, syncGold } from './state';
 import { boardChanged } from './boardSignal';
 import { registerSaveSegment, parseFields } from './save';
 import { deriveSeed } from './rng';
+import { CHALLENGE_BONUS } from './sharedData';
 
 /**
  * Shady Dealer challenges — optional wagers bought in the inter-round lobby for 1 gold
@@ -22,8 +23,6 @@ import { deriveSeed } from './rng';
  * history clears and the sequence starts again.
  */
 
-const CHALLENGE_BONUS = 2;
-export const CHALLENGE_COST = 1;
 
 export interface ChallengeDef {
   /** Stable short key. Persisted, so never renumber or reuse. */
