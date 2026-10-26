@@ -18,6 +18,10 @@
  *    the handle can be recycled into anything new.
  *
  * Event-driven both ways: nothing polls.
+ *
+ * Models attached to a unit -- the victory trophy -- ride the same hooks, for
+ * the same reason: an attached effect is a handle of its own, and outlives a
+ * removed unit unless something destroys it.
  */
 
 declare const _G: { RemoveUnit: (this: void, u: unit) => void };
@@ -28,6 +32,8 @@ interface Label {
 
 /** Keyed by the unit, so a removal looks its label up in one step. */
 const labels = new Map<unit, Label>();
+/** Models attached to a unit by markUnit, likewise keyed by the unit. */
+const marks = new Map<unit, effect>();
 let hooked = false;
 let deathTrigger: trigger | null = null;
 
@@ -46,6 +52,13 @@ function dropLabel(u: unit): void {
   labels.delete(u);
 }
 
+function dropMark(u: unit): void {
+  const fx = marks.get(u);
+  if (fx == null) return;
+  DestroyEffect(fx);
+  marks.delete(u);
+}
+
 /** Wrap RemoveUnit, and set up the death trigger, once.
  *
  *  Done on first use rather than at module load: natives are not reliable at
@@ -56,14 +69,35 @@ function install(): void {
   hooked = true;
   const nativeRemoveUnit = _G.RemoveUnit;
   _G.RemoveUnit = (u: unit) => {
-    if (u != null) dropLabel(u);
+    if (u != null) { dropLabel(u); dropMark(u); }
     nativeRemoveUnit(u);
   };
   deathTrigger = CreateTrigger();
   TriggerAddAction(deathTrigger, () => {
     const u = GetTriggerUnit();
-    if (u != null) dropLabel(u);
+    if (u != null) { dropLabel(u); dropMark(u); }
   });
+}
+
+/** Attach `model` to `u` at `point` for as long as `u` exists, at `scale`
+ *  measured against the WORLD rather than the unit: an attached model grows
+ *  and shrinks with its unit's own scale, so that is divided back out, and
+ *  the same mark comes out the same size on a full-size peasant as on a
+ *  shrunken hero. One mark per unit: marking again replaces it. */
+export function markUnit(u: unit, model: string, point: string, scale: number): void {
+  install();
+  dropMark(u);
+  const fx = AddSpecialEffectTarget(model, u, point);
+  if (fx == null) return;
+  const unitScale = BlzGetUnitRealField(u, UNIT_RF_SCALING_VALUE);
+  BlzSetSpecialEffectScale(fx, scale / (unitScale > 0 ? unitScale : 1));
+  marks.set(u, fx);
+  if (deathTrigger != null) TriggerRegisterUnitEvent(deathTrigger, u, EVENT_UNIT_DEATH);
+}
+
+/** How many marks exist. For tests: a mark outliving its unit is a leak. */
+export function unitMarkCount(): number {
+  return marks.size;
 }
 
 /** Float `text` over `u` for as long as `u` exists. */

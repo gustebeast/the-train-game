@@ -1,11 +1,12 @@
-import { Grid, GRID_MAX_X, biomeForCampLevel } from './constants';
+import { Grid, GRID_MAX_X, biomeForCampLevel, gridToWorld } from './constants';
 import { stopPregameMusic } from '../lobbyMusic';
 import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateVictoryLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
-import { spawnTerrain, spawnReadyCircle, SpawnedTrain } from './spawn';
+import { spawnTerrain, spawnReadyCircle, addBoardEffect, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { Unit } from 'w3ts';
-import { PEASANT_ID, TROPHY_ABILITY_ID } from '../constants';
+import { PEASANT_ID, TROPHY_MODEL, TROPHY_SCALE } from '../constants';
+import { markUnit } from '../unitLabels';
 import { forEachUnitOfPlayer, getHumanPlayers, getWorldBounds } from '../util';
 import { makeDancer, startDanceClock } from '../dance';
 import {
@@ -396,7 +397,11 @@ function loadVictoryLobby(): void {
   for (const p of getHumanPlayers()) {
     forEachUnitOfPlayer(p.handle, u => { if (GetUnitTypeId(u) === PEASANT_ID) winners.push(u); });
   }
-  for (const u of winners) UnitAddAbility(u, TROPHY_ABILITY_ID);
+  for (const u of winners) markUnit(u, TROPHY_MODEL, 'overhead', TROPHY_SCALE);
+  // And the trophy itself, life-size on the top middle grass tile -- the
+  // square the inter-round lobby gives to the shop.
+  const top = gridToWorld({ x: 0, y: 3 });
+  addBoardEffect(TROPHY_MODEL, top.x, top.y, 1.6);
 }
 
 function loadDefeatLobby(): void {

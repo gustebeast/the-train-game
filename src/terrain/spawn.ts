@@ -76,6 +76,20 @@ export interface SpawnedTrain {
 /** Where the arena template said the party and the boss go, in world
  *  coordinates. Filled while the grid is walked and read by loadBossBattlefield
  *  -- the template marks the places, the arena decides who fills them. */
+/** Free-standing models dressing the current board. Special effects are not
+ *  units, destructables or items, so the board sweep would leave them behind;
+ *  registering one here means it goes with the board. */
+const boardEffects: effect[] = [];
+
+/** Stand a model on the board as scenery, removed with the board. */
+export function addBoardEffect(model: string, x: number, y: number, scale: number): effect | null {
+  const fx = AddSpecialEffect(model, x, y);
+  if (fx == null) return null;
+  BlzSetSpecialEffectScale(fx, scale);
+  boardEffects.push(fx);
+  return fx;
+}
+
 let bossHeroSpots: GridPos[] = [];
 let bossMercSpots: GridPos[] = [];
 let bossSpot: GridPos | null = null;
@@ -169,6 +183,8 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
     EnumDestructablesInRect(getWorldBounds(), null!, () => RemoveDestructable(GetEnumDestructable()!));
     forEachUnitInWorld(u => RemoveUnit(u));
     EnumItemsInRect(getWorldBounds(), null!, () => RemoveItem(GetEnumItem()!));
+    for (const fx of boardEffects) DestroyEffect(fx);
+    boardEffects.length = 0;
     resumeResourceDrops();
     placedTracks.length = 0;
     resetVictoryTriggered();
