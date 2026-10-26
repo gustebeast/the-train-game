@@ -2,7 +2,7 @@ import { Item, Trigger, Unit } from 'w3ts';
 import { updateCarryingVisual } from './carrying';
 import { gameState } from './state';
 import { canHold, isResourceItem } from './itemRules';
-import { nextFrame } from './util';
+import { INVENTORY_SLOTS, nextFrame } from './util';
 import {
   WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, REROLL_ITEM_ID,
@@ -27,16 +27,17 @@ export function setCrateStart(u: Unit): void {
   crateStart = u;
 }
 
-export function getCrate(): Unit | null {
-  return crate;
-}
-
 export function getCrateStart(): Unit | null {
   return crateStart;
 }
 
-/** Sync the target crate's current inventory into gameState. */
-function syncCrateState(): void {
+/** Bank what is in the target crate as next round's starting crate. Called
+ *  once, when the round is won and before the save is written.
+ *
+ *  Read off the crate rather than tallied as items go in: the tally only saw
+ *  the give/take spell, so wood dropped in by a manual right-click never
+ *  counted and silently failed to carry over. */
+export function bankCrateForNextRound(): void {
   if (crate == null) return;
   const tracks = findItemByType(crate, TRACK_PIECE_ID);
   const wood = findItemByType(crate, WOOD_ID);
@@ -46,8 +47,9 @@ function syncCrateState(): void {
   gameState.crateStoneCount = stone != null ? stone.charges : 0;
 }
 
-/** Set an item's charges on a storage unit, creating or removing the item as needed. */
-export function setStorageItem(target: Unit, itemTypeId: number, charges: number, slot: number): void {
+/** Set an item's charges on a storage unit, creating or removing the item as
+ *  needed. A new stack goes in the carrier's own slot for that resource. */
+export function setStorageItem(target: Unit, itemTypeId: number, charges: number): void {
   const existing = findItemByType(target, itemTypeId);
   if (charges <= 0) {
     if (existing != null) RemoveItem(existing.handle);
@@ -60,7 +62,7 @@ export function setStorageItem(target: Unit, itemTypeId: number, charges: number
     if (newItem != null) {
       newItem.charges = charges;
       UnitAddItem(target.handle, newItem.handle);
-      UnitDropItemSlot(target.handle, newItem.handle, slot);
+      UnitDropItemSlot(target.handle, newItem.handle, getStorageSlot(target, itemTypeId));
     }
   }
 }
@@ -68,12 +70,9 @@ export function setStorageItem(target: Unit, itemTypeId: number, charges: number
 /** Populate the start crate from saved counts and reset them. Called at round start. */
 export function loadCrateForRound(): void {
   if (crateStart == null) return;
-  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateTrackCount,
-    getStorageSlot(crateStart, TRACK_PIECE_ID));
-  setStorageItem(crateStart, WOOD_ID, gameState.crateWoodCount,
-    getStorageSlot(crateStart, WOOD_ID));
-  setStorageItem(crateStart, STONE_ID, gameState.crateStoneCount,
-    getStorageSlot(crateStart, STONE_ID));
+  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateTrackCount);
+  setStorageItem(crateStart, WOOD_ID, gameState.crateWoodCount);
+  setStorageItem(crateStart, STONE_ID, gameState.crateStoneCount);
   gameState.crateTrackCount = 0;
   gameState.crateWoodCount = 0;
   gameState.crateStoneCount = 0;
@@ -82,16 +81,9 @@ export function loadCrateForRound(): void {
 /** Populate the start crate with max stack to show capacity. Called in inter-round lobby. */
 export function loadCrateForInterRoundLobby(): void {
   if (crateStart == null) return;
-  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateMaxStack,
-    getStorageSlot(crateStart, TRACK_PIECE_ID));
-  setStorageItem(crateStart, WOOD_ID, gameState.crateMaxStack,
-    getStorageSlot(crateStart, WOOD_ID));
-  setStorageItem(crateStart, STONE_ID, gameState.crateMaxStack,
-    getStorageSlot(crateStart, STONE_ID));
-}
-
-function isCrate(u: Unit): boolean {
-  return u.handle === crate?.handle;
+  setStorageItem(crateStart, TRACK_PIECE_ID, gameState.crateMaxStack);
+  setStorageItem(crateStart, WOOD_ID, gameState.crateMaxStack);
+  setStorageItem(crateStart, STONE_ID, gameState.crateMaxStack);
 }
 
 /** Abilities granted while carrying the matching item type. */
@@ -154,7 +146,7 @@ function storageOrder(carrier: Unit): number[] {
   return [TRACK_PIECE_ID, WOOD_ID, STONE_ID];
 }
 
-export function getStorageSlot(carrier: Unit, itemTypeId: number): number {
+function getStorageSlot(carrier: Unit, itemTypeId: number): number {
   const order = storageOrder(carrier);
   for (let i = 0; i < order.length; i++) {
     if (order[i] === itemTypeId) return i;
@@ -220,29 +212,13 @@ export function isTrackWagon(u: Unit): boolean {
   return u.typeId === TRACK_WAGON_ID;
 }
 
-/** Get the max stack size for a unit and item type. */
-export function getMaxStack(u: Unit, itemTypeId?: number): number {
-  if (isTrain(u)) {
-    return itemTypeId === TRACK_PIECE_ID ? gameState.trainTrackMaxStack : gameState.trainCargoMaxStack;
-  }
+/** How many of one item a unit can stack. A carrier has one stack size for
+ *  everything it is allowed to hold (itemRules.canHold). */
+export function getMaxStack(u: Unit): number {
+  if (isTrain(u)) return gameState.trainCargoMaxStack;
   if (isTrackWagon(u)) return gameState.trainTrackMaxStack;
   if (u.typeId === CRATE_ID) return gameState.crateMaxStack;
   return gameState.peasantMaxStack;
-}
-
-/** Re-exported so existing callers keep working; the definition lives with the
- *  rest of the item classification in itemRules.ts. */
-function isResource(itemTypeId: number): boolean {
-  return isResourceItem(itemTypeId);
-}
-
-/** Check whether a unit is carrying an item of the given type. */
-export function unitHasItemType(u: Unit, itemTypeId: number): boolean {
-  for (let slot = 0; slot < 6; slot++) {
-    const it = u.getItemInSlot(slot);
-    if (it != null && it.typeId === itemTypeId) return true;
-  }
-  return false;
 }
 
 /** Get the item in slot 0 (first inventory slot) for a unit. */
@@ -252,7 +228,7 @@ export function getSlot0Item(u: Unit): Item | null {
 
 /** Find an item of the given type in a unit's inventory. */
 export function findItemByType(u: Unit, itemTypeId: number): Item | null {
-  for (let slot = 0; slot < 6; slot++) {
+  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
     const it = u.getItemInSlot(slot);
     if (it != null && it.typeId === itemTypeId) return it;
   }
@@ -261,7 +237,7 @@ export function findItemByType(u: Unit, itemTypeId: number): Item | null {
 
 /** Find any item in a unit's inventory. */
 function findAnyItem(u: Unit): Item | null {
-  for (let slot = 0; slot < 6; slot++) {
+  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
     const it = u.getItemInSlot(slot);
     if (it != null) return it;
   }
@@ -277,22 +253,12 @@ export function validateGive(itemTypeId: number, target: Unit): string | null {
   const forbidden = canHold(target, itemTypeId);
   if (forbidden != null) return forbidden;
 
-  // Below here is transfer POLICY, not a holding rule: these targets can hold
-  // the item perfectly well, they just may not be handed one by a player.
-
-  // The track wagon is filled by the engine's production — only take
-  if (isTrackWagon(target)) {
-    return "Can't load the wagon!";
-  }
-
-  // Can't give tracks to the train — only take
-  if (isTrain(target) && itemTypeId === TRACK_PIECE_ID) {
-    return "Can't load tracks!";
-  }
+  const refused = refuseHandOff(target);
+  if (refused != null) return refused;
 
   const matching = findItemByType(target, itemTypeId);
   if (matching != null) {
-    if (matching.charges >= getMaxStack(target, itemTypeId)) {
+    if (matching.charges >= getMaxStack(target)) {
       return 'Inventory full!';
     }
     return null; // Can stack more
@@ -307,6 +273,15 @@ export function validateGive(itemTypeId: number, target: Unit): string | null {
   }
 
   return null; // Target can accept
+}
+
+/** Transfer POLICY, not a holding rule: a target that can hold the item
+ *  perfectly well but may not be HANDED one by a player. Asked by both ways a
+ *  player hands something over -- the give spell and a right-click give. */
+function refuseHandOff(target: Unit): string | null {
+  // The track wagon is filled by the engine's production; players only take.
+  if (isTrackWagon(target)) return "Can't load the wagon!";
+  return null;
 }
 
 /** Priority order for taking items from storage. */
@@ -340,7 +315,7 @@ export function validateTake(taker: Unit, storage: Unit): string | null {
     if (wagonTracks == null || wagonTracks.charges <= 0) {
       return 'No tracks!';
     }
-    if (heldItem.charges >= getMaxStack(taker, TRACK_PIECE_ID)) {
+    if (heldItem.charges >= getMaxStack(taker)) {
       return 'Inventory full!';
     }
     return null;
@@ -361,7 +336,7 @@ export function validateTake(taker: Unit, storage: Unit): string | null {
  */
 export function giveToStorage(giver: Unit, giverItem: Item, storage: Unit): boolean {
   const itemType = giverItem.typeId;
-  const maxStack = getMaxStack(storage, itemType);
+  const maxStack = getMaxStack(storage);
   const existing = findItemByType(storage, itemType);
   const currentCharges = existing != null ? existing.charges : 0;
   const canGive = maxStack - currentCharges;
@@ -395,7 +370,6 @@ function notifyStorageChanged(storage: Unit): void {
   if ((isTrain(storage) || isTrackWagon(storage)) && onTrainInventoryChanged != null) {
     onTrainInventoryChanged();
   }
-  if (isCrate(storage)) syncCrateState();
 }
 
 /**
@@ -409,7 +383,7 @@ export function takeFromStorage(taker: Unit, storage: Unit): boolean {
   const source = findItemByType(storage, takeType);
   if (source == null || source.charges <= 0) return false;
 
-  const maxStack = getMaxStack(taker, takeType);
+  const maxStack = getMaxStack(taker);
   const existing = findItemByType(taker, takeType);
   const currentCharges = existing != null ? existing.charges : 0;
   const canTake = maxStack - currentCharges;
@@ -468,7 +442,7 @@ export function initItems(): void {
     if (unit == null || picked == null) return;
 
     const pickedType = picked.typeId;
-    const pickedIsResource = isResource(pickedType);
+    const pickedIsResource = isResourceItem(pickedType);
     const dropper = pendingGivers.get(picked.handle) ?? null;
     pendingGivers.delete(picked.handle);
     // The unit that gave us this item, if it came from another unit
@@ -502,22 +476,18 @@ export function initItems(): void {
     // below (it is neither resource nor tool). Nothing else to do on pickup.
     if (pickedType === REROLL_ITEM_ID) return;
 
-    // Can't give tracks to the train (but allow internally produced tracks)
-    if (isTrain(unit) && pickedType === TRACK_PIECE_ID && giver != null) {
-      rejectPickup("Can't load tracks!");
-      return;
-    }
-
-    // The track wagon only receives tracks from production, never from players
-    if (isTrackWagon(unit) && giver != null) {
-      rejectPickup("Can't load the wagon!");
-      return;
+    if (giver != null) {
+      const refused = refuseHandOff(unit);
+      if (refused != null) {
+        rejectPickup(refused);
+        return;
+      }
     }
 
     // Scan inventory for existing items (excluding the one just picked up)
     let otherItem: Item | undefined;
     let matchingResource: Item | undefined;
-    for (let slot = 0; slot < 6; slot++) {
+    for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
       const it = unit.getItemInSlot(slot);
       if (it == null || it.handle === picked.handle) continue;
       if (pickedIsResource && it.typeId === pickedType) {
@@ -529,7 +499,7 @@ export function initItems(): void {
 
     if (matchingResource != null) {
       // Same resource type — merge charges up to max stack
-      const maxStack = getMaxStack(unit, pickedType);
+      const maxStack = getMaxStack(unit);
       if (matchingResource.charges >= maxStack) {
         rejectPickup('Inventory full!');
         return;

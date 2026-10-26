@@ -8,8 +8,6 @@ import { TRACK_PIECE_ID } from './constants';
 import { isBurning } from './train';
 import { isInGameplay } from './state';
 
-const CHANNEL_ORDER_ID = 852600;
-const SMART_ORDER_ID = 851971;
 const GIVE_TAKE_ABILITY_ID = FourCC(Abilities.Channel);
 
 /** The peasant that issued a give or take, or null if this order is not one.
@@ -18,7 +16,8 @@ const GIVE_TAKE_ABILITY_ID = FourCC(Abilities.Channel);
  *  and the refusal has to be SPOKEN as well as returned: a silently ignored
  *  order reads as the spell being broken rather than as the rule it is. */
 function giveTakeCaster(): Unit | null {
-  if (GetIssuedOrderId() !== CHANNEL_ORDER_ID) return null;
+  // The give/take spell is a Channel copy, so it is ordered as "channel".
+  if (GetIssuedOrderId() !== OrderId('channel')) return null;
   const unit = Unit.fromEvent();
   if (unit == null) return null;
   if (!isInGameplay()) {
@@ -57,7 +56,7 @@ export function initGiveTake(): void {
     const targetItem = GetOrderTargetItem();
     if (targetItem != null) {
       const unitHandle = unit.handle;
-      nextFrame(() => IssueTargetOrderById(unitHandle, SMART_ORDER_ID, targetItem));
+      nextFrame(() => IssueTargetOrder(unitHandle, 'smart', targetItem));
       return;
     }
 
@@ -81,11 +80,13 @@ export function initGiveTake(): void {
       return;
     }
 
-    // Empty hand + non-storage target → reject
-    if (item == null) {
-      rejectOrder(unit.handle, "Can't take from that!");
+    // Only storage takes part in give/take; anything else is refused now,
+    // before the walk, rather than walked up to and silently ignored.
+    if (!isStorage(target)) {
+      rejectOrder(unit.handle, item == null ? "Can't take from that!" : "Can't give to that!");
       return;
     }
+    if (item == null) return;
 
     // Give flow — pre-validate before walking, execute in SPELL_CHANNEL
     const rejection = validateGive(item.typeId, target);
@@ -95,7 +96,7 @@ export function initGiveTake(): void {
     // If valid, Channel spell walks up and SPELL_CHANNEL handles the give
   });
 
-  // --- SPELL_CHANNEL: execute take when unit arrives in range ---
+  // --- SPELL_CHANNEL: execute the give or take when the unit arrives ---
   const channelTrigger = Trigger.create();
   channelTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_CHANNEL);
   channelTrigger.addAction(() => {

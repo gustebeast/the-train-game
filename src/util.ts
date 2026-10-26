@@ -84,7 +84,7 @@ export function onChatCommandWithArg(command: string, action: (arg: string) => v
 }
 
 /** WC3 inventories are six slots wide. */
-const INVENTORY_SLOTS = 6;
+export const INVENTORY_SLOTS = 6;
 
 /** Run cb for every item a unit is carrying, skipping empty slots. */
 export function forEachInventoryItem(handle: unit, cb: (this: void, it: item) => void): void {

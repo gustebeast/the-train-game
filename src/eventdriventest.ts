@@ -15,7 +15,7 @@ import { spawnStrangeRock } from './bossRock';
 import { placedTracks } from './track/state';
 import { auditMinimapIcons, minimapIconCount } from './minimapIcons';
 import { getTrain, getTrackWagon } from './train';
-import { setStorageItem, getStorageSlot, giveToStorage, findItemByType } from './items';
+import { setStorageItem, giveToStorage, findItemByType } from './items';
 
 /**
  * Five systems that used to poll on the global tick now run on events. What
@@ -208,15 +208,15 @@ function runCargoEvents(t: TestReporter): void {
   const wait = ONE_FRAME * 2;
 
   // Start from empty cars, whatever the round handed out.
-  setStorageItem(train, WOOD_ID, 0, 0);
-  setStorageItem(train, STONE_ID, 0, 0);
-  setStorageItem(wagon, TRACK_PIECE_ID, 0, 0);
+  setStorageItem(train, WOOD_ID, 0);
+  setStorageItem(train, STONE_ID, 0);
+  setStorageItem(wagon, TRACK_PIECE_ID, 0);
   t.after(wait, () => {
     const c0 = cargoShowing();
     expect(t, 'emptyShowsNothing', (c0.wood || c0.stone || c0.tracks) ? 1 : 0, 0);
 
     // In: setStorageItem adding a new stack (production's path to the wagon).
-    setStorageItem(wagon, TRACK_PIECE_ID, 2, getStorageSlot(wagon, TRACK_PIECE_ID));
+    setStorageItem(wagon, TRACK_PIECE_ID, 2);
     // In: a player's give, from a peasant carrying stone.
     const peasant = Unit.create(me, PEASANT_ID, train.x + 64, train.y, 0)!;
     const stone = Item.create(STONE_ID, peasant.x, peasant.y)!;
@@ -224,7 +224,7 @@ function runCargoEvents(t: TestReporter): void {
     UnitAddItem(peasant.handle, stone.handle);
     expect(t, 'giveAccepted', giveToStorage(peasant, stone, train) ? 1 : 0, 1);
     // In: setStorageItem on the engine.
-    setStorageItem(train, WOOD_ID, 1, getStorageSlot(train, WOOD_ID));
+    setStorageItem(train, WOOD_ID, 1);
     t.after(wait, () => {
       const c1 = cargoShowing();
       expect(t, 'tracksOnAfterStore', c1.tracks ? 1 : 0, 1);
@@ -238,7 +238,7 @@ function runCargoEvents(t: TestReporter): void {
       const w = findItemByType(train, WOOD_ID);
       if (w != null) { w.charges -= 1; if (w.charges <= 0) RemoveItem(w.handle); }
       // Out: a stack set to zero.
-      setStorageItem(wagon, TRACK_PIECE_ID, 0, 0);
+      setStorageItem(wagon, TRACK_PIECE_ID, 0);
       t.after(wait, () => {
         const c2 = cargoShowing();
         expect(t, 'woodOffWhenUsedUp', c2.wood ? 1 : 0, 0);
@@ -248,7 +248,7 @@ function runCargoEvents(t: TestReporter): void {
         // A new round replaces both cars. Cargo that arrives on the NEW engine
         // must show there.
         loadTerrain(0);
-        setStorageItem(getTrain(), WOOD_ID, 1, getStorageSlot(getTrain(), WOOD_ID));
+        setStorageItem(getTrain(), WOOD_ID, 1);
         t.after(wait, () => {
           expect(t, 'woodOnNewTrain', cargoShowing().wood ? 1 : 0, 1);
           t.done();

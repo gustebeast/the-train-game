@@ -7,6 +7,7 @@ import { gameState, syncGold } from './state';
 import { saveToFile } from './save';
 import { rollCreepCamp } from './creeps';
 import { chooseHeroes, chooseHeroPlayers } from './heroes';
+import { bankCrateForNextRound } from './items';
 
 const GOLD_PER_ROUND = 1;
 
@@ -36,5 +37,6 @@ export function awardVictory(): void {
   rollCreepCamp();
   chooseHeroes();
   chooseHeroPlayers();
+  bankCrateForNextRound();
   saveToFile();
 }

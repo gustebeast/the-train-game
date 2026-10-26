@@ -238,7 +238,25 @@ function pickLeastBusyHeroPlayers(): void {
 
 /** Spawned hero units this round, each paired with its index into allHeroes.
  *  (Explicit pairing — a failed Unit.create must not misalign hero data.) */
-let spawnedHeroes: Array<{ unit: Unit; dataIdx: number }> = [];
+interface SpawnedHero {
+  unit: Unit;
+  dataIdx: number;
+  /** Ends hero mode when the last hero falls. Kept here so it can be
+   *  destroyed with the entry: heroes almost always leave by being REMOVED
+   *  (unsummon, the round reset, the sparring teardown), which fires no death
+   *  event, so a trigger that only destroyed itself on death leaked one per
+   *  hero per summon. */
+  deathTrig: Trigger | null;
+}
+let spawnedHeroes: SpawnedHero[] = [];
+
+/** Forget the spawned heroes, destroying their death triggers. */
+function forgetSpawnedHeroes(): void {
+  for (const s of spawnedHeroes) {
+    if (s.deathTrig != null) s.deathTrig.destroy();
+  }
+  spawnedHeroes = [];
+}
 
 /** Whether heroes have been summoned this round. */
 let heroesSpawned = false;
@@ -391,7 +409,7 @@ export function resetHeroState(): void {
   }
   releaseMercUnit(); // snapshots merc items if its unit still exists
   heroesSpawned = false;
-  spawnedHeroes = [];
+  forgetSpawnedHeroes();
   peasantOwnerMap.clear();
 }
 
@@ -498,15 +516,16 @@ export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
     const owner = owners[math.min(i, owners.length - 1)];
     const hero = spawnHeroUnit(dataIdx, owner, x, y);
     if (hero != null) {
-      spawnedHeroes.push({ unit: hero, dataIdx });
+      spawnedHeroes.push({ unit: hero, dataIdx, deathTrig: null });
     }
   }
   // Wait one frame for hero stats (XP/skills) to finalize, then register
   // death triggers and notify (tome bonuses are applied by spawnHeroUnit)
   nextFrame(() => {
-    for (const { unit } of spawnedHeroes) {
+    for (const entry of spawnedHeroes) {
       const deathTrig = Trigger.create();
-      TriggerRegisterUnitEvent(deathTrig.handle, unit.handle, EVENT_UNIT_DEATH);
+      deathTrig.registerUnitEvent(entry.unit, EVENT_UNIT_DEATH);
+      entry.deathTrig = deathTrig;
       deathTrig.addAction(() => {
         // Check if all heroes are dead
         if (spawnedHeroes.every(s => GetUnitState(s.unit.handle, UNIT_STATE_LIFE) <= 0)) {
@@ -534,7 +553,7 @@ export function clearSpawnedHeroUnits(): void {
   for (const s of spawnedHeroes) {
     if (GetUnitTypeId(s.unit.handle) !== 0) RemoveUnit(s.unit.handle);
   }
-  spawnedHeroes = [];
+  forgetSpawnedHeroes();
 }
 
 /** End hero summoning: snapshot items, remove heroes and their summons,
@@ -556,7 +575,7 @@ export function endHeroState(): void {
     if (!humanIds.includes(GetPlayerId(GetOwningPlayer(u)))) return;
     RemoveUnit(u);
   });
-  spawnedHeroes = [];
+  forgetSpawnedHeroes();
   heroesSpawned = false;
 
   // Restore peasant ownership and pan cameras back for players regaining peasant control

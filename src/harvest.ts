@@ -1,9 +1,8 @@
 import { Destructable, Item, Trigger, Unit } from 'w3ts';
 import { BIOMES, ROCK_RAW, GRANITE_RAW } from './terrain/constants';
-import { unitHasItemType, rejectOrder } from './items';
+import { findItemByType, rejectOrder } from './items';
 import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID } from './constants';
 import { noteChoppedTree, noteMinedStone } from './tutorialBoard';
-
 
 /** Every biome's tree: they differ only in look. */
 const TREE_DEST_IDS = new Set<number>();
@@ -83,7 +82,7 @@ function handleResourceOrder(unit: Unit, dest: destructable): void {
   const tool = requiredToolForDest(destTypeId);
   if (tool === 0) return;
 
-  if (!unitHasItemType(unit, tool)) {
+  if (findItemByType(unit, tool) == null) {
     rejectOrder(unit.handle, 'Requires ' + toolName(tool) + '!');
     return;
   }
@@ -131,9 +130,16 @@ export function initHarvest(): void {
   });
 
   // --- Intercept point orders near resource destructables (out of fog) ---
+  //
+  // A right-click on a tree under fog arrives as a POINT order at the tree, not
+  // a target order. Only right-click (smart) and attack-move mean "work this":
+  // a plain move that happens to end beside a tree is just walking, and
+  // stopping it with "Requires Axe!" froze heroes and peasants alike.
   const destPointTrigger = Trigger.create();
   destPointTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
   destPointTrigger.addAction(() => {
+    const order = GetIssuedOrderId();
+    if (order !== OrderId('smart') && order !== OrderId('attack')) return;
     const x = GetOrderPointX();
     const y = GetOrderPointY();
     const unit = Unit.fromEvent();

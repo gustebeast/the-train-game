@@ -209,7 +209,7 @@ export function initShop(): void {
       gameState.crateMaxStack += 4;
       // The shop is in the inter-round lobby, where the START crate displays capacity as
       // item charges — refresh it and play the effect there (the target
-      // crate from getCrate() only exists during gameplay rounds)
+      // crate only exists during gameplay rounds)
       loadCrateForInterRoundLobby();
       const crateStart = getCrateStart();
       if (crateStart != null) effectTargets = [crateStart];
