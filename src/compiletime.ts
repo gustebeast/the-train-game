@@ -741,6 +741,11 @@ compiletime(({ objectData, constants }) => {
   // Made invulnerable when spawned (bossRock.ts), like the water tiles: no
   // health bar, and attacks get the engine's refusal. The 999999 HP is only a
   // backstop. Transmute kills rather than damages, invulnerable or not.
+  const salesGoblin = objectData.units.copy(constants.units.Peasant, 'sgob');
+  if (salesGoblin != null) {
+    salesGoblin.name = 'Secret Salesperson';
+    salesGoblin.modelFile = 'war3mapImported\\MrGoblin.mdx';
+  }
   const sealRock = objectData.units.copy(constants.units.Barracks, STRANGE_ROCK_UNIT);
   if (sealRock != null) {
     sealRock.name = 'Strange Rock';
