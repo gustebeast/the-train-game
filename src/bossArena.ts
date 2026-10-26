@@ -43,11 +43,14 @@ let watcher: Trigger | null = null;
  *  straight back out -- which is what a boss fight with no heroes did. */
 let partyArrived = false;
 let onDefeat: (() => void) | null = null;
-let onVictory: (() => void) | null = null;
+/** Told who survived, since they are who must walk out. */
+let onVictory: ((this: void, survivors: unit[]) => void) | null = null;
 
 /** How the arena reports its ending. Set by terrain/load.ts, which owns what
  *  board comes next. */
-export function setBossArenaCallbacks(defeat: () => void, victory: () => void): void {
+export function setBossArenaCallbacks(
+  defeat: () => void, victory: (this: void, survivors: unit[]) => void,
+): void {
   onDefeat = defeat;
   onVictory = victory;
 }
@@ -182,8 +185,24 @@ function checkEnding(): void {
     return;
   }
   if (!enemiesRemain()) {
+    // The party stays on the floor: whoever is still standing is who has to
+    // walk out. Their state is cleared when the next board loads, as before.
     stopBossArena();
-    endHeroState();
-    if (onVictory != null) onVictory();
+    if (onVictory != null) onVictory(survivors());
   }
+}
+
+/** The party units still alive, summons left out: they come and go on their
+ *  own timers, and a way out must not wait on one. Only if nothing BUT summons
+ *  survived do they count -- otherwise there would be nobody to walk out. */
+function survivors(): unit[] {
+  const all: unit[] = [];
+  for (const player of getHumanPlayers()) {
+    forEachUnitOfPlayer(player.handle, u => {
+      if (IsUnitType(u, UNIT_TYPE_DEAD) || GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
+      all.push(u);
+    });
+  }
+  const real = all.filter(u => !IsUnitType(u, UNIT_TYPE_SUMMONED));
+  return real.length > 0 ? real : all;
 }

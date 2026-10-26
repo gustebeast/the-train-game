@@ -32,6 +32,20 @@ interface ActiveZone {
   /** Set while the zone is standing on a refusal, so stepping a second player
    *  on does not repeat it. Cleared as soon as anybody steps off. */
   refused: boolean;
+  /** When set, the zone is ready once every one of THESE units that is still
+   *  alive stands in it, instead of one peasant per player. */
+  members: unit[] | null;
+  /** Which members are standing in the zone right now. */
+  membersInside: Set<unit>;
+}
+
+function isMember(zone: ActiveZone, u: unit): boolean {
+  return zone.members != null && zone.members.indexOf(u) >= 0;
+}
+
+function membersReady(zone: ActiveZone): boolean {
+  const living = zone.members!.filter(u => GetWidgetLife(u) > 0.405);
+  return living.length > 0 && living.every(u => zone.membersInside.has(u));
 }
 
 const zoneConfigs = new Map<string, ZoneConfig>();
@@ -42,7 +56,9 @@ function checkAllReady(zone: ActiveZone): void {
   const activeIds = getHumanPlayers().map(p => p.id);
   if (activeIds.length === 0) return;
 
-  const allReady = activeIds.every(id => zone.readyPlayers.has(id));
+  const allReady = zone.members != null
+    ? membersReady(zone)
+    : activeIds.every(id => zone.readyPlayers.has(id));
 
   if (allReady && zone.countdownTimer == null) {
     const why = zone.config.blocked != null ? zone.config.blocked() : null;
@@ -59,7 +75,8 @@ function checkAllReady(zone: ActiveZone): void {
 
 function startCountdown(zone: ActiveZone): void {
   zone.countdownStep = 3;
-  print(zone.config.message + ' in ' + I2S(zone.countdownStep) + '...');
+  // An unnamed zone counts down bare: "3...", with no "<message> in".
+  print((zone.config.message === '' ? '' : zone.config.message + ' in ') + I2S(zone.countdownStep) + '...');
   zone.countdownTimer = Timer.create();
   zone.countdownTimer.start(1.0, true, () => {
     zone.countdownStep -= 1;
@@ -88,8 +105,12 @@ export function registerReadyZone(
   zoneConfigs.set(id, { message, callback, blocked });
 }
 
-/** Create a ready zone centered at (cx, cy) for the given registered zone id. */
-export function initReadyZone(cx: number, cy: number, id: string, marker: Unit | null = null): void {
+/** Create a ready zone centered at (cx, cy) for the given registered zone id.
+ *  Pass `members` to make it wait for those units instead of for a peasant
+ *  from every player. */
+export function initReadyZone(
+  cx: number, cy: number, id: string, marker: Unit | null = null, members: unit[] | null = null,
+): void {
   const config = zoneConfigs.get(id);
   if (config == null) return;
 
@@ -111,27 +132,53 @@ export function initReadyZone(cx: number, cy: number, id: string, marker: Unit |
     countdownStep: 0,
     readyPlayers: new Set(),
     refused: false,
+    members,
+    membersInside: new Set(),
   };
 
   zone.enterTrigger.registerEnterRegion(region.handle, undefined);
   zone.enterTrigger.addAction(() => {
     const u = Unit.fromEvent();
-    if (u == null || u.typeId !== PEASANT_ID) return;
+    if (u == null) return;
+    if (zone.members != null) {
+      if (!isMember(zone, u.handle)) return;
+      zone.membersInside.add(u.handle);
+    } else {
+      if (u.typeId !== PEASANT_ID) return;
+      zone.readyPlayers.add(u.owner.id);
+    }
     UnitAddAbility(u.handle, READY_ORB_ABILITY_ID);
-    zone.readyPlayers.add(u.owner.id);
     checkAllReady(zone);
   });
 
   zone.leaveTrigger.registerLeaveRegion(region.handle, undefined);
   zone.leaveTrigger.addAction(() => {
     const u = Unit.fromEvent();
-    if (u == null || u.typeId !== PEASANT_ID) return;
+    if (u == null) return;
+    if (zone.members != null) {
+      if (!isMember(zone, u.handle)) return;
+      zone.membersInside.delete(u.handle);
+    } else {
+      if (u.typeId !== PEASANT_ID) return;
+      zone.readyPlayers.delete(u.owner.id);
+    }
     UnitRemoveAbility(u.handle, READY_ORB_ABILITY_ID);
-    zone.readyPlayers.delete(u.owner.id);
     checkAllReady(zone);
   });
 
   activeZones.set(id, zone);
+
+  // A member zone can appear under units already standing there, and entering
+  // only fires on the way in -- so count whoever is on the spot now.
+  if (members != null) {
+    for (const u of members) {
+      if (GetWidgetLife(u) > 0.405 && IsUnitInRegion(region.handle, u)) {
+        zone.membersInside.add(u);
+        UnitAddAbility(u, READY_ORB_ABILITY_ID);
+      }
+    }
+    checkAllReady(zone);
+  }
 
   // Set up shared player-leave trigger once
   if (playerLeaveTrigger == null) {

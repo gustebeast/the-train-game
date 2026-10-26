@@ -31,6 +31,12 @@ function slotCacheFile(slot: number): string {
 const KEY_SEQ = 'seq';
 const KEY_DEFEATED = 'DEFEATED';
 const DEFEATED_YES = 'yes';
+/** Set the moment the boss falls. A victorious save is still OFFERED -- the
+ *  chooser shows the party that won, trophies and all -- but it cannot be
+ *  loaded: the run is finished. Spelled out on its own line for the same
+ *  reason DEFEATED is. */
+const KEY_VICTORIOUS = 'VICTORIOUS';
+const VICTORIOUS_YES = 'yes';
 const KEY_VERSION = 'VERSION';
 
 /**
@@ -71,6 +77,8 @@ export interface SaveSlotInfo {
   /** Highest completed round. */
   round: number;
   defeated: boolean;
+  /** The run beat the boss. Shown in the chooser, never loaded. */
+  victorious: boolean;
   /** Hero unit type ids, for the chooser to display. */
   heroTypeIds: number[];
   /** The heroes exactly as stored, one encoded record each. The chooser stands
@@ -303,7 +311,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
   if (!versionMatches(gc)) {
     FlushGameCache(gc);
     return {
-      slot, seq: 0, round: 0, defeated: true,
+      slot, seq: 0, round: 0, defeated: true, victorious: false,
       heroTypeIds: [], heroRecords: [], mercs: [],
     };
   }
@@ -326,6 +334,7 @@ function readSlotInfo(slot: number): SaveSlotInfo | null {
     seq: tonumber(stored(KEY_SEQ)) ?? 0,
     round: core.round,
     defeated: stored(KEY_DEFEATED) === DEFEATED_YES,
+    victorious: stored(KEY_VICTORIOUS) === VICTORIOUS_YES,
     heroTypeIds,
     heroRecords,
     mercs: decodeMercs(stored('mm')),
@@ -349,15 +358,16 @@ export function listSaves(includeDefeated = false): SaveSlotInfo[] {
   return found;
 }
 
-/** The slot a new run should claim: a free one, else the oldest defeated one,
- *  else the oldest of all. A slot holding a save this build cannot read counts
- *  as free -- readSlotInfo returns nothing for it. */
+/** The slot a new run should claim: a free one, else the oldest finished one
+ *  -- defeated or victorious, since neither can be played again -- else the
+ *  oldest of all. A slot holding a save this build cannot read counts as free
+ *  -- readSlotInfo returns nothing for it. */
 function allocateSlot(): number {
   const used = listSaves(true);
   for (let slot = 1; slot <= SLOT_COUNT; slot++) {
     if (!used.some(info => info.slot === slot)) return slot;
   }
-  const dead = used.filter(info => info.defeated);
+  const dead = used.filter(info => info.defeated || info.victorious);
   const pool = dead.length > 0 ? dead : used;
   let oldest = pool[0];
   for (const info of pool) {
@@ -374,8 +384,9 @@ function claimNewSlot(): number {
 }
 
 /** Write the session's state into `slot`, stamping it as the newest save.
- *  `defeated` hides it from the chooser without destroying it. */
-function writeSlot(slot: number, defeated: boolean): void {
+ *  `defeated` hides it from the chooser without destroying it; `victorious`
+ *  keeps it on show but closes it to loading. */
+function writeSlot(slot: number, defeated: boolean, victorious = false): void {
   const cacheFile = slotCacheFile(slot);
   let highestSeq = 0;
   for (const info of listSaves(true)) {
@@ -398,6 +409,7 @@ function writeSlot(slot: number, defeated: boolean): void {
   put(KEY_VERSION, I2S(SAVE_VERSION)!);
   put(KEY_SEQ, I2S(highestSeq + 1)!);
   if (defeated) put(KEY_DEFEATED, DEFEATED_YES);
+  if (victorious) put(KEY_VICTORIOUS, VICTORIOUS_YES);
   PreloadGenEnd(slotSaveFile(slot));
   sessionData.set(slot, record);
 
@@ -417,7 +429,7 @@ function writeSlot(slot: number, defeated: boolean): void {
     }
   }
   writtenThisSession.set(slot, {
-    slot, seq: highestSeq + 1, round: gameState.round, defeated,
+    slot, seq: highestSeq + 1, round: gameState.round, defeated, victorious,
     heroTypeIds, heroRecords, mercs,
   });
 }
@@ -435,6 +447,14 @@ export function saveToFile(): void {
 export function markCurrentSaveDefeated(): void {
   if (currentSlot === 0) return;
   writeSlot(currentSlot, true);
+}
+
+/** Mark the session's save as victorious: the boss has fallen. Written the
+ *  moment the last enemy dies, so the run is finished on disk even if nobody
+ *  ever walks out of the arena. Does nothing if no slot was ever claimed. */
+export function markCurrentSaveVictorious(): void {
+  if (currentSlot === 0) return;
+  writeSlot(currentSlot, false, true);
 }
 
 /** Wipe the session back to a brand new run: every segment to its baseline,
@@ -463,9 +483,9 @@ export function loadFromSlot(slot: number): boolean {
   return true;
 }
 
-/** Load the newest save that is not defeated. */
+/** Load the newest save that is still playable: not defeated, not victorious. */
 export function loadFromFile(): boolean {
-  const saves = listSaves();
+  const saves = listSaves().filter(info => !info.victorious);
   if (saves.length === 0) return false;
   return loadFromSlot(saves[0].slot);
 }
