@@ -99,3 +99,4 @@ typings/
 # tracked; these are not worth the churn.
 soundtrack/Media/peaks/
 soundtrack/Backups/
+!vendor/*.tgz

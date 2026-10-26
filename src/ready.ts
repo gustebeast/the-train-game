@@ -15,6 +15,11 @@ interface ZoneConfig {
    *  nothing -- Load Save with no saves, paging with only one -- says so at
    *  once instead of counting three down to nothing happening. */
   blocked?: () => string | null;
+  /** How many seconds the countdown should run, when three is not always
+   *  enough. Asked when the countdown starts and again when it reaches zero,
+   *  so something that changes in between -- a reroll restarting the sparring
+   *  match -- extends it rather than being skipped past. */
+  seconds?: () => number;
 }
 
 interface ActiveZone {
@@ -73,13 +78,27 @@ function checkAllReady(zone: ActiveZone): void {
   }
 }
 
+const MIN_COUNTDOWN = 3;
+
+/** Seconds the zone still wants to wait, beyond nothing. Whole seconds,
+ *  rounded up, so a wait of 6.2 is never cut to 6. */
+function extraWait(zone: ActiveZone): number {
+  if (zone.config.seconds == null) return 0;
+  return math.max(0, math.ceil(zone.config.seconds()));
+}
+
 function startCountdown(zone: ActiveZone): void {
-  zone.countdownStep = 3;
+  zone.countdownStep = math.max(MIN_COUNTDOWN, extraWait(zone));
   // An unnamed zone counts down bare: "3...", with no "<message> in".
   print((zone.config.message === '' ? '' : zone.config.message + ' in ') + I2S(zone.countdownStep) + '...');
   zone.countdownTimer = Timer.create();
   zone.countdownTimer.start(1.0, true, () => {
     zone.countdownStep -= 1;
+    if (zone.countdownStep <= 0) {
+      // Still waiting on something that changed mid-countdown: keep going.
+      const more = extraWait(zone);
+      if (more > 0) zone.countdownStep = more;
+    }
     if (zone.countdownStep > 0) {
       print(I2S(zone.countdownStep) + '...');
     } else {
@@ -101,8 +120,9 @@ function cancelCountdown(zone: ActiveZone): void {
 /** Register a ready zone type with its countdown message and completion callback. */
 export function registerReadyZone(
   id: string, message: string, callback: () => void, blocked?: () => string | null,
+  seconds?: () => number,
 ): void {
-  zoneConfigs.set(id, { message, callback, blocked });
+  zoneConfigs.set(id, { message, callback, blocked, seconds });
 }
 
 /** Create a ready zone centered at (cx, cy) for the given registered zone id.
@@ -136,7 +156,7 @@ export function initReadyZone(
     membersInside: new Set(),
   };
 
-  zone.enterTrigger.registerEnterRegion(region.handle, undefined);
+  zone.enterTrigger.registerEnterRegion(region, undefined);
   zone.enterTrigger.addAction(() => {
     const u = Unit.fromEvent();
     if (u == null) return;
@@ -151,7 +171,7 @@ export function initReadyZone(
     checkAllReady(zone);
   });
 
-  zone.leaveTrigger.registerLeaveRegion(region.handle, undefined);
+  zone.leaveTrigger.registerLeaveRegion(region, undefined);
   zone.leaveTrigger.addAction(() => {
     const u = Unit.fromEvent();
     if (u == null) return;
