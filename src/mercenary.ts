@@ -7,11 +7,15 @@ import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creepCamps';
 import { UNKNOWN_UNIT_ID, MAX_MERCS } from './constants';
 
-/** Hero-style inventory (the same ability the peasant carries tools with). It
- *  is BAKED onto every merc-able creep type in object data (see compiletime.ts):
- *  WC3 only creates working inventory slots for an inventory ability the unit
- *  has at creation time, so adding one at runtime yields 0 slots. This runtime
- *  add is therefore a harmless no-op backstop.
+/** Hero-style inventory (the same ability the peasant carries tools with),
+ *  added to each mercenary as it spawns -- and only there.
+ *
+ *  Added at runtime it gives the full six working slots: measured in game for
+ *  a type that never had it in object data (mercinventory). It used to be baked
+ *  into object data as well, on the belief that a runtime add yields no slots,
+ *  for 33 Lordaeron Summer types; the pool long since outgrew that list, and
+ *  baking it onto a TYPE handed the inventory to every camp creep of the type,
+ *  so a charmed one came over able to carry anything.
  *
  *  This is STOCK AInv, which drops its items on death — no object-data change
  *  suppresses that (an Aihn block that claimed to was dead config; see

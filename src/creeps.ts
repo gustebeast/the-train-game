@@ -351,6 +351,8 @@ interface SpawnedCreep {
    *  fires no death event, so a trigger that only destroyed itself on death
    *  leaked one per creep per failed camp. */
   deathTrig: Trigger | null;
+  /** Re-checks the camp when Charm takes this creep; see scaleCreepStats. */
+  charmTrig: Trigger | null;
 }
 
 /** Spawned creeps for the current round, paired with their camp data. */
@@ -360,8 +362,10 @@ let spawnedCreeps: SpawnedCreep[] = [];
 function forgetSpawnedCreeps(): void {
   for (const c of spawnedCreeps) {
     if (c.deathTrig != null) c.deathTrig.destroy();
+    if (c.charmTrig != null) c.charmTrig.destroy();
   }
   spawnedCreeps = [];
+  naturalHP.clear();
 }
 
 /** Where the current camp's cage stood, so a drop can be placed there after the
@@ -385,6 +389,10 @@ function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
   }
 }
 
+/** Each spawned creep's own max HP before anything rigged or scaled it, by
+ *  handle id. The sparring match needs it after rigging has replaced it. */
+const naturalHP = new Map<number, number>();
+
 /** One camp's creeps on the 3x3 grid round (cx, cy), appended to spawnedCreeps. */
 function placeCamp(cx: number, cy: number, camp: CreepCamp): void {
   const owner = getNeutralAggressive();
@@ -406,7 +414,8 @@ function placeCamp(cx: number, cy: number, camp: CreepCamp): void {
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_NUMBER_OF_DICE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);
-    spawnedCreeps.push({ unit: u, campUnit: creeps[i], deathTrig: null });
+    naturalHP.set(GetHandleId(u.handle), BlzGetUnitMaxHP(u.handle));
+    spawnedCreeps.push({ unit: u, campUnit: creeps[i], deathTrig: null, charmTrig: null });
   }
 }
 
@@ -488,6 +497,15 @@ function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
 
   if (sparringActive) {
     sparringCreepStartHP = SPARRING_HP;
+    // What one camp and one copy of the party are worth BEFORE rigging, for
+    // crediting a creep taken out early (see removalCredit). Copy 0 is the
+    // roster's own units; every copy is the same party.
+    sparringForceEHP = sumForce([...getSpawnedHeroes(), ...getSpawnedMercUnits()]).ehp;
+    let campEHP = 0;
+    for (const c of spawnedCreeps) campEHP += getEffectiveHP(c.unit.handle);
+    sparringCampEHP = campEHP / SPARRING_COPIES.length;
+    sparringRemovals = 0;
+    sparringRemovalCredit = 0;
     // Mercenaries too: one that dies mid-match stops dealing damage and stops
     // taking it, quietly biasing both numbers.
     for (const h of fieldedForce()) {
@@ -538,6 +556,7 @@ function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
 export function dpsSampleBreakdown(): {
   creepHPLost: number; ourHPLost: number; summonHPLost: number;
   trackedOurs: number; trackedSummons: number; trackedCreeps: number;
+  removals: number; removalCredit: number;
 } {
   let summons = 0;
   for (const e of trackedOurs) if (e.summon) summons += 1;
@@ -546,6 +565,7 @@ export function dpsSampleBreakdown(): {
     trackedOurs: trackedOurs.length,
     trackedSummons: summons,
     trackedCreeps: trackedCreeps.length,
+    removals: sparringRemovals, removalCredit: sparringRemovalCredit,
   };
 }
 
@@ -571,6 +591,10 @@ export function getDpsMeasurementReport(): string[] {
   lines.push('Our DPS (measured): ' + I2S(R2I(measured.heroDPS)));
   lines.push('Creep DPS (measured): ' + I2S(R2I(measured.creepDPS)));
   lines.push('HP taken off the creeps: ' + I2S(R2I(creepHPLost)));
+  if (sparringRemovals > 0) {
+    lines.push('  of which ' + I2S(sparringRemovals) + ' creep(s) charmed or killed outright, credited '
+      + I2S(R2I(sparringRemovalCredit)));
+  }
   lines.push('HP taken off our side: ' + I2S(R2I(ourHPLost))
     + ' (of which summons took ' + I2S(R2I(summonHPLost)) + ')');
   if (measured.creepDPS > 0) {
@@ -611,6 +635,30 @@ export function measureFieldedForce(): {
     heroDPS: heroTotals.dps, mercDPS: mercTotals.dps,
     mercsOwnedByHumans,
   };
+}
+
+/** Whether a creep is out of its camp's fight: dead, or charmed onto our side. */
+function isOutOfCamp(u: unit): boolean {
+  return GetUnitState(u, UNIT_STATE_LIFE) <= 0 || GetOwningPlayer(u) !== getNeutralAggressive().handle;
+}
+
+/** Set once this camp's clear has been paid, so a charmed creep dying after
+ *  the camp was already beaten cannot pay it twice. */
+let campBeatenPaid = false;
+
+/** The camp is beaten once every creep in it is dead or charmed: peasants get
+ *  Unsummon Heroes, the Tough Camp challenge completes, and a flawless level 3
+ *  clear leaves the Strange Key where the cage stood -- however the creeps
+ *  were dealt with. */
+function checkCampBeaten(): void {
+  if (campBeatenPaid) return;
+  if (!spawnedCreeps.every(c => isOutOfCamp(c.unit.handle))) return;
+  campBeatenPaid = true;
+  grantUnsummonToAllPeasants();
+  completeChallenge(CH_TOUGH_CAMP);
+  const origin = campOrigin;
+  const level = getCampData();
+  if (origin != null && level != null) onCampCleared(origin.x, origin.y, level.level);
 }
 
 /** Scale creep stats, remove invulnerability, register death triggers. */
@@ -674,8 +722,11 @@ export function scaleCreepStats(heroes: Unit[]): void {
       deathTrig.registerUnitEvent(c.unit, EVENT_UNIT_DEATH);
       c.deathTrig = deathTrig;
       deathTrig.addAction(() => {
-        awardHeroXP(xpReward);
-        if (drops != null) {
+        // A creep that dies after being charmed died as one of ours: as in the
+        // base game, Charm takes the unit instead of its XP and its drops.
+        const charmed = GetOwningPlayer(h) !== getNeutralAggressive().handle;
+        if (!charmed) awardHeroXP(xpReward);
+        if (drops != null && !charmed) {
           for (const drop of drops) {
             // A named drop is taken literally; everything else is a class and
             // a level for the engine to roll.
@@ -685,18 +736,19 @@ export function scaleCreepStats(heroes: Unit[]): void {
             if (itemId !== 0) CreateItem(itemId, GetUnitX(h), GetUnitY(h));
           }
         }
-        // Check if all creeps are dead — grant Unsummon Heroes to peasants
-        if (spawnedCreeps.every(s => GetUnitState(s.unit.handle, UNIT_STATE_LIFE) <= 0)) {
-          grantUnsummonToAllPeasants();
-          completeChallenge(CH_TOUGH_CAMP);
-          // A flawless level 3 clear leaves the Strange Key where the cage was.
-          const origin = campOrigin;
-          const level = getCampData();
-          if (origin != null && level != null) onCampCleared(origin.x, origin.y, level.level);
-        }
+        checkCampBeaten();
       });
+      // Charm takes a creep out of the camp without a death, and the camp is
+      // beaten all the same once nothing in it still fights for it. Kept on
+      // the entry like the death trigger, for the same reason: a creep removed
+      // uncharmed never fires it.
+      const charmTrig = Trigger.create();
+      charmTrig.registerUnitEvent(c.unit, EVENT_UNIT_CHANGE_OWNER);
+      c.charmTrig = charmTrig;
+      charmTrig.addAction(() => checkCampBeaten());
     }
   }
+  campBeatenPaid = false;
 
   // Both sides are rigged now, so a baseline taken here is honest. Anything
   // earlier reads one side's rigging as the other side's damage.
@@ -904,7 +956,39 @@ let ourHPLost = 0;
 let summonHPLost = 0;
 
 /** A unit being watched, with the HP it had at the last sample. */
-interface TrackedHP { unit: unit; lastHP: number; summon: boolean; }
+interface TrackedHP {
+  unit: unit; lastHP: number; summon: boolean;
+  /** A creep already taken out of the fight and credited; see removalCredit. */
+  out?: boolean;
+}
+
+/** One copy of the party's effective HP, and one camp's, before rigging. */
+let sparringForceEHP = 0;
+let sparringCampEHP = 0;
+/** Creeps taken out early this match, and the HP credited for them. */
+let sparringRemovals = 0;
+let sparringRemovalCredit = 0;
+
+/**
+ * What taking a creep out of the fight early is worth, in the match's units.
+ *
+ * Transmute kills a creep outright and Charm takes it over; either way, in a
+ * real round the camp loses that creep's whole HP at once. Read naively the
+ * match gets that badly wrong in both directions: a transmuted creep loses its
+ * rigged share of the 99999 pool -- tens of thousands of HP in a quarter
+ * second -- and a charmed one jumps to 99999 when our side rigs it, which read
+ * as about -67000 HP of damage dealt. A party with both measured -1055 DPS.
+ *
+ * So the creep is credited with the HP it WOULD have had in the round: its own
+ * natural HP scaled the way scaleCreepStats scales a real camp, by the party's
+ * effective HP over the camp's. From then on a charmed creep is ours -- the
+ * damage it deals and takes count on our side, because it has been picked up
+ * and rigged like a summon.
+ */
+function removalCredit(u: unit): number {
+  if (sparringCampEHP <= 0) return 0;
+  return (naturalHP.get(GetHandleId(u)) ?? 0) * (sparringForceEHP / sparringCampEHP);
+}
 let trackedCreeps: TrackedHP[] = [];
 let trackedOurs: TrackedHP[] = [];
 let dpsSampler: Timer | null = null;
@@ -939,9 +1023,21 @@ function trackForDPS(list: TrackedHP[], u: unit, rig: boolean): void {
  *  They are rigged and tracked the moment they show up, so they neither die
  *  mid-match nor go uncounted. */
 function sampleDPS(): void {
+  const creepOwner = getNeutralAggressive().handle;
   for (const entry of trackedCreeps) {
-    if (GetUnitTypeId(entry.unit) === 0) continue;
+    if (entry.out === true || GetUnitTypeId(entry.unit) === 0) continue;
     const hp = GetUnitState(entry.unit, UNIT_STATE_LIFE);
+    // Dead (no creep dies to damage in the match -- the pool is too deep --
+    // so this is an instant kill) or charmed: credit it once, and stop
+    // reading its HP, which no longer means anything for the camp.
+    if (hp <= 0.405 || GetOwningPlayer(entry.unit) !== creepOwner) {
+      const credit = removalCredit(entry.unit);
+      creepHPLost += credit;
+      sparringRemovals += 1;
+      sparringRemovalCredit += credit;
+      entry.out = true;
+      continue;
+    }
     creepHPLost += entry.lastHP - hp;
     entry.lastHP = hp;
   }

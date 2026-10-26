@@ -489,7 +489,8 @@ function sixHero(type: string, skills: ReadonlyArray<string>): HeroData {
   s[skills[0]] = 2;
   s[skills[1]] = 2;
   s[skills[2]] = 1;
-  return { typeId: FourCC(type), xp: 1400, skills: s, items: [],
+  // Level 5 on this map's table (100 XP a level; 900 is the level 10 cap).
+  return { typeId: FourCC(type), xp: 400, skills: s, items: [],
     tomeStr: 0, tomeAgi: 0, tomeInt: 0, tomeHP: 0 };
 }
 
