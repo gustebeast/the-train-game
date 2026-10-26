@@ -19,7 +19,7 @@ import { resetBossKey } from '../bossKey';
 import { isBossVictory, placedTracks } from '../track/state';
 import { getNeutralExtra } from '../teams';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';
-import { getCampData } from '../creeps';
+import { getCampData, sparringSecondsToMinimum } from '../creeps';
 import { gameState } from '../state';
 import { loadFromSlot, listSaves, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
@@ -118,7 +118,12 @@ setAwardVictoryCallback(() => {
   if (inTutorial) return;
   awardVictory();
 });
-registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round));
+// The countdown waits out the sparring match's minimum: starting the round
+// ends the match, and one cut short measures the opening seconds -- ranged
+// heroes and summons hitting creeps still walking in -- which reads the party
+// as several times stronger than it is and scales the next camp to match.
+registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round),
+  undefined, sparringSecondsToMinimum);
 registerReadyZone('newgame', 'Starting a new game', () => {
   beginNewRun();
   loadTerrain(0);
