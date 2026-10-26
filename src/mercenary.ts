@@ -260,6 +260,14 @@ function hire(maxLevel: number): boolean {
   return true;
 }
 
+/** Test hook: hire exactly these mercenaries, bare-handed, in slot order. */
+export function setMercsForTest(typeIds: ReadonlyArray<number>): void {
+  for (let i = 0; i < MAX_MERCS; i++) {
+    slots[i] = emptySlot();
+    if (i < typeIds.length) slots[i].typeId = typeIds[i];
+  }
+}
+
 /** Buy the Mercenary Contract: your first mercenary, and level 2 camps. */
 export function buyMercContract(): boolean {
   if (!canBuyMercContract()) return false;
@@ -352,6 +360,12 @@ export function spawnMercsForOwner(owner: MapPlayer, x: number, y: number): void
     if (u != null) sl.unit = u;
     i += 1;
   }
+}
+
+/** The living mercenaries as data, for standing up extra copies of them that
+ *  must not touch the contract slots -- see the sparring match. */
+export function getLivingMercData(): MercData[] {
+  return livingSlots().map(sl => ({ typeId: sl.typeId, items: sl.items }));
 }
 
 /** Spawn every living mercenary alongside the heroes. */

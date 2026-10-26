@@ -2,11 +2,13 @@ import { Destructable, Timer, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creepCamps';
 import {
   getMercCampLevel, spawnMercsForOwner, getSpawnedMercUnits, removeSpawnedMercUnits,
+  spawnMercFromData, getLivingMercData,
 } from './mercenary';
 import { registerSaveSegment, parseFields } from './save';
 import {
   awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes,
   grantUnsummonToAllPeasants, hasHeroes, clearSpawnedHeroUnits,
+  spawnHeroFromData, getChosenHeroData,
 } from './heroes';
 import {
   SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, FILL_ABILITY_ID, BRIDGE_ABILITY_ID,
@@ -23,6 +25,60 @@ import { forEachUnitOfPlayer } from './util';
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
 const SPARRING_DURATION = 30;
+
+/**
+ * The sparring match is fought six times over, at once, and measured as one.
+ *
+ * A single match is a noisy measurement. Whether the camp's spells land on a
+ * hero or on a heavily armoured mercenary, which unit ends up in front, how
+ * many casts happen in the window -- each swings the result, and repeat runs
+ * of the same party against the same camp read anywhere from 1.4 to 3.4.
+ * Six copies, summed, average most of that out: measured at six, the combined
+ * result moved by about 5-10% between runs instead.
+ *
+ * Each copy approaches its camp from a different side, so the average is over
+ * who gets hit first rather than six repeats of one arrangement. The top copy
+ * of each strip tilts up, the bottom one down, the middle stays level: a tilt
+ * toward a neighbour walks the heroes into its camp.
+ *
+ * Where they stand matters as much as how many:
+ *   - out in the two walkable strips either side of the lobby's water, which
+ *     no player can see. The walkable board is only x +-2624 by y +-1344;
+ *     north and south of that is unwalkable boundary, and units placed there
+ *     are shoved hundreds of units away before the fight begins;
+ *   - 950 apart, which kept copies from fighting each other's camps;
+ *   - NOT in the lobby's sparring corner, where the single match used to be.
+ *     That camp sat jammed against the board edge, which favoured the heroes:
+ *     the same fight measured about 1.6x stronger there than on open ground,
+ *     and the next camp was scaled to match.
+ *
+ * Every copy belongs to the one check player. It is the only slot the map sets
+ * up as a computer player, and an AI started in any other slot never casts --
+ * which is half of what the match exists to measure.
+ */
+const SPARRING_COPIES: ReadonlyArray<{ x: number; y: number; approach: number }> = [
+  { x: -1984, y: -950, approach: 210 },
+  { x: -1984, y: 0, approach: 0 },
+  { x: -1984, y: 950, approach: 150 },
+  { x: 2048, y: -950, approach: 330 },
+  { x: 2048, y: 0, approach: 180 },
+  { x: 2048, y: 950, approach: 30 },
+];
+/**
+ * The shortest sparring match whose result is kept as it is.
+ *
+ * Measured by cutting real matches short: before about 8 seconds the opening
+ * dominates and the result is off by 2-6x; by 10 the typical error is about a
+ * quarter, and a full 30 seconds only improves that to about a sixth. The ready
+ * countdown waits for it -- see sparringSecondsToMinimum.
+ */
+const SPARRING_MIN_SECONDS = 10;
+/** How far from its camp each copy's party starts. */
+const SPARRING_APPROACH = 4 * TRACK_SIZE;
+/** How far one of the match's units may wander from its own copy before it is
+ *  sent back. The check player's AI picks camps to attack for itself, and with
+ *  six on the map it occasionally sends a party at a neighbour's. */
+const SPARRING_LEASH = 700;
 /** Creep DPS multiplier — scales creep output above measured hero DPS as a balance constant. */
 const CREEP_DPS_ADVANTAGE = 1.1;
 /** Creep DPS multiplier when the Tough Creep Camp challenge is armed. */
@@ -237,6 +293,11 @@ export function forceLevel3Camp(): boolean {
 
 /** Which camp is selected, as an index into CREEP_CAMPS. Exported for the
  *  rotation test, which needs to tell two camps apart. */
+/** Test hook: the camp the next board will cage, by index into CREEP_CAMPS. */
+export function setCampForTest(index: number): void {
+  campIndex = index;
+}
+
 export function getCampIndex(): number | null {
   return campIndex;
 }
@@ -296,8 +357,19 @@ export function getCampOrigin(): { x: number; y: number } | null {
 
 function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
   campOrigin = { x: cx, y: cy };
-  const owner = getNeutralAggressive();
   spawnedCreeps = [];
+  // The sparring match puts the camp down once per copy, out in the strips;
+  // the cage only says where it would have been, which restarts still need.
+  if (sparringActive) {
+    for (const c of SPARRING_COPIES) placeCamp(c.x, c.y, camp);
+  } else {
+    placeCamp(cx, cy, camp);
+  }
+}
+
+/** One camp's creeps on the 3x3 grid round (cx, cy), appended to spawnedCreeps. */
+function placeCamp(cx: number, cy: number, camp: CreepCamp): void {
+  const owner = getNeutralAggressive();
   const creeps = camp.creeps;
   for (let i = 0; i < creeps.length && i < 9; i++) {
     const [dx, dy] = GRID_OFFSETS[i];
@@ -543,7 +615,10 @@ export function scaleCreepStats(heroes: Unit[]): void {
 
     if (sparringActive) {
       // High HP so heroes can't kill them; damage left at defaults to measure actual creep DPS
-      const scaledHP = math.max(1, math.floor(sparringCreepStartHP / spawnedCreeps.length));
+      // Split per CAMP: spawnedCreeps holds every copy's creeps, and dividing
+      // the pool by all of them would leave each creep a sixth of its share.
+      const perCamp = math.max(1, spawnedCreeps.length / SPARRING_COPIES.length);
+      const scaledHP = math.max(1, math.floor(sparringCreepStartHP / perCamp));
       BlzSetUnitMaxHP(h, scaledHP);
       SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
     } else {
@@ -628,8 +703,10 @@ function teardownSparringMatch(record: boolean): void {
     sparringTimer = null;
     if (record && elapsed > 0) {
       sampleDPS();   // bank whatever landed since the last sample
-      measuredHeroDPS = creepHPLost / elapsed;
-      measuredCreepDPS = ourHPLost / elapsed;
+      // Per copy, so "DPS" keeps meaning one party's against one camp. The
+      // ratio between the two -- all the scaling uses -- is unchanged by it.
+      measuredHeroDPS = creepHPLost / elapsed / SPARRING_COPIES.length;
+      measuredCreepDPS = ourHPLost / elapsed / SPARRING_COPIES.length;
     }
   }
   // Clean up the sparring creeps so they don't linger into the next round
@@ -644,8 +721,17 @@ function teardownSparringMatch(record: boolean): void {
     removeSpawnedMercUnits();
     clearSpawnedHeroUnits();
     clearCheckPlayerUnits();
+    sparringExtras = [];
+    sparringHome.clear();
   }
   sparringActive = false;
+}
+
+/** Seconds until the running sparring match reaches its minimum length, or 0
+ *  when it has, or when there is no match to wait for. */
+export function sparringSecondsToMinimum(): number {
+  if (sparringTimer == null) return 0;
+  return math.max(0, SPARRING_MIN_SECONDS - sparringTimer.elapsed);
 }
 
 /** What the sparring match is doing right now. Diagnostics only -- nothing in the
@@ -653,10 +739,11 @@ function teardownSparringMatch(record: boolean): void {
  *  outside instead of inferring it. */
 export function getSparringStatus(): {
   mode: boolean; creeps: number; heroes: number; mercs: number; timer: boolean;
-  elapsed: number; campIndex: number;
+  elapsed: number; campIndex: number; copies: number;
 } {
   return {
     mode: sparringActive,
+    copies: SPARRING_COPIES.length,
     campIndex: campIndex ?? -1,
     mercs: getSpawnedMercUnits().length,
     creeps: spawnedCreeps.length,
@@ -680,27 +767,88 @@ export function startSparringMatch(): void {
   if (!hasHeroes()) return;
 
   sparringActive = true;
-  const cageX = cageDestructable.x;
-  const cageY = cageDestructable.y;
 
-  // Destroy cage → triggers creep spawn via registerCageTrigger
+  // Destroy cage → triggers creep spawn via registerCageTrigger, which puts
+  // one camp down per copy because sparringActive is already set.
   cageDestructable.kill();
 
-  fieldDPSHeroes(cageX, cageY);
+  fieldDPSHeroes();
 }
 
 /** Put the roster in against whatever creeps are standing, which is what
  *  starts the clock: spawnHeroes fires onHeroesSpawned a frame later, and
  *  scaleCreepStats is where the timer is created. */
-function fieldDPSHeroes(cx: number, cy: number): void {
-  // To the left of the 6x3 area.
-  const heroX = cx - 4 * TRACK_SIZE;
-  spawnHeroes([getDPSCheckPlayer()], heroX, cy);
+function fieldDPSHeroes(): void {
+  const check = getDPSCheckPlayer();
+  sparringExtras = [];
+  sparringHome.clear();
+  const start = (c: { x: number; y: number; approach: number }): [number, number] => [
+    c.x + SPARRING_APPROACH * Cos(c.approach * bj_DEGTORAD),
+    c.y + SPARRING_APPROACH * Sin(c.approach * bj_DEGTORAD),
+  ];
+  // Copies 1..5 first, from the roster's data. Order matters: tome bonuses
+  // land a frame after a hero spawns, and copy 0's spawn is what starts the
+  // clock a frame later. Spawned after it, these copies' tomes would land
+  // after sampling began and read as negative damage.
+  const heroes = getChosenHeroData();
+  const mercs = getLivingMercData();
+  for (let i = 1; i < SPARRING_COPIES.length; i++) {
+    const [hx, hy] = start(SPARRING_COPIES[i]);
+    for (const h of heroes) {
+      const u = spawnHeroFromData(h, check, hx, hy);
+      if (u != null) sparringExtras.push(u);
+    }
+    for (let m = 0; m < mercs.length; m++) {
+      const u = spawnMercFromData(mercs[m], check, hx + m * 96, hy - 96);
+      if (u != null) sparringExtras.push(u);
+    }
+  }
+  // Copy 0 through the roster's own spawn, which fires onHeroesSpawned and so
+  // starts the match.
+  const [hx0, hy0] = start(SPARRING_COPIES[0]);
+  spawnHeroes([check], hx0, hy0);
   // Mercenaries fight alongside the heroes in a real round, so a measurement
   // taken without them understates the force the camp will actually face and
   // scales the next camp too easily. Owned by the check player like the heroes,
   // so the same teardown reaches them and no human's camera is involved.
-  spawnMercsForOwner(getDPSCheckPlayer(), heroX, cy - 96);
+  spawnMercsForOwner(check, hx0, hy0 - 96);
+}
+
+/** The match's units beyond copy 0's: copy 0 is the roster's own live units,
+ *  which the hero and mercenary systems track; these are extra copies of them
+ *  that only the match knows about. */
+let sparringExtras: Unit[] = [];
+
+/** Which copy each of the match's units belongs to, by handle id. Recorded the
+ *  first time a unit is seen, when it is still beside its own camp. */
+const sparringHome = new Map<number, number>();
+
+function nearestCopy(x: number, y: number): number {
+  let best = 0;
+  let bestD = math.huge;
+  for (let i = 0; i < SPARRING_COPIES.length; i++) {
+    const dx = SPARRING_COPIES[i].x - x;
+    const dy = SPARRING_COPIES[i].y - y;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+/** Send anything that has wandered too far from its own copy back to it. */
+function leashSparring(u: unit): void {
+  const id = GetHandleId(u);
+  let home = sparringHome.get(id);
+  if (home == null) {
+    home = nearestCopy(GetUnitX(u), GetUnitY(u));
+    sparringHome.set(id, home);
+  }
+  const c = SPARRING_COPIES[home];
+  const dx = GetUnitX(u) - c.x;
+  const dy = GetUnitY(u) - c.y;
+  if (dx * dx + dy * dy > SPARRING_LEASH * SPARRING_LEASH) {
+    IssuePointOrder(u, 'attack', c.x, c.y);
+  }
 }
 
 /** Take EVERYTHING the check player owns off the field.
@@ -784,8 +932,10 @@ function sampleDPS(): void {
     if (entry.summon) summonHPLost += lost;
     entry.lastHP = hp;
   }
-  // Pick up anything the fight has summoned since the last sample.
+  // Pick up anything the fight has summoned since the last sample, and keep
+  // every copy's units at their own camp.
   forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
+    leashSparring(u);
     for (const e of trackedOurs) {
       if (e.unit === u) return;
     }
@@ -839,6 +989,7 @@ function stopDPSSampling(): void {
 function fieldedForce(): Unit[] {
   const all = getSpawnedHeroes();
   for (const m of getSpawnedMercUnits()) all.push(m);
+  for (const e of sparringExtras) all.push(e);
   return all;
 }
 
@@ -864,7 +1015,7 @@ export function restartSparringMatch(): void {
   if (origin == null || camp == null || !hasHeroes()) return;
   sparringActive = true;
   spawnCreepsAt(origin.x, origin.y, camp);
-  fieldDPSHeroes(origin.x, origin.y);
+  fieldDPSHeroes();
 }
 
 // ---------------------------------------------------------------------------

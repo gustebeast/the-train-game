@@ -2,7 +2,13 @@ import { registerTest, TestReporter } from './testkit';
 import {
   getSparringStatus, forceLevel3Camp, getCampData, restartSparringMatch, measureFieldedForce,
   cancelSparringMatch, getCheckPlayerUnitCount, getCampOrigin,
+  setCampForTest, sparringSecondsToMinimum, getDpsMeasured, rollCreepCamp,
 } from './creeps';
+import { Abilities } from '@objectdata/abilities';
+import { Units } from '@objectdata/units';
+import { CREEP_CAMPS } from './creepCamps';
+import { HeroData, setRosterForTest } from './heroes';
+import { setMercsForTest } from './mercenary';
 import { Unit } from 'w3ts';
 import { getDPSCheckPlayer } from './teams';
 import { spawnHeroes } from './heroes';
@@ -10,7 +16,7 @@ import { spawnMercWithHeroes } from './mercenary';
 import { Players } from 'w3ts/globals';
 import { buyMercContract, hasActiveMerc } from './mercenary';
 import { toggleDPSVision } from './teams';
-import { getHumanPlayers } from './util';
+import { getHumanPlayers, forEachUnitOfPlayer } from './util';
 import { loadInterRoundLobby, beginNewRun } from './terrain/load';
 import { purchaseSummonUpgrade, isSummonUpgradePurchased } from './summonUpgrade';
 import { refreshInterRoundLobbyRoster } from './interRoundLobbyRoster';
@@ -116,8 +122,9 @@ function runDpsRestartTest(t: TestReporter): void {
       t.report('meatCampIndex', swapped.campIndex);
       expect(t, 'meatCampLevelIs3', meatCamp != null ? meatCamp.level : 0, 3);
       expect(t, 'meatMatchRunning', swapped.timer ? 1 : 0, 1);
+      // One camp per copy of the match.
       expect(t, 'meatCreepsMatchNewCamp', swapped.creeps,
-        meatCamp != null ? meatCamp.creeps.length : -1);
+        meatCamp != null ? meatCamp.creeps.length * swapped.copies : -1);
       // The clock must have restarted, not carried the replaced camp's on.
       t.report('meatElapsed', R2I(swapped.elapsed));
       if (swapped.elapsed >= before.elapsed) {
@@ -139,7 +146,7 @@ function runDpsRestartTest(t: TestReporter): void {
         expect(t, 'revertCampIndex', after.campIndex, before.campIndex);
         expect(t, 'revertMatchRunning', after.timer ? 1 : 0, 1);
         expect(t, 'revertCreepsMatchCamp', after.creeps,
-          revertCamp != null ? revertCamp.creeps.length : -1);
+          revertCamp != null ? revertCamp.creeps.length * after.copies : -1);
         // A rebuilt lobby means a fresh clock, not the interrupted one.
         t.report('revertElapsed', R2I(after.elapsed));
         if (after.elapsed > 4) {
@@ -338,3 +345,158 @@ function runDpsFieldClearTest(t: TestReporter): void {
 }
 
 registerTest('dpsfieldclear', runDpsFieldClearTest);
+
+
+/** The sparring match's units are not on anybody's screen.
+ *
+ *  dpsvision asserts the alliance flag, which is one way vision could reach a
+ *  player and not the only one: the heroes could be lit by the lobby's own
+ *  scenery, or by a human's units standing near the corner. This asks the
+ *  engine the question the player actually experiences -- can I see that hero
+ *  -- with the match really running, a few seconds in. */
+function runDpsSeenTest(t: TestReporter): void {
+  beginNewRun();
+  // A new run has no camp rolled until its first round ends, and without one
+  // there is no match to look at. The game always rolls one before the lobby;
+  // a test jumping straight there has to do it itself.
+  rollCreepCamp();
+  loadInterRoundLobby();
+
+  t.after(4, () => {
+    const dps = getDPSCheckPlayer();
+    const humans = getHumanPlayers();
+    expect(t, 'matchRunning', getSparringStatus().timer ? 1 : 0, 1);
+
+    let fielded = 0;
+    let seen = 0;
+    forEachUnitOfPlayer(dps.handle, u => {
+      if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
+      fielded += 1;
+      for (const p of humans) {
+        if (IsUnitVisible(u, p.handle)) { seen += 1; return; }
+      }
+    });
+    t.report('unitsFielded', fielded);
+    if (fielded === 0) t.fail('unitsFielded', 'no match units to look for');
+    expect(t, 'unitsSeenByAHuman', seen, 0);
+    t.done();
+  });
+}
+
+registerTest('dpsseen', runDpsSeenTest);
+
+
+
+/** The sparring match is six copies of the fight, measured as one.
+ *
+ *  Run with a fixed party -- Far Seer and Priestess at level 5, plus an Ogre
+ *  Lord -- against a fixed camp, so the counts below are exact. Checks the
+ *  things that would go wrong quietly: a copy that never fields, creeps given a
+ *  sixth of their HP because the pool was split across every camp instead of
+ *  one, a party wandering off to a neighbour's camp, heroes that never cast,
+ *  the ready wait not counting down, and a teardown that leaves units or their
+ *  items lying in the strips. */
+const SIX_COPIES = 6;
+const SIX_CAMP = 217;   // gnoll assassins x2, overseer, warden: four creeps
+
+function runSixCopiesTest(t: TestReporter): void {
+  beginNewRun();
+  setRosterForTest([
+    sixHero(Units.FarSeer, [Abilities.FeralSpirit, Abilities.ChainLightning, Abilities.FarSight]),
+    sixHero(Units.PriestessOfTheMoon, [Abilities.SearingArrows, Abilities.TrueshotAura, Abilities.Scout]),
+  ]);
+  setMercsForTest([FourCC('nogl')]);
+  setCampForTest(SIX_CAMP);
+  loadInterRoundLobby();
+  // Counted after the lobby loads: loading it clears whatever earlier tests
+  // left lying, which read as items the match had taken away.
+  const itemsBefore = countItems();
+
+  const check = getDPSCheckPlayer().handle;
+  let casts = 0;
+  const castTrig = CreateTrigger()!;
+  TriggerRegisterPlayerUnitEvent(castTrig, check, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+  TriggerAddAction(castTrig, () => { casts += 1; });
+
+  t.after(4, () => {
+    const camp = CREEP_CAMPS[SIX_CAMP];
+    const s = getSparringStatus();
+    expect(t, 'matchRunning', s.timer ? 1 : 0, 1);
+    expect(t, 'creepsFielded', s.creeps, SIX_COPIES * camp.creeps.length);
+
+    // Heroes and mercenaries across every copy, by type; summons excluded.
+    let heroes = 0;
+    let mercs = 0;
+    forEachUnitOfPlayer(check, u => {
+      if (IsUnitType(u, UNIT_TYPE_HERO)) heroes += 1;
+      else if (GetUnitTypeId(u) === FourCC('nogl')) mercs += 1;
+    });
+    expect(t, 'heroesFielded', heroes, SIX_COPIES * 2);
+    expect(t, 'mercsFielded', mercs, SIX_COPIES);
+
+    // Each creep keeps its share of ONE camp's pool.
+    let lowest = 999999;
+    forEachUnitOfPlayer(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, u => {
+      const hp = BlzGetUnitMaxHP(u);
+      if (hp < lowest) lowest = hp;
+    });
+    const share = R2I(99999 / camp.creeps.length);
+    t.report('lowestCreepMaxHP', lowest);
+    if (lowest < share) t.fail('lowestCreepMaxHP', 'expected at least ' + I2S(share));
+
+    // The wait the ready countdown would use: about 6 of the 10 left.
+    const wait = sparringSecondsToMinimum();
+    t.report('waitAt4s', wait);
+    if (wait < 4 || wait > 8) t.fail('waitAt4s', 'expected about 6 seconds');
+  });
+
+  t.after(12, () => {
+    expect(t, 'waitAfterMinimum', R2I(sparringSecondsToMinimum()), 0);
+    // Everyone still beside a camp of their own: no unit of ours further from
+    // its nearest creep than the leash plus a camp's width.
+    let strays = 0;
+    forEachUnitOfPlayer(check, u => {
+      let nearest = 1e12;
+      forEachUnitOfPlayer(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, c => {
+        const d = (GetUnitX(u) - GetUnitX(c)) ** 2 + (GetUnitY(u) - GetUnitY(c)) ** 2;
+        if (d < nearest) nearest = d;
+      });
+      if (nearest > 900 * 900) strays += 1;
+    });
+    expect(t, 'unitsAwayFromAnyCamp', strays, 0);
+    t.report('castsBy12s', casts);
+    if (casts < SIX_COPIES) t.fail('castsBy12s', 'expected every copy to have cast');
+  });
+
+  // The match ends on its own at 30 seconds.
+  t.after(32, () => {
+    DestroyTrigger(castTrig);
+    expect(t, 'matchOver', getSparringStatus().timer ? 1 : 0, 0);
+    expect(t, 'checkPlayerUnitsLeft', getCheckPlayerUnitCount(), 0);
+    expect(t, 'creepsLeft', getSparringStatus().creeps, 0);
+    expect(t, 'itemsLeftLying', countItems() - itemsBefore, 0);
+    const m = getDpsMeasured();
+    t.report('heroDPSPerCopy', m.heroDPS);
+    t.report('creepDPSPerCopy', m.creepDPS);
+    t.report('ratio', m.creepDPS > 0 ? m.heroDPS / m.creepDPS : 0);
+    if (m.creepDPS <= 0 || m.heroDPS <= 0) t.fail('ratio', 'nothing measured');
+    t.done();
+  });
+}
+
+function sixHero(type: string, skills: ReadonlyArray<string>): HeroData {
+  const s: Record<string, number> = {};
+  s[skills[0]] = 2;
+  s[skills[1]] = 2;
+  s[skills[2]] = 1;
+  return { typeId: FourCC(type), xp: 1400, skills: s, items: [],
+    tomeStr: 0, tomeAgi: 0, tomeInt: 0, tomeHP: 0 };
+}
+
+function countItems(): number {
+  let n = 0;
+  EnumItemsInRect(GetWorldBounds()!, undefined, () => { n += 1; });
+  return n;
+}
+
+registerTest('dpssix', runSixCopiesTest);

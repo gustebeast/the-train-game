@@ -329,8 +329,32 @@ export function chooseHeroes(): void {
   chosenIndices = [indices[0], indices[1]];
 }
 
+/** The heroes that would be fielded right now, as data rather than units.
+ *
+ *  For standing up extra copies of the party -- the sparring match runs
+ *  several -- without going through spawnHeroes, which owns the one roster
+ *  of live units and fires the spawn callback that starts a round. */
+export function getChosenHeroData(): HeroData[] {
+  const out: HeroData[] = [];
+  for (const i of chosenIndices) {
+    if (allHeroes[i].typeId !== 0) out.push(allHeroes[i]);
+  }
+  return out;
+}
+
 /** Scratch space for the tie-break draws, reused so a pick allocates nothing. */
 const ROSTER_TIEBREAKS: number[] = [0, 0, 0, 0];
+
+/** Test hook: replace the roster outright and field its first two.
+ *
+ *  Measurements that depend on WHICH heroes fight -- the sparring match's
+ *  convergence, say -- cannot live with initRandomHeroes' draw. */
+export function setRosterForTest(heroes: HeroData[]): void {
+  for (let i = 0; i < allHeroes.length; i++) {
+    allHeroes[i] = i < heroes.length ? heroes[i] : emptyHero();
+  }
+  chosenIndices = [0, 1];
+}
 
 /** Award XP to both chosen heroes and sync to units. */
 export function awardHeroXP(xp: number): void {
