@@ -690,12 +690,18 @@ compiletime(({ objectData, constants }) => {
   stone.modelUsed = 'Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_Rock6.mdx';
   stone.scalingValue = 0.4;
 
-  // Tree destructables (SummerTreeWall / LTlt)
-  const tree = objectData.destructables.get(constants.destructables.SummerTreeWall)!;
-  tree.hitPoints = 15;
-  tree.selectableInGame = false;
-  tree.occlusionHeight = 0;
-  tree.targetedAs = 'debris';
+  // Tree destructables: one tree wall per biome (see BIOMES in terrain/constants)
+  for (const treeId of [
+    constants.destructables.SummerTreeWall,
+    constants.destructables.FallTreeWall,
+    constants.destructables.SnowyTreeWall,
+  ]) {
+    const tree = objectData.destructables.get(treeId)!;
+    tree.hitPoints = 15;
+    tree.selectableInGame = false;
+    tree.occlusionHeight = 0;
+    tree.targetedAs = 'debris';
+  }
 
   // Rock destructables (RockChunks2 / LTrt — 6 variations, same model as granite)
   const rock = objectData.destructables.get(constants.destructables.RockChunks2)!;

@@ -31,6 +31,38 @@ export enum Terrain {
   DUNGEON_BRICK = 7,
   DUNGEON_RED_STONE = 8,
   LAVA_CRACKS = 9,
+  // Under a round's water. Like GRASS and GRASSY_DIRT, the tile it paints
+  // depends on the round's biome.
+  POOL = 10,
+}
+
+/** The look of a round, set by its creep camp's level: the harder the camp,
+ *  the later the season. Lobbies and the boss arena stay SUMMER. */
+export enum Biome {
+  SUMMER = 0,
+  FALL = 1,
+  WINTER = 2,
+}
+
+export interface BiomeArt {
+  grass: string;
+  grassyDirt: string;
+  pool: string;
+  tree: string;
+}
+
+export const BIOMES: Record<Biome, BiomeArt> = {
+  [Biome.SUMMER]: { grass: 'Lgrs', grassyDirt: 'Lgrd', pool: 'Lrok', tree: 'LTlt' },
+  [Biome.FALL]: { grass: 'Fgrs', grassyDirt: 'Fgrd', pool: 'Frok', tree: 'FTtw' },
+  [Biome.WINTER]: { grass: 'Wsnw', grassyDirt: 'Wsng', pool: 'Wrok', tree: 'WTst' },
+};
+
+/** Camp level 1/2/3 -> summer/fall/winter. No camp (or anything out of range)
+ *  is summer. */
+export function biomeForCampLevel(level: number | null): Biome {
+  if (level === 2) return Biome.FALL;
+  if (level != null && level >= 3) return Biome.WINTER;
+  return Biome.SUMMER;
 }
 
 export enum Entity {
@@ -100,6 +132,7 @@ export interface Grid {
   exit: GridPos; // Grid coordinate where the path exits on the right side
   /** The second exit, present only in rounds that can reach the boss. */
   bossExit: GridPos | null;
+  biome: Biome;
 }
 
 // --- Grid coordinate helpers ---
@@ -132,7 +165,7 @@ export function gridToWorld(pos: GridPos): GridPos {
 }
 
 // --- Destructable rawcodes ---
-export const TREE_RAW = 'LTlt';  // SummerTreeWall (Lordaeron Summer)
+export const TREE_RAW = BIOMES[Biome.SUMMER].tree;  // SummerTreeWall (Lordaeron Summer)
 export const ROCK_RAW = 'LTrt';  // RockChunks2 (Lordaeron Summer — 6 variations)
 /** Scale for each variation of the rock-chunk model, so every rock -- resource,
  *  granite, and the Strange Rock -- comes out the same size for the same shape. */
