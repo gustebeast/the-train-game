@@ -6,10 +6,14 @@ import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
 import { challengeUIState, initChallengeUI } from './challengeUI';
 import { isBossFightWatched, startBossFight } from './bossArena';
 import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer } from './util';
-import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID } from './constants';
+import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
+import { Item, Unit } from 'w3ts';
+import { cargoShowing } from './cargoVisuals';
+import { getTrain, getTrackWagon } from './train';
+import { setStorageItem, getStorageSlot, giveToStorage, findItemByType } from './items';
 
 /**
- * Four systems that used to poll on the global tick now run on events. What
+ * Five systems that used to poll on the global tick now run on events. What
  * separates the two is WHEN the reaction lands, so each case below is read in
  * the same frame as the event, or one frame later where the code deliberately
  * waits a frame -- never after a wait long enough for a poll to have caught up.
@@ -185,3 +189,67 @@ function runUnionRules(t: TestReporter): void {
   });
 }
 registerTest('unionrules', runUnionRules);
+
+// --- cargo models on the train cars ---------------------------------------
+
+/** Each way cargo reaches or leaves a car, read two frames after it happens
+ *  (the sync waits one frame, because DROP fires before the item leaves). */
+function runCargoEvents(t: TestReporter): void {
+  beginNewRun();
+  loadTerrain(0);
+  const train = getTrain();
+  const wagon = getTrackWagon();
+  const me = getHumanPlayers()[0];
+  const wait = ONE_FRAME * 2;
+
+  // Start from empty cars, whatever the round handed out.
+  setStorageItem(train, WOOD_ID, 0, 0);
+  setStorageItem(train, STONE_ID, 0, 0);
+  setStorageItem(wagon, TRACK_PIECE_ID, 0, 0);
+  t.after(wait, () => {
+    const c0 = cargoShowing();
+    expect(t, 'emptyShowsNothing', (c0.wood || c0.stone || c0.tracks) ? 1 : 0, 0);
+
+    // In: setStorageItem adding a new stack (production's path to the wagon).
+    setStorageItem(wagon, TRACK_PIECE_ID, 2, getStorageSlot(wagon, TRACK_PIECE_ID));
+    // In: a player's give, from a peasant carrying stone.
+    const peasant = Unit.create(me, PEASANT_ID, train.x + 64, train.y, 0)!;
+    const stone = Item.create(STONE_ID, peasant.x, peasant.y)!;
+    stone.charges = 2;
+    UnitAddItem(peasant.handle, stone.handle);
+    expect(t, 'giveAccepted', giveToStorage(peasant, stone, train) ? 1 : 0, 1);
+    // In: setStorageItem on the engine.
+    setStorageItem(train, WOOD_ID, 1, getStorageSlot(train, WOOD_ID));
+    t.after(wait, () => {
+      const c1 = cargoShowing();
+      expect(t, 'tracksOnAfterStore', c1.tracks ? 1 : 0, 1);
+      expect(t, 'stoneOnAfterGive', c1.stone ? 1 : 0, 1);
+      expect(t, 'woodOnAfterStore', c1.wood ? 1 : 0, 1);
+
+      // A charge changing in place must not take the model off.
+      const s = findItemByType(train, STONE_ID);
+      if (s != null) s.charges = s.charges + 1;
+      // Out: the last wood used up exactly as production does it.
+      const w = findItemByType(train, WOOD_ID);
+      if (w != null) { w.charges -= 1; if (w.charges <= 0) RemoveItem(w.handle); }
+      // Out: a stack set to zero.
+      setStorageItem(wagon, TRACK_PIECE_ID, 0, 0);
+      t.after(wait, () => {
+        const c2 = cargoShowing();
+        expect(t, 'woodOffWhenUsedUp', c2.wood ? 1 : 0, 0);
+        expect(t, 'tracksOffAtZero', c2.tracks ? 1 : 0, 0);
+        expect(t, 'stoneStaysOnChargeChange', c2.stone ? 1 : 0, 1);
+
+        // A new round replaces both cars. Cargo that arrives on the NEW engine
+        // must show there.
+        loadTerrain(0);
+        setStorageItem(getTrain(), WOOD_ID, 1, getStorageSlot(getTrain(), WOOD_ID));
+        t.after(wait, () => {
+          expect(t, 'woodOnNewTrain', cargoShowing().wood ? 1 : 0, 1);
+          t.done();
+        });
+      });
+    });
+  });
+}
+registerTest('cargoevents', runCargoEvents);
