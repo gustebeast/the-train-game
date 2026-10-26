@@ -1,6 +1,5 @@
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, BUCKET_FULL_ID } from './constants';
-import { onGlobalTick } from './globalTick';
-import { getWorldBounds } from './util';
+import { getWorldBounds, nextFrame } from './util';
 
 interface IconStyle {
   red: number;
@@ -30,9 +29,15 @@ interface TrackedIcon {
 /** Ground items currently marked on the minimap, keyed by item handle. */
 const tracked = new Map<item, TrackedIcon>();
 
+/** Fires when a tool on the ground is destroyed -- items have hit points, and
+ *  a killed item is gone with no pickup, drop or RemoveItem to say so. Each
+ *  tool is registered when it first gets an icon. */
+let itemDeath: trigger | null = null;
+
 function createIcon(it: item, typeId: number): void {
   const style = ICON_STYLES.get(typeId);
   if (style == null) return;
+  if (itemDeath != null) TriggerRegisterDeathEvent(itemDeath, it);
   const x = GetItemX(it);
   const y = GetItemY(it);
   const icon = CreateMinimapIcon(x, y, style.red, style.green, style.blue, style.path, FOG_OF_WAR_MASKED);
@@ -42,48 +47,153 @@ function createIcon(it: item, typeId: number): void {
 }
 
 /**
- * Diff the tools currently on the ground against the tracked icons.
+ * Ground tools on the minimap, kept up to date by events rather than a scan.
  *
- * A periodic scan (rather than pickup/drop event hooks) covers every way a
- * tool can enter or leave the ground with one code path: terrain spawn,
- * drop/pickup, carrier death, and the round-reset item wipe. Carried items
- * are not on the map, so EnumItemsInRect excludes them automatically.
+ * An icon belongs on the map exactly while its item is a tool, on the ground
+ * (not carried), visible, and alive. That is recomputed for ONE item whenever
+ * anything that could change it happens to that item:
+ *
+ *  - picked up / dropped -- the pickup and drop events. A carrier dying drops
+ *    its items through the same event.
+ *  - created -- CreateItem has no event, so the native is wrapped. w3ts's
+ *    Item.create calls the global at call time, so it is covered too.
+ *  - removed -- RemoveItem on a GROUND item has no event either (a carried one
+ *    fires drop), so it is wrapped as well. This is how a board wipe clears
+ *    them.
+ *  - moved or hidden on the ground -- SetItemPosition and SetItemVisible,
+ *    wrapped; w3ts's x/y/visible setters go through them.
+ *  - destroyed on the ground -- a death event on each tool that has an icon.
+ *
+ * Recomputing the item's whole desired state, rather than applying "picked
+ * up => remove icon", is what keeps this reliable: a handle recycled into a
+ * different item, or two events landing in the same frame, still settle on
+ * whatever the item IS now. The recompute waits a frame, because a drop event
+ * fires while the item is still in the inventory.
+ *
+ * The old scanner survives as auditMinimapIcons, run once when the hooks go
+ * in (the start lobby is built before they exist) and by the tests, which
+ * hold the event-driven state to exactly what a full scan would produce.
  */
-function scan(): void {
-  const found = new Set<item>();
 
+function wantsIcon(it: item): boolean {
+  const typeId = GetItemTypeId(it);
+  if (!ICON_STYLES.has(typeId)) return false;
+  if (IsItemOwned(it)) return false;
+  if (!IsItemVisible(it)) return false;
+  return GetWidgetLife(it) > 0;
+}
+
+function dropIcon(it: item): void {
+  const entry = tracked.get(it);
+  if (entry == null) return;
+  DestroyMinimapIcon(entry.icon);
+  tracked.delete(it);
+}
+
+/** Make this one item's icon match what the item is now. */
+function refresh(it: item): void {
+  const existing = tracked.get(it);
+  if (!wantsIcon(it)) { dropIcon(it); return; }
+  const typeId = GetItemTypeId(it);
+  if (existing != null && existing.typeId === typeId
+      && existing.x === GetItemX(it) && existing.y === GetItemY(it)) return;
+  dropIcon(it);
+  createIcon(it, typeId);
+}
+
+function refreshNextFrame(it: item | undefined | null): void {
+  if (it == null) return;
+  nextFrame(() => refresh(it));
+}
+
+/** Compare the icons with what a full scan of the ground says they should
+ *  be, fixing any difference. Returns how many it had to fix: always zero if
+ *  the events are doing their job. */
+export function auditMinimapIcons(): number {
+  let fixed = 0;
+  const found = new Set<item>();
   EnumItemsInRect(getWorldBounds(), null!, () => {
     const it = GetEnumItem();
-    if (it == null) return;
-    const typeId = GetItemTypeId(it);
-    if (!ICON_STYLES.has(typeId)) return;
+    if (it == null || !wantsIcon(it)) return;
     found.add(it);
+    const e = tracked.get(it);
+    if (e == null || e.typeId !== GetItemTypeId(it) || e.x !== GetItemX(it) || e.y !== GetItemY(it)) {
+      fixed += 1;
+      refresh(it);
+    }
+  });
+  const stale: item[] = [];
+  for (const [it] of tracked) if (!found.has(it)) stale.push(it);
+  for (const it of stale) { fixed += 1; dropIcon(it); }
+  return fixed;
+}
 
-    const existing = tracked.get(it);
-    if (existing == null) {
-      createIcon(it, typeId);
-    } else if (existing.x !== GetItemX(it) || existing.y !== GetItemY(it) || existing.typeId !== typeId) {
-      // Same handle but moved or recycled (e.g. picked up and re-dropped
-      // within one scan interval) — recreate at the current position
-      DestroyMinimapIcon(existing.icon);
-      tracked.delete(it);
-      createIcon(it, typeId);
+/** How many icons are up. For tests. */
+export function minimapIconCount(): number {
+  let n = 0;
+  for (const _ of tracked) n += 1;
+  return n;
+}
+
+declare const _G: {
+  CreateItem: (this: void, id: number, x: number, y: number) => item | undefined;
+  BlzCreateItemWithSkin: (this: void, id: number, x: number, y: number, skin: number) => item | undefined;
+  RemoveItem: (this: void, it: item) => void;
+  SetItemPosition: (this: void, it: item, x: number, y: number) => void;
+  SetItemVisible: (this: void, it: item, show: boolean) => void;
+};
+
+export function initMinimapIcons(): void {
+  const nativeCreate = _G.CreateItem;
+  _G.CreateItem = (id: number, x: number, y: number) => {
+    const it = nativeCreate(id, x, y);
+    refreshNextFrame(it);
+    return it;
+  };
+  const nativeCreateSkin = _G.BlzCreateItemWithSkin;
+  _G.BlzCreateItemWithSkin = (id: number, x: number, y: number, skin: number) => {
+    const it = nativeCreateSkin(id, x, y, skin);
+    refreshNextFrame(it);
+    return it;
+  };
+  const nativeRemove = _G.RemoveItem;
+  _G.RemoveItem = (it: item) => {
+    // Now, not next frame: the handle may be recycled before then.
+    if (it != null) dropIcon(it);
+    nativeRemove(it);
+  };
+  const nativeSetPos = _G.SetItemPosition;
+  _G.SetItemPosition = (it: item, x: number, y: number) => {
+    nativeSetPos(it, x, y);
+    refreshNextFrame(it);
+  };
+  const nativeSetVisible = _G.SetItemVisible;
+  _G.SetItemVisible = (it: item, show: boolean) => {
+    nativeSetVisible(it, show);
+    refreshNextFrame(it);
+  };
+
+  const moves = CreateTrigger();
+  for (let i = 0; i < bj_MAX_PLAYER_SLOTS; i++) {
+    TriggerRegisterPlayerUnitEvent(moves, Player(i)!, EVENT_PLAYER_UNIT_PICKUP_ITEM, null!);
+    TriggerRegisterPlayerUnitEvent(moves, Player(i)!, EVENT_PLAYER_UNIT_DROP_ITEM, null!);
+  }
+  TriggerAddAction(moves, () => refreshNextFrame(GetManipulatedItem()));
+
+  itemDeath = CreateTrigger();
+  TriggerAddAction(itemDeath, () => {
+    // Matched by handle id, not by object: the event hands back the item as a
+    // WIDGET, which is not the same Lua value as the item the icon is keyed by,
+    // so looking it up directly finds nothing. Measured: a destroyed tool kept
+    // its icon until this compared ids instead.
+    const dying = GetTriggerWidget();
+    if (dying == null) return;
+    const id = GetHandleId(dying);
+    for (const [it] of tracked) {
+      if (GetHandleId(it) === id) { dropIcon(it); return; }
     }
   });
 
-  // Collect stale entries first — don't mutate the map mid-iteration
-  const stale: item[] = [];
-  for (const [it] of tracked) {
-    if (!found.has(it)) stale.push(it);
-  }
-  for (const it of stale) {
-    const entry = tracked.get(it);
-    if (entry != null) DestroyMinimapIcon(entry.icon);
-    tracked.delete(it);
-  }
-}
-
-/** Register the periodic scanner that marks ground tools on the minimap. */
-export function initMinimapIcons(): void {
-  onGlobalTick(scan);
+  // Anything created before the hooks existed.
+  auditMinimapIcons();
 }

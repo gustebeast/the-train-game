@@ -6,9 +6,10 @@ import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
 import { challengeUIState, initChallengeUI } from './challengeUI';
 import { isBossFightWatched, startBossFight } from './bossArena';
 import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer } from './util';
-import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
+import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID } from './constants';
 import { Item, Unit } from 'w3ts';
 import { cargoShowing } from './cargoVisuals';
+import { auditMinimapIcons, minimapIconCount } from './minimapIcons';
 import { getTrain, getTrackWagon } from './train';
 import { setStorageItem, getStorageSlot, giveToStorage, findItemByType } from './items';
 
@@ -253,3 +254,112 @@ function runCargoEvents(t: TestReporter): void {
   });
 }
 registerTest('cargoevents', runCargoEvents);
+
+// --- minimap tool icons ---------------------------------------------------
+
+/**
+ * "Reliable" is defined against the scanner this replaced: after every kind of
+ * change, a full scan of the ground must find NOTHING to fix. auditMinimapIcons
+ * is that scan; it returns how many icons it had to correct.
+ */
+function runMinimapEvents(t: TestReporter): void {
+  beginNewRun();
+  loadTerrain(0);
+  const wait = ONE_FRAME * 2;
+  const me = getHumanPlayers()[0];
+
+  const groundAxe = (): item | null => {
+    let found: item | null = null;
+    EnumItemsInRect(GetWorldBounds()!, null!, () => {
+      const it = GetEnumItem();
+      if (found == null && it != null && GetItemTypeId(it) === AXE_ID && !IsItemOwned(it)) found = it;
+    });
+    return found;
+  };
+
+  t.after(wait, () => {
+    t.report('iconsAfterLoad', minimapIconCount());
+    if (minimapIconCount() === 0) t.fail('iconsAfterLoad', 'no tools on the ground, nothing tested');
+    expect(t, 'auditAfterLoad', auditMinimapIcons(), 0);
+
+    const axe = groundAxe();
+    if (axe == null) { t.fail('axe', 'no ground axe'); t.done(); return; }
+    const icons0 = minimapIconCount();
+    const carrier = CreateUnit(me.handle, PEASANT_ID, GetItemX(axe), GetItemY(axe), 0)!;
+
+    // Picked up.
+    UnitAddItem(carrier, axe);
+    t.after(wait, () => {
+      expect(t, 'pickupRemovesIcon', icons0 - minimapIconCount(), 1);
+      expect(t, 'auditAfterPickup', auditMinimapIcons(), 0);
+
+      // Dropped somewhere else.
+      SetUnitPosition(carrier, GetUnitX(carrier) + 256, GetUnitY(carrier));
+      UnitRemoveItem(carrier, axe);
+      t.after(wait, () => {
+        expect(t, 'dropRestoresIcon', minimapIconCount(), icons0);
+        expect(t, 'auditAfterDrop', auditMinimapIcons(), 0);
+
+        // Carried, and the carrier dies.
+        UnitAddItem(carrier, axe);
+        t.after(wait, () => {
+          KillUnit(carrier);
+          t.after(wait, () => {
+            expect(t, 'carrierDeathRestoresIcon', minimapIconCount(), icons0);
+            expect(t, 'auditAfterCarrierDeath', auditMinimapIcons(), 0);
+
+            // Moved on the ground, hidden, shown, then created and removed.
+            SetItemPosition(axe, GetItemX(axe) - 384, GetItemY(axe));
+            t.after(wait, () => {
+              expect(t, 'auditAfterMove', auditMinimapIcons(), 0);
+              SetItemVisible(axe, false);
+              t.after(wait, () => {
+                expect(t, 'hideRemovesIcon', icons0 - minimapIconCount(), 1);
+                SetItemVisible(axe, true);
+                const spare = CreateItem(PICKAXE_ID, 0, 0)!;
+                t.after(wait, () => {
+                  expect(t, 'createAddsIcon', minimapIconCount(), icons0 + 1);
+                  RemoveItem(spare);
+                  // Same frame: removal is handled inside the call.
+                  expect(t, 'removeDropsIconSameFrame', minimapIconCount(), icons0);
+                  t.after(wait, () => {
+                    expect(t, 'auditAfterCreateRemove', auditMinimapIcons(), 0);
+
+                    // Created and picked up in one frame -- how filling or
+                    // emptying a bucket swaps the item. Must leave no icon.
+                    const swap = Unit.create(me, PEASANT_ID, 0, 0, 0)!;
+                    UnitAddItem(swap.handle, CreateItem(BUCKET_FULL_ID, 0, 0)!);
+                    t.after(wait, () => {
+                      expect(t, 'createThenCarryNoIcon', minimapIconCount(), icons0);
+                      expect(t, 'auditAfterSwap', auditMinimapIcons(), 0);
+
+                      // Destroyed on the ground, the way it happens in play:
+                      // damage. (SetWidgetLife to 0 does NOT fire an item's
+                      // death event -- measured -- and nothing in the map
+                      // destroys tools that way.)
+                      UnitDamageTarget(swap.handle, axe, 100000, true, false,
+                        ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
+                      t.after(wait, () => {
+                        t.report('axeLifeAfterDamage', GetWidgetLife(axe));
+                        expect(t, 'auditAfterDestroy', auditMinimapIcons(), 0);
+
+                        // A new board: everything wiped and respawned.
+                        loadTerrain(0);
+                        t.after(wait, () => {
+                          expect(t, 'auditAfterRegen', auditMinimapIcons(), 0);
+                          t.report('iconsAfterRegen', minimapIconCount());
+                          t.done();
+                        });
+                      });
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+}
+registerTest('minimapevents', runMinimapEvents);
