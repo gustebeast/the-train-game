@@ -1,4 +1,4 @@
-import { W3TS_HOOK, addScriptHook } from 'w3ts/hooks';
+﻿import { W3TS_HOOK, addScriptHook } from 'w3ts/hooks';
 
 import './compiletime';
 // Must be imported for its side effect: it wraps the engine's config(), which
@@ -45,6 +45,7 @@ import './dpstest'; // watch the lobby DPS sparring match
 import './lobbyvisiontest'; // lobby scenery must not hand out vision
 import './circlelabeltest'; // a circle's label lives exactly as long as the circle
 import './eventdriventest'; // board, dealer, boss ending and Union Rules react on events
+import './inventorytest'; // peasant inventory: swaps, purchases, slot moves
 import './dpsscaletest'; // what the DPS match actually measures, in raw HP
 import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included

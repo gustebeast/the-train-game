@@ -1,11 +1,11 @@
 import { Item, Trigger, Unit } from 'w3ts';
 import { updateCarryingVisual } from './carrying';
 import { gameState } from './state';
-import { canHold, isResourceItem } from './itemRules';
+import { canHold, isResourceItem, isShopUpgrade } from './itemRules';
 import { nextFrame } from './util';
 import {
   WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
-  PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, REROLL_ITEM_ID,
+  PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
   BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID, FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID,
 } from './constants';
 
@@ -498,9 +498,10 @@ export function initItems(): void {
       return;
     }
 
-    // Allowed, but carried alongside tools without the tool swap/merge logic
-    // below (it is neither resource nor tool). Nothing else to do on pickup.
-    if (pickedType === REROLL_ITEM_ID) return;
+    // A purchase arrives here like any pickup at the buyer's feet. An upgrade is
+    // used up the moment it is acquired (shop.ts), so like a powerup it never
+    // displaces what the buyer is holding -- buying one used to drop the axe.
+    if (isShopUpgrade(pickedType)) return;
 
     // Can't give tracks to the train (but allow internally produced tracks)
     if (isTrain(unit) && pickedType === TRACK_PIECE_ID && giver != null) {
@@ -567,4 +568,45 @@ export function initItems(): void {
 
     refreshCarrier(unit);
   });
+
+  // A peasant's slots mean something (slot 0 is what Give/Take hands over and
+  // what the peasant is seen carrying), so dragging an item to another slot is
+  // put back. The game has no way to refuse the move, but it does announce it:
+  // the drag is a target order on the item, 852002 + destination slot, issued
+  // while the item still sits in its old slot. The move itself lands right
+  // after this handler, so the undo waits a frame. Right-click give and drop
+  // are other orders and are left alone.
+  const moveTrigger = Trigger.create();
+  moveTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
+  moveTrigger.addAction(() => {
+    if (revertingMove) return;
+    const order = GetIssuedOrderId();
+    if (order < MOVE_SLOT_ORDER_FIRST || order > MOVE_SLOT_ORDER_FIRST + 5) return;
+    const unitHandle = GetTriggerUnit();
+    const item = GetOrderTargetItem();
+    if (unitHandle == null || item == null) return;
+    if (GetUnitTypeId(unitHandle) !== PEASANT_ID) return;
+    const fromSlot = slotOfItem(unitHandle, item);
+    if (fromSlot < 0 || fromSlot === order - MOVE_SLOT_ORDER_FIRST) return;
+    nextFrame(() => {
+      if (UnitItemInSlot(unitHandle, fromSlot) === item) return;
+      if (!UnitHasItem(unitHandle, item)) return;
+      // Putting it back is itself a slot move; don't undo the undo.
+      revertingMove = true;
+      UnitDropItemSlot(unitHandle, item, fromSlot);
+      revertingMove = false;
+    });
+  });
+}
+
+let revertingMove = false;
+
+/** Order id of "move the target item to slot 0"; slots 1-5 follow it. */
+const MOVE_SLOT_ORDER_FIRST = 852002;
+
+function slotOfItem(u: unit, item: item): number {
+  for (let slot = 0; slot < 6; slot++) {
+    if (UnitItemInSlot(u, slot) === item) return slot;
+  }
+  return -1;
 }

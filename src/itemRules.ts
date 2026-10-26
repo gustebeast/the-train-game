@@ -36,7 +36,7 @@ function isToolItem(itemTypeId: number): boolean {
 /** Consumed the moment it is acquired (shop.ts turns the pickup into the
  *  upgrade), so it is never really carried and everyone may accept one --
  *  otherwise buying an upgrade would be rejected before it could apply. */
-function isShopUpgrade(itemTypeId: number): boolean {
+export function isShopUpgrade(itemTypeId: number): boolean {
   for (const id of SHOP_UPGRADE_ITEM_IDS) {
     if (id === itemTypeId) return true;
   }
