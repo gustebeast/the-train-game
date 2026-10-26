@@ -53,6 +53,15 @@ function isPeasantUtility(itemTypeId: number): boolean {
   return itemTypeId === REROLL_ITEM_ID || itemTypeId === BOSS_KEY_ITEM_ID;
 }
 
+/** Bought from the Secret Salesperson: grants its peasant a special ability
+ *  and lives in the last inventory slot, out of the way of the carried item.
+ *  None exist yet. */
+const PEASANT_ABILITY_ITEM_IDS: number[] = [];
+
+export function isPeasantAbilityItem(itemTypeId: number): boolean {
+  return PEASANT_ABILITY_ITEM_IDS.indexOf(itemTypeId) !== -1;
+}
+
 /** Anything the train game does not define is treated as hero loot (claws,
  *  rings, tomes — the creep-camp drop pools). Defaulting this way means a new
  *  drop is automatically hero-only rather than silently becoming carryable by

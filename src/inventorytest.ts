@@ -76,14 +76,15 @@ function clearInventory(p: unit): void {
 
 /** Peasant inventory holds one item, in slot 0, and every way of acquiring one
  *  follows the same rule as picking it up off the ground:
- *    A  buying a Reroll while holding the axe puts the axe at the buyer's feet
+ *    A  picking up a Reroll while holding the axe puts the axe at the feet
  *    A2 picking the axe back up drops the Reroll -- it swaps like any item
  *    B  buying an upgrade (used up on the spot) leaves the held axe alone
- *    C  a Reroll the buyer can't afford changes nothing
- *    D  dragging the axe to another slot is put back
+ *    D  dragging the axe to another slot is put back, and stays put back
  *
- *  Purchases go through the real shop (IssueNeutralImmediateOrderById), since
- *  the question is how the shop's own events interleave with the pickup rules. */
+ *  The upgrade goes through the real shop (IssueNeutralImmediateOrderById),
+ *  since the question is how the shop's own events interleave with the pickup
+ *  rules. Scripted orders never buy the Reroll, so its swap is tested by
+ *  pickup -- the same handler a purchase reaches. */
 function runInventoryFlow(t: TestReporter): void {
   beginNewRun();
   loadInterRoundLobby();
@@ -106,23 +107,20 @@ function runInventoryFlowLoaded(t: TestReporter): void {
   SetUnitPosition(p, GetUnitX(shop), GetUnitY(shop) - 250);
   clearGround(...here());
   UnitAddItem(p, CreateItem(AXE_ID, ...here())!);
-  // Stocked only while the lobby has someone to reroll; the test needn't wait.
-  AddItemToStock(shop, REROLL_ITEM_ID, 10, 10);
+
   SelectUnitForPlayerSingle(shop, me);
   // Aneu ("Select Hero"): the unit the shop hands purchases to.
   IssueNeutralTargetOrderById(me, shop, 852566, p);
-  // The first scripted purchase only settles who the buyer is; it buys
-  // nothing. Make it one the player can't afford, so it couldn't anyway.
+  // The first scripted purchase only settles who the buyer is and buys
+  // nothing; spend it on an upgrade the player can't afford.
   setGold(0);
-  IssueNeutralImmediateOrderById(me, shop, REROLL_ITEM_ID);
+  IssueNeutralImmediateOrderById(me, shop, RESOURCE_CAPACITY_ID);
 
   t.after(0.5, () => {
     clearGround(...here());
     // --- A ---
-    setGold(5);
-    IssueNeutralImmediateOrderById(me, shop, REROLL_ITEM_ID);
-    t.after(1, () => {
-      expect(t, 'A_goldSpent', 5 - gameState.gold, 1);
+    UnitAddItem(p, CreateItem(REROLL_ITEM_ID, ...here())!);
+    t.after(0.5, () => {
       expect(t, 'A_rerollSlot', slotOf(p, REROLL_ITEM_ID), 0);
       expect(t, 'A_axeHeld', countHeld(p, AXE_ID), 0);
       expect(t, 'A_axeAtFeet', groundCount(...here(), AXE_ID), 1);
@@ -143,6 +141,7 @@ function runInventoryFlowLoaded(t: TestReporter): void {
 
         // --- B ---
         clearGround(...here());
+        setGold(5);
         const goldBefore = gameState.gold;
         IssueNeutralImmediateOrderById(me, shop, RESOURCE_CAPACITY_ID);
         t.after(1, () => {
@@ -151,16 +150,7 @@ function runInventoryFlowLoaded(t: TestReporter): void {
           expect(t, 'B_axeAtFeet', groundCount(...here(), AXE_ID), 0);
           expect(t, 'B_upgradeHeld', countHeld(p, RESOURCE_CAPACITY_ID), 0);
 
-          // --- C ---
-          setGold(0);
-          IssueNeutralImmediateOrderById(me, shop, REROLL_ITEM_ID);
-          t.after(1, () => {
-            expect(t, 'C_axeSlot', slotOf(p, AXE_ID), 0);
-            expect(t, 'C_axeAtFeet', groundCount(...here(), AXE_ID), 0);
-            expect(t, 'C_rerollHeld', countHeld(p, REROLL_ITEM_ID), 0);
-            expect(t, 'C_rerollAtFeet', groundCount(...here(), REROLL_ITEM_ID), 0);
-            runMoveSlot(t, p);
-          });
+          runMoveSlot(t, p);
         });
       });
     });

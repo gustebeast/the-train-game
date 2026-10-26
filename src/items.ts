@@ -1,7 +1,7 @@
 import { Item, Trigger, Unit } from 'w3ts';
 import { updateCarryingVisual } from './carrying';
 import { gameState } from './state';
-import { canHold, isResourceItem, isShopUpgrade } from './itemRules';
+import { canHold, isPeasantAbilityItem, isResourceItem, isShopUpgrade } from './itemRules';
 import { nextFrame } from './util';
 import {
   WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
@@ -569,44 +569,50 @@ export function initItems(): void {
     refreshCarrier(unit);
   });
 
-  // A peasant's slots mean something (slot 0 is what Give/Take hands over and
-  // what the peasant is seen carrying), so dragging an item to another slot is
-  // put back. The game has no way to refuse the move, but it does announce it:
-  // the drag is a target order on the item, 852002 + destination slot, issued
-  // while the item still sits in its old slot. The move itself lands right
-  // after this handler, so the undo waits a frame. Right-click give and drop
-  // are other orders and are left alone.
+  // A peasant's slots mean something: slot 0 holds the one carried item (what
+  // Give/Take hands over and what the peasant is seen carrying), and the last
+  // slot holds an ability item. Dragging an item between slots can't be
+  // refused, but the game announces it -- the drag is a target order on the
+  // item, 852002 + destination slot -- and the move lands right after this
+  // handler. So a frame later the inventory is checked against that layout and
+  // anything out of place is put back. Putting it back is itself a drag, which
+  // brings us here again; by then the layout is valid and the check does
+  // nothing. Right-click give and drop are other orders and are left alone.
   const moveTrigger = Trigger.create();
   moveTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
   moveTrigger.addAction(() => {
-    if (revertingMove) return;
     const order = GetIssuedOrderId();
     if (order < MOVE_SLOT_ORDER_FIRST || order > MOVE_SLOT_ORDER_FIRST + 5) return;
     const unitHandle = GetTriggerUnit();
-    const item = GetOrderTargetItem();
-    if (unitHandle == null || item == null) return;
-    if (GetUnitTypeId(unitHandle) !== PEASANT_ID) return;
-    const fromSlot = slotOfItem(unitHandle, item);
-    if (fromSlot < 0 || fromSlot === order - MOVE_SLOT_ORDER_FIRST) return;
-    nextFrame(() => {
-      if (UnitItemInSlot(unitHandle, fromSlot) === item) return;
-      if (!UnitHasItem(unitHandle, item)) return;
-      // Putting it back is itself a slot move; don't undo the undo.
-      revertingMove = true;
-      UnitDropItemSlot(unitHandle, item, fromSlot);
-      revertingMove = false;
-    });
+    if (unitHandle == null || GetUnitTypeId(unitHandle) !== PEASANT_ID) return;
+    nextFrame(() => arrangePeasantSlots(unitHandle));
   });
 }
 
-let revertingMove = false;
-
 /** Order id of "move the target item to slot 0"; slots 1-5 follow it. */
 const MOVE_SLOT_ORDER_FIRST = 852002;
+const CARRIED_SLOT = 0;
+const ABILITY_SLOT = 5;
 
-function slotOfItem(u: unit, item: item): number {
+function homeSlot(itemTypeId: number): number {
+  return isPeasantAbilityItem(itemTypeId) ? ABILITY_SLOT : CARRIED_SLOT;
+}
+
+/** Move every item that is out of place into its home slot. Each home holds
+ *  one item, so one that finds its home already taken by something that
+ *  belongs there is dropped at the peasant's feet -- a stone and a log never
+ *  share an inventory, whichever of them got there first keeps the slot. */
+function arrangePeasantSlots(u: unit): void {
   for (let slot = 0; slot < 6; slot++) {
-    if (UnitItemInSlot(u, slot) === item) return slot;
+    const it = UnitItemInSlot(u, slot);
+    if (it == null) continue;
+    const home = homeSlot(GetItemTypeId(it));
+    if (slot === home) continue;
+    const occupant = UnitItemInSlot(u, home);
+    if (occupant != null && homeSlot(GetItemTypeId(occupant)) === home) {
+      UnitRemoveItem(u, it);
+    } else {
+      UnitDropItemSlot(u, it, home);
+    }
   }
-  return -1;
 }
