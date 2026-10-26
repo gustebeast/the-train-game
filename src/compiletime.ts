@@ -327,6 +327,17 @@ compiletime(({ objectData, constants }) => {
     Aroa: zeroedSpellCost, // Roar (summon heroes spell)
     ACro: zeroedSpellCost, // RoarNeutralHostile (unsummon heroes spell)
     ACss: zeroedSpellCost, // ShadowStrike neutral hostile (fill bucket spell)
+    // The Alchemist's Transmute pays its caster gold for the creep it kills.
+    // Gold here is gameState.gold, copied onto native gold by syncGold, so the
+    // payout only ever showed as phantom gold: the counter jumped (66 for one
+    // kobold, measured) and the shop, which spends gameState.gold, refused to
+    // honour it. Zeroed rather than left to the next sync to wipe. Forced
+    // because 0 is what the library THINKS the default is, so assigning
+    // goldCostFactor = 0 would write nothing at all.
+    ANtm: [
+      { id: 'Ntm1', variableType: 2, dataPointer: 1, value: 0 }, // goldCostFactor
+      { id: 'Ntm2', variableType: 2, dataPointer: 2, value: 0 }, // lumberCostFactor
+    ],
     // NOTE: there was an Aihn (UnitInventoryHuman) block here configuring
     // "mercenary inventory, no drop on death". It was dead: no unit anywhere
     // carries Aihn. The mercenary is given AInv (InventoryHero) instead -- see

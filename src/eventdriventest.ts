@@ -1,4 +1,5 @@
 import { registerTest, TestReporter } from './testkit';
+import { gameState } from './state';
 import { Units } from '@objectdata/units';
 import { beginNewRun, loadTerrain, loadInterRoundLobby, loadBossBattlefield } from './terrain/load';
 import { armChallenge, clearChallenges, isChallengeArmed, getArmedChallenge } from './challenges';
@@ -395,3 +396,52 @@ function runToolHealth(t: TestReporter): void {
   t.done();
 }
 registerTest('toolhealth', runToolHealth);
+
+// --- Transmute must not pay gold -------------------------------------------
+
+/** The Alchemist's Transmute kills a creep and pays its owner gold. Gold here
+ *  lives in gameState and is copied onto native gold by syncGold, so a payout
+ *  shows as phantom gold the shop then refuses to honour. Cast it for real and
+ *  measure both. */
+function runTransmuteGold(t: TestReporter): void {
+  beginNewRun();
+  loadTerrain(0);
+  const me = getHumanPlayers()[0];
+  const alchemist = CreateUnit(me.handle, FourCC('Nalc'), 0, 0, 0)!;
+  UnitAddAbility(alchemist, FourCC('ANtm'));
+  SetUnitAbilityLevel(alchemist, FourCC('ANtm'), 1);
+  SetUnitState(alchemist, UNIT_STATE_MANA, 1000);
+  const creep = CreateUnit(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, FourCC('nkob'), 150, 0, 180)!;
+  const nativeBefore = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD);
+  const stateBefore = gameState.gold;
+  const ordered = IssueTargetOrder(alchemist, 'transmute', creep);
+  expect(t, 'orderAccepted', ordered ? 1 : 0, 1);
+  t.after(4, () => {
+    expect(t, 'creepTransmuted', GetWidgetLife(creep) <= 0.405 ? 1 : 0, 1);
+    const nativeGain = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - nativeBefore;
+    t.report('stateGoldGain', gameState.gold - stateBefore);
+    expect(t, 'nativeGoldGain', nativeGain, 0);
+    t.done();
+  });
+}
+registerTest('transmutegold', runTransmuteGold);
+
+/** Kills pay no gold either. Found as the control for transmutegold: with
+ *  Transmute's own payout zeroed, 10 gold still arrived, and a plain kill of the
+ *  same creep paid 6 -- kill bounty, phantom gold on every creep in a round. */
+function runKillBounty(t: TestReporter): void {
+  beginNewRun();
+  loadTerrain(0);
+  const me = getHumanPlayers()[0];
+  const killer = CreateUnit(me.handle, FourCC('Nalc'), 0, 0, 0)!;
+  const creep = CreateUnit(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, FourCC('nkob'), 150, 0, 180)!;
+  const before = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD);
+  UnitDamageTarget(killer, creep, 100000, true, false,
+    ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
+  t.after(1, () => {
+    expect(t, 'creepKilled', GetWidgetLife(creep) <= 0.405 ? 1 : 0, 1);
+    expect(t, 'nativeGoldFromPlainKill', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - before, 0);
+    t.done();
+  });
+}
+registerTest('killbounty', runKillBounty);
