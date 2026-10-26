@@ -5,6 +5,7 @@ import { rerollInterRoundLobbyHero } from './heroes';
 import { rerollInterRoundLobbyMerc } from './mercenary';
 import { restartSparringMatch } from './creeps';
 import { nextFrame, forEachUnitInWorld } from './util';
+import { isSalespersonPawn } from './salesperson';
 
 const REROLL_COST = 1;
 
@@ -40,6 +41,8 @@ export function initReroll(): void {
   pawnTrigger.addAction(() => {
     const item = GetSoldItem();
     if (item == null || GetItemTypeId(item) !== REROLL_ITEM_ID) return;
+    // The Secret Salesperson buys nothing but ability items (salesperson.ts).
+    if (isSalespersonPawn()) return;
     RemoveItem(item); // don't leave it in the shop's pawn inventory
     gameState.gold += REROLL_COST;
     syncState();

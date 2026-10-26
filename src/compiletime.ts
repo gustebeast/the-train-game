@@ -342,6 +342,13 @@ compiletime(({ objectData, constants }) => {
     // A copy starts from the stock Transmute, not from the ANtm fix above, so
     // it needs its own: no gold, and free for a peasant with no mana.
     // concat, not a spread: spreads break this block's eval (see project notes).
+    // Vacuum Resources, a COPY of Channel (see the vacuum block): no target,
+    // and it must not disable the peasant's other abilities while it runs.
+    A013: zeroedSpellCost.concat([
+      { id: 'Ncl2', variableType: 0, dataPointer: 2, value: 0 }, // targetType: none
+      { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
+      { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
+    ]),
     A012: zeroedSpellCost.concat([
       { id: 'Ntm1', variableType: 2, dataPointer: 1, value: 0 }, // goldCostFactor
       { id: 'Ntm2', variableType: 2, dataPointer: 2, value: 0 }, // lumberCostFactor
@@ -368,12 +375,19 @@ compiletime(({ objectData, constants }) => {
       // Custom copies first, matched by their NEW id. Without this a forced
       // entry for a copy (A012) found nothing in the original table, and the
       // fallback below then wrote it there as if it were a stock ability.
+      // A copy also inherits whatever this file did to its base: the vacuum, a
+      // copy of Channel, came out with give/take's "unit or point" target type
+      // and no way to cast it with no target. So for copies the forced value
+      // replaces an inherited one instead of only filling a gap.
       for (const obj of result.w3a.customTable.objects) {
         const mods = forcedMods[obj.newId];
         if (mods == null) continue;
         seen.add(obj.newId);
         for (const forced of mods) {
-          if (!obj.modifications.some((m: any) => m.id === forced.id)) {
+          const inherited = obj.modifications.find((m: any) => m.id === forced.id);
+          if (inherited != null) {
+            inherited.value = forced.value;
+          } else {
             const mod = new Modification();
             Object.assign(mod, forced, { levelOrVariation: 1, u1: 0 });
             obj.modifications.push(mod);
@@ -650,7 +664,56 @@ compiletime(({ objectData, constants }) => {
   // the boss. 999999, the same as the indestructible granite; no attack in the
   // map comes close. Wood, stone and track pieces are left breakable: losing
   // one is a nuisance, not a lost round.
-  for (const unbreakable of [axe, pickaxe, bucket, bucketFull, bossKey]) {
+  // Peasant ability items, sold by the Secret Salesperson. Carried in the last
+  // inventory slot, apart from the one carried item (items.ts), and passed to
+  // another peasant like any item. Holding one grants its spell; the item
+  // itself does nothing when clicked. Campaign items, so creeps never drop them.
+  const resourceVacuum = objectData.items.get(constants.items.GlyphOfPurification)!;
+  resourceVacuum.name = 'Resource Vacuum';
+  resourceVacuum.tooltipBasic = resourceVacuum.name;
+  resourceVacuum.description = 'Grants Vacuum Resources (Q): pulls the wood and stone lying within a tile of you into one pile of each.';
+  resourceVacuum.tooltipExtended = resourceVacuum.description;
+  const greaterResourceVacuum = objectData.items.get(constants.items.EnchantedGemstone)!;
+  greaterResourceVacuum.name = 'Greater Resource Vacuum';
+  greaterResourceVacuum.tooltipBasic = greaterResourceVacuum.name;
+  greaterResourceVacuum.description = 'Grants Vacuum Resources (Q): pulls the wood and stone lying within two tiles of you into one pile of each.';
+  greaterResourceVacuum.tooltipExtended = greaterResourceVacuum.description;
+  for (const abilityItem of [resourceVacuum, greaterResourceVacuum]) {
+    abilityItem.goldCost = 2;
+    abilityItem.stockMaximum = 10;
+    abilityItem.stockReplenishInterval = 3600;
+    abilityItem.stockInitialAfterStartDelay = 10;
+    abilityItem.abilities = '';
+    abilityItem.activelyUsed = false;
+    abilityItem.useAutomaticallyWhenAcquired = false;
+    abilityItem.canBeDropped = true;
+    abilityItem.droppedWhenCarrierDies = true;
+    abilityItem.perishable = false;
+    // Sellable so the salesperson can buy it back; the regular shop hands it back.
+    abilityItem.canBeSoldToMerchants = true;
+    abilityItem.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNTornado.blp';
+  }
+
+  // Upgrade Peasant Ability: used up on purchase, turning the buyer's ability
+  // item into its Greater version (salesperson.ts). Bought with nothing to
+  // upgrade, it is refunded.
+  const upgradeAbility = objectData.items.get(constants.items.Mooncrystal)!;
+  upgradeAbility.name = 'Upgrade Peasant Ability';
+  upgradeAbility.tooltipBasic = upgradeAbility.name;
+  upgradeAbility.description = 'Turns the peasant ability item you are holding into its Greater version. Resource Vacuum becomes Greater Resource Vacuum, which reaches two tiles instead of one. Refunded if you have nothing to upgrade.';
+  upgradeAbility.tooltipExtended = upgradeAbility.description;
+  upgradeAbility.goldCost = 3;
+  upgradeAbility.stockMaximum = 10;
+  upgradeAbility.stockReplenishInterval = 3600;
+  upgradeAbility.stockInitialAfterStartDelay = 10;
+  upgradeAbility.abilities = '';
+  upgradeAbility.activelyUsed = false;
+  upgradeAbility.useAutomaticallyWhenAcquired = true;
+  upgradeAbility.perishable = true;
+  upgradeAbility.classification = 'PowerUp';
+  upgradeAbility.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGlyph.blp';
+
+  for (const unbreakable of [axe, pickaxe, bucket, bucketFull, bossKey, resourceVacuum, greaterResourceVacuum]) {
     unbreakable.hitPoints = 999999;
   }
 
@@ -741,12 +804,29 @@ compiletime(({ objectData, constants }) => {
   // Made invulnerable when spawned (bossRock.ts), like the water tiles: no
   // health bar, and attacks get the engine's refusal. The 999999 HP is only a
   // backstop. Transmute kills rather than damages, invulnerable or not.
-  const salesGoblin = objectData.units.copy(constants.units.Peasant, 'sgob');
+  // Secret Salesperson: a shop that turns up on snow rounds, selling peasant
+  // ability items. A Marketplace copy because the Marketplace is the one shop
+  // whose runtime stock (AddItemToStock) displays -- see the shop below -- and
+  // standing still is all he does anyway. Model: "Mr. Goblin, the Goblin
+  // Adventurer" by Deolrin (Hive Workshop), which uses only stock textures.
+  const salesGoblin = objectData.units.copy(constants.units.Marketplace, 'sgob');
   if (salesGoblin != null) {
     salesGoblin.name = 'Secret Salesperson';
+    salesGoblin.nameEditorSuffix = '';
     salesGoblin.modelFile = 'war3mapImported\\MrGoblin.mdx';
     // The goblin model is small: this makes him peasant height (peasants are 0.6).
     salesGoblin.scalingValueundefined = 1.65;
+    salesGoblin.selectionScale = 1;
+    salesGoblin.groundTexture = '';
+    salesGoblin.shadowTextureBuilding = '';
+    salesGoblin.pathingMap = 'PathTextures\\4x4simplesolid.tga';
+    salesGoblin.collisionSize = 32;
+    salesGoblin.itemsSold = '';
+    salesGoblin.itemsMade = '';
+    salesGoblin.sightRadiusDay = 400;
+    salesGoblin.sightRadiusNight = 400;
+    // Secret: finding him is the point, so he is not on the minimap.
+    salesGoblin.hideMinimapDisplay = true;
   }
   const sealRock = objectData.units.copy(constants.units.Barracks, STRANGE_ROCK_UNIT);
   if (sealRock != null) {
@@ -1330,6 +1410,7 @@ compiletime(({ objectData, constants }) => {
   const BOSS_ADD_UNIT = 'uinl';
   const BOSS_INFERNO = 'A010';
   const ADD_THUNDER_CLAP = 'A011';
+  const VACUUM_ABILITY = 'A013';
 
   /** Thunder Clap's mana cost, the same at all three levels. Stamped onto the
    *  copy below rather than inherited, so the add's mana pool can be defined as
@@ -1386,6 +1467,36 @@ compiletime(({ objectData, constants }) => {
     keyThrow.name = 'Use Strange Key';
     keyThrow.tooltipNormal = 'Use Strange Key';
     keyThrow.tooltipNormalExtended = 'Throw the key at the Strange Rock to break it open.';
+  }
+
+  // Vacuum Resources (Q): a third Channel, granted by holding either Resource
+  // Vacuum. No target -- it works around the caster (vacuum.ts). Every ability
+  // item's spell goes on Q, so a peasant only ever has one there.
+  const vacuum = objectData.abilities.copy(constants.abilities.Channel, VACUUM_ABILITY) as ChannelAbility | undefined;
+  if (vacuum != null) {
+    vacuum.heroAbility = false;
+    vacuum.levels = 1;
+    // Target type (none), mana and the disabling of other abilities are forced
+    // to 0 under A013: 0 is what the library thinks the default is.
+    vacuum.options = 1; // visible on the command card
+    // Not 0: Channel reads 0 as "channel until interrupted" (see the dash).
+    vacuum.followThroughTime = 0.01;
+    vacuum.castingTime = 0;
+    vacuum.cooldown = 3;
+    // Its own order string: give/take is 'channel' and the dash 'flare', and
+    // two abilities on one unit sharing an order is one of them never firing.
+    vacuum.baseOrderIDundefined = 'whirlwind';
+    vacuum.animationNames = 'spell';
+    vacuum.caster = '';
+    vacuum.target = '';
+    vacuum.effect = '';
+    vacuum.name = 'Vacuum Resources';
+    vacuum.tooltipNormal = 'Vacuum Resources';
+    vacuum.tooltipNormalExtended = 'Pull the wood and stone lying near you into one pile of each: within one tile with a Resource Vacuum, two with a Greater Resource Vacuum.';
+    vacuum.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNTornado.blp';
+    vacuum.hotkeyNormal = 'Q';
+    vacuum.buttonPositionNormalX = 0;
+    vacuum.buttonPositionNormalY = 2;
   }
 
   const clap = objectData.abilities.copy(constants.abilities.ThunderClap, ADD_THUNDER_CLAP);

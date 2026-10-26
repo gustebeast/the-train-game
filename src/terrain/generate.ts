@@ -462,6 +462,54 @@ function placeResources(grid: Grid, difficulty: number): void {
 // Step 5: Place creep camp (one per level)
 // ============================================================
 
+/** Tiles reachable from the start without crossing granite. Trees, rocks and
+ *  water count as reachable: they can be chopped, mined or bridged. */
+function reachableFromStart(grid: Grid): boolean[] {
+  const reachable: boolean[] = [];
+  for (let i = 0; i < GRID_W * GRID_H; i++) reachable[i] = false;
+  const startIdx = idx(GRID_MIN_X, 0);
+  reachable[startIdx] = true;
+  const queue: number[] = [startIdx];
+  while (queue.length > 0) {
+    const ci = queue.pop()!;
+    forEachNeighbour(ci, ni => {
+      if (reachable[ni]) return;
+      if (grid.cells[ni].entity === Entity.GRANITE) return;
+      reachable[ni] = true;
+      queue.push(ni);
+    });
+  }
+  return reachable;
+}
+
+/** Snow rounds only: put the Secret Salesperson on an empty tile the players
+ *  can reach, out of the start and finish areas and clear of the creep camp,
+ *  picked the way the camp is. Nothing marks where he is. */
+function placeSalesperson(grid: Grid): void {
+  const reachable = reachableFromStart(grid);
+  const candidates: GridPos[] = [];
+  for (let gy = GRID_MIN_Y + 1; gy <= GRID_MAX_Y - 1; gy++) {
+    for (let gx = SPAWN.maxX + 2; gx <= VICTORY.minX - 2; gx++) {
+      if (isReserved(gx, gy) || !reachable[idx(gx, gy)]) continue;
+      if (grid.cells[idx(gx, gy)].entity !== Entity.NONE) continue;
+      if (nearEntity(grid, gx, gy, Entity.CREEP_CAMP, 2)) continue;
+      candidates.push({ x: gx, y: gy });
+    }
+  }
+  if (candidates.length === 0) return;
+  const pick = candidates[GetRandomInt(0, candidates.length - 1)];
+  grid.cells[idx(pick.x, pick.y)].entity = Entity.SALESPERSON;
+}
+
+function nearEntity(grid: Grid, gx: number, gy: number, entity: Entity, radius: number): boolean {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (inBounds(gx + dx, gy + dy) && grid.cells[idx(gx + dx, gy + dy)].entity === entity) return true;
+    }
+  }
+  return false;
+}
+
 function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
   // Valid X range: at least 1 tile gap from start and victory areas
   const minX = SPAWN.maxX + 2;
@@ -479,21 +527,7 @@ function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
     cy = Math.max(GRID_MIN_Y + 1, Math.min(GRID_MAX_Y - 1, fixedY));
   } else {
     if (minX > maxX) return; // no room
-    // Flood-fill from start tile through non-granite to find reachable tiles
-    const reachable: boolean[] = [];
-    for (let i = 0; i < GRID_W * GRID_H; i++) reachable[i] = false;
-    const startIdx = idx(GRID_MIN_X, 0);
-    reachable[startIdx] = true;
-    const queue: number[] = [startIdx];
-    while (queue.length > 0) {
-      const ci = queue.pop()!;
-      forEachNeighbour(ci, ni => {
-        if (reachable[ni]) return;
-        if (grid.cells[ni].entity === Entity.GRANITE) return;
-        reachable[ni] = true;
-        queue.push(ni);
-      });
-    }
+    const reachable = reachableFromStart(grid);
 
     // Pick from reachable, non-reserved tiles in the valid range
     const candidates: GridPos[] = [];
@@ -983,6 +1017,7 @@ export function generateTerrain(
   placeResources(grid, difficulty);
   placeEntities(grid);
   placeCreepCamp(grid);
+  if (biome === Biome.WINTER) placeSalesperson(grid);
   // Critterpocalypse: every eligible grass tile instead of the default count
   placeCritters(grid, isChallengeArmed(CH_CRITTERPOCALYPSE) ? GRID_W * GRID_H : CRITTER_COUNT);
   return grid;

@@ -3,7 +3,7 @@ import {
   AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID,
   BUCKET_ID, BUCKET_FULL_ID, REROLL_ITEM_ID, BOSS_KEY_ITEM_ID,
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
-  SHOP_UPGRADE_ITEM_IDS, UNKNOWN_UNIT_ID,
+  SHOP_UPGRADE_ITEM_IDS, UNKNOWN_UNIT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID,
 } from './constants';
 
 /**
@@ -54,9 +54,8 @@ function isPeasantUtility(itemTypeId: number): boolean {
 }
 
 /** Bought from the Secret Salesperson: grants its peasant a special ability
- *  and lives in the last inventory slot, out of the way of the carried item.
- *  None exist yet. */
-const PEASANT_ABILITY_ITEM_IDS: number[] = [];
+ *  and lives in the last inventory slot, out of the way of the carried item. */
+const PEASANT_ABILITY_ITEM_IDS: number[] = [RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID];
 
 export function isPeasantAbilityItem(itemTypeId: number): boolean {
   return PEASANT_ABILITY_ITEM_IDS.indexOf(itemTypeId) !== -1;
@@ -68,7 +67,8 @@ export function isPeasantAbilityItem(itemTypeId: number): boolean {
  *  a peasant. */
 function isHeroItem(itemTypeId: number): boolean {
   return !isResourceItem(itemTypeId) && !isToolItem(itemTypeId)
-    && !isShopUpgrade(itemTypeId) && !isPeasantUtility(itemTypeId);
+    && !isShopUpgrade(itemTypeId) && !isPeasantUtility(itemTypeId)
+    && !isPeasantAbilityItem(itemTypeId);
 }
 
 // --- carriers -------------------------------------------------------------
@@ -111,7 +111,8 @@ export function canHold(holder: Unit, itemTypeId: number): string | null {
     return isHeroItem(itemTypeId) ? null : "They can't carry that!";
   }
   if (isPeasantUnit(holder)) {
-    return (isResourceItem(itemTypeId) || isToolItem(itemTypeId) || isPeasantUtility(itemTypeId))
+    return (isResourceItem(itemTypeId) || isToolItem(itemTypeId) || isPeasantUtility(itemTypeId)
+      || isPeasantAbilityItem(itemTypeId))
       ? null : "Peasants can't carry hero items!";
   }
   // Everything else fights alongside the heroes -- the mercenaries above all --

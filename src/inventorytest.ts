@@ -5,8 +5,6 @@ import { beginNewRun, loadInterRoundLobby } from './terrain/load';
 import { forEachUnitInWorld, forEachUnitOfPlayer, getHumanPlayers } from './util';
 import { AXE_ID, PEASANT_ID, REROLL_ITEM_ID, RESOURCE_CAPACITY_ID } from './constants';
 
-const ONE_FRAME = 1 / 32;
-
 function firstUnitOfType(typeId: number): unit | null {
   let found: unit | null = null;
   forEachUnitInWorld(u => { if (found == null && GetUnitTypeId(u) === typeId) found = u; });
@@ -60,7 +58,6 @@ function setGold(n: number): void {
   gameState.gold = n;
   syncState();
 }
-
 
 function expect(t: TestReporter, key: string, actual: number, want: number): void {
   if (actual === want) t.report(key, actual);

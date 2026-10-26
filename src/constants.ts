@@ -111,10 +111,21 @@ export const CHALLENGE_ITEM_ID = FourCC(Items.Shimmerweed);
 /** Shop item: makes the next creep camp a level 3 one. */
 export const STRANGE_MEAT_ID = FourCC(Items.BloodfeathersHeart);
 
+/** The Secret Salesperson, a shop that turns up on snow rounds. */
+export const SALESPERSON_ID = FourCC('sgob');
+/** Peasant ability items, sold by the Secret Salesperson. Each grants its
+ *  holder an ability and lives in the last inventory slot. */
+export const RESOURCE_VACUUM_ID = FourCC(Items.GlyphOfPurification);
+export const GREATER_RESOURCE_VACUUM_ID = FourCC(Items.EnchantedGemstone);
+/** Salesperson item: turns the buyer's ability item into its Greater version. */
+export const UPGRADE_PEASANT_ABILITY_ID = FourCC(Items.Mooncrystal);
+/** Vacuum Resources, granted by either vacuum. Q, like every ability item's spell. */
+export const VACUUM_ABILITY_ID = FourCC('A013');
+
 /** Everything the shop sells that is consumed on acquisition. */
 export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = [
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, SUMMON_UPGRADE_ITEM_ID,
   MERC_CONTRACT_ID, MERC_CONTRACT_2_ID, CHALLENGE_ITEM_ID, RESTORE_HP_ID,
-  STRANGE_MEAT_ID,
+  STRANGE_MEAT_ID, UPGRADE_PEASANT_ABILITY_ID,
 ];
