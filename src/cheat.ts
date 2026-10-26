@@ -18,6 +18,7 @@ import { beginNight, endNight, isNight } from './daynight';
 import { getNeutralPassive, toggleDPSVision } from './teams';
 import { getDpsMeasurementReport } from './creeps';
 import { makeDancer } from './dance';
+import { checkUnionRules } from './challengeWatch';
 import { spawnBoss } from './boss';
 import { forEachUnitOfPlayer } from './util';
 
@@ -154,6 +155,9 @@ export function initCheat(): void {
     clearChallenges();
     armChallenge(def.id);
     applyChallengeEffects();
+    // Armed mid-round, tools may already be in hand; Union Rules otherwise only
+    // looks when someone picks one up.
+    checkUnionRules();
     print('Armed ' + I2S(n) + '. |cffffcc00' + def.name + '|r: ' + def.description);
   });
 

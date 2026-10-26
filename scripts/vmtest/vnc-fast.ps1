@@ -87,9 +87,25 @@ function Vnc-Pointer($conn, [int]$x, [int]$y, [byte]$mask){
   $conn.s.Write($m,0,6); $conn.s.Flush()
 }
 function Vnc-Click($conn, [int]$x, [int]$y){
-  Vnc-Pointer $conn $x $y 0; Start-Sleep -Milliseconds 80
-  Vnc-Pointer $conn $x $y 1; Start-Sleep -Milliseconds 70
-  Vnc-Pointer $conn $x $y 0; Start-Sleep -Milliseconds 80
+  # Every phase of the click needs its own rendered frame -- the same fix
+  # Vnc-DblClick got below, which this never received.
+  #
+  # The guests render at 15 fps (~66ms a frame) and WC3 samples the mouse once
+  # per frame. With 80ms after the move, the move and the press could be read
+  # in the same frame, and WC3 then delivered the press at the PREVIOUS cursor
+  # position. The press was held only 70ms, so it could also start and end
+  # inside a single frame and never be seen as down at all.
+  #
+  # The run that exposed it: ENTER PLAYER NAME with the name typed correctly
+  # and CONFIRM never taking. The cursor was still on the name field from the
+  # click before, so a press delivered there just re-focused the text box.
+  # Murph hit it twice running alone, and dougie once under load.
+  #
+  # 200ms to settle the move, a press held across two-plus frames, and a frame
+  # after the release before anything else happens.
+  Vnc-Pointer $conn $x $y 0; Start-Sleep -Milliseconds 200
+  Vnc-Pointer $conn $x $y 1; Start-Sleep -Milliseconds 150
+  Vnc-Pointer $conn $x $y 0; Start-Sleep -Milliseconds 100
 }
 function Vnc-DblClick($conn, [int]$x, [int]$y){
   # The two clicks must land on DIFFERENT rendered frames.

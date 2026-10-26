@@ -2,6 +2,7 @@ import { defineChallenge, completeChallenge, isChallengeArmed } from './challeng
 import { getHumanPlayers } from './util';
 import { placedTracks } from './track/state';
 import { TRACK_SIZE } from './track/constants';
+import { boardChanged } from './boardSignal';
 
 /**
  * The challenge catalogue: definitions plus the counters they display.
@@ -66,6 +67,7 @@ export function resetChallengeProgress(): void {
   dashCount = 0;
   brinkSeconds = 0;
   soloToolsBroken = false;
+  boardChanged();
 }
 
 function dashTarget(): number {
@@ -234,6 +236,7 @@ export function recountTrackShapes(): void {
 export function applyTrackShapes(shapes: TrackShapes): void {
   straightRun = shapes.straightRun;
   curvedCount = shapes.curved;
+  boardChanged();
 
   if (isChallengeArmed(CH_STRAIGHT_15) && straightRun >= STRAIGHT_TARGET) {
     completeChallenge(CH_STRAIGHT_15);
@@ -247,24 +250,30 @@ export function applyTrackShapes(shapes: TrackShapes): void {
 export function noteDash(): void {
   if (!isChallengeArmed(CH_DASH)) return;
   dashCount += 1;
+  boardChanged();
   if (dashCount >= dashTarget()) completeChallenge(CH_DASH);
 }
 
 /** Two units were found holding the same tool type — the wager is lost. */
 export function noteToolSharingBroken(): void {
+  if (soloToolsBroken) return;
   soloToolsBroken = true;
+  boardChanged();
 }
 
 /** One second passed with the train inside the danger window. */
 export function noteBrinkSecond(): void {
   if (!isChallengeArmed(CH_BRINK)) return;
   brinkSeconds += 1;
+  boardChanged();
   if (brinkSeconds >= BRINK_SECONDS) completeChallenge(CH_BRINK);
 }
 
 /** The train left the danger window, so the streak restarts. */
 export function resetBrinkSeconds(): void {
+  if (brinkSeconds === 0) return;
   brinkSeconds = 0;
+  boardChanged();
 }
 
 /** The last track of the round has been laid. Challenges judged over the whole
