@@ -196,6 +196,7 @@ const TRACK_FILES = {
   startLobby: 'war3mapImported\\StartLobby.wav',
   interRound: 'war3mapImported\\InterRoundLobby.wav',
   defeat: 'war3mapImported\\Purgatory.wav',
+  boss: 'war3mapImported\\BossBattle.wav',
 };
 
 type MusicTrack = keyof typeof TRACK_FILES;
@@ -419,7 +420,7 @@ function loadChooseSaveLobby(): void {
  *  the lava has none by design (its blockers are invisible destructables), so
  *  without this the surround would sit unexplored and render black. */
 export function loadBossBattlefield(): void {
-  enterBoard(null, generateBossBattlefield());
+  enterBoard('boss', generateBossBattlefield());
 }
 
 /** Hand the inter-round lobby's scenery to the neutral player that shares NO
