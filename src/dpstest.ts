@@ -407,8 +407,10 @@ function runSixCopiesTest(t: TestReporter): void {
   ]);
   setMercsForTest([FourCC('nogl')]);
   setCampForTest(SIX_CAMP);
-  const itemsBefore = countItems();
   loadInterRoundLobby();
+  // Counted after the lobby loads: loading it clears whatever earlier tests
+  // left lying, which read as items the match had taken away.
+  const itemsBefore = countItems();
 
   const check = getDPSCheckPlayer().handle;
   let casts = 0;

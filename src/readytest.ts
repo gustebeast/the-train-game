@@ -3,6 +3,7 @@ import { registerTest, TestReporter } from './testkit';
 import { registerReadyZone, initReadyZone } from './ready';
 import { PEASANT_ID } from './constants';
 import { getHumanPlayers, forEachUnitOfPlayer } from './util';
+import { loadStartLobby } from './terrain/load';
 
 /**
  * How long a ready countdown actually runs.
@@ -27,6 +28,16 @@ const SPOTS: ReadonlyArray<readonly [number, number]> = [
 ];
 
 function runReadyTest(t: TestReporter): void {
+  // A known board: the strips beside the start lobby are open ground. Run
+  // after a test that left a round loaded, the third spot had terrain on it,
+  // the peasant was shoved off the circle, and the countdown never began.
+  // The peasant is looked for a moment later, not straight away: units a
+  // board stands up straight after loading can be replaced within a frame.
+  loadStartLobby();
+  t.after(0.5, () => runReadyCases(t));
+}
+
+function runReadyCases(t: TestReporter): void {
   const humans = getHumanPlayers();
   let peasant: unit | null = null;
   if (humans.length > 0) {
@@ -86,9 +97,19 @@ function runReadyTest(t: TestReporter): void {
     started = clock.elapsed;
     waitFrom = started;
     SetUnitPosition(p, x, y);
-    // Where it actually landed: a circle it was shoved off cannot count it.
-    t.report(c.id + '_landedDX', GetUnitX(p) - x);
-    t.report(c.id + '_landedDY', GetUnitY(p) - y);
+    // Where it actually landed: a circle it was shoved off cannot count it,
+    // and would leave the test waiting forever for a countdown that never
+    // starts -- so say so and stop instead.
+    const dx = GetUnitX(p) - x;
+    const dy = GetUnitY(p) - y;
+    t.report(c.id + '_landedDX', dx);
+    t.report(c.id + '_landedDY', dy);
+    if (math.abs(dx) > 100 || math.abs(dy) > 100) {
+      t.fail(c.id, 'peasant landed off the circle');
+      SetUnitPosition(p, homeX, homeY);
+      clock.destroy();
+      t.done();
+    }
   };
   t.after(0.5, () => runCase(0));
 }
