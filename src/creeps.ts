@@ -15,7 +15,7 @@ import {
 import { isChallengeArmed, completeChallenge } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
-import { onCampCleared } from './bossKey';
+import { onCampCleared, onCampFightStarted } from './bossKey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
 import { forEachUnitOfPlayer } from './util';
@@ -886,6 +886,7 @@ export function registerCageTrigger(): void {
     const cx = cageDestructable.x;
     const cy = cageDestructable.y;
     spawnCreepsAt(cx, cy, camp);
+    onCampFightStarted(camp.level);
     // Grant Summon Heroes ability to the nearest peasant
     // (GetKillingUnit() doesn't work for destructable death events)
     let nearest: unit | null = null;
