@@ -15,7 +15,6 @@ import {
   isMercDead, buyMercContract, buySecondContract,
   canBuyMercContract, canBuySecondContract, getLivingMercCount,
 } from './mercenary';
-import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
 import { forceLevel3Camp } from './creeps';
 import { forEachUnitInWorld, nextFrame, getHumanPlayers } from './util';
 import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges';

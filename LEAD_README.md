@@ -53,7 +53,7 @@ current request:
    npx tsc -p tsconfig.json --noEmit
    npm run build
    ```
-   If `tsconfig.json` conflicts, keep `main`'s version. Source conflicts:
+   Source conflicts:
    resolve them yourself when the intent of both sides is clear (union of
    independently-added features is the common case); if a conflict is
    genuinely ambiguous, have the sub-agent merge `main` into their branch
@@ -90,11 +90,12 @@ resolve against the real `main`).
   agent is done — see "retire an agent" in `SUBAGENT_README.md`
   (⚠️ junction removal order matters: `cmd /c rmdir` the worktree's
   `node_modules` junction FIRST, or the real node_modules gets destroyed).
-- **Never build from inside a worktree** — the build rewrites
-  `tsconfig.json` with absolute paths; it must only run in the main
-  checkout. (Sub-agents may build inside their own worktree per the
-  policy in SUBAGENT_README; the constraint here is about *you* and the
-  main checkout.)
+- **Never build from inside a worktree** — the official build runs in the
+  main checkout. (Sub-agents may build inside their own worktree per the
+  policy in SUBAGENT_README; the constraint here is about *you*.)
+- **Commit a dependency change before installing it.** Every worktree's
+  `node_modules` is a junction to the main checkout's, so an install there
+  changes what every agent builds against the moment it runs.
 - `git status` before any destructive git command — the user's
   `feedback.txt` is habitually dirty in the working tree and must never be
   committed or clobbered.

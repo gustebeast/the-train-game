@@ -39,8 +39,7 @@ this skill only bootstraps you into the role and does not restate it.
   persisting. Bare `git commit` after a turn boundary has twice committed to
   the wrong branch — check the branch name in commit output.
 - You **may** build your own branch, but only with your worktree as cwd:
-  `cd .worktrees/<name>; npm run build`, then `git checkout -- tsconfig.json`.
-  Never commit `tsconfig.json` — the build rewrites it with absolute paths.
+  `cd .worktrees/<name>; npm run build`.
 - **Never launch WC3 on the host** (`BuildAndLaunch.bat`). Test via your VM:
   `scripts/vmtest/run-test.ps1 -Vm <name> -Map .worktrees/<name>/dist/bin/TheTrainGame.w3x`
 - **Never merge to `main`.** That is the lead's job.

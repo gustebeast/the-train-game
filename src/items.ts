@@ -331,10 +331,10 @@ export function validateTake(taker: Unit, storage: Unit): string | null {
 }
 
 /**
- * Transfer an item from giver to storage, respecting stack caps.
+ * Transfer a carried item into storage, respecting stack caps.
  * Moves as many charges as possible; removes the giver's item if fully transferred.
  */
-export function giveToStorage(giver: Unit, giverItem: Item, storage: Unit): boolean {
+export function giveToStorage(giverItem: Item, storage: Unit): boolean {
   const itemType = giverItem.typeId;
   const maxStack = getMaxStack(storage);
   const existing = findItemByType(storage, itemType);

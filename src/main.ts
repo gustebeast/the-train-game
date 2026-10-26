@@ -31,7 +31,6 @@ import { initChallengeEffects } from './challengeEffects';
 import { initCameraLock } from './cameraLock';
 import { initCargoVisuals } from './cargoVisuals';
 import { syncGold } from './state';
-import { getHumanPlayers } from './util';
 import { log } from './debug';
 
 import { initTestKit } from './testkit';
@@ -100,10 +99,6 @@ function tsMain() {
     initTestKit();
 
     syncGold();
-    const humanPlayers = getHumanPlayers();
-    humanPlayers.forEach((player) => {
-      player.setState(PLAYER_STATE_RESOURCE_LUMBER, 0);
-    });
 
   } catch (e) {
     log('tsMain error: ' + tostring(e));

@@ -1,5 +1,5 @@
 import { registerTest, TestReporter } from './testkit';
-import { getDpsMeasured, dpsSampleBreakdown, getSparringStatus } from './creeps';
+import { getDpsMeasured, dpsSampleBreakdown } from './creeps';
 import { beginNewRun, loadInterRoundLobby } from './terrain/load';
 import { buyMercContract } from './mercenary';
 

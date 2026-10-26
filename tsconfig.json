@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "allowJs": false,
     "outDir": ".",
     "baseUrl": "./",
@@ -18,9 +20,9 @@
     "plugins": [
       {
         "transform": "war3-transformer",
-        "mapDir": "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame/maps/TheTrainGame.w3x",
-        "entryFile": "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame/src/main.ts",
-        "outputDir": "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame/dist/TheTrainGame.w3x"
+        "mapDir": "maps/TheTrainGame.w3x",
+        "entryFile": "src/main.ts",
+        "outputDir": "dist/TheTrainGame.w3x"
       }
     ],
     "types": [

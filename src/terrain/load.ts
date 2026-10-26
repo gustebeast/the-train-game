@@ -7,7 +7,7 @@ import { registerReadyZone } from '../ready';
 import { Unit } from 'w3ts';
 import { PEASANT_ID, TROPHY_MODEL, TROPHY_SCALE } from '../constants';
 import { markUnit } from '../unitLabels';
-import { forEachUnitOfPlayer, getHumanPlayers, getWorldBounds } from '../util';
+import { forEachUnitOfPlayer, getHumanPlayers } from '../util';
 import { makeDancer, startDanceClock } from '../dance';
 import {
   closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,

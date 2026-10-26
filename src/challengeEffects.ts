@@ -1,5 +1,5 @@
 import { Unit } from 'w3ts';
-import { onGlobalTick } from './globalTick';
+import { onGlobalTick, TICK_INTERVAL } from './globalTick';
 import { isInGameplay } from './state';
 import { isChallengeArmed } from './challenges';
 import { CH_NO_UI, CH_SHOULDER_CAM } from './challengeList';
@@ -66,7 +66,7 @@ const OTS_HEIGHT_OFFSET = 50;
  *    means a scroll-wheel nudge is yanked straight back, which is unpleasant
  *    enough to stop anyone zooming out of the handicap -- the jerkiness IS the
  *    deterrent, so it is deliberate rather than something to tune away. */
-const OTS_FOLLOW_TIME = 0.5;
+const OTS_FOLLOW_TIME = TICK_INTERVAL;
 const OTS_SNAP = 0;
 
 let otsActive = false;

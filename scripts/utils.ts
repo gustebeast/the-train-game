@@ -1,5 +1,4 @@
 import { execSync } from "child_process";
-import { writeFileSync } from "fs";
 import * as fs from "fs-extra";
 import * as path from "path";
 import { createLogger, format, transports } from "winston";
@@ -43,19 +42,6 @@ export function toArrayBuffer(b: Buffer): ArrayBuffer {
 }
 
 /**
- * Convert an ArrayBuffer to Buffer
- * @param ab
- */
-export function toBuffer(ab: ArrayBuffer) {
-  var buf = Buffer.alloc(ab.byteLength);
-  var view = new Uint8Array(ab);
-  for (var i = 0; i < buf.length; ++i) {
-    buf[i] = view[i];
-  }
-  return buf;
-}
-
-/**
  * Recursively retrieve a list of files in a directory.
  * @param dir The path of the directory
  */
@@ -74,17 +60,6 @@ export function getFilesInDirectory(dir: string) {
   });
   return files;
 };
-
-function updateTSConfig(mapFolder: string) {
-  const tsconfig = loadJsonFile('tsconfig.json');
-  const plugin = tsconfig.compilerOptions.plugins[0];
-
-  plugin.mapDir = path.resolve('maps', mapFolder).replace(/\\/g, '/');
-  plugin.entryFile = path.resolve(tsconfig.tstl.luaBundleEntry).replace(/\\/g, '/');
-  plugin.outputDir = path.resolve('dist', mapFolder).replace(/\\/g, '/');
-
-  writeFileSync('tsconfig.json', JSON.stringify(tsconfig, undefined, 2));
-}
 
 /**
  * Empty ./dist, tolerating files another process is holding open.
@@ -134,7 +109,13 @@ function cleanDist(): void {
 }
 
 /**
+ * Build the map folder into ./dist: copy the source map, transpile the
+ * TypeScript (war3-transformer applies the object data on the way), and append
+ * the Lua to war3map.lua.
  *
+ * Everything is relative to the current directory -- including the
+ * war3-transformer paths in tsconfig.json -- so a build run inside an agent's
+ * worktree writes only inside that worktree.
  */
 export function compileMap(config: IProjectConfig) {
   if (!config.mapFolder) {
@@ -158,14 +139,11 @@ export function compileMap(config: IProjectConfig) {
   fs.copySync(`./maps/${config.mapFolder}`, `./dist/${config.mapFolder}`, { overwrite: false });
 
   // Lock race selection in the dist copy without touching the source file
-  const distMapLua = `./dist/${config.mapFolder}/war3map.lua`;
-  if (fs.existsSync(distMapLua)) {
-    const lua = fs.readFileSync(distMapLua).toString();
-    fs.writeFileSync(distMapLua, lua.replace(/SetPlayerRaceSelectable\(([^,]+),\s*true\)/g, 'SetPlayerRaceSelectable($1, false)'));
+  const mapLua = `./dist/${config.mapFolder}/war3map.lua`;
+  if (fs.existsSync(mapLua)) {
+    const lua = fs.readFileSync(mapLua).toString();
+    fs.writeFileSync(mapLua, lua.replace(/SetPlayerRaceSelectable\(([^,]+),\s*true\)/g, 'SetPlayerRaceSelectable($1, false)'));
   }
-
-  logger.info("Modifying tsconfig.json to work with war3-transformer...");
-  updateTSConfig(config.mapFolder);
 
   logger.info("Transpiling TypeScript to Lua...");
   execSync('tstl -p tsconfig.json', { stdio: 'inherit' });
@@ -177,8 +155,6 @@ export function compileMap(config: IProjectConfig) {
   }
 
   // Merge the TSTL output with war3map.lua
-  const mapLua = `./dist/${config.mapFolder}/war3map.lua`;
-
   if (!fs.existsSync(mapLua)) {
     logger.error(`Could not find "${mapLua}"`);
     return false;
@@ -189,7 +165,7 @@ export function compileMap(config: IProjectConfig) {
 
     if (config.minifyScript) {
       logger.info(`Minifying script...`);
-      contents = luamin.minify(contents.toString());
+      contents = luamin.minify(contents);
     }
 
     fs.writeFileSync(mapLua, contents);

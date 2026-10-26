@@ -1,7 +1,7 @@
 import { Timer } from 'w3ts';
 
 /** How often (seconds) the global tick fires. */
-const TICK_INTERVAL = 0.5;
+export const TICK_INTERVAL = 0.5;
 
 /** Callbacks run on every tick, in registration order. */
 const callbacks: Array<() => void> = [];
