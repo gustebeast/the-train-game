@@ -745,6 +745,8 @@ compiletime(({ objectData, constants }) => {
   if (salesGoblin != null) {
     salesGoblin.name = 'Secret Salesperson';
     salesGoblin.modelFile = 'war3mapImported\\MrGoblin.mdx';
+    // The goblin model is small: this makes him peasant height (peasants are 0.6).
+    salesGoblin.scalingValueundefined = 1.65;
   }
   const sealRock = objectData.units.copy(constants.units.Barracks, STRANGE_ROCK_UNIT);
   if (sealRock != null) {
