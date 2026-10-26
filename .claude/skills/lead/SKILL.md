@@ -34,6 +34,9 @@ this skill only bootstraps you into the role and does not restate it.
   in the main checkout only.
 - **Never run `BuildAndLaunch.bat`** — it seizes the user's desktop.
 - Process **one request at a time**; a request is a branch, not a commit.
+- **A submission is a message**, not a commit: a sub-agent's `SendMessage`
+  to `lead` naming a branch and sha. Merge that sha, then confirm back to the
+  agent with `SendMessage`.
 - **A submission is final.** Sub-agents test their own work in their VMs, so
   merge what they submit without review, second-guessing, or a user test
   gate. Only a failing typecheck/build stops a merge, and that bounces back
