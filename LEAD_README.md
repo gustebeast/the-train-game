@@ -25,46 +25,17 @@ after submitting aren't swept in. Sessions only exchange messages when
 their permission modes match (all five run bypass); a mismatched send is
 held for the user to approve.
 
-A branch ahead of `main` **without** a submission is work in progress —
-commits are not submissions. If one looks finished but no message came,
-ask the agent rather than merging it. The two branch watchers below are
-the backstop for a lost message:
+A message also starts a new turn when you are idle, so no background
+watcher is needed (verified 2026-10-26: murph's message woke
+an idle lead). Don't arm one — a persistent task makes the session look
+permanently busy, and since commits are no longer submissions it would only
+report work in progress.
 
-1. **Prompt-time hook** — a `UserPromptSubmit` hook (in
-   `.claude/settings.json`) runs at every user prompt and reports any
-   `agent/*` branch with commits ahead of `main`.
-2. **Intake monitor (push notification)** — arm this ONCE at session start
-   with the `Monitor` tool (`persistent: true`). Unlike the old watcher it
-   does **not** exit when it fires, so there is nothing to re-arm — each
-   new merge request arrives as its own notification for the life of the
-   session:
-   ```bash
-   cd "C:/Users/gus/Sync/Documents/Games/Warcraft3/TheTrainGame"
-   prev=""
-   while true; do
-     cur=$(git for-each-ref --format='%(refname:short)' refs/heads/agent/ 2>/dev/null | while read -r b; do
-       n=$(git rev-list --count "main..$b" 2>/dev/null || echo 0)
-       [ "${n:-0}" -gt 0 ] && echo "$b ($n ahead) $(git rev-parse --short "$b")"
-     done | sort)
-     comm -13 <(echo "$prev") <(echo "$cur")
-     prev="$cur"
-     sleep 20
-   done
-   ```
-   It emits a line only for branches genuinely **ahead of main**, so an
-   agent merging `main` into their own branch no longer wakes you, and a
-   branch going quiet after you merge it is silent too. Treat a line from
-   it as "check whether a submission message came", not as a merge
-   request.
-
-   **You are the only role that runs one.** A persistent monitor shows up
-   as a permanently "running task" and makes its chat look busy forever,
-   which is why sub-agents no longer run one — it would destroy the user's
-   ability to see which agents are actually working. That cost is worth
-   paying once, here, because you are expected to integrate submissions
-   unattended; it is not worth paying five times.
-
-Either way, a branch ahead of `main` is a pending merge request.
+A branch ahead of `main` **without** a submission is work in progress. If
+one looks finished but no message came, ask the agent rather than merging
+it. The **prompt-time hook** (`UserPromptSubmit` in `.claude/settings.json`)
+lists such branches at every user prompt; that is the backstop for a lost
+message.
 
 ## Protocol for each merge request
 
