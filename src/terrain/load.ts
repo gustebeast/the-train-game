@@ -1,4 +1,4 @@
-import { Grid, GRID_MAX_X } from './constants';
+import { Grid, GRID_MAX_X, biomeForCampLevel } from './constants';
 import { stopPregameMusic } from '../lobbyMusic';
 import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateVictoryLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
 import { spawnTerrain, SpawnedTrain } from './spawn';
@@ -341,7 +341,8 @@ export function loadTerrain(difficulty: number, skipCleanup = false, exitX = GRI
   // only round that gets a second exit -- the two arrive together or not at all.
   const camp = getCampData();
   const bossRound = camp != null && camp.level >= 3;
-  return loadGameplay(generateTerrain(difficulty, exitX, bossRound), skipCleanup);
+  const biome = biomeForCampLevel(camp != null ? camp.level : null);
+  return loadGameplay(generateTerrain(difficulty, exitX, bossRound, biome), skipCleanup);
 }
 
 /** -cheatmode drops straight into gameplay without passing a start lobby, so

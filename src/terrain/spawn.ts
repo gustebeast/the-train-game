@@ -2,9 +2,9 @@ import { Destructable, Item, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
 
 import {
-  Terrain, Entity, Grid,
+  Terrain, Entity, Grid, Biome, BIOMES,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
-  TREE_RAW, ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, STRANGE_ROCK_RAW, GridPos,
+  ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, STRANGE_ROCK_RAW, GridPos,
   idx, gridToWorld,
 } from './constants';
 import { DEFAULT_TRACK, SKINS } from '../track/constants';
@@ -30,9 +30,8 @@ import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
 const ROCK_MODEL_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
 
 // --- Terrain tile FourCCs ---
-const TERRAIN_FOURCC: Record<Terrain, string> = {
-  [Terrain.GRASS]: 'Lgrs',
-  [Terrain.GRASSY_DIRT]: 'Lgrd',
+// GRASS, GRASSY_DIRT and POOL depend on the biome; see tileFor.
+const TERRAIN_FOURCC: Record<Exclude<Terrain, Terrain.GRASS | Terrain.GRASSY_DIRT | Terrain.POOL>, string> = {
   [Terrain.ROCK]: 'Lrok',
   [Terrain.ROUGH_DIRT]: 'Ldro',
   [Terrain.WHITE_MARBLE]: 'Xwmb',
@@ -48,8 +47,15 @@ const PLAYER_ENTITIES = [Entity.PLAYER_1, Entity.PLAYER_2, Entity.PLAYER_3, Enti
 
 const CENTER_OFFSET = 16;
 
-function paintTile(worldX: number, worldY: number, terrain: Terrain): void {
-  SetTerrainType(worldX, worldY, FourCC(TERRAIN_FOURCC[terrain]), -1, 1, 0);
+function tileFor(terrain: Terrain, biome: Biome): string {
+  if (terrain === Terrain.GRASS) return BIOMES[biome].grass;
+  if (terrain === Terrain.GRASSY_DIRT) return BIOMES[biome].grassyDirt;
+  if (terrain === Terrain.POOL) return BIOMES[biome].pool;
+  return TERRAIN_FOURCC[terrain];
+}
+
+function paintTile(worldX: number, worldY: number, terrain: Terrain, biome: Biome): void {
+  SetTerrainType(worldX, worldY, FourCC(tileFor(terrain, biome)), -1, 1, 0);
 }
 
 /** Spawn an initial E-W track piece and register it in placedTracks. */
@@ -175,7 +181,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
       const world = gridToWorld({ x: gx, y: gy });
 
       // Paint terrain
-      paintTile(world.x, world.y, cell.terrain);
+      paintTile(world.x, world.y, cell.terrain, grid.biome);
 
       // Spawn entity
       const readyCircle = READY_CIRCLES[cell.entity];
@@ -188,7 +194,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         case Entity.TREE: {
           const variation = GetRandomInt(0, 9);
           const tree = Destructable.create(
-            FourCC(TREE_RAW), world.x, world.y,
+            FourCC(BIOMES[grid.biome].tree), world.x, world.y,
             GetRandomReal(220, 320), 0.8, variation,
           );
           if (tree != null) registerResourceDest(tree);

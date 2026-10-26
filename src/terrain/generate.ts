@@ -1,5 +1,5 @@
 import {
-  Terrain, Entity, Cell, Grid, GridPos, DIRS, SPAWN, VICTORY, BOSS_EXIT,
+  Terrain, Entity, Biome, Cell, Grid, GridPos, DIRS, SPAWN, VICTORY, BOSS_EXIT,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, GRID_W, GRID_H,
   idx, idxToCoords, inBounds, isReserved,
 } from './constants';
@@ -32,7 +32,7 @@ function createGrid(): Grid {
     cells[i] = { terrain: Terrain.GRASS, entity: Entity.NONE };
     path[i] = false;
   }
-  return { cells, path, exit: { x: GRID_MAX_X, y: 0 }, bossExit: null };
+  return { cells, path, exit: { x: GRID_MAX_X, y: 0 }, bossExit: null, biome: Biome.SUMMER };
 }
 
 // --- Find a random empty tile (no entity, not reserved) ---
@@ -967,13 +967,19 @@ function placeCritters(grid: Grid, count: number): void {
   }
 }
 
-export function generateTerrain(difficulty: number, exitX = GRID_MAX_X, withBossExit = false): Grid {
+export function generateTerrain(
+  difficulty: number, exitX = GRID_MAX_X, withBossExit = false, biome = Biome.SUMMER,
+): Grid {
   const grid = createGrid();
+  grid.biome = biome;
   BOSS_EXIT.active = false;
   generatePath(grid, exitX);
   if (withBossExit) generateBossExit(grid, exitX);
   placeGranite(grid, difficulty);
   placeWater(grid, difficulty);
+  for (const cell of grid.cells) {
+    if (cell.entity === Entity.WATER) cell.terrain = Terrain.POOL;
+  }
   placeResources(grid, difficulty);
   placeEntities(grid);
   placeCreepCamp(grid);

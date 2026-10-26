@@ -1,11 +1,13 @@
 import { Destructable, Item, Trigger, Unit } from 'w3ts';
-import { TREE_RAW, ROCK_RAW, GRANITE_RAW } from './terrain/constants';
+import { BIOMES, ROCK_RAW, GRANITE_RAW } from './terrain/constants';
 import { unitHasItemType, rejectOrder } from './items';
 import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID } from './constants';
 import { noteChoppedTree, noteMinedStone } from './tutorialBoard';
 
 
-const TREE_DEST_ID = FourCC(TREE_RAW);
+/** Every biome's tree: they differ only in look. */
+const TREE_DEST_IDS = new Set<number>();
+for (const art of Object.values(BIOMES)) TREE_DEST_IDS.add(FourCC(art.tree));
 const ROCK_DEST_ID = FourCC(ROCK_RAW);
 const GRANITE_DEST_ID = FourCC(GRANITE_RAW);
 
@@ -40,7 +42,7 @@ function dropResource(itemId: number): void {
 
 /** Register a resource destructable so it drops an item on death. */
 export function registerResourceDest(dest: Destructable): void {
-  if (dest.typeId === TREE_DEST_ID) {
+  if (TREE_DEST_IDS.has(dest.typeId)) {
     treeDeath.registerDeathEvent(dest);
   } else if (dest.typeId === ROCK_DEST_ID) {
     rockDeath.registerDeathEvent(dest);
@@ -49,7 +51,7 @@ export function registerResourceDest(dest: Destructable): void {
 
 /** Returns the required tool for a destructable type, or 0 if none needed. */
 function requiredToolForDest(destTypeId: number): number {
-  if (destTypeId === TREE_DEST_ID) return AXE_ID;
+  if (TREE_DEST_IDS.has(destTypeId)) return AXE_ID;
   if (destTypeId === ROCK_DEST_ID) return PICKAXE_ID;
   return 0;
 }
@@ -61,7 +63,7 @@ function toolName(itemTypeId: number): string {
 }
 
 function isResourceDest(destTypeId: number): boolean {
-  return destTypeId === TREE_DEST_ID || destTypeId === ROCK_DEST_ID;
+  return TREE_DEST_IDS.has(destTypeId) || destTypeId === ROCK_DEST_ID;
 }
 
 /**
