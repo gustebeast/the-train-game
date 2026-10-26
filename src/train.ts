@@ -1,5 +1,5 @@
 import { Unit, Timer, Trigger, Rectangle, Region } from 'w3ts';
-import { createTimer, startOneShot } from './timers';
+import { createTimer, destroyTimer, startOneShot } from './timers';
 import { placedTracks, isVictoryTriggered } from './track/state';
 import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
@@ -66,7 +66,7 @@ export function isWrecked(): boolean {
 /** Stop the burn tick, if one is running. */
 function stopBurnTimer(): void {
   if (burnTimer != null) {
-    burnTimer.destroy();
+    destroyTimer(burnTimer);
     burnTimer = null;
   }
 }

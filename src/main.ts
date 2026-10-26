@@ -60,6 +60,10 @@ function tsMain() {
     // Pick a creep camp for the first round
     rollCreepCamp();
 
+    // Before anything can show a sky: outside a round the map is permanently
+    // day, and the clock only moves when daynight.ts moves it.
+    initDayNight();
+
     // Boot into the start lobby rather than straight into round 1: the host
     // chooses there whether to start a run, play the tutorial or load a save.
     // No train exists yet, so nothing here may assume one -- initTrain runs
@@ -75,9 +79,6 @@ function tsMain() {
     initBossKey();
     initFill();
     initWaterTrain();
-    // Before anything can show a sky: outside a round the map is permanently
-    // day, and the clock only moves when daynight.ts moves it.
-    initDayNight();
     initCheat();
     initShop();
     initDealerOffer();

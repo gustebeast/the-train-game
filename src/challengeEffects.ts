@@ -35,7 +35,6 @@ function setUiHidden(hidden: boolean): void {
 
 // --- over-the-shoulder camera ---------------------------------------------
 
-/** Chase-camera geometry. Low and close, looking slightly down at the unit. */
 /** Close enough that the peasant reads as the subject of the shot rather than a
  *  figure in a landscape -- roughly double its on-screen size versus the first
  *  pass at 900. */
@@ -125,9 +124,14 @@ export function isShoulderCamActive(): boolean {
  *
  *  Also the entry point for the -thirdperson cheat, so the view can be tried
  *  without buying the challenge. While it is on the camera is genuinely locked:
- *  distance, angle and position are re-applied every OTS_INTERVAL, so wheeling
- *  out or scrolling away snaps back within a frame or two rather than letting a
+ *  distance, angle and position are re-applied on every global tick, so wheeling
+ *  out or scrolling away snaps back within half a second rather than letting a
  *  player escape the handicap. */
+/** The sky the chase camera looks into. The path once lost its backslashes
+ *  (single ones in a JS string are swallowed), and an invalid sky path renders
+ *  nothing, so the view showed black above the horizon. */
+const SHOULDER_CAM_SKY = 'Environment\\Sky\\LordaeronSummerSky\\LordaeronSummerSky.mdl';
+
 function setShoulderCam(active: boolean): void {
   if (otsActive === active) return;
   otsActive = active;
@@ -136,7 +140,7 @@ function setShoulderCam(active: boolean): void {
     // the void above the terrain renders black. A chase camera looks straight at
     // it, so give it a sky for as long as it is running and take it away again
     // afterwards -- this is a per-mode fix, not a change to how the game looks.
-    SetSkyModel('Environment\Sky\LordaeronSummerSky\LordaeronSummerSky.mdl');
+    SetSkyModel(SHOULDER_CAM_SKY);
     return;
   }
   SetSkyModel('');
