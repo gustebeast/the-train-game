@@ -494,24 +494,36 @@ function Start-TestVmMatch {
   # observable, and it stops the moment the browser is where it must be. If it
   # never gets there, the run says so immediately instead of burning the ready
   # timeout on a map it was never going to load.
+  #
+  # The map row is selected INSIDE the same loop, and the browser is looked at
+  # again after selecting it. The list rebuild can land late -- after a probe
+  # has already seen Download -- and it drops the browser back to the top level,
+  # so the row click then selects "Justice" (seen on murph 2026-10-26: the probe
+  # screenshot showed Download, the final one Justice). Only a look taken after
+  # the selection proves CREATE will open the uploaded map.
   $shot = Join-Path $env:TEMP "trainvm-$($Vm.Name)-browser.png"
-  $inDownload = $false
+  $selected = $false
   foreach ($attempt in 1..5) {
     $probe = Vnc-Connect $Connection.port   # fresh connection: a reused one is sent only CHANGED regions
     try { Vnc-Shot $probe $shot } finally { $probe.cli.Close() }
-    if ((Get-ImageRegionBrightness $shot 590 430 390 560) -le 15) { $inDownload = $true; break }
-    # Top level: row 1 is the "Download" folder, so enter it and look again.
-    Vnc-DblClick $Connection $ui.downloadFolder[0] $ui.downloadFolder[1]
-    Start-Sleep -Milliseconds 1200
+    if ((Get-ImageRegionBrightness $shot 590 430 390 560) -gt 15) {
+      # Top level: row 1 is the "Download" folder, so enter it and look again.
+      Vnc-DblClick $Connection $ui.downloadFolder[0] $ui.downloadFolder[1]
+      Start-Sleep -Milliseconds 1200
+      continue
+    }
+    Start-Sleep -Milliseconds 300
+    Vnc-Click $Connection $ui.firstMapRow[0] $ui.firstMapRow[1]
+    Start-Sleep -Milliseconds 500
+    $probe = Vnc-Connect $Connection.port
+    try { Vnc-Shot $probe $shot } finally { $probe.cli.Close() }
+    if ((Get-ImageRegionBrightness $shot 590 430 390 560) -le 15) { $selected = $true; break }
   }
-  if (-not $inDownload) {
-    throw ("$($Vm.Name): the map browser would not enter the Download folder after 5 attempts " +
+  if (-not $selected) {
+    throw ("$($Vm.Name): the map browser would not stay in the Download folder after 5 attempts " +
            "(it is still showing the full stock map list). Selecting a map now would run one of " +
            "Blizzard's, not the built map. Screenshot: $shot")
   }
-  Start-Sleep -Milliseconds 300
-  Vnc-Click    $Connection $ui.firstMapRow[0]     $ui.firstMapRow[1]
-  Start-Sleep -Milliseconds 500
   Vnc-Click    $Connection $ui.createButton[0]    $ui.createButton[1]
   Start-Sleep -Milliseconds 1500
 
