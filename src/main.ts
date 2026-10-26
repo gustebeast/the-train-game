@@ -110,4 +110,3 @@ function tsMain() {
 }
 
 addScriptHook(W3TS_HOOK.MAIN_AFTER, tsMain);
-import './zzposetest';
