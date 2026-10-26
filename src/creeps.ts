@@ -343,10 +343,27 @@ const GRID_OFFSETS: ReadonlyArray<readonly [number, number]> = [
   [TRACK_SIZE, -TRACK_SIZE],   // 9: bot-right
 ];
 
-/** Spawned creeps for the current round, paired with their camp data. */
-let spawnedCreeps: Array<{ unit: Unit; campUnit: CreepUnit }> = [];
+interface SpawnedCreep {
+  unit: Unit;
+  campUnit: CreepUnit;
+  /** Pays XP and drops on death. Kept on the entry so it is destroyed with it:
+   *  a creep removed rather than killed (all heroes dead, the board sweep)
+   *  fires no death event, so a trigger that only destroyed itself on death
+   *  leaked one per creep per failed camp. */
+  deathTrig: Trigger | null;
+}
 
-/** Spawn creeps around the given world position in a 3x3 grid. Invulnerable until heroes arrive. */
+/** Spawned creeps for the current round, paired with their camp data. */
+let spawnedCreeps: SpawnedCreep[] = [];
+
+/** Forget the spawned creeps, destroying their death triggers. */
+function forgetSpawnedCreeps(): void {
+  for (const c of spawnedCreeps) {
+    if (c.deathTrig != null) c.deathTrig.destroy();
+  }
+  spawnedCreeps = [];
+}
+
 /** Where the current camp's cage stood, so a drop can be placed there after the
  *  cage itself is long gone. */
 let campOrigin: { x: number; y: number } | null = null;
@@ -355,9 +372,10 @@ export function getCampOrigin(): { x: number; y: number } | null {
   return campOrigin;
 }
 
+/** Spawn creeps around the given world position in a 3x3 grid. Invulnerable until heroes arrive. */
 function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
   campOrigin = { x: cx, y: cy };
-  spawnedCreeps = [];
+  forgetSpawnedCreeps();
   // The sparring match puts the camp down once per copy, out in the strips;
   // the cage only says where it would have been, which restarts still need.
   if (sparringActive) {
@@ -388,7 +406,7 @@ function placeCamp(cx: number, cy: number, camp: CreepCamp): void {
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_NUMBER_OF_DICE, 0);
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);
-    spawnedCreeps.push({ unit: u, campUnit: creeps[i] });
+    spawnedCreeps.push({ unit: u, campUnit: creeps[i], deathTrig: null });
   }
 }
 
@@ -402,7 +420,7 @@ function removeSpawnedCreeps(): void {
       RemoveUnit(c.unit.handle);
     }
   }
-  spawnedCreeps = [];
+  forgetSpawnedCreeps();
 }
 
 // ---------------------------------------------------------------------------
@@ -453,8 +471,14 @@ function sumForce(units: Unit[]): { ehp: number; dps: number } {
 }
 
 
+/** How much harder than the force a camp is allowed to hit. Tough Camp raises
+ *  it; everything that quotes or applies the damage scale asks here. */
+function currentDpsAdvantage(): number {
+  return isChallengeArmed(CH_TOUGH_CAMP) ? TOUGH_CAMP_DPS_ADVANTAGE : CREEP_DPS_ADVANTAGE;
+}
+
 /** Compute DPS and EHP scale factors for creep stat scaling. */
-function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: number } {
+function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
   let creepDPS = 0;
   let creepEHP = 0;
   for (const c of spawnedCreeps) {
@@ -499,9 +523,8 @@ function computeScaleFactors(heroes: Unit[]): { dpsScale: number; ehpScale: numb
   // is nothing to measure, and the units' own damage stands in.
   const forceDPS = measuredHeroDPS > 0 ? measuredHeroDPS : fielded.dps;
   const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
-  const dpsAdvantage = isChallengeArmed(CH_TOUGH_CAMP) ? TOUGH_CAMP_DPS_ADVANTAGE : CREEP_DPS_ADVANTAGE;
   return {
-    dpsScale: effectiveCreepDPS > 0 ? (forceDPS * dpsAdvantage) / effectiveCreepDPS : 1,
+    dpsScale: effectiveCreepDPS > 0 ? (forceDPS * currentDpsAdvantage()) / effectiveCreepDPS : 1,
     ehpScale: creepEHP > 0 ? forceEHP / creepEHP : 1,
   };
 }
@@ -531,26 +554,27 @@ export function dpsSampleBreakdown(): {
  *
  *  scale is the multiplier applied to every creep's damage: 1 leaves them at
  *  their ladder values, 3 triples them. A number far from 1 means the match
- *  measured something lopsided. */
+ *  measured something lopsided. It uses the same advantage the next camp will
+ *  get, so it is honest with Tough Camp armed. */
 export function getDpsMeasured(): { heroDPS: number; creepDPS: number; scale: number } {
   return {
     heroDPS: measuredHeroDPS,
     creepDPS: measuredCreepDPS,
-    scale: measuredCreepDPS > 0 ? measuredHeroDPS * CREEP_DPS_ADVANTAGE / measuredCreepDPS : 0,
+    scale: measuredCreepDPS > 0 ? measuredHeroDPS * currentDpsAdvantage() / measuredCreepDPS : 0,
   };
 }
 
 /** The same three numbers as lines, for -dpsnumbers to print. */
 export function getDpsMeasurementReport(): string[] {
+  const measured = getDpsMeasured();
   const lines: string[] = [];
-  lines.push('Our DPS (measured): ' + I2S(R2I(measuredHeroDPS)));
-  lines.push('Creep DPS (measured): ' + I2S(R2I(measuredCreepDPS)));
+  lines.push('Our DPS (measured): ' + I2S(R2I(measured.heroDPS)));
+  lines.push('Creep DPS (measured): ' + I2S(R2I(measured.creepDPS)));
   lines.push('HP taken off the creeps: ' + I2S(R2I(creepHPLost)));
   lines.push('HP taken off our side: ' + I2S(R2I(ourHPLost))
     + ' (of which summons took ' + I2S(R2I(summonHPLost)) + ')');
-  if (measuredCreepDPS > 0) {
-    const scale = measuredHeroDPS * CREEP_DPS_ADVANTAGE / measuredCreepDPS;
-    lines.push('=> creep damage scale: ' + I2S(R2I(scale * 100)) + '%');
+  if (measured.creepDPS > 0) {
+    lines.push('=> creep damage scale: ' + I2S(R2I(measured.scale * 100)) + '%');
   } else {
     lines.push('=> no creep DPS measured; scaling falls back to the estimate');
   }
@@ -593,7 +617,7 @@ export function measureFieldedForce(): {
 export function scaleCreepStats(heroes: Unit[]): void {
   if (spawnedCreeps.length === 0 || heroes.length === 0) return;
 
-  const { dpsScale, ehpScale } = computeScaleFactors(heroes);
+  const { dpsScale, ehpScale } = computeScaleFactors();
 
   // Compute XP rewards: use creep level as weight, scale to target total
   const isFirstCamp = heroes.every(h => GetHeroXP(h.handle) === 0);
@@ -647,7 +671,8 @@ export function scaleCreepStats(heroes: Unit[]): void {
       const xpReward = creepXPRewards[i];
       const drops = c.campUnit.itemDrops;
       const deathTrig = Trigger.create();
-      TriggerRegisterUnitEvent(deathTrig.handle, h, EVENT_UNIT_DEATH);
+      deathTrig.registerUnitEvent(c.unit, EVENT_UNIT_DEATH);
+      c.deathTrig = deathTrig;
       deathTrig.addAction(() => {
         awardHeroXP(xpReward);
         if (drops != null) {
@@ -657,15 +682,11 @@ export function scaleCreepStats(heroes: Unit[]): void {
             const itemId = drop.id != null
               ? FourCC(drop.id)
               : ChooseRandomItemEx(drop.type ?? ITEM_TYPE_PERMANENT, drop.level ?? 1);
-            if (itemId !== 0) {
-              const dying = GetTriggerUnit()!;
-              CreateItem(itemId, GetUnitX(dying), GetUnitY(dying));
-            }
+            if (itemId !== 0) CreateItem(itemId, GetUnitX(h), GetUnitY(h));
           }
         }
-        DestroyTrigger(deathTrig.handle);
         // Check if all creeps are dead — grant Unsummon Heroes to peasants
-        if (spawnedCreeps.every(c => GetUnitState(c.unit.handle, UNIT_STATE_LIFE) <= 0)) {
+        if (spawnedCreeps.every(s => GetUnitState(s.unit.handle, UNIT_STATE_LIFE) <= 0)) {
           grantUnsummonToAllPeasants();
           completeChallenge(CH_TOUGH_CAMP);
           // A flawless level 3 clear leaves the Strange Key where the cage was.
@@ -715,7 +736,7 @@ function teardownSparringMatch(record: boolean): void {
     for (const c of spawnedCreeps) {
       c.unit.destroy();
     }
-    spawnedCreeps = [];
+    forgetSpawnedCreeps();
     // Order matters: the mercenary's kit is snapshotted off its live unit, so
     // that has to happen before the sweep removes it.
     removeSpawnedMercUnits();
