@@ -6,7 +6,7 @@ import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
 import { challengeUIState, initChallengeUI } from './challengeUI';
 import { isBossFightWatched, startBossFight } from './bossArena';
 import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer } from './util';
-import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID } from './constants';
+import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID } from './constants';
 import { Item, Unit } from 'w3ts';
 import { cargoShowing } from './cargoVisuals';
 import { auditMinimapIcons, minimapIconCount } from './minimapIcons';
@@ -337,7 +337,9 @@ function runMinimapEvents(t: TestReporter): void {
                       // damage. (SetWidgetLife to 0 does NOT fire an item's
                       // death event -- measured -- and nothing in the map
                       // destroys tools that way.)
-                      UnitDamageTarget(swap.handle, axe, 100000, true, false,
+                      // Beyond the tools' 999999 HP: unreachable in play now,
+                      // but the icon's death handling is still held to account.
+                      UnitDamageTarget(swap.handle, axe, 10000000, true, false,
                         ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
                       t.after(wait, () => {
                         t.report('axeLifeAfterDamage', GetWidgetLife(axe));
@@ -363,3 +365,33 @@ function runMinimapEvents(t: TestReporter): void {
   });
 }
 registerTest('minimapevents', runMinimapEvents);
+
+// --- tools can't be broken ------------------------------------------------
+
+/** The tools and the key carry 999999 HP, so an A-click cannot destroy them.
+ *  Read off real items, which is what proves the object data reached the built
+ *  map rather than only the source. Wood is reported as the breakable control. */
+function runToolHealth(t: TestReporter): void {
+  const me = getHumanPlayers()[0];
+  const hitter = CreateUnit(me.handle, PEASANT_ID, 0, 0, 0)!;
+  const tools: [string, number][] = [
+    ['axe', AXE_ID], ['pickaxe', PICKAXE_ID], ['bucket', BUCKET_ID],
+    ['bucketFull', BUCKET_FULL_ID], ['key', BOSS_KEY_ITEM_ID],
+  ];
+  for (const [name, id] of tools) {
+    const it = CreateItem(id, 0, 0)!;
+    const life = GetWidgetLife(it);
+    t.report(name + 'HP', life);
+    if (life < 999999) t.fail(name + 'HP', 'expected 999999, got ' + I2S(R2I(life)));
+    // A far harder hit than any A-click, which must leave it standing.
+    UnitDamageTarget(hitter, it, 5000, true, false,
+      ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
+    expect(t, name + 'SurvivesHeavyHit', GetWidgetLife(it) > 0 ? 1 : 0, 1);
+    RemoveItem(it);
+  }
+  const wood = CreateItem(WOOD_ID, 0, 0)!;
+  t.report('woodHP', GetWidgetLife(wood));
+  RemoveItem(wood);
+  t.done();
+}
+registerTest('toolhealth', runToolHealth);

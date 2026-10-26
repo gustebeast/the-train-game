@@ -602,6 +602,16 @@ compiletime(({ objectData, constants }) => {
   bucketFull.abilities = '';
   bucketFull.modelUsed = 'war3mapImported\\BucketFull.mdx';
 
+  // The tools and the key can't be destroyed by attacking them: items have hit
+  // points, and A-clicking a tool on the ground used to break it, which loses a
+  // whole round's worth of chopping, mining or watering -- or the only key to
+  // the boss. 999999, the same as the indestructible granite; no attack in the
+  // map comes close. Wood, stone and track pieces are left breakable: losing
+  // one is a nuisance, not a lost round.
+  for (const unbreakable of [axe, pickaxe, bucket, bucketFull, bossKey]) {
+    unbreakable.hitPoints = 999999;
+  }
+
   // Wood resource item (IronwoodBranch — normal holdable item)
   const wood = objectData.items.get(constants.items.IronwoodBranch)!;
   wood.name = 'Wood';
