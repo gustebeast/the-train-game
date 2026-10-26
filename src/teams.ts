@@ -95,6 +95,16 @@ export function initTeams() {
     }
   }
 
+  // No kill bounty from anyone. Gold here is gameState.gold, copied onto native
+  // gold by syncGold, and earned from rounds and challenges -- never from kills.
+  // A bounty only raised native gold, so every creep killed in a round showed
+  // as phantom gold (6 for a kobold, measured) that the shop then refused to
+  // honour, until the next sync quietly took it back. All players rather than
+  // just the creeps: critters, the boss and its infernals are owned elsewhere.
+  for (let i = 0; i < bj_MAX_PLAYER_SLOTS; i++) {
+    SetPlayerState(Player(i)!, PLAYER_STATE_GIVES_BOUNTY, 0);
+  }
+
   humanPlayers.forEach((p: MapPlayer) => {
     SetCameraFieldForPlayer(p.handle, CAMERA_FIELD_TARGET_DISTANCE, 2500, 0);
     p.setState(PLAYER_STATE_RESOURCE_GOLD, 500);

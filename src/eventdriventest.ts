@@ -1,4 +1,5 @@
 import { registerTest, TestReporter } from './testkit';
+import { gameState } from './state';
 import { Units } from '@objectdata/units';
 import { beginNewRun, loadTerrain, loadInterRoundLobby, loadBossBattlefield } from './terrain/load';
 import { armChallenge, clearChallenges, isChallengeArmed, getArmedChallenge } from './challenges';
@@ -6,9 +7,10 @@ import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
 import { challengeUIState, initChallengeUI } from './challengeUI';
 import { isBossFightWatched, startBossFight } from './bossArena';
 import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer } from './util';
-import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
+import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID } from './constants';
 import { Item, Unit } from 'w3ts';
 import { cargoShowing } from './cargoVisuals';
+import { auditMinimapIcons, minimapIconCount } from './minimapIcons';
 import { getTrain, getTrackWagon } from './train';
 import { setStorageItem, getStorageSlot, giveToStorage, findItemByType } from './items';
 
@@ -253,3 +255,193 @@ function runCargoEvents(t: TestReporter): void {
   });
 }
 registerTest('cargoevents', runCargoEvents);
+
+// --- minimap tool icons ---------------------------------------------------
+
+/**
+ * "Reliable" is defined against the scanner this replaced: after every kind of
+ * change, a full scan of the ground must find NOTHING to fix. auditMinimapIcons
+ * is that scan; it returns how many icons it had to correct.
+ */
+function runMinimapEvents(t: TestReporter): void {
+  beginNewRun();
+  loadTerrain(0);
+  const wait = ONE_FRAME * 2;
+  const me = getHumanPlayers()[0];
+
+  const groundAxe = (): item | null => {
+    let found: item | null = null;
+    EnumItemsInRect(GetWorldBounds()!, null!, () => {
+      const it = GetEnumItem();
+      if (found == null && it != null && GetItemTypeId(it) === AXE_ID && !IsItemOwned(it)) found = it;
+    });
+    return found;
+  };
+
+  t.after(wait, () => {
+    t.report('iconsAfterLoad', minimapIconCount());
+    if (minimapIconCount() === 0) t.fail('iconsAfterLoad', 'no tools on the ground, nothing tested');
+    expect(t, 'auditAfterLoad', auditMinimapIcons(), 0);
+
+    const axe = groundAxe();
+    if (axe == null) { t.fail('axe', 'no ground axe'); t.done(); return; }
+    const icons0 = minimapIconCount();
+    const carrier = CreateUnit(me.handle, PEASANT_ID, GetItemX(axe), GetItemY(axe), 0)!;
+
+    // Picked up.
+    UnitAddItem(carrier, axe);
+    t.after(wait, () => {
+      expect(t, 'pickupRemovesIcon', icons0 - minimapIconCount(), 1);
+      expect(t, 'auditAfterPickup', auditMinimapIcons(), 0);
+
+      // Dropped somewhere else.
+      SetUnitPosition(carrier, GetUnitX(carrier) + 256, GetUnitY(carrier));
+      UnitRemoveItem(carrier, axe);
+      t.after(wait, () => {
+        expect(t, 'dropRestoresIcon', minimapIconCount(), icons0);
+        expect(t, 'auditAfterDrop', auditMinimapIcons(), 0);
+
+        // Carried, and the carrier dies.
+        UnitAddItem(carrier, axe);
+        t.after(wait, () => {
+          KillUnit(carrier);
+          t.after(wait, () => {
+            expect(t, 'carrierDeathRestoresIcon', minimapIconCount(), icons0);
+            expect(t, 'auditAfterCarrierDeath', auditMinimapIcons(), 0);
+
+            // Moved on the ground, hidden, shown, then created and removed.
+            SetItemPosition(axe, GetItemX(axe) - 384, GetItemY(axe));
+            t.after(wait, () => {
+              expect(t, 'auditAfterMove', auditMinimapIcons(), 0);
+              SetItemVisible(axe, false);
+              t.after(wait, () => {
+                expect(t, 'hideRemovesIcon', icons0 - minimapIconCount(), 1);
+                SetItemVisible(axe, true);
+                const spare = CreateItem(PICKAXE_ID, 0, 0)!;
+                t.after(wait, () => {
+                  expect(t, 'createAddsIcon', minimapIconCount(), icons0 + 1);
+                  RemoveItem(spare);
+                  // Same frame: removal is handled inside the call.
+                  expect(t, 'removeDropsIconSameFrame', minimapIconCount(), icons0);
+                  t.after(wait, () => {
+                    expect(t, 'auditAfterCreateRemove', auditMinimapIcons(), 0);
+
+                    // Created and picked up in one frame -- how filling or
+                    // emptying a bucket swaps the item. Must leave no icon.
+                    const swap = Unit.create(me, PEASANT_ID, 0, 0, 0)!;
+                    UnitAddItem(swap.handle, CreateItem(BUCKET_FULL_ID, 0, 0)!);
+                    t.after(wait, () => {
+                      expect(t, 'createThenCarryNoIcon', minimapIconCount(), icons0);
+                      expect(t, 'auditAfterSwap', auditMinimapIcons(), 0);
+
+                      // Destroyed on the ground, the way it happens in play:
+                      // damage. (SetWidgetLife to 0 does NOT fire an item's
+                      // death event -- measured -- and nothing in the map
+                      // destroys tools that way.)
+                      // Beyond the tools' 999999 HP: unreachable in play now,
+                      // but the icon's death handling is still held to account.
+                      UnitDamageTarget(swap.handle, axe, 10000000, true, false,
+                        ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
+                      t.after(wait, () => {
+                        t.report('axeLifeAfterDamage', GetWidgetLife(axe));
+                        expect(t, 'auditAfterDestroy', auditMinimapIcons(), 0);
+
+                        // A new board: everything wiped and respawned.
+                        loadTerrain(0);
+                        t.after(wait, () => {
+                          expect(t, 'auditAfterRegen', auditMinimapIcons(), 0);
+                          t.report('iconsAfterRegen', minimapIconCount());
+                          t.done();
+                        });
+                      });
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+}
+registerTest('minimapevents', runMinimapEvents);
+
+// --- tools can't be broken ------------------------------------------------
+
+/** The tools and the key carry 999999 HP, so an A-click cannot destroy them.
+ *  Read off real items, which is what proves the object data reached the built
+ *  map rather than only the source. Wood is reported as the breakable control. */
+function runToolHealth(t: TestReporter): void {
+  const me = getHumanPlayers()[0];
+  const hitter = CreateUnit(me.handle, PEASANT_ID, 0, 0, 0)!;
+  const tools: [string, number][] = [
+    ['axe', AXE_ID], ['pickaxe', PICKAXE_ID], ['bucket', BUCKET_ID],
+    ['bucketFull', BUCKET_FULL_ID], ['key', BOSS_KEY_ITEM_ID],
+  ];
+  for (const [name, id] of tools) {
+    const it = CreateItem(id, 0, 0)!;
+    const life = GetWidgetLife(it);
+    t.report(name + 'HP', life);
+    if (life < 999999) t.fail(name + 'HP', 'expected 999999, got ' + I2S(R2I(life)));
+    // A far harder hit than any A-click, which must leave it standing.
+    UnitDamageTarget(hitter, it, 5000, true, false,
+      ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
+    expect(t, name + 'SurvivesHeavyHit', GetWidgetLife(it) > 0 ? 1 : 0, 1);
+    RemoveItem(it);
+  }
+  const wood = CreateItem(WOOD_ID, 0, 0)!;
+  t.report('woodHP', GetWidgetLife(wood));
+  RemoveItem(wood);
+  t.done();
+}
+registerTest('toolhealth', runToolHealth);
+
+// --- Transmute must not pay gold -------------------------------------------
+
+/** The Alchemist's Transmute kills a creep and pays its owner gold. Gold here
+ *  lives in gameState and is copied onto native gold by syncGold, so a payout
+ *  shows as phantom gold the shop then refuses to honour. Cast it for real and
+ *  measure both. */
+function runTransmuteGold(t: TestReporter): void {
+  beginNewRun();
+  loadTerrain(0);
+  const me = getHumanPlayers()[0];
+  const alchemist = CreateUnit(me.handle, FourCC('Nalc'), 0, 0, 0)!;
+  UnitAddAbility(alchemist, FourCC('ANtm'));
+  SetUnitAbilityLevel(alchemist, FourCC('ANtm'), 1);
+  SetUnitState(alchemist, UNIT_STATE_MANA, 1000);
+  const creep = CreateUnit(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, FourCC('nkob'), 150, 0, 180)!;
+  const nativeBefore = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD);
+  const stateBefore = gameState.gold;
+  const ordered = IssueTargetOrder(alchemist, 'transmute', creep);
+  expect(t, 'orderAccepted', ordered ? 1 : 0, 1);
+  t.after(4, () => {
+    expect(t, 'creepTransmuted', GetWidgetLife(creep) <= 0.405 ? 1 : 0, 1);
+    const nativeGain = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - nativeBefore;
+    t.report('stateGoldGain', gameState.gold - stateBefore);
+    expect(t, 'nativeGoldGain', nativeGain, 0);
+    t.done();
+  });
+}
+registerTest('transmutegold', runTransmuteGold);
+
+/** Kills pay no gold either. Found as the control for transmutegold: with
+ *  Transmute's own payout zeroed, 10 gold still arrived, and a plain kill of the
+ *  same creep paid 6 -- kill bounty, phantom gold on every creep in a round. */
+function runKillBounty(t: TestReporter): void {
+  beginNewRun();
+  loadTerrain(0);
+  const me = getHumanPlayers()[0];
+  const killer = CreateUnit(me.handle, FourCC('Nalc'), 0, 0, 0)!;
+  const creep = CreateUnit(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, FourCC('nkob'), 150, 0, 180)!;
+  const before = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD);
+  UnitDamageTarget(killer, creep, 100000, true, false,
+    ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
+  t.after(1, () => {
+    expect(t, 'creepKilled', GetWidgetLife(creep) <= 0.405 ? 1 : 0, 1);
+    expect(t, 'nativeGoldFromPlainKill', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - before, 0);
+    t.done();
+  });
+}
+registerTest('killbounty', runKillBounty);

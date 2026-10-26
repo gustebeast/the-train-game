@@ -327,6 +327,17 @@ compiletime(({ objectData, constants }) => {
     Aroa: zeroedSpellCost, // Roar (summon heroes spell)
     ACro: zeroedSpellCost, // RoarNeutralHostile (unsummon heroes spell)
     ACss: zeroedSpellCost, // ShadowStrike neutral hostile (fill bucket spell)
+    // The Alchemist's Transmute pays its caster gold for the creep it kills.
+    // Gold here is gameState.gold, copied onto native gold by syncGold, so the
+    // payout only ever showed as phantom gold: the counter jumped (66 for one
+    // kobold, measured) and the shop, which spends gameState.gold, refused to
+    // honour it. Zeroed rather than left to the next sync to wipe. Forced
+    // because 0 is what the library THINKS the default is, so assigning
+    // goldCostFactor = 0 would write nothing at all.
+    ANtm: [
+      { id: 'Ntm1', variableType: 2, dataPointer: 1, value: 0 }, // goldCostFactor
+      { id: 'Ntm2', variableType: 2, dataPointer: 2, value: 0 }, // lumberCostFactor
+    ],
     // NOTE: there was an Aihn (UnitInventoryHuman) block here configuring
     // "mercenary inventory, no drop on death". It was dead: no unit anywhere
     // carries Aihn. The mercenary is given AInv (InventoryHero) instead -- see
@@ -601,6 +612,16 @@ compiletime(({ objectData, constants }) => {
   bucketFull.canBeSoldToMerchants = false;
   bucketFull.abilities = '';
   bucketFull.modelUsed = 'war3mapImported\\BucketFull.mdx';
+
+  // The tools and the key can't be destroyed by attacking them: items have hit
+  // points, and A-clicking a tool on the ground used to break it, which loses a
+  // whole round's worth of chopping, mining or watering -- or the only key to
+  // the boss. 999999, the same as the indestructible granite; no attack in the
+  // map comes close. Wood, stone and track pieces are left breakable: losing
+  // one is a nuisance, not a lost round.
+  for (const unbreakable of [axe, pickaxe, bucket, bucketFull, bossKey]) {
+    unbreakable.hitPoints = 999999;
+  }
 
   // Wood resource item (IronwoodBranch — normal holdable item)
   const wood = objectData.items.get(constants.items.IronwoodBranch)!;
