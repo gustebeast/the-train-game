@@ -1,4 +1,4 @@
-import { Destructable, Item, Trigger, Unit } from 'w3ts';
+import { Destructable, Item, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import {
   loadCheatTerrain, loadInterRoundLobby, loadBossBattlefield,
@@ -15,41 +15,12 @@ import {
 } from './challenges';
 import { applyTrackShapes } from './challengeList';
 import { beginNight, endNight, isNight } from './daynight';
-import { getNeutralPassive, toggleDPSVision } from './teams';
+import { getNeutralExtra, getNeutralPassive, toggleDPSVision } from './teams';
 import { getDpsMeasurementReport } from './creeps';
 import { makeDancer } from './dance';
 import { checkUnionRules } from './challengeWatch';
 import { spawnBoss } from './boss';
-import { forEachUnitOfPlayer } from './util';
-
-/** Register a chat command (exact match, any player) with its action. */
-function onChatCommand(command: string, action: () => void): void {
-  const trigger = Trigger.create();
-  Players.forEach(p => {
-    TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, command, true);
-  });
-  trigger.addAction(action);
-}
-
-/** Register a chat command that takes an argument, e.g. "-challenge 4".
- *
- *  WC3's non-exact chat event matches a SUBSTRING, not a prefix, so "-challenge"
- *  would also fire on someone typing "look at -challenge 4" mid-sentence. The
- *  guard below insists the message actually starts with the command, which is
- *  also what keeps the argument at a known offset. */
-function onChatCommandWithArg(command: string, action: (arg: string) => void): void {
-  const trigger = Trigger.create();
-  Players.forEach(p => {
-    TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, command, false);
-  });
-  trigger.addAction(() => {
-    const said = GetEventPlayerChatString();
-    if (said == null) return;
-    if (string.sub(said, 1, string.len(command)) !== command) return;
-    const [rest] = string.gsub(string.sub(said, string.len(command) + 1), '^%s+', '');
-    action(rest);
-  });
-}
+import { forEachUnitOfPlayer, onChatCommand, onChatCommandWithArg } from './util';
 
 export function initCheat(): void {
   onChatCommand('-cheatmode', () => {
@@ -72,11 +43,11 @@ export function initCheat(): void {
     stone.charges = 99;
   });
 
-  // Roll obstacle arena: clears a patch around the camera and drops one of each
-  // collision hazard around a fresh peasant so you can roll (E) into each and
-  // confirm the roll no longer clips through them. rock=E, tree=N, water=W,
+  // Dash obstacle arena: clears a patch around the camera and drops one of each
+  // collision hazard around a fresh peasant so you can dash (E) into each and
+  // confirm the dash does not clip through them. rock=E, tree=N, water=W,
   // train=S.
-  onChatCommand('-rolltest', () => {
+  onChatCommand('-dashtest', () => {
     const ax = GetCameraTargetPositionX();
     const ay = GetCameraTargetPositionY();
     const r = Rect(ax - 700, ay - 700, ax + 700, ay + 700);
@@ -85,11 +56,12 @@ export function initCheat(): void {
     const d = 340;
     Destructable.create(FourCC(ROCK_RAW), ax + d, ay, 0, 1.4, 0);
     Destructable.create(FourCC(TREE_RAW), ax, ay + d, 0, 1.0, 0);
-    const water = Unit.create(getNeutralPassive(), WATER_ID, ax - d, ay, 0);
+    // Owned the way the board's own water is (spawn.ts).
+    const water = Unit.create(getNeutralExtra(), WATER_ID, ax - d, ay, 0);
     if (water != null) water.invulnerable = true;
     const train = Unit.create(getNeutralPassive(), TRAIN_ID, ax, ay - d, 0);
     if (train != null) train.invulnerable = true;
-    CreateUnit(Players[0].handle, PEASANT_ID, ax, ay, 90);
+    Unit.create(Players[0], PEASANT_ID, ax, ay, 90);
     PanCameraToTimed(ax, ay, 0);
     print('Dash arena: rock=E, tree=N, water=W, train=S. Cast Dash (E) into each.');
   });
@@ -101,7 +73,7 @@ export function initCheat(): void {
     forEachUnitOfPlayer(Players[0].handle, u => {
       if (pe == null && GetUnitTypeId(u) === PEASANT_ID) pe = u;
     });
-    if (pe == null) { print('rollnow: no peasant'); return; }
+    if (pe == null) { print('dashnow: no peasant'); return; }
     const p = pe;
     PanCameraToTimed(GetUnitX(p), GetUnitY(p), 0);
     SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 1100, 0);
@@ -226,14 +198,17 @@ export function initCheat(): void {
     triggerDefeat();
   });
 
-  // Jump to the inter-round lobby, for looking at the shop and the dealer without playing
-  // a round to get there.
-  onChatCommand('-boss', () => {
+  // Jump to the boss arena, for the fight's real setting rather than a boss
+  // dropped into a round. (This was registered as a second -boss, so typing
+  // -boss spawned a boss and then swept it away with the arena.)
+  onChatCommand('-arena', () => {
     stopGameplay();
     loadBossBattlefield();
     print('Boss battlefield loaded.');
   });
 
+  // Jump to the inter-round lobby, for looking at the shop and the dealer
+  // without playing a round to get there.
   onChatCommand('-lobby', () => {
     stopGameplay();
     advanceChallengeOffer();

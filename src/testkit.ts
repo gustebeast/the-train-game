@@ -1,7 +1,7 @@
-import { Timer, Trigger } from 'w3ts';
+import { Timer } from 'w3ts';
 import { loadInterRoundLobby } from './terrain/load';
 import { stopGameplay } from './train';
-import { Players } from 'w3ts/globals';
+import { onChatCommand } from './util';
 
 /** In-map half of the automated test harness.
  *
@@ -251,13 +251,7 @@ function startTest(name: string): void {
  *  the shared map so `-test <name>` still selects a test. */
 export function initTestKit(autoRun?: string): void {
   for (const test of tests) {
-    const trigger = Trigger.create();
-    Players.forEach(p => {
-      TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, '-test ' + test.name, true);
-    });
-    trigger.addAction(() => {
-      startTest(test.name);
-    });
+    onChatCommand('-test ' + test.name, () => startTest(test.name));
   }
 
   // The runner polls for this to know the map is live and accepting chat.

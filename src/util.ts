@@ -1,4 +1,4 @@
-import { MapPlayer, Timer, Unit } from 'w3ts';
+import { MapPlayer, Timer, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 
 /** Get all human players currently in the game (playing + user-controlled). */
@@ -30,7 +30,7 @@ export function getWorldBounds(): rect {
 /** Enumerate all units on the map. */
 export function forEachUnitInWorld(cb: (u: unit) => void): void {
   const g = CreateGroup()!;
-  GroupEnumUnitsInRect(g, getWorldBounds(), null!);
+  GroupEnumUnitsInRect(g, getWorldBounds(), undefined);
   ForGroup(g, () => {
     const u = GetEnumUnit();
     if (u != null) cb(u);
@@ -52,6 +52,35 @@ export function forEachUnitOfPlayer(owner: player, cb: (this: void, u: unit) => 
     if (u != null) cb(u);
   });
   DestroyGroup(g);
+}
+
+/** Register a chat command (exact match, any player) with its action. */
+export function onChatCommand(command: string, action: () => void): void {
+  const trigger = Trigger.create();
+  Players.forEach(p => {
+    TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, command, true);
+  });
+  trigger.addAction(action);
+}
+
+/** Register a chat command that takes an argument, e.g. "-challenge 4".
+ *
+ *  WC3's non-exact chat event matches a SUBSTRING, not a prefix, so "-challenge"
+ *  would also fire on someone typing "look at -challenge 4" mid-sentence. The
+ *  guard below insists the message actually starts with the command, which is
+ *  also what keeps the argument at a known offset. */
+export function onChatCommandWithArg(command: string, action: (arg: string) => void): void {
+  const trigger = Trigger.create();
+  Players.forEach(p => {
+    TriggerRegisterPlayerChatEvent(trigger.handle, p.handle, command, false);
+  });
+  trigger.addAction(() => {
+    const said = GetEventPlayerChatString();
+    if (said == null) return;
+    if (string.sub(said, 1, string.len(command)) !== command) return;
+    const [rest] = string.gsub(string.sub(said, string.len(command) + 1), '^%s+', '');
+    action(rest);
+  });
 }
 
 /** WC3 inventories are six slots wide. */

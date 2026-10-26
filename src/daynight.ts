@@ -1,5 +1,4 @@
 import { Timer } from 'w3ts';
-import { createTimer } from './timers';
 import { getHumanPlayers, getWorldBounds } from './util';
 import { isChallengeArmed } from './challenges';
 import { CH_NIGHT_BLACKOUT } from './challengeList';
@@ -29,6 +28,10 @@ const NIGHT_EARLIEST = 60;
 const NIGHT_LATEST = 600;
 
 let night = false;
+// The night timers are deliberately NOT board-tracked (timers.ts): this module
+// cancels them itself on every way out of a round, and loadGameplay schedules
+// the night before spawnTerrain sweeps the board -- a tracked timer was
+// destroyed by that sweep the moment it was made, so night never fell.
 /** The pending "start night" timer, so victory can cancel it. */
 let nightStart: Timer | null = null;
 /** The pending "end night" timer. */
@@ -118,8 +121,11 @@ function restoreExplored(): void {
   }
   exploredByPlayer = [];
   if (flashes.length === 0) return;
-  const t = createTimer();
+  // Untracked: if a board sweep destroyed this before it fired, the VISIBLE
+  // modifiers would never be stopped and would light the next board.
+  const t = Timer.create();
   t.start(0.1, false, () => {
+    t.destroy();
     for (const mod of flashes) {
       FogModifierStop(mod);
       DestroyFogModifier(mod);
@@ -162,8 +168,9 @@ function stopBlackout(): void {
   restoreExplored();
 }
 
-/** Exported for the automated fog test, which needs night on demand rather
- *  than waiting out a random 1-10 minute timer. */
+/** Night now, rather than when the round's timer says. The round's timer
+ *  calls it; so do -night and the fog tests, which cannot wait out a random
+ *  1-10 minute delay. */
 export function beginNight(): void {
   if (night) return;
   night = true;
@@ -172,7 +179,7 @@ export function beginNight(): void {
   if (isChallengeArmed(CH_NIGHT_BLACKOUT)) startBlackout();
   print('|cff8080ffNight falls.|r You can no longer see through your allies.');
   nightEnd = cancelTimer(nightEnd);
-  const t = createTimer();
+  const t = Timer.create();
   t.start(NIGHT_DURATION, false, () => endNight());
   nightEnd = t;
 }
@@ -216,7 +223,7 @@ export function startDayNightForRound(): void {
   setAlliedVision(true);
 
   const delay = GetRandomInt(NIGHT_EARLIEST, NIGHT_LATEST);
-  const t = createTimer();
+  const t = Timer.create();
   t.start(delay, false, () => beginNight());
   nightStart = t;
 }
@@ -233,7 +240,6 @@ export function cancelNightForVictory(): void {
 
 /** Full stop, for leaving gameplay by any route (victory, defeat, inter-round lobby). */
 export function stopDayNight(): void {
-  nightStart = cancelTimer(nightStart);
   cancelNightForVictory();
   // Re-assert the freeze rather than only setting the hour: this is the call
   // every lobby makes on the way in, and a lobby is precisely where the clock
