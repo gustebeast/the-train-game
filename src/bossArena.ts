@@ -1,11 +1,11 @@
-import { MapPlayer, Timer, Unit } from 'w3ts';
+import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { BOSS_ADD_ID, BOSS_ID } from './constants';
 import { spawnBoss, stopBoss } from './boss';
 import { dealPartyForHumans } from './bossParty';
 import { spawnHeroes, getSpawnedHeroes, endHeroState, chooseAllHeroes } from './heroes';
 import { spawnMercWithHeroes, getLivingMercCount } from './mercenary';
 import { getBossHeroSpots, getBossMercSpots, getBossSpot } from './terrain/spawn';
-import { forEachUnitOfPlayer, getHumanPlayers } from './util';
+import { forEachUnitOfPlayer, getHumanPlayers, nextFrame } from './util';
 
 /**
  * The boss fight itself: who stands where, and how it ends.
@@ -27,14 +27,17 @@ import { forEachUnitOfPlayer, getHumanPlayers } from './util';
  * first time an infernal timed out instead of being killed.
  */
 
-/** How often the ending conditions are checked. */
-const WATCH_SECONDS = 1.0;
-/** Given to the fight before it may be declared over, so the frame where the
- *  party has spawned but the boss has not cannot read as a win. */
-const GRACE_SECONDS = 3.0;
-
-let watcher: Timer | null = null;
-let elapsed = 0;
+/** Re-checks the ending whenever anything dies or a player leaves.
+ *
+ *  Both endings can only begin with a death -- the last of the party falling,
+ *  or the last hostile going down, which includes a lesser infernal whose timed
+ *  life runs out, since expiry is a death -- or with a player leaving, which
+ *  takes their units out of the party. So those are the only moments worth
+ *  looking. This used to look every second instead, with a three-second grace
+ *  so the frame where the party had spawned but the boss had not could not
+ *  read as a win; checking only on a death needs no grace, because nothing
+ *  has died in that frame. */
+let watcher: Trigger | null = null;
 /** Set once the party has actually been seen standing. Without it an arena
  *  that never managed to spawn anybody reads as an instant wipe and bounces
  *  straight back out -- which is what a boss fight with no heroes did. */
@@ -97,7 +100,6 @@ function enemiesRemain(): boolean {
  */
 export function startBossFight(): void {
   stopBossArena();
-  elapsed = 0;
   partyArrived = false;
 
   const bossSpot = getBossSpot();
@@ -151,22 +153,37 @@ export function startBossFight(): void {
     }
   }
 
-  const timer = Timer.create();
-  watcher = timer;
-  timer.start(WATCH_SECONDS, true, () => {
-    elapsed += WATCH_SECONDS;
-    if (elapsed < GRACE_SECONDS) return;
-    if (partyStanding()) partyArrived = true;
-    if (partyArrived && !partyStanding()) {
-      stopBossArena();
-      endHeroState();
-      if (onDefeat != null) onDefeat();
-      return;
-    }
-    if (!enemiesRemain()) {
-      stopBossArena();
-      endHeroState();
-      if (onVictory != null) onVictory();
-    }
-  });
+  // Everyone is on the board now, so this is when the party has arrived --
+  // if anybody spawned at all. A fight that stood up nobody must not read as
+  // an instant wipe.
+  partyArrived = partyStanding();
+
+  const trig = Trigger.create();
+  watcher = trig;
+  trig.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DEATH);
+  for (const p of getHumanPlayers()) trig.registerPlayerEvent(p, EVENT_PLAYER_LEAVE);
+  // A frame later: inside the death event the dying unit can still read as
+  // alive to the checks below, and judging it standing would miss the ending.
+  trig.addAction(() => nextFrame(() => checkEnding()));
+}
+
+/** Whether a fight is in progress and being watched. For tests. */
+export function isBossFightWatched(): boolean {
+  return watcher != null;
+}
+
+/** Decide whether the fight is over, by looking at the board. */
+function checkEnding(): void {
+  if (watcher == null) return; // already ended, or a stale callback
+  if (partyArrived && !partyStanding()) {
+    stopBossArena();
+    endHeroState();
+    if (onDefeat != null) onDefeat();
+    return;
+  }
+  if (!enemiesRemain()) {
+    stopBossArena();
+    endHeroState();
+    if (onVictory != null) onVictory();
+  }
 }

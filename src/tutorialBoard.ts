@@ -1,4 +1,5 @@
 import { getHumanPlayers } from './util';
+import { boardChanged } from './boardSignal';
 
 // The tutorial's scoreboard. Five things a new player needs to have tried, each
 // counting how many of them have done it -- so a table of four learns together
@@ -19,6 +20,7 @@ let counting = false;
 export function startTutorialBoard(): void {
   chopped.clear(); mined.clear(); watered.clear(); loaded.clear(); bridged.clear();
   counting = true;
+  boardChanged();
 }
 
 export function stopTutorialBoard(): void {
@@ -26,19 +28,29 @@ export function stopTutorialBoard(): void {
 }
 
 export function noteChoppedTree(playerId: number): void {
-  if (counting) chopped.add(playerId);
+  if (!counting || chopped.has(playerId)) return;
+  chopped.add(playerId);
+  boardChanged();
 }
 export function noteMinedStone(playerId: number): void {
-  if (counting) mined.add(playerId);
+  if (!counting || mined.has(playerId)) return;
+  mined.add(playerId);
+  boardChanged();
 }
 export function noteWateredTrain(playerId: number): void {
-  if (counting) watered.add(playerId);
+  if (!counting || watered.has(playerId)) return;
+  watered.add(playerId);
+  boardChanged();
 }
 export function noteLoadedMaterial(playerId: number): void {
-  if (counting) loaded.add(playerId);
+  if (!counting || loaded.has(playerId)) return;
+  loaded.add(playerId);
+  boardChanged();
 }
 export function noteBuiltBridge(playerId: number): void {
-  if (counting) bridged.add(playerId);
+  if (!counting || bridged.has(playerId)) return;
+  bridged.add(playerId);
+  boardChanged();
 }
 
 function line(label: string, done: Set<number>, total: number): string {

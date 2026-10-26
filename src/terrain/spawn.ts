@@ -15,6 +15,7 @@ import { TRACK_SIZE } from '../track/constants';
 import { registerStrangeRock } from '../bossRock';
 import { placedTracks, setVictoryTile, setBossVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
+import { labelUnit } from '../unitLabels';
 import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, cleanupCage, cancelSparringMatch } from '../creeps';
 import { resetHeroState } from '../heroes';
@@ -125,7 +126,12 @@ function spawnReadyCircle(
 ): void {
   const circle = Unit.create(getNeutralExtra(), FourCC(Units.CircleOfPower), x, y, 0);
   if (circle == null) return;
+  // The name stays: it is what selecting the circle shows. The floating label
+  // says the same thing without having to click.
   BlzSetUnitName(circle.handle, spec.label);
+  // White for every circle. The warning circles are already told apart by the
+  // red tint on the circle itself.
+  labelUnit(circle.handle, spec.label, 255, 255, 255);
   if (spec.warning === true) SetUnitVertexColor(circle.handle, 255, 180, 180, 255);
   initReadyZone(x, y, spec.zone, circle);
 }

@@ -1,5 +1,6 @@
-import { Timer } from 'w3ts';
 import { getArmedChallenge, ChallengeDef, CHALLENGE_COST } from './challenges';
+import { onBoardChanged } from './boardSignal';
+import { getHumanPlayers } from './util';
 
 /**
  * The armed challenge's overlay.
@@ -9,16 +10,15 @@ import { getArmedChallenge, ChallengeDef, CHALLENGE_COST } from './challenges';
  * transitions that tear down and rebuild the world. Building the same thing out
  * of BlzFrames would mean re-implementing placement and collapsing for no gain.
  *
- * Refreshed on a slow timer instead of at every event. Progress comes from
- * counters that several unrelated systems bump, so polling one place is far
- * less error-prone than making each of them remember to redraw, and a challenge
- * counter does not need to be frame-accurate.
+ * Redrawn on change, not on a timer: every counter it shows already reports
+ * its change through one function, and that function signals the board (see
+ * boardSignal.ts). The one input with no such function is the player count --
+ * "Dashes 12 / 100" and the tutorial's "2 / 4" both scale with it -- so a player
+ * leaving redraws too.
  */
 
-const REFRESH_SECONDS = 0.5;
-
 let board: multiboard | null = null;
-let refresh: Timer | null = null;
+let listening = false;
 /** Last text drawn, so an unchanged board is left alone. */
 let lastTitle = '';
 let lastName = '';
@@ -221,11 +221,19 @@ function draw(): void {
 
 /** Start the overlay. Idempotent, so round transitions can call it freely. */
 export function initChallengeUI(): void {
-  if (refresh == null) {
-    refresh = Timer.create();
-    refresh.start(REFRESH_SECONDS, true, () => draw());
+  if (!listening) {
+    listening = true;
+    onBoardChanged(() => draw());
+    const leave = CreateTrigger();
+    for (const p of getHumanPlayers()) TriggerRegisterPlayerEvent(leave, p.handle, EVENT_PLAYER_LEAVE);
+    TriggerAddAction(leave, () => draw());
   }
   draw();
+}
+
+/** What the board is showing right now, for tests: empty title when hidden. */
+export function challengeUIState(): { title: string; progress: string; previewing: boolean } {
+  return { title: lastTitle, progress: lastProgress, previewing: preview != null };
 }
 
 /** Take the overlay off screen -- used when leaving gameplay, so the inter-round lobby and

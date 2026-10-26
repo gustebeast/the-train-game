@@ -19,7 +19,6 @@ import { areHeroesSpawned, getSpawnedHeroes } from './heroes';
 import { forceLevel3Camp } from './creeps';
 import { forEachUnitInWorld, nextFrame, getHumanPlayers } from './util';
 import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges';
-import { onGlobalTick } from './globalTick';
 import { showChallengePreview, clearChallengePreview } from './challengeUI';
 import { refreshInterRoundLobbyRoster, hasInterRoundLobbyRerollTargets } from './interRoundLobbyRoster';
 
@@ -284,6 +283,9 @@ let dealerUnit: Unit | null = null;
 /** Remember this inter-round lobby's dealer, so the overlay can tell when he is selected. */
 export function registerDealer(dealer: Unit): void {
   dealerUnit = dealer;
+  // A new dealer means a new lobby: whatever the old one was showing went with
+  // the old one, and nobody can have this one selected yet.
+  clearChallengePreview();
 }
 
 /** True while any player has the dealer selected. */
@@ -311,16 +313,30 @@ function dealerIsSelected(): boolean {
  *  survive a stray double-click. A panel needs neither: re-selecting redraws
  *  the same thing, and it goes away when you look away.
  *
- *  Shown on the SELECTED event so it appears the instant you click, but taken
- *  down by asking the engine who is selected rather than by trusting the
- *  DESELECTED event -- which was measured not firing when clicking away from
- *  the dealer, leaving the panel stuck up. Asking cannot miss an edge. */
+ *  Shown on the SELECTED event and taken down on the DESELECTED event. An
+ *  earlier version of this comment said DESELECTED does not fire when you click
+ *  away, and that was a misreading. Clicking EMPTY GROUND in WC3 deselects
+ *  nothing -- the dealer stays selected, so the preview correctly stays up.
+ *  Clicking another unit does deselect him, and the event fires; both checked
+ *  with real mouse clicks through the VM.
+ *
+ *  What IS true of DESELECTED is that inside its handler the engine has not
+ *  finished updating the selection, so IsUnitSelected can still answer with
+ *  the old state. Hence the one-frame wait before asking whether ANY player
+ *  still has the dealer selected -- which still has to be asked, because the
+ *  board is shared, and one player looking away must not hide it from another
+ *  who is still reading. A one-shot timer, not a poll.
+ *
+ *  The dealer being removed with the lobby needs no case of its own: a new
+ *  board starts with the preview cleared (registerDealer). */
 export function initDealerOffer(): void {
   const dealerType = FourCC(Units.TombOfRelics);
 
   const selected = Trigger.create();
+  const deselected = Trigger.create();
   Players.forEach(p => {
     TriggerRegisterPlayerUnitEvent(selected.handle, p.handle, EVENT_PLAYER_UNIT_SELECTED, undefined);
+    TriggerRegisterPlayerUnitEvent(deselected.handle, p.handle, EVENT_PLAYER_UNIT_DESELECTED, undefined);
   });
   selected.addAction(() => {
     const u = GetTriggerUnit();
@@ -328,9 +344,12 @@ export function initDealerOffer(): void {
     const offered = getOfferedChallenge();
     if (offered != null) showChallengePreview(offered);
   });
-
-  onGlobalTick(() => {
-    if (!dealerIsSelected()) clearChallengePreview();
+  deselected.addAction(() => {
+    const u = GetTriggerUnit();
+    if (u == null || GetUnitTypeId(u) !== dealerType) return;
+    nextFrame(() => {
+      if (!dealerIsSelected()) clearChallengePreview();
+    });
   });
 }
 
