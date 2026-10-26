@@ -5,13 +5,13 @@ import { spawnTerrain, spawnReadyCircle, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { Unit } from 'w3ts';
-import { PEASANT_ID } from '../constants';
+import { PEASANT_ID, TROPHY_ABILITY_ID } from '../constants';
 import { forEachUnitOfPlayer, getHumanPlayers, getWorldBounds } from '../util';
 import { makeDancer, startDanceClock } from '../dance';
 import {
   closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,
   selectNewerSave, selectOlderSave,
-  getOfferedSaveCount,
+  getOfferedSaveCount, isSelectedSaveVictorious,
 } from '../chooseSaveLobby';
 import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
@@ -21,9 +21,9 @@ import { getNeutralExtra } from '../teams';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';
 import { getCampData } from '../creeps';
 import { gameState } from '../state';
-import { loadFromSlot, listSaves, markCurrentSaveDefeated, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
+import { loadFromSlot, listSaves, markCurrentSaveDefeated, markCurrentSaveVictorious, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
-  hasHeroes, initRandomHeroes, chooseHeroes,
+  hasHeroes, initRandomHeroes, chooseHeroes, getInterRoundLobbyHeroUnits,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
 } from '../heroes';
 import { startSparringMatch } from '../creeps';
@@ -36,7 +36,7 @@ import {
   DAY_TIME, startDayNightForRound, stopDayNight,
 } from '../daynight';
 import { refreshInterRoundLobbyRoster, resetInterRoundLobbyRoster } from '../interRoundLobbyRoster';
-import { saveMercInterRoundLobbySnapshot } from '../mercenary';
+import { saveMercInterRoundLobbySnapshot, getInterRoundLobbyMercUnits } from '../mercenary';
 import { deriveSeed } from '../rng';
 import { advanceChallengeOffer } from '../challenges';
 
@@ -111,6 +111,9 @@ setBossArenaCallbacks(
     loadInterRoundLobby();
   },
   survivors => {
+    // On disk the moment the boss falls, not when the party walks out: the
+    // run is won whether or not anyone ever reaches the circle.
+    markCurrentSaveVictorious();
     setMusic('silence');
     spawnReadyCircle(0, 0, { label: '', zone: 'bossexit' }, survivors);
   },
@@ -173,10 +176,11 @@ registerReadyZone('saveconfirm', 'Loading the selected save', () => {
   // taken -- shop, roster and all. Dropping straight into gameplay skipped the
   // half of the round the save was standing in.
   loadInterRoundLobby();
-});
+}, () => (isSelectedSaveVictorious() ? 'This save is already victorious and cannot be loaded' : null));
 registerReadyZone('restart', 'Returning to the start lobby', () => {
-  // The run is already marked defeated (loadDefeatLobby did that on the way
-  // in), so this only has to put the session back to how it boots.
+  // The run is already marked finished -- defeated by loadDefeatLobby, or
+  // victorious when the boss fell -- so this only has to put the session back
+  // to how it boots.
   beginNewRun();
   loadStartLobby();
 });
@@ -373,11 +377,26 @@ export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
  *  cannot overwrite the inter-round lobby state a later session would load.
  *
  *  Contrast loadInterRoundLobby(), which is the victory path and rebuilds everything. */
-/** The run is over and won. Same shape as the defeat lobby, on its own board:
- *  the save is left alone rather than marked, because beating the boss is not
- *  something that should stop you loading the run again. */
+/** The run is over and won: the defeat lobby's floor, with the whole party
+ *  standing on it -- peasants, and the heroes and mercenaries in the
+ *  inter-round lobby's roster column -- every one of them under a trophy.
+ *  The save was already marked victorious when the boss fell. */
 function loadVictoryLobby(): void {
+  // Snapshot first, as the inter-round lobby does: the roster hides anyone who
+  // differs from the last snapshot behind a "?", and a hero rolled in the last
+  // lobby has been met since -- in the boss fight -- so nobody here is a secret.
+  saveHeroInterRoundLobbySnapshot();
+  saveMercInterRoundLobbySnapshot();
   enterBoard('victory', generateVictoryLobby());
+  resetInterRoundLobbyRoster();
+  refreshInterRoundLobbyRoster();
+  const winners: unit[] = [];
+  for (const h of getInterRoundLobbyHeroUnits()) winners.push(h.handle);
+  for (const m of getInterRoundLobbyMercUnits()) winners.push(m.handle);
+  for (const p of getHumanPlayers()) {
+    forEachUnitOfPlayer(p.handle, u => { if (GetUnitTypeId(u) === PEASANT_ID) winners.push(u); });
+  }
+  for (const u of winners) UnitAddAbility(u, TROPHY_ABILITY_ID);
 }
 
 function loadDefeatLobby(): void {

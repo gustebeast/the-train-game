@@ -4,6 +4,7 @@ import { getNeutralPassive } from './teams';
 import { decodeHero, spawnHeroFromData } from './heroes';
 import { spawnMercFromData } from './mercenary';
 import { TRACK_SIZE } from './track/constants';
+import { TROPHY_ABILITY_ID } from './constants';
 
 // The save chooser's own state: which of the offered saves is selected, and the
 // display units and label standing in for it. The lobby terrain is spawned by
@@ -61,6 +62,9 @@ function refresh(): void {
     if (u == null) return;
     u.invulnerable = true;
     PauseUnit(u.handle, true);
+    // A party that beat the boss stands under its trophies, as it did in the
+    // victory lobby. The save is shown, but cannot be loaded.
+    if (info.victorious) UnitAddAbility(u.handle, TROPHY_ABILITY_ID);
     display.push(u);
   };
 
@@ -118,6 +122,12 @@ export function selectOlderSave(): void {
   if (offered.length === 0) return;
   selected = (selected + 1) % offered.length;
   refresh();
+}
+
+/** Whether the selected save already beat the boss, which closes it to
+ *  loading. */
+export function isSelectedSaveVictorious(): boolean {
+  return offered.length > 0 && offered[selected].victorious;
 }
 
 /** The slot the player has settled on, or 0 when there is nothing to play. */

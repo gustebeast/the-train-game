@@ -529,6 +529,27 @@ compiletime(({ objectData, constants }) => {
   readyOrbAttach.targetAttachmentPoint1 = 'head';
   readyOrbAttach.attackBonus = 0;
 
+  // Trophy attachment ability: floats over everyone in the victory lobby, and
+  // over a victorious save's party in the chooser. A COPY of the ready orb's
+  // base rather than another stock bonus ability, because every free one in
+  // the family belongs to an item that can drop. Copied after the default poke
+  // above, so the copy inherits the sentinel and its 0 bonus serialises.
+  const TROPHY_ABILITY = 'A012';
+  // "Golden Cup" from Reward Trophies by stan0033, Hive Workshop
+  // (hiveworkshop.com/threads/reward-trophies.342129) -- credit requested.
+  // The model reads its texture from war3mapImported\gold.blp, so that file
+  // must keep exactly that name.
+  const TROPHY_MODEL = 'war3mapImported\\Trophy.mdx';
+  const trophyAttach = objectData.abilities.copy(
+    constants.abilities.ItemDamageBonusPlus6, TROPHY_ABILITY) as StatBonusAbility | undefined;
+  if (trophyAttach != null) {
+    trophyAttach.name = 'Trophy';
+    trophyAttach.target = TROPHY_MODEL;
+    trophyAttach.targetAttachments = 1;
+    trophyAttach.targetAttachmentPoint1 = 'overhead';
+    trophyAttach.attackBonus = 0;
+  }
+
 
   // Axe item
   const axe = objectData.items.get(constants.items.SturdyWarAxe)!;

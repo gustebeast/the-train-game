@@ -23,6 +23,9 @@ export const BOSS_ADD_ID = FourCC('uinl');
 /** The boss's Inferno: a Tichondrius-campaign copy, so the Dreadlord's is
  *  untouched. */
 export const BOSS_INFERNO_ABILITY_ID = FourCC('A010');
+/** The gold trophy floating over a party that beat the boss. Art only: an
+ *  attachment ability with its bonus zeroed (see compiletime.ts). */
+export const TROPHY_ABILITY_ID = FourCC('A012');
 
 // Critters: the wandering-animal set from classic 1v1 melee maps
 export const CRITTER_TYPE_IDS: ReadonlyArray<number> = [
