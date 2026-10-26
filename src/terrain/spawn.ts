@@ -4,7 +4,7 @@ import { Units } from '@objectdata/units';
 import {
   Terrain, Entity, Grid, Biome, BIOMES,
   GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
-  ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, STRANGE_ROCK_RAW, GridPos,
+  ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, ROCK_MODEL_SCALES, GridPos,
   idx, gridToWorld,
 } from './constants';
 import { DEFAULT_TRACK, SKINS } from '../track/constants';
@@ -12,7 +12,7 @@ import { DEFAULT_TRACK, SKINS } from '../track/constants';
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { TRACK_SIZE } from '../track/constants';
-import { registerStrangeRock } from '../bossRock';
+import { spawnStrangeRock } from '../bossRock';
 import { placedTracks, setVictoryTile, setBossVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
 import { labelUnit } from '../unitLabels';
@@ -27,7 +27,6 @@ import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
 // Per-variation scales to normalize rock/granite models to a consistent 128-unit footprint.
 // Both LTrt (rock) and LTrc (granite) use the same base model with 6 variations.
 // Footprints at scale 1.0: [210, 230, 204, 206, 210, 171]
-const ROCK_MODEL_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
 
 // --- Terrain tile FourCCs ---
 // GRASS, GRASSY_DIRT and POOL depend on the biome; see tileFor.
@@ -221,9 +220,7 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
         }
 
         case Entity.STRANGE_ROCK: {
-          // Full size and unrotated: this one is a landmark, not scenery.
-          const seal = Destructable.create(FourCC(STRANGE_ROCK_RAW), world.x, world.y, 0, 1.4, 0);
-          if (seal != null) registerStrangeRock(seal.handle);
+          spawnStrangeRock(world.x, world.y);
           break;
         }
 

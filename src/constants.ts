@@ -18,6 +18,10 @@ export const UNKNOWN_UNIT_ID = FourCC('qmrk');
  *  compiletime.ts. */
 /** Dropped by a flawless level 3 camp; opens the way to the boss. */
 export const BOSS_KEY_ITEM_ID = FourCC(Items.KeyOfThreeMoons);
+/** The Strange Key's throw: a copy of Transmute (compiletime.ts). */
+export const KEY_THROW_ABILITY_ID = FourCC('A012');
+/** The Strange Rock sealing the boss exit -- a unit, so the key can target it. */
+export const STRANGE_ROCK_ID = FourCC('srok');
 export const BOSS_ID = FourCC('ubos');
 export const BOSS_ADD_ID = FourCC('uinl');
 /** The boss's Inferno: a Tichondrius-campaign copy, so the Dreadlord's is

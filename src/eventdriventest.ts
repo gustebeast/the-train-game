@@ -7,9 +7,12 @@ import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
 import { challengeUIState, initChallengeUI } from './challengeUI';
 import { isBossFightWatched, startBossFight } from './bossArena';
 import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer } from './util';
-import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID } from './constants';
+import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID,
+  TRAIN_ID, TRACK_WAGON_ID } from './constants';
 import { Item, Unit } from 'w3ts';
 import { cargoShowing } from './cargoVisuals';
+import { spawnStrangeRock } from './bossRock';
+import { placedTracks } from './track/state';
 import { auditMinimapIcons, minimapIconCount } from './minimapIcons';
 import { getTrain, getTrackWagon } from './train';
 import { setStorageItem, getStorageSlot, giveToStorage, findItemByType } from './items';
@@ -445,3 +448,82 @@ function runKillBounty(t: TestReporter): void {
   });
 }
 registerTest('killbounty', runKillBounty);
+
+// --- the Strange Key ------------------------------------------------------
+
+function holdsKey(u: unit): boolean {
+  for (let slot = 0; slot < 6; slot++) {
+    const it = UnitItemInSlot(u, slot);
+    if (it != null && GetItemTypeId(it) === BOSS_KEY_ITEM_ID) return true;
+  }
+  return false;
+}
+
+/** The key is thrown at the rock and breaks it on impact; everything else is
+ *  refused by the engine before the key is spent; attacks do nothing. */
+function runStrangeKey(t: TestReporter): void {
+  beginNewRun();
+  loadTerrain(0);
+  const me = getHumanPlayers()[0];
+  // The board is random, so clear the patch the test stands on: a rock or a
+  // peasant dropped onto water or granite gets shoved aside, and the throw then
+  // fails for reasons that have nothing to do with the key.
+  const area = Rect(-200, -300, 700, 400)!;
+  EnumDestructablesInRect(area, null!, () => RemoveDestructable(GetEnumDestructable()!));
+  const clear = CreateGroup()!;
+  GroupEnumUnitsInRect(clear, area, null!);
+  ForGroup(clear, () => {
+    const u = GetEnumUnit()!;
+    if (GetUnitTypeId(u) !== TRAIN_ID && GetUnitTypeId(u) !== TRACK_WAGON_ID) RemoveUnit(u);
+  });
+  DestroyGroup(clear);
+  RemoveRect(area);
+  const rock = spawnStrangeRock(400, 0);
+  expect(t, 'rockSpawned', rock != null ? 1 : 0, 1);
+  if (rock == null) { t.done(); return; }
+  const p = CreateUnit(me.handle, PEASANT_ID, 150, 0, 0)!;
+  const key = CreateItem(BOSS_KEY_ITEM_ID, 150, 0)!;
+  UnitAddItem(p, key);
+
+  // Refused targets: a creep, one of our own tracks (a structure, so the
+  // ancient flag is what excludes it), and the peasant's own side.
+  const kobold = CreateUnit(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, FourCC('nkob'), 150, 200, 0)!;
+  const track = placedTracks[0];
+  expect(t, 'refusedOnCreep', UnitUseItemTarget(p, key, kobold) ? 1 : 0, 0);
+  expect(t, 'refusedOnTrack', track != null && UnitUseItemTarget(p, key, track.handle) ? 1 : 0, 0);
+  expect(t, 'refusedOnSelf', UnitUseItemTarget(p, key, p) ? 1 : 0, 0);
+  expect(t, 'keyKeptAfterRefusals', holdsKey(p) ? 1 : 0, 1);
+
+  // Invulnerable, as water is: no health bar, and a player's attack on it is
+  // refused when clicked. (A SCRIPT order skips that click-time check, so it
+  // cannot be asserted here -- checked with real clicks instead.)
+  expect(t, 'invulnerable', BlzIsUnitInvulnerable(rock) ? 1 : 0, 1);
+
+  // Damage does nothing to it either.
+  UnitDamageTarget(p, rock, 5000, true, false,
+    ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
+  expect(t, 'survivesHeavyHit', GetWidgetLife(rock) > 0.405 ? 1 : 0, 1);
+
+  const gold0 = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD);
+  t.after(ONE_FRAME * 4, () => {
+  expect(t, 'throwAccepted', UnitUseItemTarget(p, key, rock) ? 1 : 0, 1);
+  t.after(0.1, () => {
+    // The missile is still in the air: thrown, not instant.
+    t.report('rockAliveWhileInFlight', GetWidgetLife(rock) > 0.405 ? 1 : 0);
+    t.after(3, () => {
+      expect(t, 'rockBrokenOnImpact', GetWidgetLife(rock) > 0.405 ? 1 : 0, 0);
+      expect(t, 'keySpent', holdsKey(p) ? 1 : 0, 0);
+      let keysOnGround = 0;
+      EnumItemsInRect(GetWorldBounds()!, null!, () => {
+        const it = GetEnumItem();
+        if (it != null && GetItemTypeId(it) === BOSS_KEY_ITEM_ID) keysOnGround += 1;
+      });
+      expect(t, 'keyNotLeftOnGround', keysOnGround, 0);
+      expect(t, 'noGoldFromThrow', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - gold0, 0);
+      expect(t, 'creepUntouched', GetWidgetLife(kobold) > 0.405 ? 1 : 0, 1);
+      t.done();
+    });
+  });
+  });
+}
+registerTest('strangekey', runStrangeKey);
