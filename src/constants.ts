@@ -40,6 +40,11 @@ export const TROPHY_MODEL = 'war3mapImported\\Trophy.mdx';
  *  looked right. */
 export const TROPHY_SCALE = 0.6;
 
+/** The roster: how many heroes a run carries. Two are fielded a round. */
+export const HERO_SLOTS = 4;
+/** How many mercenaries can be hired at once. */
+export const MAX_MERCS = 2;
+
 // Critters: the wandering-animal set from classic 1v1 melee maps
 export const CRITTER_TYPE_IDS: ReadonlyArray<number> = [
   FourCC(Units.Rabbit),

@@ -4,7 +4,6 @@ import { placedTracks, isVictoryTriggered } from './track/state';
 import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
 import { gameState, isInGameplay, setInGameplay, registerSyncCallback, syncState } from './state';
-// import { deleteSave } from './save';
 import { setStorageItem } from './items';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 
@@ -395,7 +394,6 @@ export function initTrain(unit: Unit, wagon: Unit) {
     startOneShot(crashDelay, () => {
       if (crashDeadline !== 0) {
         triggerDefeat();
-        // deleteSave(); // Disabled for testing
       }
     });
   });
