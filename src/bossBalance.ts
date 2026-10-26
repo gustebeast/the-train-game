@@ -6,6 +6,9 @@ import { BOSS_ADD_ID, BOSS_ID } from './constants';
 import { spawnBoss, stopBoss } from './boss';
 import { getDPSCheckPlayer } from './teams';
 import { registerTest, TestReporter } from './testkit';
+import { loadBossBattlefield } from './terrain/load';
+import { PATH_BLOCKER_RAW } from './terrain/constants';
+import { forEachUnitOfPlayer } from './util';
 
 /**
  * Balance harness for the final boss.
@@ -353,3 +356,226 @@ for (const comp of [STUN_COMP, CASTER_COMP, TANK_COMP, WEAK_COMP,
   // has to clear that with room for the setup either side of it.
   registerTest('bf' + comp.name, (t: TestReporter) => runFight(comp, t), FIGHT_SECONDS + 60);
 }
+
+
+// ---------------------------------------------------------------------------
+// Five fights at once, in the real arena and four copies of it
+// ---------------------------------------------------------------------------
+
+/**
+ * The same fight as runFight, but where it actually happens and five times over.
+ *
+ * runFight spawned the boss wherever the camera was -- the start lobby, open
+ * ground with the players' peasants in meteor range -- whereas the real fight is
+ * in the arena: a 9x9 floor sealed by lava. Confinement matters (the sparring
+ * match measured 1.6x differently in a corner than on open ground), so this
+ * loads the arena board and fights there.
+ *
+ * And one fight is one draw of a noisy AI, so it runs five: the arena itself,
+ * and four more boxes of the same floor walled with the same blockers, two in
+ * each walkable strip beyond the lava. The board's walkable area ends at grid
+ * +-20 by +-10, which with the lava's ring at +-10 leaves exactly a 9x9 floor
+ * and its walls twice over per strip.
+ *
+ * Each copy fights to a finish -- the boss or the whole party dead -- rather
+ * than to a timer: the real fight has none, and the original tuning's closest
+ * result was a timeout with two heroes still standing.
+ *
+ * Everything is attributed to the copy it was spawned in; summons and adds to
+ * the nearest copy when first seen. A hit between two different copies is
+ * counted as cross-talk -- the walls stop walking, not meteors or spells.
+ */
+const ARENA_COPIES: ReadonlyArray<readonly [number, number]> = [
+  [0, 0], [15, 5], [15, -5], [-15, 5], [-15, -5],
+];
+/** Hero, mercenary and boss places relative to a copy's centre, matching the
+ *  arena template's. */
+const REL_HERO_SPOTS: ReadonlyArray<readonly [number, number]> = [[-3, 2], [-3, 1], [-3, -1], [-3, -2]];
+const REL_MERC_SPOTS: ReadonlyArray<readonly [number, number]> = [[-4, 1], [-4, -1]];
+const REL_BOSS_SPOT: readonly [number, number] = [3, 0];
+/** A safety net, not a rule: the real fight has no timer. */
+const ARENA_FIGHT_CAP = 300;
+const CELL = 128;
+
+/** Wall the copies beyond the arena itself in with the arena's own blocker. */
+function wallCopies(copies: ReadonlyArray<readonly [number, number]>): void {
+  for (let c = 1; c < copies.length; c++) {
+    const [cx, cy] = copies[c];
+    for (let d = -5; d <= 5; d++) {
+      for (const [gx, gy] of [[cx + d, cy - 5], [cx + d, cy + 5], [cx - 5, cy + d], [cx + 5, cy + d]]) {
+        CreateDestructable(FourCC(PATH_BLOCKER_RAW), gx * CELL, gy * CELL, 0, 1, 0);
+      }
+    }
+  }
+}
+
+function nearestArena(x: number, y: number): number {
+  let best = 0;
+  let bestD = 1e12;
+  for (let i = 0; i < ARENA_COPIES.length; i++) {
+    const dx = ARENA_COPIES[i][0] * CELL - x;
+    const dy = ARENA_COPIES[i][1] * CELL - y;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+function runArenaFights(comp: Comp, t: TestReporter,
+  copies: ReadonlyArray<readonly [number, number]> = ARENA_COPIES): void {
+  loadBossBattlefield();
+  wallCopies(copies);
+  const n = copies.length;
+  const heroPlayer = getDPSCheckPlayer().handle;
+
+  const home = new Map<number, number>();
+  const copyOf = (u: unit): number => {
+    const id = GetHandleId(u);
+    let c = home.get(id);
+    if (c == null) { c = nearestArena(GetUnitX(u), GetUnitY(u)); home.set(id, c); }
+    return c;
+  };
+
+  const bosses: Unit[] = [];
+  const heroes: Unit[][] = [];
+  const mercs: Unit[][] = [];
+  for (let i = 0; i < n; i++) {
+    const [cx, cy] = copies[i];
+    const boss = spawnBoss((cx + REL_BOSS_SPOT[0]) * CELL, (cy + REL_BOSS_SPOT[1]) * CELL);
+    if (boss == null) { t.fail('boss' + I2S(i)!, 'did not spawn'); t.done(); return; }
+    home.set(GetHandleId(boss.handle), i);
+    bosses.push(boss);
+    heroes.push([]);
+    mercs.push([]);
+    for (let h = 0; h < comp.heroes.length; h++) {
+      const [rx, ry] = REL_HERO_SPOTS[h];
+      const u = buildHero(comp.heroes[h], (cx + rx) * CELL, (cy + ry) * CELL);
+      if (u == null) continue;
+      home.set(GetHandleId(u.handle), i);
+      heroes[i].push(u);
+    }
+    for (let m = 0; m < MERC_TYPES.length; m++) {
+      const [rx, ry] = REL_MERC_SPOTS[m];
+      const u = Unit.create(getDPSCheckPlayer(), FourCC(MERC_TYPES[m]), (cx + rx) * CELL, (cy + ry) * CELL, 0);
+      if (u == null) continue;
+      home.set(GetHandleId(u.handle), i);
+      mercs[i].push(u);
+    }
+  }
+  t.report('comp', comp.name);
+  t.report('copies', n);
+  t.report('bossHP', bosses[0].maxLife);
+
+  const dealt: number[] = [];
+  const taken: number[] = [];
+  const casts: number[] = [];
+  const result: string[] = [];
+  const endAt: number[] = [];
+  const bossLeftPct: number[] = [];
+  const heroesLeft: number[] = [];
+  const mercsLeft: number[] = [];
+  for (let i = 0; i < n; i++) {
+    dealt.push(0); taken.push(0); casts.push(0); result.push('');
+    endAt.push(0); bossLeftPct.push(0); heroesLeft.push(0); mercsLeft.push(0);
+  }
+  let cross = 0;
+
+  const bossPlayer = bosses[0].owner.handle;
+  const trigs: trigger[] = [];
+  const onBossSide = CreateTrigger()!;
+  TriggerRegisterPlayerUnitEvent(onBossSide, bossPlayer, EVENT_PLAYER_UNIT_DAMAGED, undefined);
+  TriggerAddAction(onBossSide, () => {
+    const hit = GetTriggerUnit();
+    const src = GetEventDamageSource();
+    if (hit == null || src == null) return;
+    if (copyOf(src) !== copyOf(hit)) { cross += GetEventDamage(); return; }
+    if (GetUnitTypeId(hit) === BOSS_ID) dealt[copyOf(hit)] += GetEventDamage();
+  });
+  trigs.push(onBossSide);
+  const onHeroSide = CreateTrigger()!;
+  TriggerRegisterPlayerUnitEvent(onHeroSide, heroPlayer, EVENT_PLAYER_UNIT_DAMAGED, undefined);
+  TriggerAddAction(onHeroSide, () => {
+    const hit = GetTriggerUnit();
+    const src = GetEventDamageSource();
+    if (hit == null || src == null) return;
+    if (copyOf(src) !== copyOf(hit)) { cross += GetEventDamage(); return; }
+    taken[copyOf(hit)] += GetEventDamage();
+  });
+  trigs.push(onHeroSide);
+  const onCast = CreateTrigger()!;
+  TriggerRegisterPlayerUnitEvent(onCast, heroPlayer, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+  TriggerAddAction(onCast, () => {
+    const u = GetTriggerUnit();
+    if (u != null) casts[copyOf(u)] += 1;
+  });
+  trigs.push(onCast);
+
+  for (let i = 0; i < n; i++) {
+    for (const u of heroes[i]) IssueTargetOrder(u.handle, 'attack', bosses[i].handle);
+    for (const u of mercs[i]) IssueTargetOrder(u.handle, 'attack', bosses[i].handle);
+  }
+
+  const alive = (u: Unit): boolean =>
+    GetUnitTypeId(u.handle) !== 0 && !IsUnitType(u.handle, UNIT_TYPE_DEAD);
+
+  let elapsed = 0;
+  const tick = Timer.create();
+  tick.start(1.0, true, t.guard(() => {
+    elapsed += 1;
+    let open = 0;
+    for (let i = 0; i < n; i++) {
+      if (result[i] !== '') continue;
+      const boss = bosses[i];
+      const bossDead = !alive(boss);
+      const h = heroes[i].filter(u => alive(u)).length;
+      const m = mercs[i].filter(u => alive(u)).length;
+      if (bossDead || (h === 0 && m === 0) || elapsed >= ARENA_FIGHT_CAP) {
+        result[i] = bossDead ? 'HEROES' : (h === 0 && m === 0 ? 'BOSS' : 'CAP');
+        endAt[i] = elapsed;
+        bossLeftPct[i] = bossDead ? 0 : R2I(boss.life * 100 / boss.maxLife);
+        heroesLeft[i] = h;
+        mercsLeft[i] = m;
+      } else {
+        open += 1;
+      }
+    }
+    if (open > 0) return;
+
+    tick.destroy();
+    stopBoss();
+    for (const tr of trigs) DestroyTrigger(tr);
+    for (let i = 0; i < n; i++) {
+      const k = 'c' + I2S(i)! + '_';
+      t.report(k + 'winner', result[i]);
+      t.report(k + 'seconds', endAt[i]);
+      t.report(k + 'bossHPLeftPct', bossLeftPct[i]);
+      t.report(k + 'heroesLeft', heroesLeft[i]);
+      t.report(k + 'mercsLeft', mercsLeft[i]);
+      t.report(k + 'damageToBoss', dealt[i]);
+      t.report(k + 'damageToParty', taken[i]);
+      t.report(k + 'casts', casts[i]);
+    }
+    t.report('crossTalk', cross);
+    // Clear the field for whatever runs next.
+    forEachUnitOfPlayer(heroPlayer, u => RemoveUnit(u));
+    forEachUnitOfPlayer(bossPlayer, u => RemoveUnit(u));
+    t.done();
+  }));
+}
+
+// Registered the same way as the single fights above, as 'bf' + name, and for
+// the same reason: these are balance runs with no pass condition, about three
+// minutes each, and the suite's documented sweep excludes 'bf' -- which is the
+// only name the source scan sees here. Run them by name through
+// Invoke-MapTests (e.g. -Tests bfarenamixed); run-test.ps1's preflight looks
+// for the literal name and would need -SkipSelfTest.
+//
+// bfarenamixedsolo is the real arena alone, as the game fights it: the
+// baseline the parallel copies were checked against before being trusted.
+const ARENA_BUDGET = ARENA_FIGHT_CAP + 60;
+const SOLO_ARENA: ReadonlyArray<readonly [number, number]> = [[0, 0]];
+for (const comp of [MIXED_COMP, STUN_COMP, TAVERN_COMP, CASTER_COMP]) {
+  registerTest('bf' + 'arena' + comp.name, (t: TestReporter) => runArenaFights(comp, t), ARENA_BUDGET);
+}
+registerTest('bf' + 'arenamixedsolo',
+  (t: TestReporter) => runArenaFights(MIXED_COMP, t, SOLO_ARENA), ARENA_BUDGET);

@@ -18,7 +18,10 @@ const INFERNO_ORDER = 'inferno';
  *  soon rather than skipping a whole cycle. */
 const CAST_CHECK_SECONDS = 1.0;
 
-let castLoop: Timer | null = null;
+/** One cast loop per living boss. The game only ever fields one, but the
+ *  balance harness fights several at once, and a single shared loop let only
+ *  the last boss spawned cast Inferno at all. */
+let castLoops: Timer[] = [];
 
 /** Spawn the boss, facing south, owned by neutral aggressive so heroes will
  *  engage it and it will engage them. */
@@ -96,12 +99,16 @@ function installAddSwap(owner: player): void {
  *  data it holds about the STOCK abilities, and this Inferno is a fresh rawcode
  *  it has never heard of. Without this the boss would simply never use it. */
 function driveInferno(boss: Unit): void {
-  stopBoss();
   const timer = Timer.create();
-  castLoop = timer;
+  castLoops.push(timer);
   timer.start(CAST_CHECK_SECONDS, true, () => {
     const h = boss.handle;
-    if (GetUnitTypeId(h) === 0 || IsUnitType(h, UNIT_TYPE_DEAD)) { stopBoss(); return; }
+    if (GetUnitTypeId(h) === 0 || IsUnitType(h, UNIT_TYPE_DEAD)) {
+      // This boss's loop only: another may still be fighting.
+      castLoops = castLoops.filter(l => l !== timer);
+      timer.destroy();
+      return;
+    }
     if (GetUnitAbilityLevel(h, BOSS_INFERNO_ABILITY_ID) === 0) return;
     if (BlzGetUnitAbilityCooldownRemaining(h, BOSS_INFERNO_ABILITY_ID) > 0) return;
 
@@ -137,6 +144,8 @@ function nearestEnemy(boss: Unit): { x: number; y: number } {
   return { x: bestX, y: bestY };
 }
 
+/** Stop every boss casting. */
 export function stopBoss(): void {
-  if (castLoop != null) { castLoop.destroy(); castLoop = null; }
+  for (const l of castLoops) l.destroy();
+  castLoops = [];
 }
