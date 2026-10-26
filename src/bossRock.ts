@@ -1,37 +1,43 @@
-import { Timer, Trigger, Unit } from 'w3ts';
-import { BOSS_KEY_ITEM_ID, PEASANT_ID } from './constants';
-import { STRANGE_ROCK_RAW } from './terrain/constants';
+import { Trigger, Unit } from 'w3ts';
+import { BOSS_KEY_ITEM_ID, PEASANT_ID, STRANGE_ROCK_ID } from './constants';
+import { getNeutralExtra } from './teams';
+import { ROCK_MODEL_SCALES } from './terrain/constants';
 
 /**
  * The Strange Rock: what the Strange Key is for.
  *
- * The rock has granite's health, so attacking it without the key is a way to
- * spend the rest of the round. Bring the key within reach and it drops to a
- * single point, so the next blow finishes it -- the rock still dies to an
- * attack, which is what makes it read as a rock rather than a trigger.
+ * You USE the key on the rock. It is a copy of the Alchemist's Transmute, so
+ * the peasant throws, the missile flies, and the rock is destroyed when it
+ * lands -- all done by the engine, nothing here watching or timing it.
  *
- * Proximity rather than the attack ORDER, which was the first attempt and is
- * broken in the obvious case: a player hits the rock, learns they need the key,
- * fetches it and attacks again -- and the engine raises no order event the
- * second time, because the peasant was already attacking that exact target.
- * Measured in game: the rock sat at full health with the key in hand. Watching
- * where the key is instead has no such gap.
+ * That replaced a proximity watcher: the rock used to sit at granite's health
+ * and drop to 1 HP whenever a key-holder stood near it, checked twice a second
+ * for the rest of the game. Attacking was the verb then; the first version
+ * had keyed off the attack ORDER instead, and broke in the commonest case --
+ * re-attacking a target you are already attacking raises no new order event.
+ * A cast raises a fresh event every time.
  *
- * It re-seals when the key leaves, so the rock is only ever fragile while
- * somebody is standing there with the way to open it.
+ * Two things keep this the ONLY way in:
+ *  - the rock has 999999 HP, so attacks chip at it forever, and Transmute
+ *    kills rather than damages, so the HP is no obstacle to the key;
+ *  - the key targets "ancient structures", and the rock is the only one in the
+ *    map, so the engine's own invalid-target refusal handles everything else.
+ *    The Alchemist's real Transmute is untouched: the key casts a copy.
  */
 
-/** How close the key has to be. A little over a tile, so standing next to the
- *  rock counts and shouting at it from across the clearing does not. */
-const KEY_RANGE = 200;
-/** Full health, matching the object data. */
-const SEALED_LIFE = 999999.0;
-/** How often the rock looks around for the key. */
-const CHECK_SECONDS = 0.5;
-
-let watched: destructable | null = null;
-let watcher: Timer | null = null;
 let messaged = false;
+
+/** Stand the seal up. The one place a rock is made: the board spawner and the
+ *  tests both come through here. Neutral extra, so it shares no vision. */
+export function spawnStrangeRock(x: number, y: number): unit | null {
+  messaged = false;
+  const rock = CreateUnit(getNeutralExtra().handle, STRANGE_ROCK_ID, x, y, 270);
+  if (rock == null) return null;
+  // Variation 0 of the rock-chunk model, at the size granite and the resource
+  // rocks use for it -- a rock among rocks, singled out by colour, not size.
+  SetUnitScale(rock, ROCK_MODEL_SCALES[0], ROCK_MODEL_SCALES[0], ROCK_MODEL_SCALES[0]);
+  return rock;
+}
 
 /** Does this unit have the Strange Key in hand? */
 function carriesKey(u: unit): boolean {
@@ -42,50 +48,24 @@ function carriesKey(u: unit): boolean {
   return false;
 }
 
-/** Is a peasant holding the key standing at the rock? */
-function keyIsAtRock(rock: destructable): boolean {
-  let found = false;
-  const g = CreateGroup()!;
-  GroupEnumUnitsInRange(g, GetDestructableX(rock), GetDestructableY(rock), KEY_RANGE, undefined);
-  ForGroup(g, () => {
-    const u = GetEnumUnit();
-    if (found || u == null) return;
-    if (GetUnitTypeId(u) !== PEASANT_ID) return;
-    if (carriesKey(u)) found = true;
-  });
-  DestroyGroup(g);
-  return found;
-}
-
-/** Watch the boss exit's seal. Called by the spawner when it places one; the
- *  previous round's rock is dropped at the same time, since the map it stood on
- *  no longer exists. */
-export function registerStrangeRock(rock: destructable): void {
-  watched = rock;
-  messaged = false;
-  if (watcher != null) return;
-  const timer = Timer.create();
-  watcher = timer;
-  timer.start(CHECK_SECONDS, true, () => {
-    const rock2 = watched;
-    if (rock2 == null) return;
-    // Already broken: nothing left to guard.
-    if (GetDestructableLife(rock2) <= 0) { watched = null; return; }
-    SetDestructableLife(rock2, keyIsAtRock(rock2) ? 1 : SEALED_LIFE);
-  });
-}
-
-/** Tell a player why the rock will not budge, the moment they try it. */
+/** Point a player at the key the first time they try the rock by hand. Said
+ *  differently to a peasant already holding it: attacking was how this used
+ *  to work, so a returning player will try it. */
 export function initBossRock(): void {
   const onAttack = Trigger.create();
   onAttack.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
   onAttack.addAction(() => {
     if (GetIssuedOrderId() !== OrderId('attack')) return;
-    const target = GetOrderTargetDestructable();
-    if (target == null || GetDestructableTypeId(target) !== FourCC(STRANGE_ROCK_RAW)) return;
+    const target = GetOrderTargetUnit();
+    if (target == null || GetUnitTypeId(target) !== STRANGE_ROCK_ID) return;
     const u = Unit.fromHandle(GetTriggerUnit());
     if (u == null || u.typeId !== PEASANT_ID) return;
-    if (carriesKey(u.handle) || messaged) return;
+    if (carriesKey(u.handle)) {
+      DisplayTimedTextToPlayer(u.owner.handle, 0, 0, 8,
+        'Hitting it will not help. Use the Strange Key on it.');
+      return;
+    }
+    if (messaged) return;
     messaged = true;
     DisplayTimedTextToPlayer(u.owner.handle, 0, 0, 8,
       'The rock does not move. Something out here is carrying the way in.');

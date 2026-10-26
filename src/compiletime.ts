@@ -7,8 +7,8 @@ compiletime(({ objectData, constants }) => {
    *  constants.ts -- this side authors the unit, that side spawns it. */
   const UNKNOWN_UNIT_RAWCODE = 'qmrk';
 
-  /** Keep in step with STRANGE_ROCK_RAW in terrain/constants.ts. */
-  const STRANGE_ROCK_RAWCODE = 'BRoc';
+  /** Keep in step with STRANGE_ROCK_ID in constants.ts. */
+  const STRANGE_ROCK_UNIT = 'srok';
 
   // Everything in the world is peasant-sized unless we say otherwise.
   //
@@ -338,6 +338,14 @@ compiletime(({ objectData, constants }) => {
       { id: 'Ntm1', variableType: 2, dataPointer: 1, value: 0 }, // goldCostFactor
       { id: 'Ntm2', variableType: 2, dataPointer: 2, value: 0 }, // lumberCostFactor
     ],
+    // The Strange Key's throw, a COPY of Transmute (see the keyThrow block).
+    // A copy starts from the stock Transmute, not from the ANtm fix above, so
+    // it needs its own: no gold, and free for a peasant with no mana.
+    // concat, not a spread: spreads break this block's eval (see project notes).
+    A012: zeroedSpellCost.concat([
+      { id: 'Ntm1', variableType: 2, dataPointer: 1, value: 0 }, // goldCostFactor
+      { id: 'Ntm2', variableType: 2, dataPointer: 2, value: 0 }, // lumberCostFactor
+    ]),
     // NOTE: there was an Aihn (UnitInventoryHuman) block here configuring
     // "mercenary inventory, no drop on death". It was dead: no unit anywhere
     // carries Aihn. The mercenary is given AInv (InventoryHero) instead -- see
@@ -357,6 +365,21 @@ compiletime(({ objectData, constants }) => {
     if (result.w3a) {
       fixAbilityLevels(result.w3a);
       const seen = new Set<string>();
+      // Custom copies first, matched by their NEW id. Without this a forced
+      // entry for a copy (A012) found nothing in the original table, and the
+      // fallback below then wrote it there as if it were a stock ability.
+      for (const obj of result.w3a.customTable.objects) {
+        const mods = forcedMods[obj.newId];
+        if (mods == null) continue;
+        seen.add(obj.newId);
+        for (const forced of mods) {
+          if (!obj.modifications.some((m: any) => m.id === forced.id)) {
+            const mod = new Modification();
+            Object.assign(mod, forced, { levelOrVariation: 1, u1: 0 });
+            obj.modifications.push(mod);
+          }
+        }
+      }
       for (const obj of result.w3a.originalTable.objects) {
         const mods = forcedMods[obj.oldId];
         if (mods != null) {
@@ -548,15 +571,23 @@ compiletime(({ objectData, constants }) => {
   // the boss. A peasant item, so it lives by the peasant's one-item rule and
   // cannot be handed to the engine, the wagon or the crate -- see itemRules.ts.
   const bossKey = objectData.items.get(constants.items.KeyOfThreeMoons)!;
+  const KEY_THROW = 'A012';
   bossKey.name = 'Strange Key';
   bossKey.description = 'Taken from something that should not have been carrying it.';
-  bossKey.tooltipExtended = 'Whatever this opens is not on any map. Carry it to the Strange Rock at the far edge of the line.';
+  bossKey.tooltipExtended = 'Whatever this opens is not on any map. Use it on the Strange Rock at the far edge of the line.';
   bossKey.goldCost = 0;
   bossKey.canBeDropped = true;
   bossKey.droppedWhenCarrierDies = true;
   bossKey.perishable = false;
   bossKey.canBeSoldToMerchants = false;
-  bossKey.abilities = '';
+  // Used, not just carried: the key throws itself at the Strange Rock (A012,
+  // a copy of Transmute). One charge, perishable, so the key is spent by the
+  // throw that breaks the rock -- and only that throw, because the engine
+  // refuses any other target before a charge is touched.
+  bossKey.abilities = KEY_THROW;
+  bossKey.activelyUsed = true;
+  bossKey.numberOfCharges = 1;
+  bossKey.perishable = true;
 
   // Strange Meat: bait. Buying it makes the next camp a level 3 one, which is
   // the only camp that can drop the Strange Key.
@@ -689,29 +720,42 @@ compiletime(({ objectData, constants }) => {
 
   // The Strange Rock: seals the boss exit until somebody brings the key.
   //
-  // A copy of the granite chunk rather than granite itself -- granite is
-  // scattered over every map and must stay anonymous and indestructible, while
-  // this one has a name, a colour and a way to die.
+  // A UNIT dressed as a rock, not a destructable. The key breaks it by throwing
+  // a copy of Transmute (A012), and Transmute will not target a destructable at
+  // all -- the order is refused outright, measured. As a unit it is a legal
+  // target, and the engine does everything: the throw, the missile, and the
+  // kill when it lands.
   //
-  // Health is granite's, so ordinary attacks can chip at it forever and never
-  // break it. Breaking it is not a matter of damage at all: a peasant holding
-  // the Strange Key drops its health to 1 by ordering an attack on it, and the
-  // swing that follows finishes it (see bossRock.ts).
+  // Copied from the Barracks only because it is a plain building nothing else
+  // here modifies; everything that makes it a barracks is cleared.
   //
-  // Targeted as debris, which is what makes it attackable at all -- the same
-  // setting the trees use. It is a different rawcode from either resource, so
-  // the harvest system never mistakes it for wood or stone.
-  const strangeRock = objectData.destructables.copy(
-    constants.destructables.RockChunks1, STRANGE_ROCK_RAWCODE);
-  if (strangeRock != null) {
-    strangeRock.name = 'Strange Rock';
-    strangeRock.hitPoints = 999999;
-    strangeRock.occlusionHeight = 0;
-    strangeRock.selectableInGame = true;
-    strangeRock.targetedAs = 'debris';
-    strangeRock.tintingColor1Red = 255;
-    strangeRock.tintingColor2Green = 40;
-    strangeRock.tintingColor3Blue = 40;
+  // Classified ANCIENT so the key can target it and nothing else: the key's
+  // targets are "ancient structure", and this is the only one in the map.
+  //
+  // 999999 HP, so ordinary attacks chip at it forever. Transmute does not deal
+  // damage, it kills, so the HP is no obstacle to the key.
+  const sealRock = objectData.units.copy(constants.units.Barracks, STRANGE_ROCK_UNIT);
+  if (sealRock != null) {
+    sealRock.name = 'Strange Rock';
+    sealRock.nameEditorSuffix = '';
+    // RockChunks1's model, variation 0 -- the one the destructable used. Read
+    // from the destructable's own data rather than typed from memory.
+    sealRock.modelFile = 'Doodads\\LordaeronSummer\\Terrain\\LoardaeronRockChunks\\LoardaeronRockChunks0.mdl';
+    sealRock.tintingColor1Redundefined = 255;
+    sealRock.tintingColor2Greenundefined = 40;
+    sealRock.tintingColor3Blueundefined = 40;
+    sealRock.unitClassification = 'ancient';
+    sealRock.normal = '';
+    sealRock.unitsTrained = '';
+    sealRock.researchesAvailable = '';
+    sealRock.upgradesTo = '';
+    sealRock.hitPointsMaximumBase = 999999;
+    sealRock.hitPointsRegenerationRate = 0;
+    sealRock.sightRadiusDay = 0;
+    sealRock.sightRadiusNight = 0;
+    sealRock.hideMinimapDisplay = true;
+    sealRock.groundTexture = '';
+    sealRock.pathingMap = 'PathTextures\\4x4SimpleSolid.tga';
   }
 
   // Water: Burrow repurposed with WaterPlane model, targetable by spells, no shadow
@@ -1293,6 +1337,37 @@ compiletime(({ objectData, constants }) => {
     inferno.tooltipNormal = 'Inferno';
     inferno.tooltipNormalExtended =
       'Calls down a meteor that stuns nearby enemies and leaves a lesser infernal behind.';
+  }
+
+  // The Strange Key's throw: a COPY of Transmute, so the Alchemist's own
+  // Transmute -- which can turn up on a hero in play -- is left exactly as it
+  // is. The copy is what the key casts: the peasant throws, the missile flies,
+  // and the Strange Rock breaks when it lands.
+  type TransmuteAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>
+    & { goldCostFactor: number; lumberCostFactor: number };
+  const keyThrow = objectData.abilities.copy(
+    constants.abilities.Transmute, KEY_THROW) as TransmuteAbility | undefined;
+  if (keyThrow != null) {
+    keyThrow.levels = 1;
+    keyThrow.heroAbility = false;
+    keyThrow.castRange = 300;
+    // Mana, cooldown and Transmute's gold payout are zeroed in forcedMods under
+    // A012: assigning 0 here writes nothing, because 0 is what the library
+    // thinks the default is -- and the real defaults are 150 mana (a peasant
+    // has none, so the key was simply refused) and a gold payout (56-64 per
+    // throw, measured on the copy before it was zeroed).
+    //
+    // Targets: an ANCIENT STRUCTURE, which is only ever the Strange Rock. No
+    // flag can name one unit type, so the rock is given a classification
+    // nothing else in the map has -- Night Elf ancients are the only stock
+    // ancient buildings, and there are none here. Creeps and heroes are not
+    // structures; tracks, the shop, the dealer, crates and circles are not
+    // ancients. Anything else gets the engine's own "invalid target" refusal,
+    // cursor and message both, rather than a cast stopped after the fact.
+    keyThrow.targetsAllowed = 'structure,ancient,neutral,allies,friend,vulnerable,invulnerable';
+    keyThrow.name = 'Use Strange Key';
+    keyThrow.tooltipNormal = 'Use Strange Key';
+    keyThrow.tooltipNormalExtended = 'Throw the key at the Strange Rock to break it open.';
   }
 
   const clap = objectData.abilities.copy(constants.abilities.ThunderClap, ADD_THUNDER_CLAP);

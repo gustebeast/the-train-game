@@ -134,8 +134,10 @@ export function gridToWorld(pos: GridPos): GridPos {
 // --- Destructable rawcodes ---
 export const TREE_RAW = 'LTlt';  // SummerTreeWall (Lordaeron Summer)
 export const ROCK_RAW = 'LTrt';  // RockChunks2 (Lordaeron Summer — 6 variations)
+/** Scale for each variation of the rock-chunk model, so every rock -- resource,
+ *  granite, and the Strange Rock -- comes out the same size for the same shape. */
+export const ROCK_MODEL_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
 export const GRANITE_RAW = 'LTrc';  // RockChunks1 (Lordaeron Summer — indestructible)
-export const STRANGE_ROCK_RAW = 'BRoc';  // The boss exit's seal (see compiletime.ts)
 export const CAGE_RAW = 'LOcg';  // Cage (creep camp spawner)
 /** Pathing Blocker (Ground) (Large). No model at all, so it is invisible, and
  *  its 4x4Default pathing texture covers exactly one TRACK_SIZE cell. Used to

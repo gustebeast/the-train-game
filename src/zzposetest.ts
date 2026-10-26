@@ -1,0 +1,21 @@
+import { registerTest } from './testkit';
+import { getHumanPlayers } from './util';
+import { PEASANT_ID, BOSS_KEY_ITEM_ID } from './constants';
+import { spawnStrangeRock } from './bossRock';
+import { beginNewRun, loadTerrain } from './terrain/load';
+registerTest('keypose', t => {
+  beginNewRun();
+  loadTerrain(0);
+  const me = getHumanPlayers()[0].handle;
+  const cx = 0; const cy = -1200;
+  spawnStrangeRock(cx + 250, cy);
+  CreateUnit(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, FourCC('nkob'), cx - 250, cy, 0);
+  const p = CreateUnit(me, PEASANT_ID, cx, cy, 0)!;
+  UnitAddItem(p, CreateItem(BOSS_KEY_ITEM_ID, cx, cy)!);
+  const fog = CreateFogModifierRadius(me, FOG_OF_WAR_VISIBLE, cx, cy, 900, true, false)!;
+  FogModifierStart(fog);
+  ClearSelection(); SelectUnit(p, true);
+  PanCameraToTimed(cx, cy, 0);
+  SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 1400, 0);
+  t.after(1, () => t.done());
+});
