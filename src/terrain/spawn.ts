@@ -15,7 +15,7 @@ import { TRACK_SIZE } from '../track/constants';
 import { registerStrangeRock } from '../bossRock';
 import { placedTracks, setVictoryTile, setBossVictoryTile, resetVictoryTriggered } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
-import { labelUnit, sweepUnitLabels } from '../unitLabels';
+import { labelUnit } from '../unitLabels';
 import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, cleanupCage, cancelSparringMatch } from '../creeps';
 import { resetHeroState } from '../heroes';
@@ -156,10 +156,6 @@ export function spawnTerrain(grid: Grid, skipCleanup = false): SpawnedTrain {
     // Remove all destructables, units, and items before respawning
     EnumDestructablesInRect(getWorldBounds(), null!, () => RemoveDestructable(GetEnumDestructable()!));
     forEachUnitInWorld(u => RemoveUnit(u));
-    // Now, before anything new spawns: a removed circle's handle can be
-    // recycled into the next board's circle, and a label swept after that
-    // would find a live unit under its old handle and stay.
-    sweepUnitLabels();
     EnumItemsInRect(getWorldBounds(), null!, () => RemoveItem(GetEnumItem()!));
     resumeResourceDrops();
     placedTracks.length = 0;

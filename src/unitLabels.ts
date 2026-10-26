@@ -7,38 +7,30 @@
  * hanging over empty ground.
  *
  * The fix is not "remember to destroy them" at every place that removes a
- * circle -- that is a counter kept in step with the world by hand, and the
- * first new removal path forgets it. A label's lifetime is DERIVED from its
- * unit instead: sweepUnitLabels drops every label whose unit is no longer on
- * the map, and it runs from two places.
+ * circle; the first new removal path would forget. Instead the label hears
+ * about its unit leaving, through the two ways a unit can leave:
  *
- *  - Synchronously in the terrain cleanup, straight after every unit is
- *    removed and BEFORE the new board is spawned. That makes regeneration
- *    clean in the same frame, and it matters for more than looks: WC3 recycles
- *    handles, so a removed circle's handle can come straight back as a new
- *    circle's. Sweeping before anything new exists closes that window.
- *  - On a raw periodic timer, as the backstop for any other way a circle can
- *    leave the map. Raw rather than a tracked Timer, because the cleanup's
- *    destroyAllTimers would otherwise kill the very thing guarding it.
+ *  - Death: an ordinary EVENT_UNIT_DEATH trigger.
+ *  - Removal: WC3 has NO event for RemoveUnit, and RemoveUnit is how every
+ *    board is cleared. So the native itself is wrapped: every RemoveUnit call
+ *    in the map -- ours directly, and w3ts's Unit.destroy(), which calls the
+ *    global at call time -- drops the unit's label in the same call, before
+ *    the handle can be recycled into anything new.
  *
- * The same sweep keeps each label on its unit, so a label can never sit
- * anywhere its unit is not.
+ * Event-driven both ways: nothing polls.
  */
 
+declare const _G: { RemoveUnit: (this: void, u: unit) => void };
+
 interface Label {
-  unit: unit;
-  /** What the unit was when labelled. A different type under the same handle
-   *  means the handle was recycled into some other unit. */
-  typeId: number;
   tag: texttag;
-  text: string;
-  size: number;
 }
 
-let labels: Label[] = [];
-let sweeper: timer | null = null;
+/** Keyed by the unit, so a removal looks its label up in one step. */
+const labels = new Map<unit, Label>();
+let hooked = false;
+let deathTrigger: trigger | null = null;
 
-const SWEEP_INTERVAL = 0.25;
 /** Text size, in the units SetTextTagText takes. */
 const LABEL_SIZE = 0.024;
 /** World units per character at LABEL_SIZE, for centring. Texttags anchor at
@@ -47,77 +39,66 @@ const LABEL_SIZE = 0.024;
  *  units -- after a guess of 6.5 left every label visibly right of centre. */
 const CHAR_WIDTH = 14;
 
-function place(l: Label): void {
-  const width = string.len(l.text) * CHAR_WIDTH * (l.size / LABEL_SIZE);
-  SetTextTagPos(l.tag, GetUnitX(l.unit) - width / 2, GetUnitY(l.unit) - 12, 0);
+function dropLabel(u: unit): void {
+  const l = labels.get(u);
+  if (l == null) return;
+  DestroyTextTag(l.tag);
+  labels.delete(u);
 }
 
-/** Reused for the presence check; one group for the life of the map. */
-const probe = CreateGroup()!;
-
-/** Whether the unit is still on the map, asked of the world itself.
+/** Wrap RemoveUnit, and set up the death trigger, once.
  *
- *  Not GetUnitTypeId alone. RemoveUnit is deferred: for the rest of the frame
- *  a removed unit still reports its type and its life, so a sweep run straight
- *  after the cleanup -- the one sweep that has to work -- saw every removed
- *  circle as present and kept its label. Measured: 2 circles on the map, 5
- *  labels, 0 of them reported orphaned. World enumeration already leaves a
- *  removed unit out in that same frame, so presence is "the map still finds it
- *  where it stood", the same question anything counting circles would ask. */
-function unitStillThere(l: Label): boolean {
-  if (GetUnitTypeId(l.unit) !== l.typeId || GetWidgetLife(l.unit) <= 0.405) return false;
-  GroupClear(probe);
-  GroupEnumUnitsInRange(probe, GetUnitX(l.unit), GetUnitY(l.unit), 32, null!);
-  return IsUnitInGroup(l.unit, probe);
+ *  Done on first use rather than at module load: natives are not reliable at
+ *  module scope in this map (I2S returns "" there), and the wrapper must
+ *  capture the real native, not whatever stands in for it that early. */
+function install(): void {
+  if (hooked) return;
+  hooked = true;
+  const nativeRemoveUnit = _G.RemoveUnit;
+  _G.RemoveUnit = (u: unit) => {
+    if (u != null) dropLabel(u);
+    nativeRemoveUnit(u);
+  };
+  deathTrigger = CreateTrigger();
+  TriggerAddAction(deathTrigger, () => {
+    const u = GetTriggerUnit();
+    if (u != null) dropLabel(u);
+  });
 }
 
 /** Float `text` over `u` for as long as `u` exists. */
 export function labelUnit(u: unit, text: string, red: number, green: number, blue: number): void {
-  // One label per unit, always. If this handle already carries a label, it
-  // belongs either to this same unit (relabelled) or to a removed unit whose
-  // handle was recycled into this one before a sweep caught it. Either way it
-  // is stale, and keeping it would stack two texts on one circle.
-  const others: Label[] = [];
-  for (const l of labels) {
-    if (l.unit === u) DestroyTextTag(l.tag);
-    else others.push(l);
-  }
-  labels = others;
-
+  install();
+  // One label per unit: relabelling replaces rather than stacks.
+  dropLabel(u);
   const tag = CreateTextTag();
   if (tag == null) return;
   SetTextTagText(tag, text, LABEL_SIZE);
   SetTextTagColor(tag, red, green, blue, 255);
   SetTextTagPermanent(tag, true);
   SetTextTagVisibility(tag, true);
-  const l: Label = { unit: u, typeId: GetUnitTypeId(u), tag, text, size: LABEL_SIZE };
-  place(l);
-  labels.push(l);
-
-  if (sweeper == null) {
-    sweeper = CreateTimer();
-    TimerStart(sweeper, SWEEP_INTERVAL, true, () => sweepUnitLabels());
-  }
-}
-
-/** Drop every label whose unit has left the map, and re-seat the rest. */
-export function sweepUnitLabels(): void {
-  const kept: Label[] = [];
-  for (const l of labels) {
-    if (unitStillThere(l)) {
-      place(l);
-      kept.push(l);
-    } else {
-      DestroyTextTag(l.tag);
-    }
-  }
-  labels = kept;
+  const width = string.len(text) * CHAR_WIDTH;
+  SetTextTagPos(tag, GetUnitX(u) - width / 2, GetUnitY(u) - 12, 0);
+  labels.set(u, { tag });
+  if (deathTrigger != null) TriggerRegisterUnitEvent(deathTrigger, u, EVENT_UNIT_DEATH);
 }
 
 /** How many labels exist, and how many of those have lost their unit. The
- *  second must be zero after any sweep; tests hold it to that. */
+ *  second must always be zero; tests hold it to that.
+ *
+ *  Presence is asked of the world by enumeration, not GetUnitTypeId: RemoveUnit
+ *  is deferred, and for the rest of the frame a removed unit still reports its
+ *  type and life. Enumeration already leaves it out. */
 export function unitLabelStats(): { total: number; orphaned: number } {
+  const probe = CreateGroup()!;
+  let total = 0;
   let orphaned = 0;
-  for (const l of labels) if (!unitStillThere(l)) orphaned += 1;
-  return { total: labels.length, orphaned };
+  for (const [u] of labels) {
+    total += 1;
+    GroupClear(probe);
+    GroupEnumUnitsInRange(probe, GetUnitX(u), GetUnitY(u), 32, null!);
+    if (!IsUnitInGroup(u, probe) || GetWidgetLife(u) <= 0.405) orphaned += 1;
+  }
+  DestroyGroup(probe);
+  return { total, orphaned };
 }

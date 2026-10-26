@@ -23,13 +23,13 @@ function circlesOnMap(): unit[] {
  * floating over ground whose circles were gone. Three ways a circle can leave,
  * each checked:
  *
- *  - Regeneration, checked in the SAME frame as the load, with no wait. That
- *    proves the synchronous sweep inside the cleanup did it, not the periodic
- *    timer -- which matters because only the synchronous sweep runs before
- *    the new board's circles can take over recycled handles.
+ *  - Regeneration, checked in the SAME frame as the load, with no wait: the
+ *    labels must be gone by the time the removal call returns, before the new
+ *    board's circles can take over recycled handles.
  *  - Regeneration again, to show labels do not pile up across loads.
- *  - A circle removed by hand, outside any cleanup, which only the periodic
- *    backstop can catch.
+ *  - A circle removed by hand, outside any cleanup, and one that dies. Both
+ *    are caught by events -- the RemoveUnit hook and the death trigger --
+ *    since nothing polls.
  */
 function runCircleLabelTest(t: TestReporter): void {
   beginNewRun();
@@ -49,14 +49,22 @@ function runCircleLabelTest(t: TestReporter): void {
   loadInterRoundLobby();
   expect(t, 'noPileUpAfterSecondRegen', unitLabelStats().total, circlesOnMap().length);
 
-  // Remove one circle outside any cleanup path.
+  // Remove one circle outside any cleanup path, and look in the same frame:
+  // the RemoveUnit hook has to have dropped its label already.
   const victim = circlesOnMap()[0];
   const before = unitLabelStats().total;
   RemoveUnit(victim);
-  t.after(1, () => {
+  expect(t, 'removalDroppedLabelSameFrame', before - unitLabelStats().total, 1);
+
+  // And a circle that dies rather than being removed.
+  const dying = circlesOnMap()[0];
+  const beforeDeath = unitLabelStats().total;
+  SetUnitInvulnerable(dying, false);
+  KillUnit(dying);
+  t.after(0.5, () => {
     const after = unitLabelStats();
-    expect(t, 'backstopDroppedRemovedCircle', before - after.total, 1);
-    expect(t, 'orphansAfterBackstop', after.orphaned, 0);
+    expect(t, 'deathDroppedLabel', beforeDeath - after.total, 1);
+    expect(t, 'orphansAtEnd', after.orphaned, 0);
     t.done();
   });
 }
