@@ -208,6 +208,8 @@ function wallBoard(): void {
   const half = TRACK_SIZE / 4;
   const wallAt = (gx: number, gy: number, dx: number, dy: number): void => {
     const w = gridToWorld({ x: gx, y: gy });
+    // Ground units: BOARD_WALL_RAW stops only flyers (see its constant).
+    Destructable.create(FourCC(PATH_BLOCKER_RAW), w.x, w.y, 0, 1, 0);
     Destructable.create(FourCC(BOARD_WALL_RAW), w.x, w.y, 0, 1, 0);
     Destructable.create(FourCC(SIGHT_WALL_RAW), w.x - dx * half, w.y - dy * half, 0, 1, 0);
     Destructable.create(FourCC(SIGHT_WALL_RAW), w.x + dx * half, w.y + dy * half, 0, 1, 0);
