@@ -152,6 +152,18 @@ export function parseFields(raw: string): Record<string, string> {
   return fields;
 }
 
+/** Split a comma-joined field value ("a,b,c") into its entries. */
+export function parseList(raw: string): string[] {
+  const out: string[] = [];
+  for (const [entry] of string.gmatch(raw, '([^,]+)')) out.push(entry);
+  return out;
+}
+
+/** A comma-joined list of numbers, as `numbers.join(',')` writes it. */
+export function parseNumberList(raw: string): number[] {
+  return parseList(raw).map(entry => tonumber(entry) ?? 0);
+}
+
 /** A kit as one field value: "id,id*charges,..." -- the charges only for an
  *  item that has them, so a save written before charges were kept still reads
  *  (its items simply come back with their default charges). */
@@ -165,7 +177,7 @@ export function encodeKit(kit: ReadonlyArray<KitItem>): string {
 
 export function decodeKit(raw: string): KitItem[] {
   const kit: KitItem[] = [];
-  for (const [entry] of string.gmatch(raw, '([^,]+)')) {
+  for (const entry of parseList(raw)) {
     const [idStr, chargesStr] = string.match(entry, '^(%d+)%*?(%d*)$');
     const id = tonumber(idStr ?? '') ?? 0;
     if (id !== 0) kit.push({ id, charges: tonumber(chargesStr ?? '') ?? 0 });
@@ -268,20 +280,47 @@ export interface SavedMerc {
   items: KitItem[];
 }
 
-/** The living mercenaries in an 'mm' segment (mercenary.ts writes it: per slot
- *  n, tn is the type, dn the death flag, in the kit). */
-function decodeMercs(raw: string): SavedMerc[] {
-  const out: SavedMerc[] = [];
-  if (raw === '') return out;
+/** One mercenary slot as the MERC_SAVE_KEY segment stores it (typeId 0: never
+ *  hired). The format lives here, not in mercenary.ts, because two readers
+ *  need it: mercenary.ts restores its slots, and the chooser describes a save
+ *  without loading it. */
+export interface SavedMercSlot extends SavedMerc {
+  dead: boolean;
+}
+
+/** Per slot n: tn is the type, dn the death flag, in the kit. A never-hired
+ *  slot writes nothing. */
+export function encodeMercSlots(slots: ReadonlyArray<SavedMercSlot>): string {
+  const parts: string[] = [];
+  for (let i = 0; i < slots.length; i++) {
+    const sl = slots[i];
+    if (sl.typeId === 0) continue;
+    const n = tostring(i + 1);
+    parts.push('t' + n + '=' + tostring(sl.typeId));
+    parts.push('d' + n + '=' + (sl.dead ? '1' : '0'));
+    if (sl.items.length > 0) parts.push('i' + n + '=' + encodeKit(sl.items));
+  }
+  return table.concat(parts, ';');
+}
+
+/** Every slot, MAX_MERCS of them, hired or not. */
+export function decodeMercSlots(raw: string): SavedMercSlot[] {
   const fields = parseFields(raw);
-  for (let n = 1; n <= MAX_MERCS; n++) {
-    const typeId = tonumber(fields['t' + tostring(n)] ?? '');
-    if (typeId == null || typeId === 0) continue;
-    if ((fields['d' + tostring(n)] ?? '0') === '1') continue;
-    const items = decodeKit(fields['i' + tostring(n)] ?? '');
-    out.push({ typeId, items });
+  const out: SavedMercSlot[] = [];
+  for (let i = 0; i < MAX_MERCS; i++) {
+    const n = tostring(i + 1);
+    out.push({
+      typeId: tonumber(fields['t' + n] ?? '') ?? 0,
+      dead: fields['d' + n] === '1',
+      items: decodeKit(fields['i' + n] ?? ''),
+    });
   }
   return out;
+}
+
+/** The living mercenaries in a save. */
+function decodeLivingMercs(raw: string): SavedMerc[] {
+  return decodeMercSlots(raw).filter(sl => sl.typeId !== 0 && !sl.dead);
 }
 
 /**
@@ -373,7 +412,7 @@ function describeSlot(slot: number, get: SlotReader): SaveSlotInfo | null {
     victorious: get(KEY_VICTORIOUS) === VICTORIOUS_YES,
     heroTypeIds,
     heroRecords,
-    mercs: decodeMercs(get(MERC_SAVE_KEY)),
+    mercs: decodeLivingMercs(get(MERC_SAVE_KEY)),
   };
 }
 

@@ -3,7 +3,7 @@ import { HERO_POOL } from './sharedData';
 import { onPlayerLeave } from './playerLeave';
 import { Items } from '@objectdata/items';
 import { isInGameplay } from './state';
-import { registerSaveSegment, parseFields, heroSaveKey, encodeKit, decodeKit } from './save';
+import { registerSaveSegment, parseFields, parseNumberList, heroSaveKey, encodeKit, decodeKit } from './save';
 import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID, HERO_SLOTS, MAX_PLAYERS } from './constants';
 import { createPlaceholder } from './placeholder';
 import { seededValueAt, deriveSeed, shuffleRandom, STREAMS } from './rng';
@@ -144,11 +144,8 @@ const peasantOwnerMap: Map<unit, MapPlayer> = new Map();
 registerSaveSegment('hc',
   () => heroControlCount.join(','),
   (raw) => {
-    let i = 0;
-    for (const [val] of string.gmatch(raw, '([^,]+)')) {
-      if (i < MAX_PLAYERS) heroControlCount[i] = tonumber(val) ?? 0;
-      i++;
-    }
+    const counts = parseNumberList(raw);
+    for (let i = 0; i < counts.length && i < MAX_PLAYERS; i++) heroControlCount[i] = counts[i];
   },
   () => {
     for (let i = 0; i < MAX_PLAYERS; i++) heroControlCount[i] = 0;
@@ -159,10 +156,7 @@ registerSaveSegment('hc',
 registerSaveSegment('hp',
   () => chosenHeroPlayers.join(','),
   (raw) => {
-    const loaded: number[] = [];
-    for (const [val] of string.gmatch(raw, '([^,]+)')) {
-      loaded.push(tonumber(val) ?? 0);
-    }
+    const loaded = parseNumberList(raw);
     if (loaded.length > 0) {
       chosenHeroPlayers = loaded;
       heroPlayersFromSave = true;

@@ -1,6 +1,6 @@
 import { gameState, syncGold } from './state';
 import { boardChanged } from './boardSignal';
-import { registerSaveSegment, parseFields } from './save';
+import { registerSaveSegment, parseFields, parseList } from './save';
 import { deriveSeed, shuffleSeeded, STREAMS } from './rng';
 import { CHALLENGE_BONUS } from './sharedData';
 
@@ -182,12 +182,7 @@ function decodeChallenges(raw: string): void {
   const o = fields['o'];
   if (o != null && o !== '') offeredId = o;
   const p = fields['p'];
-  if (p != null && p !== '') {
-    seen = [];
-    for (const [id] of string.gmatch(p, '([^,]+)')) {
-      seen.push(id as string);
-    }
-  }
+  if (p != null && p !== '') seen = parseList(p);
   // Legacy saves used "c=1"/"t=1" for the two original challenges.
   if (fields['c'] === '1') armedId = 'crit';
   if (fields['t'] === '1') armedId = 'camp';

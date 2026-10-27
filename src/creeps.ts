@@ -4,7 +4,7 @@ import {
   getMercCampLevel, spawnMercsForOwner, getSpawnedMercUnits, removeSpawnedMercUnits,
   spawnMercFromData, getLivingMercData,
 } from './mercenary';
-import { registerSaveSegment, parseFields } from './save';
+import { registerSaveSegment, parseFields, parseNumberList } from './save';
 import {
   awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes,
   grantUnsummonToAllPeasants, hasHeroes, clearSpawnedHeroUnits,
@@ -153,12 +153,7 @@ function encodeCamp(): string {
 }
 
 function decodeMet(level: number, val: string): void {
-  const list: number[] = [];
-  for (const [idxStr] of string.gmatch(val, '([^,]+)')) {
-    const idx = tonumber(idxStr);
-    if (idx != null) list.push(idx);
-  }
-  encountered[level] = list;
+  encountered[level] = parseNumberList(val);
 }
 
 /** Decode "i=index;e1=...". A save from before the camp list was flattened

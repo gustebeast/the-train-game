@@ -1,6 +1,6 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
-import { registerSaveSegment, parseFields, MERC_SAVE_KEY, encodeKit, decodeKit } from './save';
+import { registerSaveSegment, MERC_SAVE_KEY, encodeMercSlots, decodeMercSlots } from './save';
 import { KitItem, forEachInventoryItem, getHumanPlayers, getInventoryKit, giveKit, unitExists } from './util';
 import { getNeutralExtra } from './teams';
 import { seededInt } from './rng';
@@ -111,27 +111,15 @@ let controlSeq = 0;
 const lastControlled: number[] = [];
 for (let i = 0; i < MAX_PLAYERS; i++) lastControlled.push(0);
 
-// Save segment. One group of fields per slot, numbered: t1/d1/i1, t2/d2/i2.
+// Save segment; the format is save.ts's, which the chooser reads too.
 registerSaveSegment(MERC_SAVE_KEY,
-  () => {
-    const parts: string[] = [];
-    for (let i = 0; i < MAX_MERCS; i++) {
-      const sl = slots[i];
-      if (sl.typeId === 0) continue;
-      const n = tostring(i + 1);
-      parts.push('t' + n + '=' + tostring(sl.typeId));
-      parts.push('d' + n + '=' + (sl.dead ? '1' : '0'));
-      if (sl.items.length > 0) parts.push('i' + n + '=' + encodeKit(sl.items));
-    }
-    return table.concat(parts, ';');
-  },
+  () => encodeMercSlots(slots),
   (raw) => {
-    const fields = parseFields(raw);
+    const saved = decodeMercSlots(raw);
     for (let i = 0; i < MAX_MERCS; i++) {
-      const n = tostring(i + 1);
-      slots[i].typeId = tonumber(fields['t' + n] ?? '') ?? 0;
-      slots[i].dead = fields['d' + n] === '1';
-      slots[i].items = decodeKit(fields['i' + n] ?? '');
+      slots[i].typeId = saved[i].typeId;
+      slots[i].dead = saved[i].dead;
+      slots[i].items = saved[i].items;
     }
   },
   // Reset-then-apply baseline: no contracts, no mercenaries, no kit

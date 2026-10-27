@@ -3,6 +3,7 @@ import { gameState } from './state';
 import { beginNewRun } from './terrain/load';
 import {
   saveToFile, listSaves, loadFromSlot, markCurrentSaveDefeated, resetToNewRun, encodeKit, decodeKit,
+  encodeMercSlots, decodeMercSlots,
 } from './save';
 
 /** A save round trip, through the same reads the chooser and -load use.
@@ -51,6 +52,18 @@ function runSaveTest(t: TestReporter): void {
   t.expect('kitCharges', kit[0].charges, 2);
   t.expect('kitUncharged', kit[1].charges, 0);
   t.expect('kitLegacyId', kit[2].id, 1003);
+
+  // Mercenary slots keep their order, and a never-hired first slot stays empty
+  // rather than letting the second slide into its place.
+  const mercs = decodeMercSlots(encodeMercSlots([
+    { typeId: 0, dead: false, items: [] },
+    { typeId: 2002, dead: true, items: [{ id: 1001, charges: 1 }] },
+  ]));
+  t.expect('mercSlots', mercs.length, 2);
+  t.expect('mercFirstEmpty', mercs[0].typeId, 0);
+  t.expect('mercSecondType', mercs[1].typeId, 2002);
+  t.expect('mercSecondDead', mercs[1].dead ? 1 : 0, 1);
+  t.expect('mercSecondKit', mercs[1].items.length, 1);
   t.expect('keptOnDisk', kept ? 1 : 0, 1);
   t.done();
 }
