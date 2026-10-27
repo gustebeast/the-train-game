@@ -1,9 +1,10 @@
 import { registerTest, TestReporter } from './testKit';
-import { difficultyForRound, loadTerrain } from '../terrain/load';
+import { beginNewRun, difficultyForRound, loadTerrain } from '../terrain/load';
 import { GRANITE_RAW } from '../sharedData';
 import { getTrain } from '../train';
 import { getWorldBounds } from '../util';
 import { CREEP_CAMPS } from '../creepCamps';
+import { getMercCampLevel } from '../mercenary';
 import { rollCreepCamp, getCampData, getCampIndex, clearCampRotation } from '../creeps';
 
 /** The camp rotation: an even split across levels, and a lap per level.
@@ -12,6 +13,11 @@ import { rollCreepCamp, getCampData, getCampIndex, clearCampRotation } from '../
  *  what makes the lap testable: every roll must come from the level 1 pool,
  *  must not repeat until that pool is exhausted, and must then start again. */
 function runCampTest(t: TestReporter): void {
+  // From a fresh run: a batch's earlier tests can leave a mercenary hired,
+  // which unlocks level 2 and puts its camps in the roll (seen as wrongLevel
+  // whenever this ran after them).
+  beginNewRun();
+  t.expect('onlyLevel1Unlocked', getMercCampLevel(), 1);
   let atLevel = 0;
   for (const c of CREEP_CAMPS) if (c.level === 1) atLevel += 1;
   t.report('level1Camps', atLevel);
