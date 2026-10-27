@@ -103,6 +103,7 @@ function startCountdown(zone: ActiveZone): void {
   // An unnamed zone counts down bare: "3...", with no "<message> in".
   print((zone.config.message === '' ? '' : zone.config.message + ' in ') + I2S(zone.countdownStep) + '...');
   zone.countdownTimer = Timer.create();
+  // periodic: a countdown, announced each second.
   zone.countdownTimer.start(1.0, true, () => {
     zone.countdownStep -= 1;
     if (zone.countdownStep <= 0) {

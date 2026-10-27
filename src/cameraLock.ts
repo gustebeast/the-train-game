@@ -9,6 +9,7 @@ const CAMERA_DISTANCE = 1200;
  *  to disable mouse-wheel zoom, so any drift snaps back within one tick. */
 export function initCameraLock(): void {
   const humanPlayers = getHumanPlayers();
+  // periodic: scrolling the zoom raises no event, so drift can only be undone.
   onGlobalTick(() => {
     // The Over the Shoulder challenge drives the camera itself; two systems
     // setting target distance every tick would fight and judder.

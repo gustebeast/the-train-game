@@ -326,6 +326,7 @@ function setupTrainAndWagon(engine: Unit, wagon: Unit): void {
     pauseProduction();
     print('The train is on fire and is losing max HP!');
     burnTimer = createTimer();
+    // periodic: burning costs max HP every second until put out or wrecked.
     burnTimer.start(1, true, () => {
       if (gameState.trainMaxHP <= TRAIN_WRECKED_MAX_HP) {
         wreckTrain();

@@ -73,6 +73,8 @@ export function checkUnionRules(): void {
 }
 
 export function initChallengeWatch(): void {
+  // periodic: Brink accumulates time spent in the danger window. The window
+  // itself could be entered and left on track events instead (a candidate).
   onGlobalTick(() => tick());
 
   const pickup = Trigger.create();

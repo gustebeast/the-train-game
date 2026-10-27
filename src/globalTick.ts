@@ -19,8 +19,8 @@ export function gameSeconds(): number {
 const callbacks: Array<() => void> = [];
 
 /** Register a callback to run every TICK_INTERVAL seconds for the whole game.
- *  Shared by recurring whole-game services (minimap icon scanning, camera
- *  zoom lock, ...) so they don't each need their own timer. */
+ *  Polling: reach for an event first. A listener here needs a `// periodic:`
+ *  reason, or the build refuses it (scripts/check-polling.js). */
 export function onGlobalTick(cb: () => void): void {
   callbacks.push(cb);
 }
@@ -33,6 +33,7 @@ export function initGlobalTick(): void {
   clock.start(100000000, false, () => {});
   // Raw Timer (not timers.ts createTimer) so the round-reset
   // destroyAllTimers() doesn't kill it
+  // periodic: the shared tick; every listener carries its own reason.
   Timer.create().start(TICK_INTERVAL, true, () => {
     for (const cb of callbacks) cb();
   });

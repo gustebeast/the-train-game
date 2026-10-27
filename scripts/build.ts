@@ -2,8 +2,19 @@ import * as fs from "fs-extra";
 import * as path from "path";
 import War3Map from "mdx-m3-viewer-th/dist/cjs/parsers/w3x/map"
 import { compileMap, getFilesInDirectory, loadJsonFile, logger, toArrayBuffer, IProjectConfig } from "./utils";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { findUnjustifiedPolling } = require("./check-polling.js");
 
 function main() {
+  // Polling has to justify itself before anything is built (check-polling.js).
+  const polling: string[] = findUnjustifiedPolling(process.cwd());
+  if (polling.length > 0) {
+    logger.error(`Polling without a reason. Use an event, or say why it must be periodic with a \`// periodic: <reason>\` comment (SUBAGENT_README.md, "Events, not polling"):`);
+    for (const p of polling) logger.error(`  ${p}`);
+    process.exitCode = 1;
+    return;
+  }
+
   const config: IProjectConfig = loadJsonFile("config.json");
   const args = process.argv.slice(2);
   const minify = args.includes('-minify') || config.minifyScript

@@ -169,6 +169,7 @@ export function clearChallengeEffects(): void {
 }
 
 export function initChallengeEffects(): void {
+  // periodic: the chase camera follows the peasant's facing as it turns.
   onGlobalTick(() => {
     if (!isInGameplay()) return;
     if (otsActive) updateShoulderCam();

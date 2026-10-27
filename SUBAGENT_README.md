@@ -102,6 +102,37 @@ worktree has uncommitted changes from a previous prompt, commit them first.
   requires it — binary conflicts can't be merged. If you must, tell the user
   so no other agent touches the same file.
 
+## Events, not polling
+
+Build behaviour on **events**, never on a timer that keeps checking whether
+something changed. A lot of work went into moving the map off polling: a
+polled check runs late, runs in the wrong phase, misses a change that came and
+went between ticks, and costs every tick for the whole game.
+
+- **Engine events first.** A `Trigger` on the event itself: unit events
+  (`registerAnyUnitEvent`), `TriggerRegisterUnitStateEvent` for a value
+  crossing a threshold, region enter/leave, item pickup/drop/sell/pawn, the
+  sync event. `onSpellEffect(abilityId, cb)` (util.ts) for a spell landing.
+- **Our own signals next.** When our code causes the change, the code that
+  makes the change announces it, and whoever cares subscribes:
+  - `on*(cb)` subscribes, and keeps every listener: `onBoardChanged`,
+    `onHeroesSpawned`, `onAllHeroesDead`, `onPlayerLeave`,
+    `onSaveCatalogReady`, `registerSyncCallback` (after every `syncState`).
+  - `note*()` is a call the changing code makes: `noteTrackPlaced`,
+    `noteCampCleared`, `noteDash`, ...
+  - No signal for your change yet? Add one where the change happens, as a
+    listener array (see boardSignal.ts). Don't watch for it from outside.
+- **One-shot delays are fine.** `nextFrame`, or a non-repeating timer for
+  "in N seconds" -- that is scheduling, not polling.
+- **Genuinely periodic work** (a countdown, damage over time, a rate measured
+  over a window, a camera the engine lets drift with no event) needs a
+  `// periodic: <reason>` comment on the line or up to three lines above it.
+  `npm run build` refuses any repeating timer, periodic trigger or
+  `onGlobalTick` listener without one (`scripts/check-polling.js`; tests are
+  exempt). The reason is for the reviewer: "it was easier" is not one.
+- **Derive, don't count.** Recompute state from the world when an event says it
+  changed; a counter you maintain by hand drifts the moment one path forgets it.
+
 ## Building & testing your branch
 
 You **can** build your own branch to test it in-game — the old "never build"

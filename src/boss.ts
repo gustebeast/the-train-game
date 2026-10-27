@@ -104,6 +104,7 @@ function installAddSwap(owner: player): void {
 function driveInferno(boss: Unit): void {
   const timer = Timer.create();
   castLoops.push(timer);
+  // periodic: a cast that fails (no mana, mid-cast) raises no event to retry on.
   timer.start(CAST_CHECK_SECONDS, true, () => {
     const h = boss.handle;
     if (!isAlive(h)) {
