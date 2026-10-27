@@ -985,6 +985,13 @@ export function generateCheatTerrain(): Grid {
   layCheatPath(grid);
   placeEntities(grid);
   placeCreepCamp(grid, GRID_MIN_X + 4, SPAWN.minY - 2);
+  // A pool and the Secret Salesperson a few steps east of the spawn, clear of
+  // the line, so a bucket can be filled and an ability item bought without
+  // hunting for either. He is a snow-round visitor normally; here he is always in.
+  const pool = grid.cells[idx(SPAWN.maxX + 3, -3)];
+  pool.entity = Entity.WATER;
+  pool.terrain = Terrain.POOL;
+  grid.cells[idx(SPAWN.maxX + 3, -1)].entity = Entity.SALESPERSON;
   placeCritters(grid);
   return grid;
 }
