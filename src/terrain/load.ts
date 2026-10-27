@@ -35,7 +35,7 @@ import {
 } from '../daynight';
 import { refreshInterRoundLobbyRoster, resetInterRoundLobbyRoster } from '../interRoundLobbyRoster';
 import { saveMercInterRoundLobbySnapshot, getInterRoundLobbyMercUnits } from '../mercenary';
-import { deriveSeed } from '../rng';
+import { deriveSeed, STREAMS } from '../rng';
 import { advanceChallengeOffer } from '../challenges';
 
 /** True while the tutorial is being played.
@@ -248,9 +248,6 @@ function loadGameplay(grid: Grid): SpawnedTrain {
   return spawned;
 }
 
-/** Stream id for map generation (see rng.deriveSeed). */
-const TERRAIN_STREAM = 2;
-
 /** The round, counted from 1, at which the map reaches full difficulty. */
 const MAX_DIFFICULTY_ROUND = 25;
 
@@ -277,7 +274,7 @@ export function loadTerrain(round: number): SpawnedTrain {
   // Keyed on the ROUND as well as the seed, so consecutive rounds differ. Not
   // on the difficulty: that stops rising at round 25, and every round after it
   // would otherwise lay out the very same map.
-  SetRandomSeed(deriveSeed(TERRAIN_STREAM) + round);
+  SetRandomSeed(deriveSeed(STREAMS.terrain) + round);
   // A level 3 camp is the only one that can drop the key, so it is also the
   // only round that gets a second exit -- the two arrive together or not at all.
   const camp = getCampData();

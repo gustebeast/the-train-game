@@ -24,6 +24,18 @@ import { gameState } from './state';
 const M = 2147483647;
 const A = 16807;
 
+/** The sub-streams subsystems draw from (deriveSeed). Listed in one place so
+ *  two systems cannot pick the same id and silently share a sequence. */
+export const STREAMS = {
+  /** The order the dealer offers challenges in (challenges.ts). */
+  challenge: 1,
+  /** Map generation, offset by the round (terrain/load.ts). */
+  terrain: 2,
+  /** Tie-breaks when choosing the round's heroes, offset by round and slot
+   *  (heroes.ts). Far from the others because the offsets climb. */
+  heroPick: 1000,
+};
+
 /** Hash the draw index into the stream so a draw depends on both, and a seed of
  *  0 (an old save) still produces a usable spread once refreshed. */
 function valueAt(seed: number, index: number): number {
@@ -64,6 +76,32 @@ export function seededInt(low: number, high: number): number {
 export function deriveSeed(streamId: number): number {
   ensureSeed();
   return valueAt(gameState.randomSeed + streamId * 7919, streamId + 1);
+}
+
+/** Shuffle `items` in place, the same way every time for the same seed: a
+ *  Fisher-Yates walk driven by the Park-Miller step above. For orders that
+ *  must survive a reload (the dealer's challenge lap). */
+export function shuffleSeeded<T>(items: T[], seed: number): void {
+  let x = (seed % M + M) % M;
+  if (x === 0) x = 1;
+  for (let i = items.length - 1; i > 0; i--) {
+    x = (A * x) % M;
+    const j = x % (i + 1);
+    const tmp = items[i];
+    items[i] = items[j];
+    items[j] = tmp;
+  }
+}
+
+/** Shuffle `items` in place on the game's own RNG. For outcomes nobody could
+ *  profit from replaying (see the note at the top). */
+export function shuffleRandom<T>(items: T[]): void {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = GetRandomInt(0, i);
+    const tmp = items[i];
+    items[i] = items[j];
+    items[j] = tmp;
+  }
 }
 
 /** Give the run a seed if it has none. Old saves predate the field, and a save

@@ -6,7 +6,7 @@ import { getHumanPlayers, unitExists } from './util';
 // Something for the other players to do while the host picks what to play.
 //
 // In the start lobby players 2-4 stand at the back as immobile peasants, and a
-// keypress plays a different animation on each of the eight keys. Purely
+// keypress plays a different animation on each of the ten keys. Purely
 // cosmetic: nothing here touches game state, and the lobby writes no save.
 //
 // Raw key events rather than spells. Spells worked, but not well: the engine
@@ -16,7 +16,7 @@ import { getHumanPlayers, unitExists } from './util';
 // (measured in game; 0.4s was still eaten). A key event is not a cast, so
 // nothing fights us and the dance starts on the frame the key goes down.
 //
-// It also settles the eighth dance. Eight abilities never fit: the engine draws
+// It also settled how many dances fit. Eight abilities never did: the engine draws
 // move, stop, hold, attack and patrol at fixed command-card slots, none of them
 // can be removed ('Apat', 'Amov' and a bespoke unit type with no move type and
 // no attacks were all tried in game), and it ignores the abilities' own button
@@ -45,12 +45,18 @@ import { getHumanPlayers, unitExists } from './util';
 // and nothing else -- the model, its sequence indices and the retimes keyed to
 // its names all stay put. Attack Morph - 31 is the one retimed 15% faster, and
 // it keeps that wherever it is played from.
-const DANCE_KEYS: ReadonlyArray<oskeytype> = [
-  OSKEY_Q, OSKEY_W, OSKEY_E, OSKEY_R, OSKEY_Y,
-  OSKEY_U, OSKEY_I, OSKEY_O, OSKEY_V, OSKEY_B,
+const DANCES: ReadonlyArray<{ key: oskeytype; sequence: number }> = [
+  { key: OSKEY_Q, sequence: 23 },
+  { key: OSKEY_W, sequence: 26 },
+  { key: OSKEY_E, sequence: 24 },
+  { key: OSKEY_R, sequence: 25 },
+  { key: OSKEY_Y, sequence: 30 },
+  { key: OSKEY_U, sequence: 28 },
+  { key: OSKEY_I, sequence: 29 },
+  { key: OSKEY_O, sequence: 27 },
+  { key: OSKEY_V, sequence: 31 },
+  { key: OSKEY_B, sequence: 32 },
 ];
-//                                             Q   W   E   R   Y   U   I   O   V   B
-const DANCE_SEQUENCES: ReadonlyArray<number> = [23, 26, 24, 25, 30, 28, 29, 27, 31, 32];
 
 /** Seconds per beat, 0 while no song is playing. Set this from the lobby track
  *  and every dance lands on the beat instead of whenever the button was hit. */
@@ -87,7 +93,7 @@ function play(h: unit, sequence: number): void {
 /** Which dancer belongs to which player, so a keypress knows who to move. */
 const dancers = new Map<number, unit>();
 
-/** Park a peasant as a dancer: it cannot walk, and the eight keys move it.
+/** Park a peasant as a dancer: it cannot walk, and the dance keys move it.
  *  Move speed 0 so the engine simply never moves it -- which also stops the
  *  walk animation from overriding a dance. */
 export function makeDancer(u: Unit): void {
@@ -106,13 +112,12 @@ export function makeDancer(u: Unit): void {
 
 export function initDance(): void {
   for (const player of getHumanPlayers()) {
-    for (let i = 0; i < DANCE_KEYS.length; i++) {
-      const sequence = DANCE_SEQUENCES[i];
-      const key = Trigger.create();
+    for (const { key, sequence } of DANCES) {
+      const trigger = Trigger.create();
       // metaKey 0: no modifier, so shift-clicking around the lobby cannot
       // accidentally set the whole room dancing.
-      BlzTriggerRegisterPlayerKeyEvent(key.handle, player.handle, DANCE_KEYS[i], 0, true);
-      key.addAction(() => {
+      BlzTriggerRegisterPlayerKeyEvent(trigger.handle, player.handle, key, 0, true);
+      trigger.addAction(() => {
         const caster = GetTriggerPlayer()!;
         const h = dancers.get(GetPlayerId(caster));
         if (h == null || !unitExists(h)) return;

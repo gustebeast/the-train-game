@@ -1,10 +1,10 @@
-import { Trigger } from 'w3ts';
+import { Trigger, Unit } from 'w3ts';
 import { gameState, syncState } from './state';
 import { REROLL_ITEM_ID, REROLL_ABILITY_ID } from './constants';
 import { rerollInterRoundLobbyHero } from './heroes';
 import { rerollInterRoundLobbyMerc } from './mercenary';
 import { restartSparringMatch } from './creeps';
-import { nextFrame, forEachUnitInWorld, unitExists } from './util';
+import { nextFrame, forEachUnitInWorld, unitExists, giveItems } from './util';
 import { REROLL_COST } from './sharedData';
 
 
@@ -80,10 +80,8 @@ export function initReroll(): void {
       // Not an inter-round lobby hero — the cast already consumed the item's charge, so
       // hand a fresh one back
       print('Hero Reroll can only target the heroes in the inter-round lobby.');
-      const caster = GetTriggerUnit();
-      if (caster != null && unitExists(caster)) {
-        UnitAddItem(caster, CreateItem(REROLL_ITEM_ID, GetUnitX(caster), GetUnitY(caster))!);
-      }
+      const caster = Unit.fromEvent();
+      if (caster != null && unitExists(caster.handle)) giveItems(caster, [REROLL_ITEM_ID]);
     }
   });
 }

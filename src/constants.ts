@@ -38,6 +38,8 @@ export const TROPHY_MODEL = 'war3mapImported\\Trophy.mdx';
  *  looked right. */
 export const TROPHY_SCALE = 0.6;
 
+/** How many players the map seats. */
+export const MAX_PLAYERS = 4;
 /** The roster: how many heroes a run carries. Two are fielded a round. */
 export const HERO_SLOTS = 4;
 /** How many mercenaries can be hired at once. */

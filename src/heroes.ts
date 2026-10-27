@@ -2,9 +2,9 @@ import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { HERO_POOL } from './sharedData';
 import { isInGameplay } from './state';
 import { registerSaveSegment, parseFields, heroSaveKey } from './save';
-import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID, HERO_SLOTS } from './constants';
+import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID, HERO_SLOTS, MAX_PLAYERS } from './constants';
 import { createPlaceholder } from './placeholder';
-import { seededValueAt, deriveSeed } from './rng';
+import { seededValueAt, deriveSeed, shuffleRandom, STREAMS } from './rng';
 import { gameState } from './state';
 import { getNeutralExtra } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
@@ -21,14 +21,6 @@ function fourCCStr(id: number): string {
   );
 }
 
-/** Fisher-Yates shuffle, in place. */
-function shuffle<T>(arr: T[]): void {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = GetRandomInt(0, i);
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-}
-
 /** Run a callback for every peasant on the map. */
 function forEachPeasant(cb: (u: unit) => void): void {
   forEachUnitInWorld(u => {
@@ -37,7 +29,7 @@ function forEachPeasant(cb: (u: unit) => void): void {
 }
 
 // ---------------------------------------------------------------------------
-// Persistent hero data (4 heroes, saved across rounds)
+// Persistent hero data (the roster, saved across rounds)
 // ---------------------------------------------------------------------------
 
 export interface HeroData {
@@ -57,7 +49,7 @@ function emptyHero(): HeroData {
   return { typeId: 0, xp: 0, skills: {}, items: [], tomeStr: 0, tomeAgi: 0, tomeInt: 0, tomeHP: 0 };
 }
 
-/** The 4 heroes available across rounds. Persisted via save segments. */
+/** The roster: the heroes available across rounds. Persisted via save segments. */
 const allHeroes: HeroData[] = [];
 for (let i = 0; i < HERO_SLOTS; i++) allHeroes.push(emptyHero());
 
@@ -133,16 +125,14 @@ for (let i = 0; i < HERO_SLOTS; i++) {
  *  same two heroes every round. Derived, a stale pair cannot exist. */
 let chosenIndices: number[] = [0, 1];
 
-/** Sub-seed namespace for the roster draw (challenges use 1, terrain 2). Kept
- *  well clear of those so a hero tie-break can never share a stream with them. */
-const HERO_PICK_STREAM = 1000;
 
 // ---------------------------------------------------------------------------
 // Hero player control — which players control heroes vs peasants
 // ---------------------------------------------------------------------------
 
 /** Number of times each player (by index) has controlled a summoned hero. */
-const heroControlCount: number[] = [0, 0, 0, 0];
+const heroControlCount: number[] = [];
+for (let i = 0; i < MAX_PLAYERS; i++) heroControlCount.push(0);
 
 /** Player indices chosen to control heroes this round. */
 let chosenHeroPlayers: number[] = [];
@@ -157,12 +147,12 @@ registerSaveSegment('hc',
   (raw) => {
     let i = 0;
     for (const [val] of string.gmatch(raw, '([^,]+)')) {
-      if (i < 4) heroControlCount[i] = tonumber(val) ?? 0;
+      if (i < MAX_PLAYERS) heroControlCount[i] = tonumber(val) ?? 0;
       i++;
     }
   },
   () => {
-    for (let i = 0; i < 4; i++) heroControlCount[i] = 0;
+    for (let i = 0; i < MAX_PLAYERS; i++) heroControlCount[i] = 0;
   },
 );
 
@@ -217,7 +207,7 @@ function pickLeastBusyHeroPlayers(): void {
     chosenHeroPlayers = playerIndices.slice(0, numHeroControllers);
   } else {
     // More ties than slots — shuffle tied and pick
-    shuffle(tied);
+    shuffleRandom(tied);
     chosenHeroPlayers = tied.slice(0, numHeroControllers);
   }
 }
@@ -263,7 +253,7 @@ export function onAllHeroesDead(cb: () => void): void {
   onAllHeroesDeadCallback = cb;
 }
 
-/** Returns true if the 4 heroes have been initialized. */
+/** Returns true if the roster has been initialized. */
 export function hasHeroes(): boolean {
   return allHeroes[0].typeId !== 0;
 }
@@ -286,7 +276,7 @@ export function initRandomHeroes(): void {
   if (heroPlayersFromSave) heroPlayersFromSave = false; else pickLeastBusyHeroPlayers();
 }
 
-/** Choose the 2 heroes with the lowest XP from the 4.
+/** Choose the 2 heroes with the lowest XP from the roster.
  *  If all XP is equal, pick 2 at random. Sets chosenIndices. */
 /** Field the WHOLE roster, not the usual two.
  *
@@ -313,14 +303,15 @@ export function chooseAllHeroes(): void {
  *  Call it only where the roster is meant to be settled: XP moves while a round
  *  is played, so re-deriving mid-round would swap the party out from under it. */
 export function chooseHeroes(): void {
-  const indices = [0, 1, 2, 3];
+  const indices: number[] = [];
+  for (let i = 0; i < HERO_SLOTS; i++) indices.push(i);
   // Least XP first. Ties -- common early, when nobody has fought yet -- break on
   // a per-round seeded draw rather than table.sort's arbitrary order, which is
   // both unstable in Lua and identical every round. Index last so the ordering
   // is total and can never depend on sort internals.
   const tie = ROSTER_TIEBREAKS;
-  for (let i = 0; i < 4; i++) {
-    tie[i] = deriveSeed(HERO_PICK_STREAM + gameState.round * 4 + i);
+  for (let i = 0; i < HERO_SLOTS; i++) {
+    tie[i] = deriveSeed(STREAMS.heroPick + gameState.round * HERO_SLOTS + i);
   }
   indices.sort((a, b) => {
     const byXp = allHeroes[a].xp - allHeroes[b].xp;
@@ -347,7 +338,7 @@ export function getChosenHeroData(): HeroData[] {
 }
 
 /** Scratch space for the tie-break draws, reused so a pick allocates nothing. */
-const ROSTER_TIEBREAKS: number[] = [0, 0, 0, 0];
+const ROSTER_TIEBREAKS: number[] = [];
 
 /** Test hook: replace the roster outright and field its first two.
  *
@@ -693,7 +684,7 @@ function createRosterHeroUnit(dataIdx: number, x: number, y: number): Unit | nul
 }
 
 /** Reroll the inter-round lobby hero represented by unitHandle: swap its slot in
- *  allHeroes to a random hero type not currently in the pool of 4, keeping
+ *  allHeroes to a random hero type not currently in the roster, keeping
  *  XP, items and tome bonuses (skills are hero-specific and reset), and
  *  replace the inter-round lobby unit in place. Returns false if unitHandle is not a
  *  inter-round lobby hero or no candidate types remain. */
@@ -746,12 +737,7 @@ export function rerollInterRoundLobbyHero(unitHandle: unit): boolean {
   // Items follow the hero. The replacement is rebuilt from HeroData, so
   // anything picked up onto the LOBBY unit has to be written back first --
   // otherwise the swap silently drops whatever the player just handed over.
-  const carried: number[] = [];
-  for (let slot = 0; slot < 6; slot++) {
-    const it = entry.unit.getItemInSlot(slot);
-    if (it != null) carried.push(it.typeId);
-  }
-  data.items = carried;
+  data.items = getInventoryItemIds(entry.unit.handle);
 
   data.typeId = nextQueuedHeroType(candidates);
   data.skills = {};
@@ -789,7 +775,7 @@ export function saveHeroInterRoundLobbySnapshot(): void {
 /** Restore hero data from the inter-round lobby snapshot (undoes rerolls). */
 export function revertHeroesToInterRoundLobbySnapshot(): void {
   if (lobbyHeroSnapshot == null) return;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < HERO_SLOTS; i++) {
     allHeroes[i] = cloneHero(lobbyHeroSnapshot[i]);
   }
 }

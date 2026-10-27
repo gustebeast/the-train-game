@@ -5,7 +5,7 @@ import { forEachInventoryItem, getHumanPlayers, getInventoryItemIds, giveItems, 
 import { getNeutralExtra } from './teams';
 import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creepCamps';
-import { UNKNOWN_UNIT_ID, MAX_MERCS } from './constants';
+import { UNKNOWN_UNIT_ID, MAX_MERCS, MAX_PLAYERS } from './constants';
 
 /** Hero-style inventory (the same ability the peasant carries tools with),
  *  added to each mercenary as it spawns -- and only there.
@@ -109,7 +109,8 @@ function clearMercDeathTrigger(sl: MercSlot): void {
 
 let controlSeq = 0;
 /** Last control-assignment sequence number per player index (hero or merc). */
-const lastControlled: number[] = [0, 0, 0, 0];
+const lastControlled: number[] = [];
+for (let i = 0; i < MAX_PLAYERS; i++) lastControlled.push(0);
 
 // Save segment. One group of fields per slot, numbered: t1/d1/i1, t2/d2/i2.
 registerSaveSegment(MERC_SAVE_KEY,
@@ -147,13 +148,13 @@ registerSaveSegment(MERC_SAVE_KEY,
     slots = emptySlots();
     currentHeroOwnerIds = [];
     controlSeq = 0;
-    for (let i = 0; i < 4; i++) lastControlled[i] = 0;
+    for (let i = 0; i < MAX_PLAYERS; i++) lastControlled[i] = 0;
   },
 );
 
 function stampControl(playerId: number): void {
   controlSeq++;
-  if (playerId >= 0 && playerId < 4) {
+  if (playerId >= 0 && playerId < MAX_PLAYERS) {
     lastControlled[playerId] = controlSeq;
   }
 }
@@ -170,7 +171,7 @@ function pickMercController(): MapPlayer | null {
     for (const id of currentHeroOwnerIds) {
       if (id === p.id) heroes++;
     }
-    const seq = p.id >= 0 && p.id < 4 ? lastControlled[p.id] : 0;
+    const seq = p.id >= 0 && p.id < MAX_PLAYERS ? lastControlled[p.id] : 0;
     if (best == null || heroes < bestHeroes || (heroes === bestHeroes && seq < bestSeq)) {
       best = p;
       bestHeroes = heroes;
@@ -476,20 +477,26 @@ export function syncInterRoundLobbyMercs(positions: Array<{ x: number; y: number
     if (sl.typeId === 0 || sl.dead) continue;
     if (lobbyMercs.some(e => e.slotIndex === i)) continue;
     const pos = positions[math.min(i, positions.length - 1)];
-    // A mercenary rolled this visit -- hired or rerolled -- stands as a question
-    // mark until the round starts.
-    const typeId = mercConcealed(i) ? UNKNOWN_UNIT_ID : sl.typeId;
-    // Same routine as the fighting mercenary, so the display carries the kit
-    // the way it will carry it in the round -- in an inventory, not on the
-    // floor. The concealed case shows the question mark instead, holding the
-    // same items, so the lobby still says what a reroll would keep.
-    // Neutral extra owns the display roster so it grants no vision -- see
-    // createRosterHeroUnit in heroes.ts.
-    const u = spawnMercFromData({ typeId, items: sl.items }, getNeutralExtra(), pos.x, pos.y);
+    const u = createRosterMercUnit(i, pos.x, pos.y);
     if (u == null) continue;
-    u.invulnerable = true;
     lobbyMercs.push({ unit: u, slotIndex: i });
   }
+}
+
+/** Stand slot `slotIndex`'s mercenary in the inter-round lobby roster.
+ *
+ *  Same routine as the fighting mercenary, so the display carries the kit the
+ *  way it will carry it in the round -- in an inventory, not on the floor. A
+ *  mercenary rolled this visit (hired or rerolled) stands as a question mark
+ *  until the round starts, holding the same items, so the lobby still says
+ *  what a reroll would keep. Neutral extra owns the display roster so it
+ *  grants no vision -- see createRosterHeroUnit in heroes.ts. */
+function createRosterMercUnit(slotIndex: number, x: number, y: number): Unit | null {
+  const sl = slots[slotIndex];
+  const typeId = mercConcealed(slotIndex) ? UNKNOWN_UNIT_ID : sl.typeId;
+  const u = spawnMercFromData({ typeId, items: sl.items }, getNeutralExtra(), x, y);
+  if (u != null) u.invulnerable = true;
+  return u;
 }
 
 /** The mercenary display units standing in the inter-round lobby. For tests. */
@@ -516,12 +523,7 @@ export function rerollInterRoundLobbyMerc(unitHandle: unit): boolean {
   RemoveUnit(entry.unit.handle);
 
   // Concealed by construction: the type just changed.
-  const replacementType = mercConcealed(entry.slotIndex) ? UNKNOWN_UNIT_ID : slot.typeId;
-  const replacement = Unit.create(getNeutralExtra(), replacementType, x, y, 270);
-  if (replacement != null) {
-    replacement.invulnerable = true;
-    giveItems(replacement, slot.items);
-    entry.unit = replacement;
-  }
+  const replacement = createRosterMercUnit(entry.slotIndex, x, y);
+  if (replacement != null) entry.unit = replacement;
   return true;
 }

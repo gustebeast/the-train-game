@@ -1,4 +1,4 @@
-import { defineChallenge, completeChallenge, isChallengeArmed } from './challenges';
+import { defineChallenge, completeChallenge, getChallengeDefs, isChallengeArmed } from './challenges';
 import { getHumanPlayers } from './util';
 import { placedTracks } from './track/state';
 import { TRACK_SIZE } from './track/constants';
@@ -89,6 +89,7 @@ defineChallenge({
   name: 'Critterpocalypse',
   description: 'The next round swarms with critters. Finish the round to win the wager.',
   progress: () => 'Finish the round',
+  completesOnFinalTrack: true,
 });
 
 defineChallenge({
@@ -141,6 +142,7 @@ defineChallenge({
   description: 'At night the whole map goes dark -- you see only what your own '
     + 'units can see. Finish the round to win the wager.',
   progress: () => 'Finish the round',
+  completesOnFinalTrack: true,
 });
 
 defineChallenge({
@@ -149,6 +151,7 @@ defineChallenge({
   description: 'The interface is hidden for the round: no minimap, no command '
     + 'card, no inventory. Hotkeys still work. Finish the round to win.',
   progress: () => 'Finish the round',
+  completesOnFinalTrack: true,
 });
 
 defineChallenge({
@@ -157,6 +160,7 @@ defineChallenge({
   description: 'The camera drops in behind your peasant for the round. Finish '
     + 'the round to win.',
   progress: () => 'Finish the round',
+  completesOnFinalTrack: true,
 });
 
 // --- event hooks, called by the systems that see the events ---------------
@@ -286,9 +290,7 @@ export function noteFinalTrackPlaced(): void {
   if (isChallengeArmed(CH_SOLO_TOOLS) && !soloToolsBroken) {
     completeChallenge(CH_SOLO_TOOLS);
   }
-  // "Survive the round" challenges: nothing to count, the win condition is
-  // simply reaching the end of the line with the handicap on.
-  for (const id of [CH_CRITTERPOCALYPSE, CH_NIGHT_BLACKOUT, CH_NO_UI, CH_SHOULDER_CAM]) {
-    if (isChallengeArmed(id)) completeChallenge(id);
+  for (const def of getChallengeDefs()) {
+    if (def.completesOnFinalTrack === true && isChallengeArmed(def.id)) completeChallenge(def.id);
   }
 }

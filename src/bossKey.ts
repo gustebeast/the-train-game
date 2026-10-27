@@ -1,5 +1,5 @@
 import { Timer, Trigger } from 'w3ts';
-import { BOSS_KEY_ITEM_ID, PEASANT_ID } from './constants';
+import { BOSS_KEY_ITEM_ID, PEASANT_ID, MAX_MERCS } from './constants';
 import { getSpawnedHeroes } from './heroes';
 import { getLivingMercCount } from './mercenary';
 import { isAlive } from './util';
@@ -31,8 +31,6 @@ import { isAlive } from './util';
 
 /** The camp level that can drop the key. */
 const KEY_CAMP_LEVEL = 3;
-/** Mercenaries that must still be standing -- see the note above. */
-const MERCS_REQUIRED = 2;
 /** Played where the cage stood, so the drop is not something you can miss. */
 const DROP_EFFECT = 'Abilities\\Spells\\Items\\AIlm\\AIlmTarget.mdl';
 /** How long the effect is left on screen before it is cleaned up. */
@@ -94,13 +92,13 @@ function allHeroesAlive(): boolean {
   return true;
 }
 
-/** Whether this camp clear has earned the key. Public so the caller can say
- *  why nothing dropped, and so it can be exercised on its own. */
+/** Whether this camp clear has earned the key. */
 function campClearEarnsKey(campLevel: number): boolean {
   if (keyDropped) return false;
   if (partyLost) return false;
   if (campLevel < KEY_CAMP_LEVEL) return false;
-  if (getLivingMercCount() < MERCS_REQUIRED) return false;
+  // Every mercenary still standing -- see the note above.
+  if (getLivingMercCount() < MAX_MERCS) return false;
   return allHeroesAlive();
 }
 

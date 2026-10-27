@@ -1,9 +1,9 @@
 import { MapPlayer, Trigger } from 'w3ts';
 import { BOSS_ADD_ID, BOSS_ID } from './constants';
 import { spawnBoss, stopBoss } from './boss';
-import { dealPartyForHumans } from './bossParty';
+import { dealHeroesForHumans } from './bossParty';
 import { spawnHeroes, getSpawnedHeroes, endHeroState, chooseAllHeroes } from './heroes';
-import { spawnMercWithHeroes, getLivingMercCount } from './mercenary';
+import { spawnMercWithHeroes, getSpawnedMercUnits } from './mercenary';
 import { getBossHeroSpots, getBossMercSpots, getBossSpot } from './terrain/spawn';
 import { forEachUnitOfPlayer, getHumanPlayers, nextFrame, isAlive, forEachUnitInWorld } from './util';
 
@@ -132,12 +132,12 @@ export function startBossFight(): void {
   const mercSpots = getBossMercSpots();
   // Everybody comes to this one, not the usual two.
   chooseAllHeroes();
-  const deal = dealPartyForHumans(heroSpots.length, getLivingMercCount());
+  const heroOwners = dealHeroesForHumans(heroSpots.length);
 
   // spawnHeroes takes one owner per hero in roster order, which is exactly the
   // shape the deal produces.
   const owners: MapPlayer[] = [];
-  for (const id of deal.heroOwners) {
+  for (const id of heroOwners) {
     const p = MapPlayer.fromIndex(id);
     if (p != null) owners.push(p);
   }
@@ -154,25 +154,16 @@ export function startBossFight(): void {
     }
   }
 
-  // The mercenaries are handed out by the mercenary system rather than by the
-  // deal above: it already places each one with whoever holds the fewest
-  // heroes, breaking ties by who has controlled least recently, which is the
-  // rule this fight wants and is one implementation instead of two. It is told
+  // The mercenaries are handed out by the mercenary system: it already places
+  // each one with whoever holds the fewest heroes, breaking ties by who has
+  // controlled least recently, which is the rule this fight wants. It is told
   // who holds which hero; it works out the rest.
   if (mercSpots.length > 0) {
-    spawnMercWithHeroes(mercSpots[0].x, mercSpots[0].y, deal.heroOwners);
-    // Onto their own marks. Derived from the board rather than handed back,
-    // since the mercenary system owns those units: whatever the players hold
-    // that is not one of the heroes is a mercenary.
-    const heroHandles = getSpawnedHeroes().map(h => h.handle);
-    let placed = 0;
-    for (const player of getHumanPlayers()) {
-      forEachUnitOfPlayer(player.handle, u => {
-        if (placed >= mercSpots.length) return;
-        if (heroHandles.indexOf(u) >= 0) return;
-        SetUnitPosition(u, mercSpots[placed].x, mercSpots[placed].y);
-        placed += 1;
-      });
+    spawnMercWithHeroes(mercSpots[0].x, mercSpots[0].y, heroOwners);
+    // Then onto their own marks.
+    const mercs = getSpawnedMercUnits();
+    for (let i = 0; i < mercs.length && i < mercSpots.length; i++) {
+      SetUnitPosition(mercs[i].handle, mercSpots[i].x, mercSpots[i].y);
     }
   }
 
