@@ -59,6 +59,12 @@ compiletime(({ objectData, constants }) => {
   /** Everything visible is drawn at peasant scale: the blanket loop below,
    *  and the units authored here that set their own (train, wagon, boss). */
   const UNIT_SCALE = 0.6;
+  /** Attack ranges, shrunk with the world. The board is roughly half the size
+   *  of an ordinary map, so stock ranges let a ranged hero or creep reach most
+   *  of the way across a camp. Its own knob rather than UNIT_SCALE: that one is
+   *  how big things LOOK, this is how far they reach, and either may be tuned
+   *  without the other. */
+  const ATTACK_RANGE_SCALE = 0.6;
 
   // --- Authoring helpers -----------------------------------------------------
   //
@@ -195,6 +201,13 @@ compiletime(({ objectData, constants }) => {
     const anyUnit = objectData.units.get(unitId as never);
     if (anyUnit == null) continue;
     anyUnit.scalingValueundefined = UNIT_SCALE;
+    // And their reach with them -- every hero, mercenary, camp creep and
+    // summon, for the same reason the scale is blanket. Both weapons: a hero's
+    // second attack is often its ranged one. Units with no weapon read 0 and
+    // stay 0. The boss and its adds are copies made further down with their
+    // own tuned numbers, so this does not reach them.
+    anyUnit.attack1Range = Math.round(anyUnit.attack1Range * ATTACK_RANGE_SCALE);
+    anyUnit.attack2Range = Math.round(anyUnit.attack2Range * ATTACK_RANGE_SCALE);
   }
 
   // Every orientation's unit wears its own pre-rotated model (the pairs are in
