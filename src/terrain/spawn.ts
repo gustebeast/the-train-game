@@ -12,13 +12,13 @@ import { DEFAULT_TRACK, TRACK_SIZE, TRACK_CENTER_OFFSET, skinFor } from '../trac
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { spawnStrangeRock } from '../bossRock';
-import { placedTracks, setVictoryTile, setBossVictoryTile, resetLineEnd } from '../track/state';
+import { placedTracks, setVictoryTile, setBossVictoryTile, resetLineEnd, noteLineChanged } from '../track/state';
 import { createReadyZone, clearReadyZones } from '../ready';
 import { labelUnit } from '../unitLabels';
 import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, clearCage, cancelSparringMatch } from '../creeps';
 import { resetHeroState } from '../heroes';
-import { stockShop, registerDealer } from '../shop';
+import { stockShop, noteDealerPlaced } from '../shop';
 import { stockSalesperson } from '../salesperson';
 import { restoreAbilityItem } from '../abilityItems';
 import { destroyAllTimers } from '../timers';
@@ -180,6 +180,7 @@ function clearBoard(): void {
   resumeResourceDrops();
   placedTracks.length = 0;
   resetLineEnd();
+  noteLineChanged();
   bossHeroSpots = [];
   bossMercSpots = [];
   bossSpot = null;
@@ -356,7 +357,7 @@ export function spawnTerrain(grid: Grid): SpawnedTrain {
         case Entity.SHADY_DEALER: {
           const dealer = Unit.create(getNeutralPassive(), FourCC(Units.TombOfRelics), world.x, world.y, 270)!;
           dealer.invulnerable = true;
-          registerDealer(dealer);
+          noteDealerPlaced();
           break;
         }
 
