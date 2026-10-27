@@ -18,6 +18,13 @@
 //   board -- a boss add dropping into the lobby. Raw timers are right when
 //   something else owns them, or when they must fire whatever happens.
 //
+// - Local reads (`// local: <reason>`). Each player's machine runs the same
+//   script, and the game desyncs the moment they decide something differently.
+//   GetLocalPlayer, a player's own selection (IsUnitSelected) and the camera
+//   all answer differently per machine; read them only to send something with
+//   BlzSendSyncData, or for something nobody else's game depends on. Selection
+//   that decides anything goes through selection.ts.
+//
 // Usage: node scripts/check-rules.js [root]   (also run by `npm run build`)
 const fs = require('fs');
 const path = require('path');
@@ -44,6 +51,14 @@ const RULES = [
     marker: /\/\/\s*untracked:\s*\S/,
     calls: [/\bTimer\.create\(\)/, /\bCreateTimer\(\)/],
     skip: (line, file) => file.endsWith(path.join('src', 'timers.ts')),
+  },
+  {
+    name: 'Local read that could desync',
+    fix: 'use synced state (selection.ts, BlzSendSyncData), or say why only this machine is affected',
+    marker: /\/\/\s*local:\s*\S/,
+    calls: [/\bGetLocalPlayer\(/, /\bIsUnitSelected\(/, /\bGetCameraTargetPosition[XY]\(/,
+      /\bGetCameraField\(/, /\bGetCameraEyePosition[XYZ]\(/],
+    skip: () => false,
   },
 ];
 

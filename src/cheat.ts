@@ -36,6 +36,7 @@ const cameraCommands = new Map<string, (this: void, x: number, y: number) => voi
 function onChatCommandAtCamera(command: string, action: (this: void, x: number, y: number) => void): void {
   cameraCommands.set(command, action);
   onChatCommand(command, () => {
+    // local: only the typer's machine reads its camera, and sends it.
     if (GetLocalPlayer() !== GetTriggerPlayer()) return;
     BlzSendSyncData(CAMERA_SYNC_PREFIX, command + ' ' + tostring(GetCameraTargetPositionX())
       + ' ' + tostring(GetCameraTargetPositionY()));
