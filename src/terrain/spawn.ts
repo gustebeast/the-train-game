@@ -208,9 +208,10 @@ function wallBoard(): void {
   // The small sight blocker is half a cell across, so two per cell, laid
   // along the wall: (dx, dy) is the wall's direction at this cell.
   const half = TRACK_SIZE / 4;
-  const wallAt = (gx: number, gy: number, dx: number, dy: number): void => {
+  const wallAt = (gx: number, gy: number, dx: number, dy: number, sight = true): void => {
     const w = gridToWorld({ x: gx, y: gy });
     Destructable.create(FourCC(BOARD_WALL_RAW), w.x, w.y, 0, 1, 0);
+    if (!sight) return;
     Destructable.create(FourCC(SIGHT_WALL_RAW), w.x - dx * half, w.y - dy * half, 0, 1, 0);
     Destructable.create(FourCC(SIGHT_WALL_RAW), w.x + dx * half, w.y + dy * half, 0, 1, 0);
   };
@@ -224,10 +225,12 @@ function wallBoard(): void {
   }
   // And a second wall, map-wide, three cells further out above and below:
   // the DPS check fights beyond it, no closer to the board than a test fight
-  // that could not be heard from it (about 500 out).
+  // that could not be heard from it (about 500 out). Pathing only -- the
+  // first wall already blocks the board's sight; this one only keeps the
+  // fights from walking up to it.
   for (let gx = -KEEP_OUT_HALF_WIDTH; gx <= KEEP_OUT_HALF_WIDTH; gx++) {
-    wallAt(gx, GRID_MIN_Y - KEEP_OUT_CELLS, 1, 0);
-    wallAt(gx, GRID_MAX_Y + KEEP_OUT_CELLS, 1, 0);
+    wallAt(gx, GRID_MIN_Y - KEEP_OUT_CELLS, 1, 0, false);
+    wallAt(gx, GRID_MAX_Y + KEEP_OUT_CELLS, 1, 0, false);
   }
 }
 
