@@ -3,7 +3,6 @@ import { trySpendGold, gainGold } from './state';
 import { REROLL_ITEM_ID, REROLL_ABILITY_ID } from './constants';
 import { rerollInterRoundLobbyHero } from './heroes';
 import { rerollInterRoundLobbyMerc } from './mercenary';
-import { restartSparringMatch } from './creeps';
 import { nextFrame, forEachUnitInWorld, unitExists, giveItems, onSpellEffect } from './util';
 import { REROLL_COST } from './sharedData';
 import { isSalespersonPawn } from './salesperson';
@@ -54,11 +53,8 @@ export function initReroll(): void {
 
     // One item for both: try the heroes, then the mercenary standing with them.
     if (rerollInterRoundLobbyHero(target) || rerollInterRoundLobbyMerc(target)) {
-      // The lobby is sparring with the roster that just changed, and the result
-      // scales the round about to be played. Measuring the hero you rerolled
-      // away is worse than not measuring at all, because the number looks
-      // exactly like a good one.
-      restartSparringMatch();
+      // The DPS check sees the roster change for itself and starts over
+      // (dpsCheck.ts describeSubject).
       // The cast is based on Wand of Illusion purely because it is an item
       // ability that always accepts a friendly unit -- Purge, the obvious
       // choice, refuses a target with nothing to dispel. Its actual effect is

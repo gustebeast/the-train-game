@@ -43,6 +43,7 @@ import { initTestKit } from './tests/testKit';
 import './tests'; // registers every test module (tests/index.ts)
 import { initBoardFlow, loadStartLobby } from './terrain/load';
 import { rollCreepCamp } from './creeps';
+import { initDPSCheck } from './dpsCheck';
 
 function tsMain() {
   try {
@@ -64,6 +65,7 @@ function tsMain() {
     loadStartLobby();
 
     initTeams();
+    initDPSCheck();
     initTrackBuildTrigger();
     initTrackDestroyTrigger();
     // Before anything that reads who has what selected (dance, the dealer).

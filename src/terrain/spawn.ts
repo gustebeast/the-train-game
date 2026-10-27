@@ -17,7 +17,8 @@ import { placedTracks, setVictoryTile, setBossVictoryTile, resetLineEnd, noteLin
 import { createReadyZone, clearReadyZones } from '../ready';
 import { labelUnit } from '../unitLabels';
 import { setCrate, setCrateStart } from '../items';
-import { setCage, registerCageTrigger, clearCage, cancelSparringMatch } from '../creeps';
+import { setCage, registerCageTrigger, clearCage } from '../creeps';
+import { stopDPSCheck } from '../dpsCheck';
 import { resetHeroState } from '../heroes';
 import { stockShop, noteDealerPlaced } from '../shop';
 import { stockSalesperson } from '../salesperson';
@@ -168,7 +169,7 @@ export function spawnReadyCircle(
  *  spawnTerrain on the way into a board is set up on the old one. */
 function clearBoard(): void {
   destroyAllTimers();
-  cancelSparringMatch();
+  stopDPSCheck();
   resetHeroState();
   clearReadyZones();
   clearCage();
@@ -206,11 +207,12 @@ function wallBoard(): void {
   // The small sight blocker is half a cell across, so two per cell, laid
   // along the wall: (dx, dy) is the wall's direction at this cell.
   const half = TRACK_SIZE / 4;
-  const wallAt = (gx: number, gy: number, dx: number, dy: number): void => {
+  const wallAt = (gx: number, gy: number, dx: number, dy: number, sight = true): void => {
     const w = gridToWorld({ x: gx, y: gy });
     // Ground units: BOARD_WALL_RAW stops only flyers (see its constant).
     Destructable.create(FourCC(PATH_BLOCKER_RAW), w.x, w.y, 0, 1, 0);
     Destructable.create(FourCC(BOARD_WALL_RAW), w.x, w.y, 0, 1, 0);
+    if (!sight) return;
     Destructable.create(FourCC(SIGHT_WALL_RAW), w.x - dx * half, w.y - dy * half, 0, 1, 0);
     Destructable.create(FourCC(SIGHT_WALL_RAW), w.x + dx * half, w.y + dy * half, 0, 1, 0);
   };
@@ -222,7 +224,21 @@ function wallBoard(): void {
     wallAt(GRID_MIN_X - 1, gy, 0, 1);
     wallAt(GRID_MAX_X + 1, gy, 0, 1);
   }
+  // And a second wall, map-wide, three cells further out above and below:
+  // the DPS check fights beyond it, no closer to the board than a test fight
+  // that could not be heard from it (about 500 out). Pathing only -- the
+  // first wall already blocks the board's sight; this one only keeps the
+  // fights from walking up to it.
+  for (let gx = -KEEP_OUT_HALF_WIDTH; gx <= KEEP_OUT_HALF_WIDTH; gx++) {
+    wallAt(gx, GRID_MIN_Y - KEEP_OUT_CELLS, 1, 0, false);
+    wallAt(gx, GRID_MAX_Y + KEEP_OUT_CELLS, 1, 0, false);
+  }
 }
+
+/** How many cells beyond the board's edge the DPS check's wall stands. */
+const KEEP_OUT_CELLS = 3;
+/** The map's half-width in cells (it is 6144 across). */
+const KEEP_OUT_HALF_WIDTH = 24;
 
 /** Replace the board: clear the old one (clearBoard), then paint the grid's
  *  terrain and create everything it places. Returns the train units if the
