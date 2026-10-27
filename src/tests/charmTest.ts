@@ -119,7 +119,7 @@ function heroXP(): number {
 
 /** Break the cage, summon the party with the peasant, and hand back the cage
  *  position -- or null, having failed the test, if any of it did not happen. */
-function startCampFight(t: TestReporter, then: (cx: number, cy: number) => void): void {
+function startCampFight(t: TestReporter, then: (cx: number, cy: number) => void, beforeSummon?: () => void): void {
   t.after(0.5, () => {
     const cage = findCage();
     if (cage == null) { t.fail('setup', 'no cage'); t.done(); return; }
@@ -140,6 +140,7 @@ function startCampFight(t: TestReporter, then: (cx: number, cy: number) => void)
       const cast = CreateTrigger()!;
       TriggerRegisterUnitEvent(cast, q, EVENT_UNIT_SPELL_EFFECT);
       TriggerAddAction(cast, () => { casts += 1; });
+      if (beforeSummon != null) beforeSummon();
       t.report('summonOrderAccepted', IssueImmediateOrder(q, 'roar') ? 1 : 0);
       t.report('inGameplayAtSummon', isInGameplay() ? 1 : 0);
       t.after(2, () => {
@@ -273,7 +274,7 @@ function runCharmKey(t: TestReporter): void {
     for (const h of getSpawnedHeroes()) SetUnitInvulnerable(h.handle, true);
     for (const m of getSpawnedMercUnits()) SetUnitInvulnerable(m.handle, true);
     t.report('mercsFielded', getSpawnedMercUnits().length);
-    t.report('mercsAliveAtClear', getSpawnedMercUnits().filter(m => GetWidgetLife(m.handle) > 0.405).length);
+    t.expect('mercsAliveAtClear', getSpawnedMercUnits().filter(m => GetWidgetLife(m.handle) > 0.405).length, 2);
     const creeps = campCreeps();
     t.expect('campCreeps', creeps.length, CREEP_CAMPS[LEVEL3_CAMP].creeps.length);
     if (creeps.length < 2) { t.done(); return; }
@@ -288,6 +289,11 @@ function runCharmKey(t: TestReporter): void {
       t.expect('keyAtCageAfterCharmedClear', keys, 1);
       t.done();
     });
+  }, () => {
+    // Frozen before the summon: a level 3 camp can kill a mercenary in the
+    // seconds before the party is made invulnerable, and the key is forfeit
+    // the moment anyone dies. This test is about the key, not the fight.
+    for (const c of campCreeps()) PauseUnit(c, true);
   });
 }
 

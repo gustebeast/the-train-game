@@ -272,6 +272,11 @@ export function noteBrinkTime(seconds: number): void {
   if (brinkTime >= BRINK_SECONDS) completeChallenge(CH_BRINK);
 }
 
+/** Unbroken seconds banked toward Living Dangerously (a probe for the tests). */
+export function getBrinkSeconds(): number {
+  return brinkTime;
+}
+
 /** The train left the danger window, so the streak restarts. */
 export function resetBrinkTime(): void {
   if (brinkTime === 0) return;

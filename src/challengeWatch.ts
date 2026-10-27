@@ -1,6 +1,7 @@
-import { Trigger } from 'w3ts';
-import { onGlobalTick, TICK_INTERVAL } from './globalTick';
+import { Timer, Trigger } from 'w3ts';
 import { isInGameplay } from './state';
+import { createTimer, destroyTimer } from './timers';
+import { onLineChanged } from './track/state';
 import { isChallengeArmed } from './challenges';
 import {
   CH_BRINK, CH_SOLO_TOOLS, BRINK_TRACKS,
@@ -16,8 +17,10 @@ import { forEachInventoryItem, forEachUnitInWorld, nextFrame } from './util';
  * Everything else is completed by the system that owns the event — a track
  * being laid, a dash cast, the last creep dying.
  *
- * Living Dangerously counts SECONDS spent near the end of the line, so it rides
- * the shared global tick.
+ * Living Dangerously counts SECONDS spent near the end of the line. Whether the
+ * train is near the end only changes when the line or the train moves, so it
+ * is judged then (onLineChanged), and a clock counts the seconds only while
+ * the train is inside the window.
  *
  * Union Rules does not need to. Two units can only come to hold the same tool
  * at the moment one of them GAINS one: dropping a tool or dying can only
@@ -53,29 +56,47 @@ function checkToolSharing(): void {
   if (broken) noteToolSharingBroken();
 }
 
-function tick(): void {
-  if (!isInGameplay()) return;
+/** Counting while the train is inside Living Dangerously's window, else null. */
+let brinkClock: Timer | null = null;
 
-  if (isChallengeArmed(CH_BRINK)) {
-    if (playersHaveLaidTrack() && getTracksRemaining() <= BRINK_TRACKS) {
-      noteBrinkTime(TICK_INTERVAL);
-    } else {
-      // Left the danger window: the streak has to be unbroken, so start over.
-      resetBrinkTime();
-    }
+function inBrinkWindow(): boolean {
+  return isInGameplay() && isChallengeArmed(CH_BRINK)
+    && playersHaveLaidTrack() && getTracksRemaining() <= BRINK_TRACKS;
+}
+
+/** Judge Living Dangerously against the line as it now stands. Entering the
+ *  window starts the clock; leaving it stops the clock and starts the streak
+ *  over, since the time has to be unbroken. A tracked timer: the board
+ *  teardown takes it, and clearing the line (onLineChanged) forgets it. */
+function updateBrink(): void {
+  const inside = inBrinkWindow();
+  if (inside && brinkClock == null) {
+    brinkClock = createTimer();
+    // periodic: the streak's seconds, counted up on the board as they pass.
+    brinkClock.start(1, true, () => noteBrinkTime(1));
+  } else if (!inside && brinkClock != null) {
+    destroyTimer(brinkClock);
+    brinkClock = null;
+    resetBrinkTime();
   }
 }
 
 /** Check Union Rules now, if it is in play. */
-export function checkUnionRules(): void {
+function checkUnionRules(): void {
   if (!isInGameplay() || !isChallengeArmed(CH_SOLO_TOOLS)) return;
   checkToolSharing();
 }
 
+/** Judge both watched challenges now, for one armed mid-round (the
+ *  -challenge cheat): tools may already be in hand, and the train already
+ *  near the end of the line. */
+export function checkWatchedChallenges(): void {
+  checkUnionRules();
+  updateBrink();
+}
+
 export function initChallengeWatch(): void {
-  // periodic: Brink accumulates time spent in the danger window. The window
-  // itself could be entered and left on track events instead (a candidate).
-  onGlobalTick(() => tick());
+  onLineChanged(() => updateBrink());
 
   const pickup = Trigger.create();
   pickup.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
