@@ -2,7 +2,7 @@ import { Abilities } from '@objectdata/abilities';
 import { Units } from '@objectdata/units';
 import { registerTest, TestReporter } from './testkit';
 import { beginNewRun, loadInterRoundLobby, loadTerrain, loadBossBattlefield, loadStartLobby } from './terrain/load';
-import { HeroData, setRosterForTest, getSpawnedHeroes, chooseAllHeroes } from './heroes';
+import { HeroData, setRosterForTest, getSpawnedHeroes } from './heroes';
 import { startBossFight, setBossArenaCallbacks, getBossArenaCallbacks } from './bossArena';
 import { setMercsForTest, spawnMercFromData, spawnMercWithHeroes, getSpawnedMercUnits, removeSpawnedMercUnits } from './mercenary';
 import { CREEP_CAMPS } from './creepCamps';
@@ -425,7 +425,6 @@ function runCharmBoss(t: TestReporter, ending: 'win' | 'lose'): void {
     finished = true;
     if (real.defeat != null && real.victory != null) setBossArenaCallbacks(real.defeat, real.victory);
   };
-  chooseAllHeroes();
   startBossFight();
 
   const humans = getHumanPlayers();

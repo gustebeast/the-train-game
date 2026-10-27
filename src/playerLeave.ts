@@ -6,7 +6,8 @@ const leaveListeners: Array<(this: void, leaving: MapPlayer) => void> = [];
 
 /** Run cb whenever a human player leaves the game. One trigger serves every
  *  listener, so a system cannot register a leave event of its own and miss the
- *  ones that came first. */
+ *  ones that came first. Listeners run BEFORE the leaver's units are killed,
+ *  so anything the leaver was only holding can be handed back first. */
 export function onPlayerLeave(cb: (this: void, leaving: MapPlayer) => void): void {
   leaveListeners.push(cb);
 }
@@ -30,10 +31,10 @@ export function initPlayerLeave(): void {
   trigger.addAction(() => {
     const leaving = MapPlayer.fromEvent();
     if (leaving == null) return;
+    for (const cb of leaveListeners) cb(leaving);
     killAllOwnedUnits(leaving.handle);
     // The kill chain can hand the leaver new units in the same frame (hero
     // death → endHeroState restores transferred peasants) — sweep once more
     nextFrame(() => killAllOwnedUnits(leaving.handle));
-    for (const cb of leaveListeners) cb(leaving);
   });
 }

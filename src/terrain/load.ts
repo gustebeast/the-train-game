@@ -7,7 +7,7 @@ import { registerReadyZone } from '../ready';
 import { TROPHY_MODEL, TROPHY_SCALE } from '../constants';
 import { markUnit } from '../unitLabels';
 import { forEachPeasantOf, getHumanPlayers } from '../util';
-import { makeDancer, startDanceClock } from '../dance';
+import { makeDancer, startDanceSession } from '../dance';
 import {
   closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,
   selectNewerSave, selectOlderSave,
@@ -71,12 +71,11 @@ export function beginNewRun(): void {
   initRandomHeroes();
 }
 
-/** A round is over and the run goes on: into the inter-round lobby.
- *
- *  Finishing a round is what counts as a new visit to the dealer, so that is
- *  where the shelf rotates. NOT inside loadInterRoundLobby: Reset Purchases goes
- *  back through there too, and rewinding a purchase must leave the same wager
- *  on sale rather than letting a player shop for a different one. */
+/** Into the inter-round lobby as if a round had just been won, for -lobby:
+ *  the dealer moves on to his next offer, which awardVictory does for a real
+ *  win. NOT inside loadInterRoundLobby: Reset Purchases goes back through there
+ *  too, and rewinding a purchase must leave the same wager on sale rather than
+ *  letting a player shop for a different one. */
 export function finishRoundToLobby(): void {
   advanceChallengeOffer();
   loadInterRoundLobby();
@@ -105,7 +104,8 @@ export function initBoardFlow(): void {
       startBossFight();
       return;
     }
-    finishRoundToLobby();
+    // awardVictory has already moved the dealer on and written the save.
+    loadInterRoundLobby();
   });
 
   // How the boss fight ends. Losing costs the attempt, not the run: it lands
@@ -115,11 +115,16 @@ export function initBoardFlow(): void {
   // mercenary still alive, not one unit per player -- and that is what takes the
   // party to the victory lobby.
   setBossArenaCallbacks(
-    () => finishRoundToLobby(),
+    () => loadInterRoundLobby(),
     survivors => {
       // On disk the moment the boss falls, not when the party walks out: the
       // run is won whether or not anyone ever reaches the circle.
       markCurrentSaveVictorious();
+      // Nobody but summons left standing: there is nobody to walk out.
+      if (survivors.length === 0) {
+        loadVictoryLobby();
+        return;
+      }
       setMusic('silence');
       spawnReadyCircle(0, 0, { label: '', zone: 'bossexit' }, survivors);
     },
@@ -344,7 +349,7 @@ export function loadStartLobby(): void {
   enterBoard('startLobby', generateStartLobby());
   // Everyone but the host becomes a dancer: immobile, with the dance spells on
   // the command card.
-  startDanceClock(START_LOBBY_BPM);
+  startDanceSession(START_LOBBY_BPM);
   for (const player of getHumanPlayers()) {
     if (player.id === 0) continue;
     forEachPeasantOf(player.handle, makeDancer);

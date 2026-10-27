@@ -4,7 +4,7 @@ import { isInGameplay } from './state';
 import { isChallengeArmed } from './challenges';
 import {
   CH_BRINK, CH_SOLO_TOOLS, BRINK_TRACKS,
-  noteBrinkTime, resetBrinkTime, noteToolSharingBroken,
+  noteBrinkTime, resetBrinkTime, noteToolSharingBroken, playersHaveLaidTrack,
 } from './challengeList';
 import { getTracksRemaining } from './train';
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, BUCKET_FULL_ID } from './constants';
@@ -66,7 +66,7 @@ function tick(): void {
   if (!isInGameplay()) return;
 
   if (isChallengeArmed(CH_BRINK)) {
-    if (getTracksRemaining() <= BRINK_TRACKS) {
+    if (playersHaveLaidTrack() && getTracksRemaining() <= BRINK_TRACKS) {
       noteBrinkTime(TICK_INTERVAL);
     } else {
       // Left the danger window: the streak has to be unbroken, so start over.

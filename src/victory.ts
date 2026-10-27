@@ -6,8 +6,10 @@ import { cancelNightForVictory } from './daynight';
 import { gameState, syncGold } from './state';
 import { saveToFile } from './save';
 import { rollCreepCamp } from './creeps';
-import { chooseHeroes, chooseHeroPlayers } from './heroes';
+import { chooseHeroes, chooseHeroPlayers, snapshotHeroItems } from './heroes';
 import { bankCrateForNextRound } from './items';
+import { snapshotMercKits } from './mercenary';
+import { advanceChallengeOffer } from './challenges';
 
 const GOLD_PER_ROUND = 1;
 
@@ -29,7 +31,14 @@ export function triggerVictory(lastTrack: Unit): void {
   if (wagon != null) wagon.moveSpeed = 200;
 }
 
-/** Called when the train actually reaches the end. Awards rewards and saves. */
+/** Called when the train actually reaches the end. Awards rewards and saves.
+ *
+ *  Everything the next lobby will show has to be settled BEFORE the save, so a
+ *  reload resumes exactly what the live session goes on to see: the party's
+ *  kit as it stands now (the heroes and mercenaries may still be on the
+ *  field), and the dealer's next offer -- finishing a round is what counts as
+ *  a new visit to him. Advancing it after the save let a reload show the
+ *  previous offer, so a player could choose between two. */
 export function awardVictory(): void {
   gameState.round += 1;
   gameState.gold += GOLD_PER_ROUND;
@@ -39,6 +48,9 @@ export function awardVictory(): void {
   rollCreepCamp();
   chooseHeroes();
   chooseHeroPlayers();
+  snapshotHeroItems();
+  snapshotMercKits();
+  advanceChallengeOffer();
   bankCrateForNextRound();
   saveToFile();
 }

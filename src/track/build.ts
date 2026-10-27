@@ -1,4 +1,4 @@
-import { Unit, Trigger } from 'w3ts';
+import { Item, Unit, Trigger } from 'w3ts';
 import { nextFrame, onSpellEffect } from '../util';
 import {
   skinFor, OPPOSITE, TRACK_UNIT_TYPES, DIRECTIONS, TRACK_SIZE,
@@ -54,6 +54,17 @@ function onTrackBuilt() {
 
   // Delay replacement so the solid-pathing Farm has time to push the builder away
   nextFrame(() => {
+    // Two pieces started in the same frame both passed the check against the
+    // same last piece. Whichever lands second would fork the line, so it is
+    // undone and its track piece (already spent) dropped back where it stood.
+    if (placedTracks[placedTracks.length - 1] !== track1) {
+      const x = track0.x;
+      const y = track0.y;
+      track0.destroy();
+      const refund = Item.create(TRACK_PIECE_ID, x, y);
+      if (refund != null) refund.charges = 1;
+      return;
+    }
     const dirToTrack1 = getDirection(track0, track1);
     const dirFromTrack1ToTrack0 = OPPOSITE[dirToTrack1];
     const dirToTrack2 = getDirection(track1, track2);

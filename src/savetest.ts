@@ -2,7 +2,7 @@ import { registerTest, TestReporter } from './testkit';
 import { gameState } from './state';
 import { beginNewRun } from './terrain/load';
 import {
-  saveToFile, listSaves, loadFromSlot, markCurrentSaveDefeated, resetToNewRun,
+  saveToFile, listSaves, loadFromSlot, markCurrentSaveDefeated, resetToNewRun, encodeKit, decodeKit,
 } from './save';
 
 /** A save round trip, through the same reads the chooser and -load use.
@@ -43,6 +43,14 @@ function runSaveTest(t: TestReporter): void {
   const stillListed = listSaves().some(info => info.slot === slot);
   t.expect('hiddenWhenDefeated', stillListed ? 0 : 1, 1);
   const kept = listSaves(true).some(info => info.slot === slot && info.defeated);
+
+  // A kit keeps its charges through the save format, and an id written
+  // without them (an older save) still reads.
+  const kit = decodeKit(encodeKit([{ id: 1001, charges: 2 }, { id: 1002, charges: 0 }]) + ',1003');
+  t.expect('kitLength', kit.length, 3);
+  t.expect('kitCharges', kit[0].charges, 2);
+  t.expect('kitUncharged', kit[1].charges, 0);
+  t.expect('kitLegacyId', kit[2].id, 1003);
   t.expect('keptOnDisk', kept ? 1 : 0, 1);
   t.done();
 }

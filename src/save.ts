@@ -1,4 +1,5 @@
 import { DEFAULT_STATE, GameState, gameState, applyState } from './state';
+import { KitItem } from './util';
 import { HERO_SLOTS, MAX_MERCS } from './constants';
 
 // One file per save slot, so several runs can be resumed independently: host a
@@ -151,6 +152,27 @@ export function parseFields(raw: string): Record<string, string> {
   return fields;
 }
 
+/** A kit as one field value: "id,id*charges,..." -- the charges only for an
+ *  item that has them, so a save written before charges were kept still reads
+ *  (its items simply come back with their default charges). */
+export function encodeKit(kit: ReadonlyArray<KitItem>): string {
+  const parts: string[] = [];
+  for (const entry of kit) {
+    parts.push(entry.charges > 0 ? tostring(entry.id) + '*' + tostring(entry.charges) : tostring(entry.id));
+  }
+  return table.concat(parts, ',');
+}
+
+export function decodeKit(raw: string): KitItem[] {
+  const kit: KitItem[] = [];
+  for (const [entry] of string.gmatch(raw, '([^,]+)')) {
+    const [idStr, chargesStr] = string.match(entry, '^(%d+)%*?(%d*)$');
+    const id = tonumber(idStr ?? '') ?? 0;
+    if (id !== 0) kit.push({ id, charges: tonumber(chargesStr ?? '') ?? 0 });
+  }
+  return kit;
+}
+
 /** Decode a "k=v;k=v;..." string into a Record, expanding short keys via keyMap. */
 function decodeRecord(raw: string, keyMap: Record<string, string>): Record<string, number> {
   const result: Record<string, number> = {};
@@ -243,7 +265,7 @@ export function revertToInterRoundLobbySnapshot(): boolean {
  *  mercenary spawner, which shows what a save would actually resume. */
 export interface SavedMerc {
   typeId: number;
-  items: number[];
+  items: KitItem[];
 }
 
 /** The living mercenaries in an 'mm' segment (mercenary.ts writes it: per slot
@@ -256,11 +278,7 @@ function decodeMercs(raw: string): SavedMerc[] {
     const typeId = tonumber(fields['t' + tostring(n)] ?? '');
     if (typeId == null || typeId === 0) continue;
     if ((fields['d' + tostring(n)] ?? '0') === '1') continue;
-    const items: number[] = [];
-    for (const [idStr] of string.gmatch(fields['i' + tostring(n)] ?? '', '([^,]+)')) {
-      const id = tonumber(idStr) ?? 0;
-      if (id !== 0) items.push(id);
-    }
+    const items = decodeKit(fields['i' + tostring(n)] ?? '');
     out.push({ typeId, items });
   }
   return out;

@@ -2,7 +2,7 @@ import { MapPlayer, Trigger } from 'w3ts';
 import { BOSS_ADD_ID, BOSS_ID } from './constants';
 import { spawnBoss, stopBoss } from './boss';
 import { dealHeroesForHumans } from './bossParty';
-import { spawnHeroes, getSpawnedHeroes, endHeroState, chooseAllHeroes } from './heroes';
+import { spawnHeroes, getSpawnedHeroes, endHeroState, wholeRoster } from './heroes';
 import { spawnMercWithHeroes, getSpawnedMercUnits } from './mercenary';
 import { getBossHeroSpots, getBossMercSpots, getBossSpot } from './terrain/spawn';
 import { forEachUnitOfPlayer, getHumanPlayers, nextFrame, isAlive, forEachUnitInWorld } from './util';
@@ -130,8 +130,6 @@ export function startBossFight(): void {
 
   const heroSpots = getBossHeroSpots();
   const mercSpots = getBossMercSpots();
-  // Everybody comes to this one, not the usual two.
-  chooseAllHeroes();
   const heroOwners = dealHeroesForHumans(heroSpots.length);
 
   // spawnHeroes takes one owner per hero in roster order, which is exactly the
@@ -145,7 +143,8 @@ export function startBossFight(): void {
     // ONE call: spawnHeroes stands up the whole roster and takes one owner per
     // hero, so calling it per place would spawn the party once per place.
     const first = heroSpots.length > 0 ? heroSpots[0] : { x: 0, y: 0 };
-    spawnHeroes(owners, first.x, first.y);
+    // Everybody comes to this one, not the usual two.
+    spawnHeroes(owners, first.x, first.y, wholeRoster());
     // Then onto their own marks, so they arrive in a line rather than in a
     // heap that pathing has to shove apart.
     const standing = getSpawnedHeroes();
@@ -209,8 +208,9 @@ function checkEnding(): void {
 }
 
 /** The party units still alive, summons left out: they come and go on their
- *  own timers, and a way out must not wait on one. Only if nothing BUT summons
- *  survived do they count -- otherwise there would be nobody to walk out. */
+ *  own timers, and a way out must not wait on one -- a circle that needed a
+ *  summon could never be satisfied once its timer ran out. Empty when only
+ *  summons survived. */
 function survivors(): unit[] {
   const all: unit[] = [];
   for (const player of getHumanPlayers()) {
@@ -220,6 +220,5 @@ function survivors(): unit[] {
       all.push(u);
     });
   }
-  const real = all.filter(u => !IsUnitType(u, UNIT_TYPE_SUMMONED));
-  return real.length > 0 ? real : all;
+  return all.filter(u => !IsUnitType(u, UNIT_TYPE_SUMMONED));
 }

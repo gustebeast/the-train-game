@@ -1,14 +1,16 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { HERO_POOL } from './sharedData';
+import { onPlayerLeave } from './playerLeave';
+import { Items } from '@objectdata/items';
 import { isInGameplay } from './state';
-import { registerSaveSegment, parseFields, heroSaveKey } from './save';
+import { registerSaveSegment, parseFields, heroSaveKey, encodeKit, decodeKit } from './save';
 import { SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, PEASANT_ID, HERO_SLOTS, MAX_PLAYERS } from './constants';
 import { createPlaceholder } from './placeholder';
 import { seededValueAt, deriveSeed, shuffleRandom, STREAMS } from './rng';
 import { gameState } from './state';
 import { getNeutralExtra } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
-import { forEachUnitInWorld, getHumanPlayers, getInventoryItemIds, giveItems, nextFrame, isAlive, unitExists, removeUnitsSummonsFirst } from './util';
+import { KitItem, forEachUnitInWorld, getHumanPlayers, getInventoryKit, giveKit, nextFrame, isAlive, unitExists, removeUnitsSummonsFirst } from './util';
 import { spawnMercWithHeroes, releaseMercUnits } from './mercenary';
 
 /** Convert a FourCC integer to a 4-character string. */
@@ -36,8 +38,8 @@ export interface HeroData {
   typeId: number;
   xp: number;
   skills: Record<string, number>;
-  /** Item rawcode IDs in inventory (up to 6 slots, 0 = empty). */
-  items: number[];
+  /** What the hero is carrying, in slot order. */
+  items: KitItem[];
   /** Bonus stats from consumed tomes (powerup items). */
   tomeStr: number;
   tomeAgi: number;
@@ -64,7 +66,7 @@ function encodeHero(hero: HeroData): string {
   if (hero.tomeInt !== 0) parts.push('ti=' + tostring(hero.tomeInt));
   if (hero.tomeHP !== 0) parts.push('th=' + tostring(hero.tomeHP));
   if (hero.items.length > 0) {
-    parts.push('it=' + hero.items.join(','));
+    parts.push('it=' + encodeKit(hero.items));
   }
   for (const [k, v] of Object.entries(hero.skills)) {
     if (v > 0) parts.push(k + '=' + tostring(v));
@@ -89,10 +91,7 @@ export function decodeHero(raw: string): HeroData {
     } else if (key === 'th') {
       hero.tomeHP = tonumber(val) ?? 0;
     } else if (key === 'it') {
-      for (const [idStr] of string.gmatch(val, '([^,]+)')) {
-        const id = tonumber(idStr) ?? 0;
-        if (id !== 0) hero.items.push(id);
-      }
+      hero.items = decodeKit(val);
     } else {
       hero.skills[key] = tonumber(val) ?? 0;
     }
@@ -293,17 +292,20 @@ export function initRandomHeroes(): void {
   if (heroPlayersFromSave) heroPlayersFromSave = false; else pickLeastBusyHeroPlayers();
 }
 
-/** Field the WHOLE roster, not the usual two.
+/** Every hero on the roster, as indices for spawnHeroes.
  *
  *  The boss fight is the one time everybody comes: an ordinary round summons
  *  the two least-rested heroes, which is what chooseHeroes picks, and turning
- *  up to the finale with half the roster would be a strange way to end a run. */
-export function chooseAllHeroes(): void {
+ *  up to the finale with half the roster would be a strange way to end a run.
+ *  Handed to spawnHeroes rather than written into chosenIndices, which is the
+ *  ROUND's pair: the lobby after a lost boss fight measures its sparring match
+ *  with that pair, and found the whole roster there instead. */
+export function wholeRoster(): number[] {
   const all: number[] = [];
   for (let i = 0; i < allHeroes.length; i++) {
     if (allHeroes[i].typeId !== 0) all.push(i);
   }
-  chosenIndices = all;
+  return all;
 }
 
 /** Field the two least-rested heroes for the round the game is on.
@@ -366,7 +368,7 @@ export function setRosterForTest(heroes: HeroData[]): void {
   // next's, until an Alchemist spawned with no point left for Transmute.
   for (let i = 0; i < allHeroes.length; i++) {
     const h = heroes[i];
-    allHeroes[i] = h != null ? { ...h, skills: { ...h.skills }, items: [...h.items] } : emptyHero();
+    allHeroes[i] = h != null ? { ...h, skills: { ...h.skills }, items: h.items.map(e => ({ id: e.id, charges: e.charges })) } : emptyHero();
   }
   chosenIndices = [0, 1];
 }
@@ -482,7 +484,7 @@ export function spawnHeroFromData(
   if (hero == null) return null;
   if (data.xp > 0) SetHeroXP(hero.handle, data.xp, true);
   applySpells(hero, data.skills);
-  giveItems(hero, data.items);
+  giveKit(hero, data.items);
   nextFrame(() => {
     const h = hero.handle;
     if (!unitExists(h)) return; // removed before the frame elapsed
@@ -505,9 +507,14 @@ function spawnHeroUnit(dataIdx: number, owner: MapPlayer, x: number, y: number):
 /** Spawn the 2 chosen heroes. Each owner in the array gets one hero.
  *  If only 1 owner, both heroes go to that player.
  *  Fires onHeroesSpawnedCallback after one frame. */
-export function spawnHeroes(owners: MapPlayer[], x: number, y: number): void {
-  for (let i = 0; i < chosenIndices.length; i++) {
-    const dataIdx = chosenIndices[i];
+export function spawnHeroes(
+  owners: MapPlayer[], x: number, y: number, indices: ReadonlyArray<number> = chosenIndices,
+): void {
+  // Hero mode is on from here: endHeroState and resetHeroState only clean up
+  // (and snapshot the kit of) heroes that went through this.
+  heroesSpawned = true;
+  for (let i = 0; i < indices.length; i++) {
+    const dataIdx = indices[i];
     const owner = owners[math.min(i, owners.length - 1)];
     const hero = spawnHeroUnit(dataIdx, owner, x, y);
     if (hero != null) {
@@ -612,9 +619,10 @@ export function grantUnsummonToAllPeasants(): void {
 // ---------------------------------------------------------------------------
 
 /** Snapshot the current inventory of all spawned heroes into persistent state. */
-function snapshotHeroItems(): void {
+/** Record what each summoned hero is carrying, leaving it on the field. */
+export function snapshotHeroItems(): void {
   for (const { unit, dataIdx } of spawnedHeroes) {
-    allHeroes[dataIdx].items = getInventoryItemIds(unit.handle);
+    allHeroes[dataIdx].items = getInventoryKit(unit.handle);
   }
 }
 
@@ -758,7 +766,7 @@ export function rerollInterRoundLobbyHero(unitHandle: unit): boolean {
   // Items follow the hero. The replacement is rebuilt from HeroData, so
   // anything picked up onto the LOBBY unit has to be written back first --
   // otherwise the swap silently drops whatever the player just handed over.
-  data.items = getInventoryItemIds(entry.unit.handle);
+  data.items = getInventoryKit(entry.unit.handle);
 
   data.typeId = nextQueuedHeroType(candidates);
   data.skills = {};
@@ -781,7 +789,7 @@ export function rerollInterRoundLobbyHero(unitHandle: unit): boolean {
 function cloneHero(h: HeroData): HeroData {
   return {
     typeId: h.typeId, xp: h.xp,
-    skills: { ...h.skills }, items: [...h.items],
+    skills: { ...h.skills }, items: h.items.map(e => ({ id: e.id, charges: e.charges })),
     tomeStr: h.tomeStr, tomeAgi: h.tomeAgi, tomeInt: h.tomeInt, tomeHP: h.tomeHP,
   };
 }
@@ -809,7 +817,23 @@ function spawnedDataIndexOf(unitHandle: unit): number {
   return -1;
 }
 
+/** A player is leaving. The peasants lent to them for hero mode go back to
+ *  their owners now, or they would be killed along with everything else the
+ *  leaver holds and the hero player would finish the round with none. */
+function returnPeasantsLentTo(leaving: MapPlayer): void {
+  const lent: unit[] = [];
+  for (const [h, owner] of peasantOwnerMap) {
+    if (GetOwningPlayer(h) === leaving.handle && owner.slotState === PLAYER_SLOT_STATE_PLAYING) lent.push(h);
+  }
+  for (const h of lent) {
+    SetUnitOwner(h, peasantOwnerMap.get(h)!.handle, true);
+    peasantOwnerMap.delete(h);
+  }
+}
+
 export function initHeroes(): void {
+  onPlayerLeave(returnPeasantsLentTo);
+
   // Summon Heroes spell trigger
   const spellTrigger = Trigger.create();
   spellTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
@@ -823,7 +847,6 @@ export function initHeroes(): void {
     // today, but the ability is a repurposed standard one and the camp list
     // grows, so the check belongs here rather than in a comment.
     if (caster == null || caster.typeId !== PEASANT_ID) return;
-    heroesSpawned = true;
 
     UnitRemoveAbility(caster.handle, SUMMON_ABILITY_ID);
     transferPeasantsAndSpawnHeroes(caster.x, caster.y);
@@ -862,17 +885,21 @@ export function initHeroes(): void {
     allHeroes[dataIdx].skills[fourCCStr(abilId)] = level;
   });
 
-  // Tome stat bonuses by rawcode
-  const TOME_BONUSES: Record<number, { str?: number; agi?: number; int?: number; hp?: number }> = {
-    [FourCC('tstr')]: { str: 1 },   // Tome of Strength
-    [FourCC('tdex')]: { agi: 1 },   // Tome of Agility
-    [FourCC('tint')]: { int: 1 },   // Tome of Intelligence
-    [FourCC('tkno')]: { str: 1, agi: 1, int: 1 }, // Tome of Knowledge
-    [FourCC('tst2')]: { str: 2 },   // Tome of Strength +2
-    [FourCC('tdx2')]: { agi: 2 },   // Tome of Agility +2
-    [FourCC('tin2')]: { int: 2 },   // Tome of Intelligence +2
-    [FourCC('manh')]: { hp: 50 },   // Manual of Health
+  // Tome stat bonuses by item. The generated names are the trustworthy ones:
+  // the rawcodes are easy to misread -- 'tkno' is the Tome of POWER (a level)
+  // and 'tpow' the Tome of KNOWLEDGE (+1 to every stat), which this table once
+  // had the wrong way round.
+  const tomeBonuses: Record<number, { str?: number; agi?: number; int?: number; hp?: number }> = {
+    [FourCC(Items.TomeOfStrength)]: { str: 1 },
+    [FourCC(Items.TomeOfAgility)]: { agi: 1 },
+    [FourCC(Items.TomeOfIntelligence)]: { int: 1 },
+    [FourCC(Items.TomeOfKnowledge)]: { str: 1, agi: 1, int: 1 },
+    [FourCC(Items.TomeOfStrengthPlus2)]: { str: 2 },
+    [FourCC(Items.TomeOfAgilityPlus2)]: { agi: 2 },
+    [FourCC(Items.TomeOfIntelligencePlus2)]: { int: 2 },
+    [FourCC(Items.ManualOfHealth)]: { hp: 50 },
   };
+  const tomeOfPower = FourCC(Items.TomeOfPower);
 
   // Track hero item pickup — snapshot inventory or record tome bonus
   const pickupTrigger = Trigger.create();
@@ -884,8 +911,17 @@ export function initHeroes(): void {
     const dataIdx = spawnedDataIndexOf(u);
     if (dataIdx < 0) return;
 
+    if (picked != null && GetItemTypeId(picked) === tomeOfPower) {
+      // A level, which the engine grants as experience. Keep it in the roster
+      // once it has landed, or the next summon would stand the hero up without
+      // it.
+      nextFrame(() => {
+        if (unitExists(u)) allHeroes[dataIdx].xp = math.max(allHeroes[dataIdx].xp, GetHeroXP(u));
+      });
+      return;
+    }
     if (picked != null) {
-      const bonus = TOME_BONUSES[GetItemTypeId(picked)];
+      const bonus = tomeBonuses[GetItemTypeId(picked)];
       if (bonus != null) {
         allHeroes[dataIdx].tomeStr += bonus.str ?? 0;
         allHeroes[dataIdx].tomeAgi += bonus.agi ?? 0;

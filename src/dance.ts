@@ -65,9 +65,11 @@ let beatPeriod = 0;
  *  we" is a subtraction rather than a running count. */
 let songClock: Timer | null = null;
 
-/** Start the beat grid. Call when the lobby track starts.
- *  bpm 0 (the default) means "no song", and dances fire immediately. */
-export function startDanceClock(bpm: number): void {
+/** A fresh start lobby: forget the last lobby's dancers (their units went
+ *  with that board, and a recycled handle must not dance for them) and start
+ *  the beat grid. bpm 0 means "no song", and dances fire immediately. */
+export function startDanceSession(bpm: number): void {
+  dancers.clear();
   if (songClock != null) songClock.destroy();
   songClock = null;
   beatPeriod = bpm > 0 ? 60 / bpm : 0;

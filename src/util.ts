@@ -167,13 +167,28 @@ export function giveItems(u: Unit, itemIds: ReadonlyArray<number>): void {
   }
 }
 
-/** Item type ids a unit is carrying, in slot order. Used to snapshot an
- *  inventory for the save file and to carry items across a respawn. */
-export function getInventoryItemIds(handle: unit): number[] {
-  const ids: number[] = [];
+/** One carried item as it is remembered between spawns: its type, and its
+ *  charges -- 0 for an item that has none. Without the charges a potion used
+ *  down to its last dose came back full on every respawn and every reload. */
+export interface KitItem { id: number; charges: number; }
+
+/** What a unit is carrying, in slot order. Used to snapshot an inventory for
+ *  the save file and to carry it across a respawn. */
+export function getInventoryKit(handle: unit): KitItem[] {
+  const kit: KitItem[] = [];
   forEachInventoryItem(handle, it => {
     const id = GetItemTypeId(it);
-    if (id !== 0) ids.push(id);
+    if (id !== 0) kit.push({ id, charges: GetItemCharges(it) });
   });
-  return ids;
+  return kit;
+}
+
+/** Hand a unit a remembered kit, charges and all. */
+export function giveKit(u: Unit, kit: ReadonlyArray<KitItem>): void {
+  for (const entry of kit) {
+    const it = CreateItem(entry.id, u.x, u.y);
+    if (it == null) continue;
+    if (entry.charges > 0) SetItemCharges(it, entry.charges);
+    UnitAddItem(u.handle, it);
+  }
 }

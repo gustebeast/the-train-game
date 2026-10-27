@@ -1,7 +1,7 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
-import { registerSaveSegment, parseFields, MERC_SAVE_KEY } from './save';
-import { forEachInventoryItem, getHumanPlayers, getInventoryItemIds, giveItems, unitExists } from './util';
+import { registerSaveSegment, parseFields, MERC_SAVE_KEY, encodeKit, decodeKit } from './save';
+import { KitItem, forEachInventoryItem, getHumanPlayers, getInventoryKit, giveKit, unitExists } from './util';
 import { getNeutralExtra } from './teams';
 import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creepCamps';
@@ -47,8 +47,8 @@ interface MercSlot {
   typeId: number;
   /** True once it died; it stays dead until its contract is bought again. */
   dead: boolean;
-  /** Item rawcodes this slot's mercenary carries, kept across death. */
-  items: number[];
+  /** What this slot's mercenary carries, kept across death. */
+  items: KitItem[];
   /** The live unit while summoned, or null. */
   unit: Unit | null;
   /** Death trigger for the live unit, or null (see clearMercDeathTrigger). */
@@ -121,25 +121,17 @@ registerSaveSegment(MERC_SAVE_KEY,
       const n = tostring(i + 1);
       parts.push('t' + n + '=' + tostring(sl.typeId));
       parts.push('d' + n + '=' + (sl.dead ? '1' : '0'));
-      if (sl.items.length > 0) parts.push('i' + n + '=' + sl.items.join(','));
+      if (sl.items.length > 0) parts.push('i' + n + '=' + encodeKit(sl.items));
     }
     return table.concat(parts, ';');
   },
   (raw) => {
-    const readItems = (val: string): number[] => {
-      const out: number[] = [];
-      for (const [idStr] of string.gmatch(val, '([^,]+)')) {
-        const id = tonumber(idStr) ?? 0;
-        if (id !== 0) out.push(id);
-      }
-      return out;
-    };
     const fields = parseFields(raw);
     for (let i = 0; i < MAX_MERCS; i++) {
       const n = tostring(i + 1);
       slots[i].typeId = tonumber(fields['t' + n] ?? '') ?? 0;
       slots[i].dead = fields['d' + n] === '1';
-      slots[i].items = readItems(fields['i' + n] ?? '');
+      slots[i].items = decodeKit(fields['i' + n] ?? '');
     }
   },
   // Reset-then-apply baseline: no contracts, no mercenaries, no kit
@@ -286,7 +278,7 @@ export function buySecondContract(): boolean {
  *  whatever it is carrying. */
 export interface MercData {
   typeId: number;
-  items: ReadonlyArray<number>;
+  items: ReadonlyArray<KitItem>;
 }
 
 /**
@@ -309,7 +301,7 @@ export function spawnMercFromData(
   const u = Unit.create(owner, data.typeId, x, y, 270);
   if (u == null) return null;
   UnitAddAbility(u.handle, MERC_INVENTORY_ABILITY_ID);
-  giveItems(u, data.items);
+  giveKit(u, data.items);
   return u;
 }
 
@@ -328,7 +320,7 @@ function spawnMercUnit(sl: MercSlot, owner: MapPlayer, x: number, y: number): vo
   deathTrig.registerUnitEvent(u, EVENT_UNIT_DEATH);
   deathTrig.addAction(() => {
     if (sl.unit != null && sl.unit.handle === GetTriggerUnit()) {
-      sl.items = getInventoryItemIds(sl.unit.handle);
+      sl.items = getInventoryKit(sl.unit.handle);
       forEachInventoryItem(sl.unit.handle, it => RemoveItem(it));
       sl.dead = true;
       sl.unit = null;
@@ -409,13 +401,20 @@ export function removeSpawnedMercUnits(): void {
   }
 }
 
+/** Record what each mercenary on the field is carrying, leaving it there. */
+export function snapshotMercKits(): void {
+  for (const sl of slots) {
+    if (sl.unit != null && unitExists(sl.unit.handle)) {
+      sl.items = getInventoryKit(sl.unit.handle);
+    }
+  }
+}
+
 /** Snapshot every mercenary's kit and drop the live-unit references. Called
  *  before the unsummon sweep / round reset removes the units themselves. */
 export function releaseMercUnits(): void {
+  snapshotMercKits();
   for (const sl of slots) {
-    if (sl.unit != null && unitExists(sl.unit.handle)) {
-      sl.items = getInventoryItemIds(sl.unit.handle);
-    }
     clearMercDeathTrigger(sl);
     sl.unit = null;
   }
@@ -515,7 +514,7 @@ export function rerollInterRoundLobbyMerc(unitHandle: unit): boolean {
   const y = entry.unit.y;
   // Read the kit off the display unit rather than trusting the stored list --
   // the player may have handed it something since the inter-round lobby was built.
-  slot.items = getInventoryItemIds(entry.unit.handle);
+  slot.items = getInventoryKit(entry.unit.handle);
   // Excludes every mercenary in play, so a reroll is always something new.
   const rolled = rollMercType(getMercCampLevel());
   if (rolled !== 0) slot.typeId = rolled;

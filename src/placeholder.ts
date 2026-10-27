@@ -1,6 +1,6 @@
 import { MapPlayer, Unit } from 'w3ts';
 import { UNKNOWN_UNIT_ID } from './constants';
-import { giveItems } from './util';
+import { KitItem, giveKit } from './util';
 
 /** Create a concealed stand-in at (x, y), carrying `items`.
  *
@@ -12,11 +12,11 @@ import { giveItems } from './util';
  *  change applied to two of the three looks exactly like the model being
  *  unreliable. */
 export function createPlaceholder(
-  owner: MapPlayer, x: number, y: number, items: number[],
+  owner: MapPlayer, x: number, y: number, items: ReadonlyArray<KitItem>,
 ): Unit | null {
   const u = Unit.create(owner, UNKNOWN_UNIT_ID, x, y, 270);
   if (u == null) return null;
   u.invulnerable = true;
-  giveItems(u, items);
+  giveKit(u, items);
   return u;
 }

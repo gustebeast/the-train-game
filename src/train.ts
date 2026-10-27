@@ -1,5 +1,6 @@
 import { Unit, Timer, Trigger, Rectangle, Region } from 'w3ts';
 import { createTimer, destroyTimer, startOneShot } from './timers';
+import { gameSeconds } from './globalTick';
 import { placedTracks, isVictoryTriggered } from './track/state';
 import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
@@ -159,7 +160,7 @@ function moveToNext() {
   arrivalRect.setRect(nxt.x - REGION_HALF, nxt.y - REGION_HALF, nxt.x + REGION_HALF, nxt.y + REGION_HALF);
   arrivalRegion.addRect(arrivalRect);
 
-  lastMoveTime = os.clock();
+  lastMoveTime = gameSeconds();
   next.invulnerable = true;
   wagonPoint = enginePoint;
   enginePoint = { x: nxt.x + ox, y: nxt.y + oy };
@@ -183,7 +184,7 @@ export function onTrackPlaced(): void {
   if (crashDeadline == 0) {
     return;
   }
-  print('Saved with ' + I2S(R2I((crashDeadline - os.clock()) * 1000)) + 'ms left!');
+  print('Saved with ' + I2S(R2I((crashDeadline - gameSeconds()) * 1000)) + 'ms left!');
   crashDeadline = 0;
   moveToNext();
 }
@@ -196,7 +197,7 @@ function reissueMoveOrder(): void {
 
   // Failsafe: if it's been too long since the last moveToNext, the train
   // likely missed the arrival region — force advance instead of re-issuing.
-  const elapsed = os.clock() - lastMoveTime;
+  const elapsed = gameSeconds() - lastMoveTime;
   if (
     elapsed >= STUCK_TIMEOUT &&
     placedTracks[targetIdx + 1] != null &&
@@ -394,7 +395,7 @@ export function initTrain(engine: Unit, wagon: Unit): void {
     }
     print('Train about to crash!');
     const crashDelay = (REGION_HALF + OVERSHOOT) / gameState.trainSpeed;
-    crashDeadline = os.clock() + crashDelay;
+    crashDeadline = gameSeconds() + crashDelay;
     startOneShot(crashDelay, () => {
       if (crashDeadline !== 0) {
         triggerDefeat();

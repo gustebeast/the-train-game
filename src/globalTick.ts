@@ -3,6 +3,18 @@ import { Timer } from 'w3ts';
 /** How often (seconds) the global tick fires. */
 export const TICK_INTERVAL = 0.5;
 
+/** A game-time clock: one timer started at init and never fired, read for
+ *  its elapsed time. Game time, not os.clock: the wall clock differs between
+ *  the machines in a multiplayer game -- so anything decided by it can go one
+ *  way on one client and another on the next, which desyncs -- and keeps
+ *  running while the game is paused. */
+let clock: Timer | null = null;
+
+/** Seconds of game time since map init. */
+export function gameSeconds(): number {
+  return clock != null ? clock.elapsed : 0;
+}
+
 /** Callbacks run on every tick, in registration order. */
 const callbacks: Array<() => void> = [];
 
@@ -16,6 +28,9 @@ export function onGlobalTick(cb: () => void): void {
 /** Start the whole-game periodic tick. Call once at map init, before or
  *  after registrations — callbacks only fire once the timer ticks. */
 export function initGlobalTick(): void {
+  // About three years: it is read, never waited for.
+  clock = Timer.create();
+  clock.start(100000000, false, () => {});
   // Raw Timer (not timers.ts createTimer) so the round-reset
   // destroyAllTimers() doesn't kill it
   Timer.create().start(TICK_INTERVAL, true, () => {

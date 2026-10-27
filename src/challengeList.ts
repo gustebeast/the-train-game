@@ -71,6 +71,13 @@ export function resetChallengeProgress(): void {
   boardChanged();
 }
 
+/** Whether the players have laid any track of their own this round. Every
+ *  round starts with the train already on its last piece, so "near the end of
+ *  the line" is true from the first second until somebody builds. */
+export function playersHaveLaidTrack(): boolean {
+  return placedTracks.length > trackBaseline;
+}
+
 function dashTarget(): number {
   return getHumanPlayers().length * DASHES_PER_PLAYER;
 }
