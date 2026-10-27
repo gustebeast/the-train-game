@@ -23,3 +23,4 @@ import './itemCooldownTest'; // ability item cooldowns survive a drop and a hand
 import './campTest'; // camp rotation: even levels, one lap per level
 import './dayNightTest'; // the clock must stay frozen, lobbies included
 import './saveTest'; // a save round trip, as the chooser and -load read it
+import './boardWallTest'; // nothing walks, flies or sees off the board

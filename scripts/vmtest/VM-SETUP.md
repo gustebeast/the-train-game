@@ -283,7 +283,31 @@ NETWORK **while online** drops the Battle.net session and throws the DISCONNECT
 dialog. Click PLAY OFFLINE and you land back on the main menu. Minted VMs are
 offline, so they never see this.
 
-### Mint each clone (offline, no login)
+### Since WC3 3.0: copy a working VM instead of minting
+
+WC3 3.0 (Sep 2026) is always-online, so the VMs stay on 2.0.4 and the base must
+never log in again (any login updates WC3). That also means the base's offline
+entitlement is long expired: a cold-booted clone of `base-off5` can never get
+past PLAY OFFLINE. Minting from the base is therefore dead. The working VMs
+survive because their `create-game-v3` snapshots hold WC3 already running
+offline, in memory.
+
+To replace a broken VM, copy a working one with its snapshots (done for murph
+from boof, 2026-10-27):
+
+1. Copy the donor's `*-Snapshot*.vmsn/.vmem`, `*.vmdk`, `.nvram`, `.vmxf` into
+   the new folder; copy its `.vmx`/`.vmsd` renamed to the new name. Skip the
+   suspended state (`*.vmss` and its `.vmem`) and crash dumps.
+2. In the `.vmx`: new `displayName`, the VM's own `RemoteDisplay.vnc.port`,
+   `checkpoint.vmState = ""`, and drop `uuid.bios`, `uuid.location` and
+   `ethernet0.generatedAddress` so VMware makes fresh ones.
+3. The `.vmsn` files embed the config too, and a revert restores the VNC port
+   from there. Patch the port digits **byte-for-byte** (Latin-1, never ASCII,
+   which turns every byte above 127 into `?`) and confirm exactly one byte
+   differs per file.
+4. `run-test.ps1 -Vm <name>` to validate.
+
+### Mint each clone (offline, no login) -- historical, needs a live entitlement
 
 **`clone-vm.ps1` does the cloning and the whole `.vmx` rewrite**, so the manual
 edits below are background rather than a checklist:
