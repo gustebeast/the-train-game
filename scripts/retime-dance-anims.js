@@ -28,8 +28,7 @@
 //   node scripts/fix-dance-anims.js
 //   node scripts/retime-dance-anims.js
 
-const fs = require('fs');
-const { Model, TARGET, load, save } = require('./peasant-model');
+const { load, save } = require('./peasant-model');
 
 
 /** Dances to retime: name -> { speed, natural }.

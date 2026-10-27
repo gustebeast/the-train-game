@@ -14,8 +14,7 @@
 //
 // Run from the project root:  node scripts/fix-roll-geosets.js
 
-const fs = require('fs');
-const { Model, TARGET, load, save } = require('./peasant-model');
+const { load, save } = require('./peasant-model');
 
 
 const m = load();

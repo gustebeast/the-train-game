@@ -31,4 +31,4 @@ function save(model, path = TARGET) {
   fs.writeFileSync(path, Buffer.from(out.buffer, out.byteOffset, out.byteLength));
 }
 
-module.exports = { Model, TARGET, load, save };
+module.exports = { TARGET, load, save };

@@ -8,7 +8,9 @@
 //
 // Two fixes, both idempotent:
 //
-// 1. Rename them to "Dance - N", a base name the engine never requests. Nothing
+// 1. Rename them to "Dance One" .. "Dance Ten", a base name the engine never
+//    requests (transplant-dance-anims.js now names them so on the way in; this
+//    catches a model from an older run). Nothing
 //    reads these names -- dance.ts plays them through SetUnitAnimationByIndex
 //    -- and renaming does not reorder the sequence list, so the indices there
 //    stay valid.
@@ -21,8 +23,7 @@
 //
 // Run from the project root:  node scripts/fix-dance-anims.js
 
-const fs = require('fs');
-const { Model, TARGET, load, save } = require('./peasant-model');
+const { load, save } = require('./peasant-model');
 
 
 /** Source names, in the order transplant-dance-anims.js appends them. */

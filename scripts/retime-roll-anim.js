@@ -21,8 +21,7 @@
 // changing the number below and re-running retunes it.
 // Run from the project root:  node scripts/retime-roll-anim.js
 
-const fs = require('fs');
-const { Model, TARGET, load, save } = require('./peasant-model');
+const { load, save } = require('./peasant-model');
 
 const SEQ_NAME = 'Walk Alternate';
 const TARGET_MS = 2334; // twice the transplanted roll's natural 1167ms
