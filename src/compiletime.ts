@@ -60,6 +60,108 @@ compiletime(({ objectData, constants }) => {
    *  and the units authored here that set their own (train, wagon, boss). */
   const UNIT_SCALE = 0.6;
 
+  // --- Authoring helpers -----------------------------------------------------
+  //
+  // Each one is a rule several objects share, written once so the objects
+  // cannot drift apart. Function declarations, so they exist from the top.
+  type UnitData = NonNullable<ReturnType<typeof objectData.units.get>>;
+  type ItemData = NonNullable<ReturnType<typeof objectData.items.get>>;
+  type AbilityData = NonNullable<ReturnType<typeof objectData.abilities.get>>;
+
+  /** A stock command-card icon by its BTN name. Only ever a name read off real
+   *  object data: a guessed one draws as a '?' or a green box. */
+  function commandIcon(name: string): string {
+    return 'ReplaceableTextures\\CommandButtons\\' + name + '.blp';
+  }
+
+  /** How far the map's own pieces see -- the track, both train cars, the
+   *  shops: the tiles around them. */
+  const PIECE_SIGHT = 400;
+  /** The same sight by day and by night. (The water is the one unit that
+   *  wants them different, and sets its own.) */
+  function setSight(unit: UnitData, radius: number): void {
+    unit.sightRadiusDay = radius;
+    unit.sightRadiusNight = radius;
+  }
+
+  /** An ability's command-card face: the tooltip's title and text, and the
+   *  icon and hotkey where given (null keeps the base ability's). */
+  function describeAbility(ability: AbilityData, title: string, text: string, icon: string | null, hotkey: string | null): void {
+    ability.tooltipNormal = title;
+    ability.tooltipNormalExtended = text;
+    if (icon != null) ability.iconNormal = commandIcon(icon);
+    if (hotkey != null) ability.hotkeyNormal = hotkey;
+  }
+
+  /** An item's name and text, as the inventory and a shop's tooltip show them. */
+  function describeItem(item: ItemData, name: string, description: string): void {
+    item.name = name;
+    item.tooltipBasic = name;
+    item.description = description;
+    item.tooltipExtended = description;
+  }
+
+  /** Hit points for an item that must never break. Items can be attacked, and
+   *  A-clicking a tool on the ground used to break it, which loses a whole
+   *  round's worth of chopping, mining or watering -- or the only key to the
+   *  boss. The same as the indestructible granite; no attack in the map comes
+   *  close. Wood, stone and track pieces are left breakable: losing one is a
+   *  nuisance, not a lost round. */
+  const UNBREAKABLE_HP = 999999;
+
+  /** A spell with no art of its own: nothing on the caster, the target or
+   *  the ground. */
+  function clearSpellArt(ability: AbilityData): void {
+    ability.caster = '';
+    ability.target = '';
+    ability.effect = '';
+  }
+
+  /** An item a unit carries about: dropped by hand, or where its carrier falls.
+   *  `perishable`: gone once its last charge is used. */
+  function carriedItem(item: ItemData, perishable: boolean): void {
+    item.canBeDropped = true;
+    item.droppedWhenCarrierDies = true;
+    item.perishable = perishable;
+  }
+
+  /** Stock for anything a shop sells. Every shop is stocked by the game
+   *  (shop.ts, salesperson.ts), so the engine's own stock rules only have to
+   *  keep out of the way: `max` on the shelf, never restocked on its own clock. */
+  function stockOnShelf(item: ItemData, max: number): void {
+    item.stockMaximum = max;
+    item.stockReplenishInterval = 3600;
+    item.stockInitialAfterStartDelay = 10;
+  }
+
+  /** A shop building: solid, a tile wide, seeing its surroundings, making
+   *  nothing. */
+  function authorShopBuilding(unit: UnitData): void {
+    unit.selectionScale = 1;
+    unit.pathingMap = 'PathTextures\\4x4simplesolid.tga';
+    unit.collisionSize = 32;
+    unit.itemsMade = '';
+    setSight(unit, PIECE_SIGHT);
+  }
+
+  /** One of the train's two cars. They have to move as one: the same
+   *  footprint, the same top speed, and the same crawl -- the engine clamps a
+   *  unit's speed to at least speedMinimum, stock 150, and the train is told
+   *  to stand still (0) and to creep (1) while it waits on track. */
+  function authorTrainCar(unitId: string, name: string, model: string): UnitData {
+    const car = objectData.units.get(unitId)!;
+    car.name = name;
+    car.tooltipBasic = name;
+    car.collisionSize = 16;
+    car.modelFile = model;
+    car.normal = constants.abilities.InventoryHero;
+    car.scalingValueundefined = UNIT_SCALE;
+    setSight(car, PIECE_SIGHT);
+    car.speedMaximum = shared.MAX_MOVE_SPEED;
+    car.speedMinimum = 1;
+    return car;
+  }
+
   // Everything in the world is peasant-sized unless we say otherwise.
   //
   // The heroes have to match the peasant, and scaling only them left every
@@ -117,27 +219,14 @@ compiletime(({ objectData, constants }) => {
     track.scalingValueundefined = 1;
     track.shadowTextureBuilding = 'NONE';
     track.groundTexture = 'NONE';
-    track.sightRadiusDay = 400;
-    track.sightRadiusNight = 400;
+    setSight(track, PIECE_SIGHT);
     // Solid while being placed, so it pushes its builder off the tile; walkable
     // once placed, so the train can drive over it.
     track.pathingMap = isOmni ? 'PathTextures\\4x4simplesolid.tga' : 'PathTextures\\4x4unbuildable.tga';
   }
 
-  const train = objectData.units.get(constants.units.WarWagon)!;
-  train.name = 'Train';
-  train.tooltipBasic = 'Train';
-  train.collisionSize = 16;
-  train.modelFile = 'war3mapImported\\WarWagon.mdx';
-  train.normal = constants.abilities.InventoryHero;
-  train.scalingValueundefined = UNIT_SCALE;
+  const train = authorTrainCar(constants.units.WarWagon, 'Train', 'war3mapImported\\WarWagon.mdx');
   train.selectionScale = 1;
-  train.sightRadiusDay = 400;
-  train.sightRadiusNight = 400;
-  train.speedMaximum = shared.MAX_MOVE_SPEED;
-  // The engine clamps a unit's speed to at least this, and stock is 150: the
-  // train is told to stand still (0) and to creep (1) while it waits on track.
-  train.speedMinimum = 1;
   train.hitPointsMaximumBase = shared.TRAIN_INITIAL_MAX_HP;
   train.hitPointsRegenerationRate = shared.TRAIN_HP_REGEN;
   train.hitPointsRegenerationType = 'always';
@@ -154,13 +243,7 @@ compiletime(({ objectData, constants }) => {
   // TrackWagon.mdx is the stock SD BloodElfWagon model copied into the map so
   // its baked-in levitation glow can be edited out (the glow geosets use
   // ShockwaveWater1/Yellow_Glow3/Star8c textures).
-  const trackWagon = objectData.units.get(constants.units.Wagon)!;
-  trackWagon.name = 'Track Wagon';
-  trackWagon.tooltipBasic = 'Track Wagon';
-  trackWagon.collisionSize = 16;
-  trackWagon.modelFile = 'war3mapImported\\TrackWagon.mdx';
-  trackWagon.normal = constants.abilities.InventoryHero;
-  trackWagon.scalingValueundefined = UNIT_SCALE;
+  const trackWagon = authorTrainCar(constants.units.Wagon, 'Track Wagon', 'war3mapImported\\TrackWagon.mdx');
   // Negative selection scale hides the health bar (invulnerability doesn't);
   // the unit stays selectable and give/take targetable
   trackWagon.selectionScale = -1;
@@ -168,10 +251,6 @@ compiletime(({ objectData, constants }) => {
   trackWagon.shadowImageWidth = 100;
   trackWagon.shadowImageCenterX = 50;
   trackWagon.shadowImageCenterY = 50;
-  trackWagon.sightRadiusDay = 400;
-  trackWagon.sightRadiusNight = 400;
-  trackWagon.speedMaximum = shared.MAX_MOVE_SPEED;
-  trackWagon.speedMinimum = 1;
   // Match the engine's turn rate (the War Wagon's stock 0.4; a Wagon's own is
   // 0.6) so both cars lose the same speed rounding corners and the coupling
   // gap stays constant
@@ -273,25 +352,18 @@ compiletime(({ objectData, constants }) => {
   // No cast animation: the spell animation is part of what the unit sits
   // through before the queue advances.
   dash.animationNames = '';
-  dash.tooltipNormal = 'Dash';
-  dash.tooltipNormalExtended = 'Dash toward the target point, moving at speed briefly.';
-  dash.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNEvasion.blp';
-  dash.hotkeyNormal = 'E';
+  describeAbility(dash, 'Dash', 'Dash toward the target point, moving at speed briefly.', 'BTNEvasion', 'E');
   // Row 0 of the command card is the stock Move/Stop/Hold/Attack row; an
   // ability placed there is hidden behind them.
   dash.buttonPositionNormalX = 2;
   dash.buttonPositionNormalY = 1;
-  dash.caster = '';
-  dash.target = '';
-  dash.effect = '';
+  clearSpellArt(dash);
 
 
   // Build track spell (BuildTinyFarm — repurposed for one-click track placement)
   const buildTrack = objectData.abilities.get(constants.abilities.BuildTinyFarm)!;
-  buildTrack.tooltipNormal = 'Build track piece';
-  buildTrack.tooltipNormalExtended = 'Consume a track piece item and build new rail for your train to follow.';
-  buildTrack.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
-  buildTrack.hotkeyNormal = 'D';
+  describeAbility(buildTrack, 'Build track piece',
+    'Consume a track piece item and build new rail for your train to follow.', 'BTNHumanBuild', 'D');
 
   // Give/Take spell (Channel — unit or point target)
   const giveTake = objectData.abilities.get(constants.abilities.Channel)! as ChannelAbility;
@@ -301,13 +373,8 @@ compiletime(({ objectData, constants }) => {
   giveTake.options = 1;
   giveTake.targetsAllowed = 'alive,allies,friend,ground,hero,invulnerable,item,mechanical,neutral,nonhero,notself,organic,player,structure,vulnerable';
   giveTake.castRange = 80;
-  giveTake.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNLoad.blp';
-  giveTake.caster = '';
-  giveTake.target = '';
-  giveTake.effect = '';
-  giveTake.tooltipNormal = 'Give/Take Item';
-  giveTake.tooltipNormalExtended = 'When holding an item, can be used to drop it on the ground or give it to a building/unit. When not holding an item, can be used to pick up an item on the ground or pull from a building. When pulling items from buildings, tracks will be pulled first, then wood, then stone.';
-  giveTake.hotkeyNormal = 'W';
+  clearSpellArt(giveTake);
+  describeAbility(giveTake, 'Give/Take Item', 'When holding an item, can be used to drop it on the ground or give it to a building/unit. When not holding an item, can be used to pick up an item on the ground or pull from a building. When pulling items from buildings, tracks will be pulled first, then wood, then stone.', 'BTNLoad', 'W');
 
   // Monkey-patch save to fix per-level ability fields (library bug: doesn't set
   // levelOrVariation/dataPointer for ability-specific fields like Ncl1-Ncl6)
@@ -582,30 +649,28 @@ compiletime(({ objectData, constants }) => {
     art.attackBonus = 0;
   }
 
-  // A peasant's tool: free, dropped where its carrier falls, never sold back.
+  // A peasant's tool: free, unbreakable, dropped where its carrier falls,
+  // never sold back.
   const authorTool = (rawcode: string, name: string, description: string, model: string) => {
     const tool = objectData.items.get(rawcode)!;
-    tool.name = name;
-    tool.description = description;
-    tool.tooltipExtended = description;
+    describeItem(tool, name, description);
+    tool.hitPoints = UNBREAKABLE_HP;
     tool.goldCost = 0;
-    tool.canBeDropped = true;
-    tool.droppedWhenCarrierDies = true;
-    tool.perishable = false;
+    carriedItem(tool, false);
     tool.canBeSoldToMerchants = false;
     tool.abilities = '';
     tool.modelUsed = model;
     return tool;
   };
-  const axe = authorTool(constants.items.SturdyWarAxe, 'Axe',
+  authorTool(constants.items.SturdyWarAxe, 'Axe',
     'Allows chopping trees which can be given to the train and converted to tracks, or used to build bridges across water.',
     'war3mapImported\\AxeGround.mdx');
-  const pickaxe = authorTool(constants.items.RustyMiningPick, 'Pickaxe',
+  authorTool(constants.items.RustyMiningPick, 'Pickaxe',
     'Allows mining rocks which can be given to the train and converted to tracks.',
     'war3mapImported\\PickaxeGround.mdx');
-  const bucket = authorTool(constants.items.EmptyVial, 'Empty Bucket',
+  authorTool(constants.items.EmptyVial, 'Empty Bucket',
     'Can be filled with water and used on the train to restore HP.', shared.BUCKET_MODEL);
-  const bucketFull = authorTool(constants.items.FullVial, 'Full Bucket',
+  authorTool(constants.items.FullVial, 'Full Bucket',
     'Can be used on the train to restore HP.', shared.BUCKET_FULL_MODEL);
 
   // The Strange Key: dropped by a level 3 creep camp cleared without losing
@@ -617,9 +682,9 @@ compiletime(({ objectData, constants }) => {
   bossKey.description = 'Taken from something that should not have been carrying it.';
   bossKey.tooltipExtended = 'Whatever this opens is not on any map. Use it on the Strange Rock at the far edge of the line.';
   bossKey.goldCost = 0;
-  bossKey.canBeDropped = true;
-  bossKey.droppedWhenCarrierDies = true;
+  carriedItem(bossKey, true);
   bossKey.canBeSoldToMerchants = false;
+  bossKey.hitPoints = UNBREAKABLE_HP;
   // Used, not just carried: the key throws itself at the Strange Rock (A012,
   // a copy of Transmute). One charge, perishable, so the key is spent by the
   // throw that breaks the rock -- and only that throw, because the engine
@@ -627,110 +692,78 @@ compiletime(({ objectData, constants }) => {
   bossKey.abilities = shared.KEY_THROW_ABILITY;
   bossKey.activelyUsed = true;
   bossKey.numberOfCharges = 1;
-  bossKey.perishable = true;
 
   // Peasant ability items, sold by the Secret Salesperson. Carried in the last
   // inventory slot, apart from the one carried item (items.ts), and passed to
   // another peasant like any item. Holding one grants its spell; the item
   // itself does nothing when clicked. Campaign items, so creeps never drop them.
-  const resourceVacuum = objectData.items.get(constants.items.GlyphOfPurification)!;
-  resourceVacuum.name = 'Resource Vacuum';
-  resourceVacuum.description = 'Grants Vacuum Resources (Q): pulls the wood and stone lying within a tile of you into one pile of each.';
-  const greaterResourceVacuum = objectData.items.get(constants.items.EnchantedGemstone)!;
-  greaterResourceVacuum.name = 'Greater Resource Vacuum';
-  greaterResourceVacuum.description = 'Grants Vacuum Resources (Q): pulls the wood and stone lying within two tiles of you into one pile of each.';
-  const unholyBone = objectData.items.get(constants.items.BloodKey)!;
-  unholyBone.name = 'Unholy Bone';
-  unholyBone.description = 'Grants Unholy Frenzy (Q): a friendly unit attacks 50% faster, losing 2 hit points a second. A peasant chops and mines faster.';
-  const greaterUnholyBone = objectData.items.get(constants.items.GhostKey)!;
-  greaterUnholyBone.name = 'Greater Unholy Bone';
-  greaterUnholyBone.description = 'Grants Unholy Frenzy (Q): a friendly unit attacks 75% faster, losing 4 hit points a second. A peasant chops and mines faster.';
-  const horseEssence = objectData.items.get(constants.items.MoonKey)!;
-  horseEssence.name = 'Horse Essence';
-  horseEssence.description = 'Grants Imbue With Horse (Q): a friendly unit moves 70% faster for 10 seconds.';
-  const greaterHorseEssence = objectData.items.get(constants.items.SunKey)!;
-  greaterHorseEssence.name = 'Greater Horse Essence';
-  greaterHorseEssence.description = 'Grants Imbue With Horse (Q): a friendly unit moves 70% faster for 20 seconds.';
-  const muscleMilk = objectData.items.get(constants.items.TheHeartOfSearinox)!;
-  muscleMilk.name = 'Muscle Milk™';
-  muscleMilk.description = 'Carry 1 more of any stack of wood, stone or tracks. Storage limits stay the same.';
-  const greaterMuscleMilk = objectData.items.get(constants.items.UrnOfKingTerenas)!;
-  greaterMuscleMilk.name = 'Greater Muscle Milk™';
-  greaterMuscleMilk.description = 'Carry 2 more of any stack of wood, stone or tracks. Storage limits stay the same.';
-  const iconFor: [typeof unholyBone, string][] = [
-    [muscleMilk, 'BTNLesserRejuvPotion'], [greaterMuscleMilk, 'BTNGreaterRejuvPotion'],
-    [resourceVacuum, 'BTNTornado'], [greaterResourceVacuum, 'BTNTornado'],
-    [unholyBone, 'BTNBoneChimes'], [greaterUnholyBone, 'BTNBoneChimes'],
-    [horseEssence, 'BTNRiderlessHorse'], [greaterHorseEssence, 'BTNRiderlessHorse'],
-  ];
-  /** The salesperson stocks his own shelf (salesperson.ts), so the engine's
-   *  stock rules only have to keep out of the way: plenty, and no restock. */
-  function stockAtSalesperson(item: typeof unholyBone): void {
-    item.stockMaximum = 10;
-    item.stockReplenishInterval = 3600;
-    item.stockInitialAfterStartDelay = 10;
-  }
-  for (const [abilityItem, icon] of iconFor) {
-    abilityItem.tooltipBasic = abilityItem.name;
-    abilityItem.tooltipExtended = abilityItem.description;
-    abilityItem.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\' + icon + '.blp';
-    abilityItem.goldCost = shared.ABILITY_ITEM_PRICE;
-    stockAtSalesperson(abilityItem);
-    abilityItem.abilities = '';
-    abilityItem.activelyUsed = false;
-    abilityItem.useAutomaticallyWhenAcquired = false;
-    abilityItem.canBeDropped = true;
-    abilityItem.droppedWhenCarrierDies = true;
-    abilityItem.perishable = false;
+  function authorAbilityItem(rawcode: string, name: string, description: string, icon: string): ItemData {
+    const item = objectData.items.get(rawcode)!;
+    describeItem(item, name, description);
+    item.interfaceIcon = commandIcon(icon);
+    item.hitPoints = UNBREAKABLE_HP;
+    item.goldCost = shared.ABILITY_ITEM_PRICE;
+    stockOnShelf(item, 10);
+    item.abilities = '';
+    item.activelyUsed = false;
+    item.useAutomaticallyWhenAcquired = false;
+    carriedItem(item, false);
     // Sellable so the salesperson can buy it back; the regular shop hands it back.
-    abilityItem.canBeSoldToMerchants = true;
+    item.canBeSoldToMerchants = true;
+    return item;
   }
+  authorAbilityItem(constants.items.GlyphOfPurification, 'Resource Vacuum',
+    'Grants Vacuum Resources (Q): pulls the wood and stone lying within a tile of you into one pile of each.',
+    'BTNTornado');
+  authorAbilityItem(constants.items.EnchantedGemstone, 'Greater Resource Vacuum',
+    'Grants Vacuum Resources (Q): pulls the wood and stone lying within two tiles of you into one pile of each.',
+    'BTNTornado');
+  authorAbilityItem(constants.items.BloodKey, 'Unholy Bone',
+    'Grants Unholy Frenzy (Q): a friendly unit attacks 50% faster, losing 2 hit points a second. A peasant chops and mines faster.',
+    'BTNBoneChimes');
+  authorAbilityItem(constants.items.GhostKey, 'Greater Unholy Bone',
+    'Grants Unholy Frenzy (Q): a friendly unit attacks 75% faster, losing 4 hit points a second. A peasant chops and mines faster.',
+    'BTNBoneChimes');
+  authorAbilityItem(constants.items.MoonKey, 'Horse Essence',
+    'Grants Imbue With Horse (Q): a friendly unit moves 70% faster for 10 seconds.',
+    'BTNRiderlessHorse');
+  authorAbilityItem(constants.items.SunKey, 'Greater Horse Essence',
+    'Grants Imbue With Horse (Q): a friendly unit moves 70% faster for 20 seconds.',
+    'BTNRiderlessHorse');
+  authorAbilityItem(constants.items.TheHeartOfSearinox, 'Muscle Milk™',
+    'Carry 1 more of any stack of wood, stone or tracks. Storage limits stay the same.',
+    'BTNLesserRejuvPotion');
+  authorAbilityItem(constants.items.UrnOfKingTerenas, 'Greater Muscle Milk™',
+    'Carry 2 more of any stack of wood, stone or tracks. Storage limits stay the same.',
+    'BTNGreaterRejuvPotion');
 
   // Upgrade Peasant Ability: used up on purchase, turning the buyer's ability
   // item into its Greater version (salesperson.ts). Bought with nothing to
   // upgrade, it is refunded.
   const upgradeAbility = objectData.items.get(constants.items.Mooncrystal)!;
-  upgradeAbility.name = 'Upgrade Peasant Ability';
-  upgradeAbility.tooltipBasic = upgradeAbility.name;
-  upgradeAbility.description = 'Turns the peasant ability item you are holding into its Greater version: a Greater Resource Vacuum reaches two tiles, a Greater Unholy Bone frenzies harder, a Greater Horse Essence lasts twice as long, Greater Muscle Milk™ carries 2 extra. Refunded if you have nothing to upgrade.';
-  upgradeAbility.tooltipExtended = upgradeAbility.description;
+  describeItem(upgradeAbility, 'Upgrade Peasant Ability', 'Turns the peasant ability item you are holding into its Greater version: a Greater Resource Vacuum reaches two tiles, a Greater Unholy Bone frenzies harder, a Greater Horse Essence lasts twice as long, Greater Muscle Milk™ carries 2 extra. Refunded if you have nothing to upgrade.');
   upgradeAbility.goldCost = shared.UPGRADE_ABILITY_PRICE;
-  stockAtSalesperson(upgradeAbility);
+  stockOnShelf(upgradeAbility, 10);
   upgradeAbility.abilities = '';
   upgradeAbility.activelyUsed = false;
   upgradeAbility.useAutomaticallyWhenAcquired = true;
   upgradeAbility.perishable = true;
   upgradeAbility.classification = 'PowerUp';
-  upgradeAbility.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGlyph.blp';
-
-  // The tools and the key can't be destroyed by attacking them: items have hit
-  // points, and A-clicking a tool on the ground used to break it, which loses a
-  // whole round's worth of chopping, mining or watering -- or the only key to
-  // the boss. 999999, the same as the indestructible granite; no attack in the
-  // map comes close. Wood, stone and track pieces are left breakable: losing
-  // one is a nuisance, not a lost round.
-  for (const unbreakable of [axe, pickaxe, bucket, bucketFull, bossKey, resourceVacuum, greaterResourceVacuum,
-    unholyBone, greaterUnholyBone, horseEssence, greaterHorseEssence, muscleMilk, greaterMuscleMilk]) {
-    unbreakable.hitPoints = 999999;
-  }
+  upgradeAbility.interfaceIcon = commandIcon('BTNGlyph');
 
   // The carried resources: one charge per item, stacked by the game (items.ts).
   // Breakable, unlike the tools -- losing one is a nuisance, not a round.
   const authorResource = (rawcode: string, name: string, description: string, icon: string, model: string, scale: number): void => {
     const resource = objectData.items.get(rawcode)!;
-    resource.name = name;
-    resource.description = description;
-    resource.tooltipExtended = description;
+    describeItem(resource, name, description);
     resource.classification = 'Charged';
     resource.goldCost = 0;
-    resource.canBeDropped = true;
-    resource.droppedWhenCarrierDies = true;
-    resource.perishable = false;
+    carriedItem(resource, false);
     resource.useAutomaticallyWhenAcquired = false;
     resource.canBeSoldToMerchants = false;
     resource.abilities = '';
     resource.numberOfCharges = 1;
-    resource.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\' + icon + '.blp';
+    resource.interfaceIcon = commandIcon(icon);
     resource.modelUsed = model;
     resource.scalingValue = scale;
   };
@@ -787,15 +820,10 @@ compiletime(({ objectData, constants }) => {
     salesGoblin.modelFile = 'war3mapImported\\MrGoblin.mdx';
     // The goblin model is small: this makes him peasant height (peasants are 0.6).
     salesGoblin.scalingValueundefined = 1.65;
-    salesGoblin.selectionScale = 1;
+    authorShopBuilding(salesGoblin);
     salesGoblin.groundTexture = '';
     salesGoblin.shadowTextureBuilding = '';
-    salesGoblin.pathingMap = 'PathTextures\\4x4simplesolid.tga';
-    salesGoblin.collisionSize = 32;
     salesGoblin.itemsSold = '';
-    salesGoblin.itemsMade = '';
-    salesGoblin.sightRadiusDay = 400;
-    salesGoblin.sightRadiusNight = 400;
     // Secret: finding him is the point, so he is not on the minimap.
     salesGoblin.hideMinimapDisplay = true;
   }
@@ -841,8 +869,7 @@ compiletime(({ objectData, constants }) => {
     sealRock.upgradesTo = '';
     sealRock.hitPointsMaximumBase = 999999;
     sealRock.hitPointsRegenerationRate = 0;
-    sealRock.sightRadiusDay = 0;
-    sealRock.sightRadiusNight = 0;
+    setSight(sealRock, 0);
     sealRock.hideMinimapDisplay = true;
     sealRock.groundTexture = '';
     sealRock.pathingMap = 'PathTextures\\4x4SimpleSolid.tga';
@@ -888,10 +915,7 @@ compiletime(({ objectData, constants }) => {
     spell.levels = 1;
     spell.castRange = 80;
     spell.targetsAllowed = 'alive,allies,friend,ground,hero,invulnerable,mechanical,neutral,nonhero,notself,organic,player,structure,vulnerable';
-    spell.tooltipNormal = name;
-    spell.tooltipNormalExtended = description;
-    spell.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
-    spell.hotkeyNormal = 'D';
+    describeAbility(spell, name, description, 'BTNHumanBuild', 'D');
   };
   authorTargetSpell(shared.PEASANT_SPELLS.bridge, 'Build Bridge',
     'Consumes one wood to convert a water block into a tile you can walk and build on');
@@ -914,11 +938,9 @@ compiletime(({ objectData, constants }) => {
   const summonHeroes = objectData.abilities.get(shared.PEASANT_SPELLS.summonHeroes)!;
   summonHeroes.heroAbility = false;
   summonHeroes.levels = 1;
-  summonHeroes.tooltipNormal = 'Summon Heroes';
-  summonHeroes.tooltipNormalExtended = 'Summon your heroes to fight alongside you.';
   // Left at the base ability's own icon: BTNSelectHeroOn.blp is not a real
   // file, so setting it here drew the Summon Heroes button as a '?' too.
-  summonHeroes.hotkeyNormal = 'R';
+  describeAbility(summonHeroes, 'Summon Heroes', 'Summon your heroes to fight alongside you.', null, 'R');
   summonHeroes.buffs = '';
   summonHeroes.effect = '';
   // Grayed out until the Summon Heroes upgrade is bought from the inter-round lobby shop
@@ -928,10 +950,8 @@ compiletime(({ objectData, constants }) => {
   const unsummonHeroes = objectData.abilities.get(shared.PEASANT_SPELLS.unsummonHeroes)!;
   unsummonHeroes.heroAbility = false;
   unsummonHeroes.levels = 1;
-  unsummonHeroes.tooltipNormal = 'Unsummon Heroes';
-  unsummonHeroes.tooltipNormalExtended = 'Dismiss your heroes and return peasant control to normal.';
-  unsummonHeroes.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNSelectHeroOff.blp';
-  unsummonHeroes.hotkeyNormal = 'R';
+  describeAbility(unsummonHeroes, 'Unsummon Heroes',
+    'Dismiss your heroes and return peasant control to normal.', 'BTNSelectHeroOff', 'R');
   unsummonHeroes.buffs = '';
   unsummonHeroes.effect = '';
 
@@ -947,14 +967,9 @@ compiletime(({ objectData, constants }) => {
   const shop = objectData.units.get(constants.units.Marketplace)!;
   shop.name = 'Shop';
   shop.scalingValueundefined = 0.5;
-  shop.selectionScale = 1;
+  authorShopBuilding(shop);
   shop.groundTexture = ''; // Same texture as a human farm
-  shop.pathingMap = 'PathTextures\\4x4simplesolid.tga';
-  shop.collisionSize = 32;
   shop.itemsSold = '';
-  shop.itemsMade = '';
-  shop.sightRadiusDay = 400;
-  shop.sightRadiusNight = 400;
   // Do NOT hand-write this unit's ability list. The Marketplace ships with
   // 'Aneu,Asid,Avul,Asud,Apit', and Aneu is "Select Hero" -- the ability that
   // gives the shop a unit to hand a purchase to. An earlier override dropped
@@ -971,9 +986,9 @@ compiletime(({ objectData, constants }) => {
   // A peasant (non-hero) carries and casts the reroll item, so the item's
   // ability must not be hero-only or the peasant can't activate it.
   rerollCast.heroAbility = false;
-  rerollCast.tooltipNormal = 'Reroll';
-  rerollCast.tooltipNormalExtended = 'Replace a hero or mercenary in the inter-round lobby with a random new one. XP and items carry over.';
-  rerollCast.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
+  describeAbility(rerollCast, 'Reroll',
+    'Replace a hero or mercenary in the inter-round lobby with a random new one. XP and items carry over.',
+    'BTNReincarnation', null);
   // Must include the friendly/own-player flags: the target is one of YOUR OWN
   // inter-round lobby heroes, and without them the hero is not a legal target at all.
   // NONHERO matters as much as hero: the mercenary is a plain creep, and a
@@ -981,9 +996,7 @@ compiletime(({ objectData, constants }) => {
   // cursor refuses it however the code behind is wired.
   rerollCast.targetsAllowed = 'alive,allies,friend,hero,nonhero,invulnerable,neutral,player,vulnerable';
   rerollCast.castRange = 500;
-  rerollCast.caster = '';
-  rerollCast.target = '';
-  rerollCast.effect = '';
+  clearSpellArt(rerollCast);
   rerollCast.buffs = '';
 
   // Shady Dealer: Tomb of Relics reskinned as an acolyte, sells inter-round lobby challenges.
@@ -998,15 +1011,10 @@ compiletime(({ objectData, constants }) => {
     constants.abilities.InvulnerableNeutral,
   ].join(',');
   shadyDealer.scalingValueundefined = 1;
-  shadyDealer.selectionScale = 1;
+  authorShopBuilding(shadyDealer);
   shadyDealer.shadowTextureBuilding = 'NONE';
   shadyDealer.groundTexture = 'NONE';
-  shadyDealer.pathingMap = 'PathTextures\\4x4simplesolid.tga';
-  shadyDealer.collisionSize = 32;
-  shadyDealer.sightRadiusDay = 400;
-  shadyDealer.sightRadiusNight = 400;
   shadyDealer.itemsSold = constants.items.Shimmerweed;
-  shadyDealer.itemsMade = '';
 
   // --- The shelf -------------------------------------------------------------
   //
@@ -1018,14 +1026,9 @@ compiletime(({ objectData, constants }) => {
     const item = objectData.items.get(rawcode)!;
     const shelf = shared.SHELF[rawcode];
     if (shelf == null) throw new Error(name + ' (' + rawcode + ') is authored as a shelf item but has no SHELF entry');
-    item.name = name;
-    item.tooltipBasic = name;
-    item.description = description;
-    item.tooltipExtended = description;
+    describeItem(item, name, description);
     item.goldCost = shelf.cost;
-    item.stockMaximum = shelf.stock;
-    item.stockReplenishInterval = 3600;
-    item.stockInitialAfterStartDelay = 10;
+    stockOnShelf(item, shelf.stock);
     item.useAutomaticallyWhenAcquired = true;
     item.activelyUsed = false;
     item.canBeDropped = false;
@@ -1043,42 +1046,42 @@ compiletime(({ objectData, constants }) => {
   // build time, so the specific challenge is announced on purchase instead.
   authorShelfItem(constants.items.Shimmerweed, 'Shady Deal',
     "Take the dealer's challenge for this round. Complete it to earn " + shared.CHALLENGE_BONUS + ' gold.',
-    'ReplaceableTextures\\CommandButtons\\BTNSheep.blp');
+    commandIcon('BTNSheep'));
 
   // Replaces Flame Resistance on the shelf whenever the train is below its
   // starting max HP.
   authorShelfItem(constants.items.HeartOfAszune, 'Repair Train',
     'Repairs the fire damage, restoring the train to ' + shared.TRAIN_INITIAL_MAX_HP
       + ' health. Health upgrades bought before the fire are not restored.',
-    'ReplaceableTextures\\CommandButtons\\BTNHealingSalve.blp');
+    commandIcon('BTNHealingSalve'));
 
   authorShelfItem(constants.items.AncientFigurine, 'Flame Resistance',
     'Increases train health by ' + shared.FLAME_RESISTANCE_HP + ', making it take longer to catch fire.',
-    'ReplaceableTextures\\CommandButtons\\BTNOrbOfFire.blp');
+    commandIcon('BTNOrbOfFire'));
 
   authorShelfItem(constants.items.BracerOfAgility, 'Track Manufacturing',
     'Reduces train mana by ' + shared.TRACK_MANUFACTURING_MANA
       + ' (to no less than ' + shared.TRACK_MANUFACTURING_MIN_MANA
       + '), allowing it to convert wood and stone to tracks more quickly.',
-    'ReplaceableTextures\\CommandButtons\\BTNStaffOfTeleportation.blp');
+    commandIcon('BTNStaffOfTeleportation'));
 
   authorShelfItem(constants.items.DruidPouch, 'Train Resource Capacity',
     'Increases the amount of wood and stone the train can carry by ' + shared.RESOURCE_CAPACITY_STEP + '.',
-    'ReplaceableTextures\\CommandButtons\\BTNPackBeast.blp');
+    commandIcon('BTNPackBeast'));
 
   authorShelfItem(constants.items.JadeRing, 'Train Track Capacity',
     'Increases the amount of tracks the train can carry by ' + shared.TRACK_CAPACITY_STEP + '.',
-    'ReplaceableTextures\\CommandButtons\\BTNSpiritLink.blp');
+    commandIcon('BTNSpiritLink'));
 
   authorShelfItem(constants.items.LionsRing, 'Crate Capacity',
     'Increases the amount of tracks, wood and stone the crate can carry by ' + shared.CRATE_CAPACITY_STEP + '.',
-    'ReplaceableTextures\\CommandButtons\\BTNMonsterLure.blp');
+    commandIcon('BTNMonsterLure'));
 
   // Back on sale whenever no mercenary is alive, so it doubles as the
   // replacement hire.
   authorShelfItem(constants.items.MogrinsReport, 'Mercenary Contract',
     'Unlocks level 2 creep camps and recruits a random mercenary creep that joins your heroes whenever they are summoned. If it dies you lose the level 2 camps and this goes back on the shelf: buying again hires a fresh mercenary, carrying the gear the last one held.',
-    'ReplaceableTextures\\CommandButtons\\BTNMedalionOfCourage.blp');
+    commandIcon('BTNMedalionOfCourage'));
 
   // One-time; keeps the stock BTNHornOfCenarius.blp icon.
   authorShelfItem(constants.items.HornOfCenarius, 'Summon Heroes Upgrade',
@@ -1100,24 +1103,17 @@ compiletime(({ objectData, constants }) => {
   // powerup: the buyer carries it, can pawn it back for a refund, and casts
   // it on an inter-round lobby hero to reroll them (reroll.ts)
   const heroReroll = objectData.items.get(constants.items.VoodooDoll)!;
-  heroReroll.name = 'Reroll';
-  heroReroll.tooltipBasic = heroReroll.name;
-  heroReroll.description = 'Use on a hero or mercenary in the inter-round lobby to replace it with a random new one. XP and items carry over. Sell back to the shop for a full refund.';
-  heroReroll.tooltipExtended = heroReroll.description;
+  describeItem(heroReroll, 'Reroll', 'Use on a hero or mercenary in the inter-round lobby to replace it with a random new one. XP and items carry over. Sell back to the shop for a full refund.');
   heroReroll.goldCost = shared.SHELF[constants.items.VoodooDoll].cost;
-  heroReroll.stockMaximum = shared.SHELF[constants.items.VoodooDoll].stock;
-  heroReroll.stockReplenishInterval = 3600;
-  heroReroll.stockInitialAfterStartDelay = 10;
+  stockOnShelf(heroReroll, shared.SHELF[constants.items.VoodooDoll].stock);
   heroReroll.useAutomaticallyWhenAcquired = false;
   heroReroll.activelyUsed = true;
-  heroReroll.canBeDropped = true;
-  heroReroll.droppedWhenCarrierDies = true;
-  heroReroll.perishable = true;
+  carriedItem(heroReroll, true);
   heroReroll.canBeSoldToMerchants = true;
   heroReroll.numberOfCharges = 1;
   heroReroll.abilities = constants.abilities.ItemIllusions;
   heroReroll.classification = 'Charged';
-  heroReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
+  heroReroll.interfaceIcon = commandIcon('BTNReincarnation');
 
   // Every hero the pool can roll, sized and pathed like the peasant. (The
   // blanket loop at the top already scaled them.)
@@ -1203,9 +1199,8 @@ compiletime(({ objectData, constants }) => {
     // a STOCK infernal instead (seen in game). boss.ts swaps the stock infernal
     // for the lesser one as it lands instead.
     inferno.name = 'Inferno';
-    inferno.tooltipNormal = 'Inferno';
-    inferno.tooltipNormalExtended =
-      'Calls down a meteor that stuns nearby enemies and leaves a lesser infernal behind.';
+    describeAbility(inferno, 'Inferno',
+      'Calls down a meteor that stuns nearby enemies and leaves a lesser infernal behind.', null, null);
   }
 
   // The Strange Key's throw: a COPY of Transmute, so the Alchemist's own
@@ -1232,23 +1227,18 @@ compiletime(({ objectData, constants }) => {
     // cursor and message both, rather than a cast stopped after the fact.
     keyThrow.targetsAllowed = 'structure,ancient,neutral,allies,friend,vulnerable,invulnerable';
     keyThrow.name = 'Use Strange Key';
-    keyThrow.tooltipNormal = 'Use Strange Key';
-    keyThrow.tooltipNormalExtended = 'Throw the key at the Strange Rock to break it open.';
+    describeAbility(keyThrow, 'Use Strange Key', 'Throw the key at the Strange Rock to break it open.', null, null);
   }
 
   /** What every ability item's spell shows: its name, on Q in the bottom-left
    *  slot -- each item's spell goes there, so a peasant only ever has one --
    *  and the shared cooldown, stated in the tooltip from the constant that
    *  sets it. Row 0 is the stock Move/Stop/Hold/Attack row (see the dash). */
-  type SpellAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>;
-  function faceAbilityItemSpell(spell: SpellAbility, name: string, description: string, icon: string | null): void {
+  function faceAbilityItemSpell(spell: AbilityData, name: string, description: string, icon: string | null): void {
     spell.cooldown = shared.ABILITY_ITEM_COOLDOWN;
     spell.name = name;
-    spell.tooltipNormal = name;
-    spell.tooltipNormalExtended = description + '|n|cffffcc00Cooldown:|r '
-      + String(shared.ABILITY_ITEM_COOLDOWN) + ' seconds.';
-    if (icon != null) spell.iconNormal = 'ReplaceableTextures\\CommandButtons\\' + icon + '.blp';
-    spell.hotkeyNormal = 'Q';
+    describeAbility(spell, name, description + '|n|cffffcc00Cooldown:|r '
+      + String(shared.ABILITY_ITEM_COOLDOWN) + ' seconds.', icon, 'Q');
     spell.buttonPositionNormalX = 0;
     spell.buttonPositionNormalY = 2;
   }
@@ -1270,9 +1260,7 @@ compiletime(({ objectData, constants }) => {
     // two abilities on one unit sharing an order is one of them never firing.
     vacuum.baseOrderIDundefined = 'whirlwind';
     vacuum.animationNames = 'spell';
-    vacuum.caster = '';
-    vacuum.target = '';
-    vacuum.effect = '';
+    clearSpellArt(vacuum);
     faceAbilityItemSpell(vacuum, 'Vacuum Resources',
       'Pull the wood and stone lying near you into one pile of each: within one tile with a Resource Vacuum, two with a Greater Resource Vacuum.',
       'BTNTornado');
