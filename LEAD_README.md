@@ -70,10 +70,11 @@ current request:
    git push origin main
    npm run publish:download
    ```
-   `publish:download` writes a release build of the new `main` to the user's
-   `Documents\Warcraft III\Maps\Download\TheTrainGame.w3x`, the map they
-   host, then rebuilds the dev map. Do it after EVERY commit to `main` --
-   merges and your own commits alike -- so that file is never behind.
+   `publish:download` builds the new `main` (the dev build: cheats and `-test`
+   commands included, which the user tests with) and copies it to their
+   `Documents\Warcraft III\Maps\Download\TheTrainGame.w3x`. Do it after
+   EVERY commit to `main` -- merges and your own commits alike -- so that file
+   is never behind.
    The prompt-time hook tells the other sub-agents to sync. They merge
    `main` into their branch **themselves**, with their own context — do
    NOT merge into their worktrees yourself.
@@ -91,8 +92,8 @@ resolve against the real `main`).
 
 ## Housekeeping you own
 
-- **A map for the user to host goes through `npm run build:release`**
-  (`npm run publish:download` does that and puts it in their Download folder), which
+- **A map for the user to host goes through `npm run build:release`**, only
+  when they ask for one (the Download-folder map is the dev build), which
   leaves out the chat cheats and the `-test` runner (src/buildFlags.ts), so no
   player in a hosted game can wreck the run with them. Every other build --
   yours, the agents', the VM runs -- keeps them.
