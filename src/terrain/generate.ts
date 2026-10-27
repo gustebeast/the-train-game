@@ -805,7 +805,10 @@ export function generateStartLobby(): Grid {
  *  few steps of the spawn. Everything a first-timer needs to try is in sight
  *  rather than somewhere out on a procedural map. */
 export function generateTutorial(): Grid {
-  const grid = generateCheatTerrain();
+  // The bare layout: the cheat map's water and salesperson would land in the
+  // rock column below, and a shop has no place in a first lesson.
+  const grid = cheatLayout(false);
+  placeCritters(grid);
   // SPAWN is the generator's reserved box -- the cleared ground the players,
   // tools and train start on. Props go OUTSIDE it, just beyond its eastern
   // edge and just south of it, so they are a couple of steps away without
@@ -975,16 +978,30 @@ function layCheatPath(grid: Grid): void {
   grid.exit = { x: CHEAT_EXIT_X, y: 0 };
 }
 
-/** The cheat map: the same clean-and-build every other map goes through, over a
- *  fixed layout rather than a generated one. placeEntities lays the spawn, the
- *  train start, the tools, the players and the target crate exactly as a real
- *  round does, so what is being tested sits in its normal surroundings. */
-export function generateCheatTerrain(): Grid {
+/** The fixed layout the cheat map and the tutorial share: the same
+ *  clean-and-build every other map goes through, over a fixed layout rather
+ *  than a generated one. placeEntities lays the spawn, the train start, the
+ *  tools, the players and the target crate exactly as a real round does, so
+ *  what is being tested sits in its normal surroundings. Critters are left to
+ *  the caller, to go in after whatever it adds. */
+function cheatLayout(withBossExit: boolean): Grid {
   SetRandomSeed(CHEAT_SEED);
   const grid = createGrid();
   layCheatPath(grid);
+  if (withBossExit) generateBossExit(grid, CHEAT_EXIT_X);
   placeEntities(grid);
   placeCreepCamp(grid, GRID_MIN_X + 4, SPAWN.minY - 2);
+  return grid;
+}
+
+/** The cheat map: the shared layout plus the conveniences only a test bench
+ *  wants.
+ *
+ *  A level 3 camp brings the boss exit, as on a real board, but placed off the
+ *  cheat map's own short exit rather than the far edge: the Strange Rock is
+ *  then a few tiles from the start, not a map away. */
+export function generateCheatTerrain(withBossExit: boolean): Grid {
+  const grid = cheatLayout(withBossExit);
   // A pool and the Secret Salesperson a few steps east of the spawn, clear of
   // the line, so a bucket can be filled and an ability item bought without
   // hunting for either. He is a snow-round visitor normally; here he is always in.

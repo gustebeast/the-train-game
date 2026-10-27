@@ -465,6 +465,13 @@ const pendingGivers = new Map<item, unit>();
 
 /** Initialize the item pickup handler (stacking, one-item enforcement). */
 export function initItems(): void {
+  // The peasant ability items' targeted spells are not for the train: Imbue
+  // With Horse would run it faster down the line, and Frenzy has nothing to
+  // give it. Neither half -- engine or track wagon -- takes them.
+  for (const order of ['unholyfrenzy', 'bloodlust']) {
+    registerPeasantTargetCheck(OrderId(order), t => !isTrain(t) && !isTrackWagon(t), 'Cannot target the train');
+  }
+
   // Track who dropped an item — keyed by item handle so it can't go stale
   const dropTrigger = Trigger.create();
   dropTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DROP_ITEM);

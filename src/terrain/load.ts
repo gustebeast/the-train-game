@@ -278,19 +278,24 @@ export function loadTerrain(round: number): SpawnedTrain {
   // on the difficulty: that stops rising at round 25, and every round after it
   // would otherwise lay out the very same map.
   SetRandomSeed(deriveSeed(STREAMS.terrain) + round);
-  // A level 3 camp is the only one that can drop the key, so it is also the
-  // only round that gets a second exit -- the two arrive together or not at all.
   const camp = getCampData();
-  const bossRound = camp != null && camp.level >= 3;
   const biome = biomeForCampLevel(camp != null ? camp.level : null);
-  return loadGameplay(generateTerrain(difficultyForRound(round), bossRound, biome));
+  return loadGameplay(generateTerrain(difficultyForRound(round), isBossRound(), biome));
+}
+
+/** Whether this round's board gets the boss exit and its Strange Rock. A level
+ *  3 camp is the only one that can drop the key, so it is also the only round
+ *  that gets a second exit -- the two arrive together or not at all. */
+function isBossRound(): boolean {
+  const camp = getCampData();
+  return camp != null && camp.level >= 3;
 }
 
 /** -cheatmode swaps the round in progress for the cheat map. It does not come
  *  through a start lobby, so it answers for the roster itself. */
 export function loadCheatTerrain(): void {
   ensureRosterForLoadedRun();
-  loadGameplay(generateCheatTerrain());
+  loadGameplay(generateCheatTerrain(isBossRound()));
 }
 
 /** The run is over and won: the defeat lobby's floor, with the whole party
