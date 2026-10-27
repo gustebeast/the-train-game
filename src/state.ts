@@ -15,7 +15,7 @@ export interface GameState {
   crateStoneCount: number;
   crateWoodCount: number;
   /** Seed for outcomes that must survive a reload identically (see rng.ts).
-   *  0 means "not yet minted" -- saves written before seeding existed. */
+   *  0 means "not yet minted": rng.ts mints one at the run's first draw. */
   randomSeed: number;
   /** How many seeded draws this run has taken. Saved with the seed so a
    *  restored save resumes at the same point in the sequence. */
@@ -73,8 +73,8 @@ export function syncState(): void {
 }
 
 /** Overwrite state from a loaded object, then sync everything.
- *  Reset-then-apply: fields missing from the save (e.g. legacy saves
- *  predating a field) fall back to defaults, never session values. */
+ *  Reset-then-apply: a field missing from the save falls back to its default,
+ *  never to the session's value. */
 export function applyState(loaded: GameState): void {
   Object.assign(gameState, DEFAULT_STATE, loaded);
   syncState();

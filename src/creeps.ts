@@ -152,21 +152,15 @@ function decodeMet(level: number, val: string): void {
   encountered[level] = parseNumberList(val);
 }
 
-/** Decode "i=index;e1=...". A save from before the camp list was flattened
- *  carries "t=<tileset>" and an index into that tileset's camps, which means
- *  something different now; such a save drops its camp state and rolls afresh
- *  rather than pointing at an unrelated camp. */
+/** Decode "i=index;e1=...". */
 function decodeCamp(raw: string): void {
   let index: number | null = null;
-  let legacy = false;
   for (const [key, val] of pairs(parseFields(raw))) {
-    if (key === 't') legacy = true;
-    else if (key === 'i') index = tonumber(val) ?? null;
+    if (key === 'i') index = tonumber(val) ?? null;
     else if (key === 'e1') decodeMet(1, val);
     else if (key === 'e2') decodeMet(2, val);
     else if (key === 'e3') decodeMet(3, val);
   }
-  if (legacy) return;
   campIndex = index;
 }
 
@@ -1064,6 +1058,8 @@ function beginDPSSampling(): void {
   for (const c of spawnedCreeps) trackForDPS(trackedCreeps, c.unit.handle, false);
   for (const h of fieldedForce()) trackForDPS(trackedOurs, h.handle, false);
   const t = Timer.create();
+  // periodic: samples HP lost over the match window. Damage events would
+  // count it exactly (a candidate for conversion).
   t.start(DPS_SAMPLE_INTERVAL, true, () => sampleDPS());
   dpsSampler = t;
 }

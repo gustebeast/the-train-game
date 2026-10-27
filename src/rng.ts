@@ -107,9 +107,8 @@ export function shuffleRandom<T>(items: T[]): void {
   }
 }
 
-/** Give the run a seed if it has none. Old saves predate the field, and a save
- *  written before this existed decodes it as 0 -- so mint one on the spot and
- *  carry on; the save picks it up the next time it is written. */
+/** Give the run a seed if it has none yet. A new run starts at 0 and mints
+ *  one at its first draw; the save picks it up the next time it is written. */
 function ensureSeed(): void {
   if (gameState.randomSeed !== 0) return;
   gameState.randomSeed = GetRandomInt(1, M - 1);

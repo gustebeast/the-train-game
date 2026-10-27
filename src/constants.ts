@@ -6,6 +6,7 @@ import {
   UNKNOWN_UNIT, STRANGE_ROCK, DASH_ABILITY, KEY_THROW_ABILITY, BOSS_UNIT, BOSS_ADD_UNIT,
   BOSS_INFERNO_ABILITY, CRITTER_TYPES, SALESPERSON_UNIT, VACUUM_ABILITY, UNHOLY_FRENZY_ABILITY,
   GREATER_UNHOLY_FRENZY_ABILITY, IMBUE_HORSE_ABILITY, GREATER_IMBUE_HORSE_ABILITY, PEASANT_SPELLS,
+  SHELF,
 } from './sharedData';
 
 // Units
@@ -157,10 +158,10 @@ export const ABILITY_ITEM_FAMILIES: ReadonlyArray<AbilityItemFamily> = [
 export const ABILITY_ITEM_IDS: ReadonlyArray<number> = ABILITY_ITEM_FAMILIES.reduce(
   (ids: number[], f) => { ids.push(f.plain, f.greater); return ids; }, []);
 
-/** Everything the shop sells that is consumed on acquisition. */
-export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = [
-  FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
-  TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, SUMMON_UPGRADE_ITEM_ID,
-  MERC_CONTRACT_ID, MERC_CONTRACT_2_ID, CHALLENGE_ITEM_ID, RESTORE_HP_ID,
-  STRANGE_MEAT_ID, UPGRADE_PEASANT_ABILITY_ID,
-];
+/** Everything sold that is consumed on acquisition: the whole shelf but the
+ *  Reroll, which is carried (shop.ts lets it through for that reason), plus
+ *  the salesperson's Upgrade Peasant Ability. */
+export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = Object.keys(SHELF)
+  .map(rawcode => FourCC(rawcode))
+  .filter(id => id !== REROLL_ITEM_ID)
+  .concat([UPGRADE_PEASANT_ABILITY_ID]);
