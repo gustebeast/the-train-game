@@ -40,17 +40,17 @@ Import-Module .\scripts\vmtest\TrainVMTest.psm1 -Force
 Invoke-MapTests -Tests damage,burn,challenge
 
 # or everything the built map registers
-Invoke-MapTests -Tests (Get-MapTestNames | Where-Object { $_ -ne 'bf' })
+Invoke-MapTests -Tests (Get-MapTestNames)
 ```
 
 Measured on the full suite: **19 tests in 241s batched, against about 912s one
 at a time**, with identical verdicts.
 
 `Get-MapTestNames` reads the names out of the source rather than a list kept by
-hand, which would go stale the first time a test was added. `bf` is excluded
-above because it is the boss BALANCE harness -- it reports numbers for tuning
-and has no pass condition, so it belongs in a deliberate run rather than a
-sweep.
+hand, which would go stale the first time a test was added. It leaves out the
+`bf*` tests unless you pass `-IncludeBalance`: they are the boss BALANCE
+harness -- they report numbers for tuning and have no pass condition, so they
+belong in a deliberate run rather than a sweep.
 
 **What batching costs you.** The tests share a world. One that leaves a round
 loaded, a challenge armed or units on the board hands that to the next. Most

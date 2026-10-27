@@ -158,7 +158,7 @@ This is the step that makes runs fast, and its exact position matters.
    folder. **Do not enter `Download`.** Entering it makes WC3 lock the map
    files, which breaks swapping the map in.
 4. Dismiss any popups so the screen is exactly what the runner expects.
-5. `vmrun snapshot <vmx> create-game` — takes about 5 minutes and captures RAM.
+5. `vmrun snapshot <vmx> <snapshot>` — takes about 5 minutes and captures RAM. `<snapshot>` is the name in `vms.json` (`snapshot`, currently `create-game-v3`); mint-vm.ps1 reads it from there.
 
 Reverting returns to this exact screen in ~11s, skipping the whole launch and
 navigation.
@@ -181,7 +181,7 @@ clone from first — revert to the live one, shut the guest down cleanly, then
 snapshot (instant, and no `.vmem` file appears):
 
 ```
-vmrun -T ws revertToSnapshot <golden.vmx> create-game
+vmrun -T ws revertToSnapshot <golden.vmx> <snapshot>
 vmrun -T ws start <golden.vmx> nogui
 vmrun -T ws stop  <golden.vmx> soft
 vmrun -T ws snapshot <golden.vmx> base-off
@@ -340,7 +340,7 @@ Then per clone:
 5. Single Player → Custom Games. If it opens inside a subfolder (top row is
    "(up one level)"), double-click that until the top row is the **Download**
    folder — the runner's coordinates assume Download is the top row.
-6. `vmrun -T ws snapshot <clone.vmx> create-game` (~5 minutes).
+6. `vmrun -T ws snapshot <clone.vmx> <snapshot>` (~5 minutes; the name from `vms.json`).
 7. Set `ready: true` for that VM in `vms.json`, then validate:
    `run-test.ps1 -Vm <name>`.
 

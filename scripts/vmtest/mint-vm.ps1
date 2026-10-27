@@ -275,63 +275,8 @@ try {
   # map you just built. A flaky click that fails loudly beats a reliable one
   # that quietly tests the wrong binary.
   #
-  # The block below is kept, disabled, so the next person reads this before
-  # rediscovering it the expensive way.
-  if ($false) {
-  #
-  # Row 1 of the map browser is "Download" at the top level and "(up one level)"
-  # inside it, so where a VM is parked decides what the runner's first click
-  # does. The clones were minted inconsistently -- murph above, boof inside --
-  # and the runner, written for one of them, escaped upwards on the other and
-  # ran a stock Blizzard map instead of the built one.
-  #
-  # Parking inside is the better of the two consistent choices: the runner then
-  # never has to enter the folder, which removes a double-click from the hot
-  # path. That click is genuinely unreliable over VNC at 15fps (WC3 samples the
-  # mouse once per frame, so the two presses can land in one frame and read as a
-  # single click), and the cheapest way to make an unreliable step stop mattering
-  # is to stop performing it.
-  #
-  # Doing it HERE is safe in a way that doing it per-run is not: minting is a
-  # one-off, so it can afford to look, retry and verify.
-  #
-  # It does NOT lock the map file. Measured on murph: with WC3 sitting inside
-  # Download on a selected map, deleting the whole Download directory and
-  # uploading a new one both succeeded. Nothing here overwrites a filename WC3
-  # already knows -- the runner uploads a fresh random name every run -- which
-  # is the case that actually breaks a snapshot-restored WC3.
-  Write-Host 'Parking inside the Download folder...'
-  $dl = "C:\Users\$($cfg.guestUser)\Documents\Warcraft III\Maps\Download"
-  $mapSrc = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'dist\bin\TheTrainGame.w3x'
-  if (-not (Test-Path $mapSrc)) { throw "No map at $mapSrc -- run 'npm run build' before minting." }
-  & $vmrun @guest deleteDirectoryInGuest $vmx $dl 2>$null | Out-Null
-  & $vmrun @guest createDirectoryInGuest $vmx $dl | Out-Null
-  & $vmrun @guest CopyFileFromHostToGuest $vmx $mapSrc "$dl\ZZMINT.w3x" | Out-Null
-  Start-Sleep -Seconds 3
-
-  # Enter it, and CONFIRM rather than assume: inside Download the list holds a
-  # couple of rows and is empty beneath them, at the top level it is full of
-  # stock map names (Test-BrowserShowsMapList).
-  $inside = $false
-  foreach ($attempt in 1..6) {
-    Vnc-DblClick $c $ui.downloadFolder[0] $ui.downloadFolder[1]
-    Start-Sleep -Seconds 2
-    $probeShot = Join-Path $OutDir "enter-download-$attempt.png"
-    $pc = Vnc-Connect $port
-    try { Vnc-Shot $pc $probeShot } finally { $pc.cli.Close() }
-    $full = Test-BrowserShowsMapList $probeShot
-    Write-Host ("  attempt {0}: full map list showing: {1}" -f $attempt, $full)
-    if (-not $full) { $inside = $true; break }
-  }
-  if (-not $inside) {
-    throw ("Could not enter the Download folder after 6 attempts, so this VM would " +
-           "be minted in the wrong state. See $OutDir")
-  }
-  # Select the map so the parked state matches what a run expects to click.
-  Vnc-Click $c $ui.firstMapRow[0] $ui.firstMapRow[1]
-  Start-Sleep -Seconds 2
-  Shot $c 'parked-inside-download'
-  }
+  # (The parked-inside code was removed; git history has it, with the
+  # measurements, for anyone tempted to try again.)
 
   # Leave the Download folder EMPTY. A file left here becomes a stale entry in
   # the snapshot's in-memory map list, which is the failure described above.
@@ -361,15 +306,19 @@ Write-Host '  WC3 still running -- safe to snapshot'
 Write-Host "Disconnecting sound..."
 & $vmrun -T ws disconnectNamedDevice $vmx sound 2>&1 | Out-Null
 
-if ((& $vmrun listSnapshots $vmx) -match '(?m)^create-game$') {
-  Write-Host 'Removing the previous create-game snapshot...'
-  & $vmrun deleteSnapshot $vmx create-game 2>&1 | Out-Null
+# The name the runner reverts to: the VM's own override, else the global one.
+# A hard-coded name here once minted 'create-game' while every run reverted to
+# 'create-game-v3', so a fresh mint was silently never used.
+$snapshotName = if ($entry.PSObject.Properties.Name -contains 'snapshot') { $entry.snapshot } else { $cfg.snapshot }
+if ((& $vmrun -T ws listSnapshots $vmx) -match ('(?m)^' + [regex]::Escape($snapshotName) + '$')) {
+  Write-Host "Removing the previous $snapshotName snapshot..."
+  & $vmrun -T ws deleteSnapshot $vmx $snapshotName 2>&1 | Out-Null
 }
-Write-Host "Snapshotting create-game (~5 min)..."
+Write-Host "Snapshotting $snapshotName (~5 min)..."
 $sw=[Diagnostics.Stopwatch]::StartNew()
-& $vmrun -T ws snapshot $vmx create-game 2>&1 | Out-Null
+& $vmrun -T ws snapshot $vmx $snapshotName 2>&1 | Out-Null
 Write-Host ("  done in {0}s" -f [math]::Round($sw.Elapsed.TotalSeconds,0))
-& $vmrun listSnapshots $vmx
+& $vmrun -T ws listSnapshots $vmx
 Write-Host "Now set ready:true for '$Vm' in vms.json and validate with run-test.ps1 -Vm $Vm."
 Write-Host "Parked ABOVE the Download folder, which is left EMPTY. The runner enters the"
 Write-Host "folder itself, and that is what makes it read the map you actually built --"

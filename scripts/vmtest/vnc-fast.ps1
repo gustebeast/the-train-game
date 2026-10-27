@@ -1,5 +1,5 @@
-# Fast VNC helpers. Same protocol as vnc-lib.ps1 but framebuffer -> Bitmap via
-# LockBits/Marshal.Copy instead of per-pixel SetPixel (which took minutes at 1080p).
+# VNC helpers. The framebuffer goes to a Bitmap via LockBits/Marshal.Copy rather
+# than per-pixel SetPixel, which took minutes at 1080p.
 $script:pw = 'trainvm1'
 function BE32([byte[]]$b){ $r=$b.Clone(); [array]::Reverse($r); return [BitConverter]::ToUInt32($r,0) }
 function BE16([byte[]]$b){ $r=$b.Clone(); [array]::Reverse($r); return [BitConverter]::ToUInt16($r,0) }
