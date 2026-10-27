@@ -8,7 +8,7 @@ import { seededValueAt, deriveSeed, shuffleRandom, STREAMS } from './rng';
 import { gameState } from './state';
 import { getNeutralExtra } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
-import { forEachUnitInWorld, getHumanPlayers, getInventoryItemIds, giveItems, nextFrame, isAlive, unitExists } from './util';
+import { forEachUnitInWorld, getHumanPlayers, getInventoryItemIds, giveItems, nextFrame, isAlive, unitExists, removeUnitsSummonsFirst } from './util';
 import { spawnMercWithHeroes, releaseMercUnits } from './mercenary';
 
 /** Convert a FourCC integer to a 4-character string. */
@@ -343,8 +343,13 @@ const ROSTER_TIEBREAKS: number[] = [];
  *  Measurements that depend on WHICH heroes fight -- the sparring match's
  *  convergence, say -- cannot live with initRandomHeroes' draw. */
 export function setRosterForTest(heroes: HeroData[]): void {
+  // Copies, not the caller's records: the roster is live state -- XP lands on
+  // it and every skill a spawned hero learns is written back to it -- so
+  // handing a test's constant over directly let one test's run leak into the
+  // next's, until an Alchemist spawned with no point left for Transmute.
   for (let i = 0; i < allHeroes.length; i++) {
-    allHeroes[i] = i < heroes.length ? heroes[i] : emptyHero();
+    const h = heroes[i];
+    allHeroes[i] = h != null ? { ...h, skills: { ...h.skills }, items: [...h.items] } : emptyHero();
   }
   chosenIndices = [0, 1];
 }
@@ -541,12 +546,16 @@ export function endHeroState(): void {
   // Remove heroes and anything they summoned (not kill — avoids dead hero
   // portraits in the UI). Human players only ever own peasants outside hero
   // mode, so any non-peasant unit they own is hero-related and safe to remove.
+  // Summons first: one whose hero is already gone cannot be removed, and a
+  // Far Seer's wolves outlived the unsummon that way.
   const humanIds = getHumanPlayers().map(p => p.id);
+  const sweep: unit[] = [];
   forEachUnitInWorld(u => {
     if (GetUnitTypeId(u) === PEASANT_ID) return;
     if (!humanIds.includes(GetPlayerId(GetOwningPlayer(u)))) return;
-    RemoveUnit(u);
+    sweep.push(u);
   });
+  removeUnitsSummonsFirst(sweep);
   forgetSpawnedHeroes();
   heroesSpawned = false;
 

@@ -8,6 +8,7 @@ import { setMercsForTest, spawnMercFromData, spawnMercWithHeroes, getSpawnedMerc
 import { CREEP_CAMPS } from './creepCamps';
 import {
   setCampForTest, getCampOrigin, getSparringStatus, getDpsMeasured, dpsSampleBreakdown,
+  SPARRING_DURATION,
 } from './creeps';
 import { getDPSCheckPlayer } from './teams';
 import { purchaseSummonUpgrade } from './summonUpgrade';
@@ -268,7 +269,13 @@ function runCharmKey(t: TestReporter): void {
   loadTerrain(gameState.round);
 
   startCampFight(t, (cx, cy) => {
+    // The whole party, mercenaries included: the key is forfeit if ANY of it
+    // dies, and an unprotected mercenary against a level 3 camp can, in the
+    // seconds a summon takes -- which is what failed this test in a batch.
     for (const h of getSpawnedHeroes()) SetUnitInvulnerable(h.handle, true);
+    for (const m of getSpawnedMercUnits()) SetUnitInvulnerable(m.handle, true);
+    t.report('mercsFielded', getSpawnedMercUnits().length);
+    t.report('mercsAliveAtClear', getSpawnedMercUnits().filter(m => GetWidgetLife(m.handle) > 0.405).length);
     const creeps = campCreeps();
     expect(t, 'campCreeps', creeps.length, CREEP_CAMPS[LEVEL3_CAMP].creeps.length);
     if (creeps.length < 2) { t.done(); return; }
@@ -337,7 +344,10 @@ function runCharmSparring(t: TestReporter): void {
       t.report('charmedHeld' + k, charmedNow);
     });
   }
-  t.after(33, () => {
+  // Once the match is over, which it decides for itself -- having first
+  // begun: right after the lobby loads it has not started, and "not running"
+  // would read as already over.
+  t.waitFor('matchStarts', () => getSparringStatus().timer, 5, () => t.waitFor('matchEnds', () => !getSparringStatus().timer, SPARRING_DURATION + 5, () => {
     DestroyTrigger(trig);
     const cn: string[] = [];
     casts.forEach((v, n) => cn.push(n + '=' + tostring(v)));
@@ -356,7 +366,7 @@ function runCharmSparring(t: TestReporter): void {
     if (m.heroDPS <= 0) t.fail('heroDPSPerCopy', 'must be positive');
     if (ratio <= 0 || ratio > 50) t.fail('ratio', 'outside anything a real party produces');
     t.done();
-  });
+  }));
 }
 
 registerTest('charmspar', runCharmSparring);
@@ -578,3 +588,58 @@ function runMercKeepsItems(t: TestReporter): void {
 }
 
 registerTest('mercitems', runMercKeepsItems);
+
+/**
+ * Unsummoning takes the heroes' summons away with them.
+ *
+ * A summon cannot be removed once its summoner has been, and the unsummon
+ * sweep removed heroes and summons in one pass, in no set order -- so a Far
+ * Seer's wolves could outlive the unsummon and wander the board as the
+ * player's until their timer ran out. The sweep now removes summons first.
+ */
+function runUnsummonSummons(t: TestReporter): void {
+  beginNewRun();
+  purchaseSummonUpgrade();
+  const seer: HeroData = { ...ALCHEMIST, typeId: FourCC(Units.FarSeer), xp: 400,
+    skills: { [Abilities.FeralSpirit]: 2 } };
+  setRosterForTest([seer, ALCHEMIST, ROUND_ROSTER[2], ROUND_ROSTER[3]]);
+  setMercsForTest([]);
+  setCampForTest(KOBOLD_CAMP);
+  loadTerrain(gameState.round);
+
+  const me = getHumanPlayers()[0].handle;
+  const summonsOfMine = (): number => {
+    let n = 0;
+    forEachUnitOfPlayer(me, u => { if (IsUnitType(u, UNIT_TYPE_SUMMONED) && GetUnitTypeId(u) !== 0) n += 1; });
+    return n;
+  };
+
+  startCampFight(t, (cx, cy) => {
+    let farSeer: unit | null = null;
+    for (const h of getSpawnedHeroes()) {
+      SetUnitInvulnerable(h.handle, true);
+      SetUnitState(h.handle, UNIT_STATE_MANA, 1000);
+      if (GetUnitTypeId(h.handle) === FourCC(Units.FarSeer)) farSeer = h.handle;
+    }
+    if (farSeer == null) { t.fail('setup', 'no Far Seer fielded'); t.done(); return; }
+    t.expect('feralSpiritOrdered', IssueImmediateOrder(farSeer, 'spiritwolf') ? 1 : 0, 1);
+    t.waitFor('wolvesArrive', () => summonsOfMine() >= 2, 5, () => {
+      t.report('summonsBeforeUnsummon', summonsOfMine());
+      for (const c of campCreeps()) KillUnit(c);
+      t.waitFor('unsummonGranted', () => {
+        const p = peasantNear(cx, cy);
+        return p != null && GetUnitAbilityLevel(p, UNSUMMON_ABILITY_ID) > 0;
+      }, 3, () => {
+        IssueImmediateOrder(peasantNear(cx, cy)!, 'roar');
+        t.waitFor('heroesGone', () => getSpawnedHeroes().length === 0, 3, () => {
+          t.after(0.5, () => {
+            t.expect('summonsLeftAfterUnsummon', summonsOfMine(), 0);
+            t.done();
+          });
+        });
+      });
+    });
+  });
+}
+
+registerTest('unsummonsummons', runUnsummonSummons);
