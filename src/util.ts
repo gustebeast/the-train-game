@@ -96,11 +96,27 @@ export function isAlive(u: unit): boolean {
   return GetUnitTypeId(u) !== 0 && !IsUnitType(u, UNIT_TYPE_DEAD) && GetWidgetLife(u) > 0.405;
 }
 
+/** Run cb for every peasant on the map, whoever owns it. */
+export function forEachPeasant(cb: (this: void, u: Unit) => void): void {
+  forEachUnitInWorld(handle => {
+    if (GetUnitTypeId(handle) === PEASANT_ID) cb(Unit.fromHandle(handle)!);
+  });
+}
+
 /** Run cb for every peasant a player owns. */
 export function forEachPeasantOf(owner: player, cb: (this: void, u: Unit) => void): void {
   forEachUnitOfPlayer(owner, handle => {
     if (GetUnitTypeId(handle) === PEASANT_ID) cb(Unit.fromHandle(handle)!);
   });
+}
+
+/** A player's peasant -- each has one outside hero mode -- or null. */
+export function firstPeasantOf(owner: player): Unit | null {
+  let found: Unit | null = null;
+  forEachPeasantOf(owner, u => {
+    if (found == null) found = u;
+  });
+  return found;
 }
 
 /** Run cb with the caster whenever any unit's `abilityId` takes effect. */

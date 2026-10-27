@@ -10,7 +10,7 @@ import {
 import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForInterRoundLobby } from './items';
 import {
-  SUMMON_UPGRADE_ITEM_ID, PEASANT_ID, REROLL_ITEM_ID,
+  SUMMON_UPGRADE_ITEM_ID, REROLL_ITEM_ID,
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, MERC_CONTRACT_ID, MERC_CONTRACT_2_ID,
   CHALLENGE_ITEM_ID, RESTORE_HP_ID, STRANGE_MEAT_ID,
@@ -21,7 +21,7 @@ import {
   canBuyMercContract, canBuySecondContract, getLivingMercCount,
 } from './mercenary';
 import { forceLevel3Camp, restartSparringMatch } from './creeps';
-import { forEachUnitInWorld, nextFrame, getHumanPlayers, unitExists } from './util';
+import { nextFrame, getHumanPlayers, unitExists, forEachPeasant } from './util';
 import { armChallenge, getOfferedChallenge } from './challenges';
 import { showChallengePreview, clearChallengePreview } from './challengeUI';
 import { refreshInterRoundLobbyRoster, hasInterRoundLobbyRerollTargets } from './interRoundLobbyRoster';
@@ -222,12 +222,7 @@ export function initShop(): void {
       unstock(SUMMON_UPGRADE_ITEM_ID);
       // The unlock applies to everyone — play the effect on every peasant
       const targets: Unit[] = [];
-      forEachUnitInWorld(u => {
-        if (GetUnitTypeId(u) === PEASANT_ID) {
-          const peasant = Unit.fromHandle(u);
-          if (peasant != null) targets.push(peasant);
-        }
-      });
+      forEachPeasant(u => targets.push(u));
       effectTargets = targets;
       // The roster is yours from this moment, so show it rather than making the
       // player finish a round to find out who they bought.

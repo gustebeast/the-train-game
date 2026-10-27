@@ -1,7 +1,7 @@
 import { Trigger } from 'w3ts';
 import { registerSaveSegment } from './save';
 import { isPeasantAbilityItem } from './itemRules';
-import { nextFrame, forEachUnitOfPlayer, INVENTORY_SLOTS } from './util';
+import { nextFrame, INVENTORY_SLOTS, firstPeasantOf } from './util';
 import {
   PEASANT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
   HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
@@ -29,14 +29,6 @@ const SAVE_CODES: number[] = [
   HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
 ];
 
-function peasantOf(playerId: number): unit | null {
-  let found: unit | null = null;
-  forEachUnitOfPlayer(Player(playerId)!, u => {
-    if (found == null && GetUnitTypeId(u) === PEASANT_ID) found = u;
-  });
-  return found;
-}
-
 function abilityItemOf(u: unit): number {
   for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
     const it = UnitItemInSlot(u, slot);
@@ -46,9 +38,9 @@ function abilityItemOf(u: unit): number {
 }
 
 function rereadPlayer(playerId: number): void {
-  const peasant = peasantOf(playerId);
+  const peasant = firstPeasantOf(Player(playerId)!);
   if (peasant == null) return;
-  const itemType = abilityItemOf(peasant);
+  const itemType = abilityItemOf(peasant.handle);
   if (itemType === 0) held.delete(playerId);
   else held.set(playerId, itemType);
 }

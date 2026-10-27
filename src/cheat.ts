@@ -21,7 +21,7 @@ import { getDpsMeasurementReport } from './creeps';
 import { makeDancer } from './dance';
 import { checkUnionRules } from './challengeWatch';
 import { spawnBoss } from './boss';
-import { forEachPeasantOf, onChatCommand, onChatCommandWithArg } from './util';
+import { firstPeasantOf, onChatCommand, onChatCommandWithArg } from './util';
 
 export function initCheat(): void {
   onChatCommand('-cheatmode', () => {
@@ -70,12 +70,8 @@ export function initCheat(): void {
   // Make your first peasant dash east on command — handy for eyeballing the
   // dash and for checking a queued follow-up order still runs.
   onChatCommand('-dashnow', () => {
-    let pe: Unit | null = null;
-    forEachPeasantOf(Players[0].handle, u => {
-      if (pe == null) pe = u;
-    });
-    if (pe == null) { print('dashnow: no peasant'); return; }
-    const p: Unit = pe;
+    const p = firstPeasantOf(Players[0].handle);
+    if (p == null) { print('dashnow: no peasant'); return; }
     PanCameraToTimed(p.x, p.y, 0);
     SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 1100, 0);
     p.issueOrderAt('flare', p.x + 400, p.y);

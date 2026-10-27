@@ -1,6 +1,7 @@
-import { Trigger, Unit } from 'w3ts';
+import { Unit } from 'w3ts';
 import { TRACK_SIZE } from './track/constants';
 import { findItemByType } from './items';
+import { onSpellEffect } from './util';
 import { VACUUM_ABILITY_ID, GREATER_RESOURCE_VACUUM_ID, WOOD_ID, STONE_ID } from './constants';
 
 /** Vacuum Resources (Q): every log and stone lying within reach of the
@@ -50,12 +51,7 @@ export function vacuumResources(x: number, y: number, reach: number): void {
 }
 
 export function initVacuum(): void {
-  const t = Trigger.create();
-  t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
-  t.addAction(() => {
-    if (GetSpellAbilityId() !== VACUUM_ABILITY_ID) return;
-    const caster = GetTriggerUnit();
-    if (caster == null) return;
-    vacuumResources(GetUnitX(caster), GetUnitY(caster), vacuumReach(caster));
+  onSpellEffect(VACUUM_ABILITY_ID, caster => {
+    vacuumResources(caster.x, caster.y, vacuumReach(caster.handle));
   });
 }

@@ -4,7 +4,7 @@ import { REROLL_ITEM_ID, REROLL_ABILITY_ID } from './constants';
 import { rerollInterRoundLobbyHero } from './heroes';
 import { rerollInterRoundLobbyMerc } from './mercenary';
 import { restartSparringMatch } from './creeps';
-import { nextFrame, forEachUnitInWorld, unitExists, giveItems } from './util';
+import { nextFrame, forEachUnitInWorld, unitExists, giveItems, onSpellEffect } from './util';
 import { REROLL_COST } from './sharedData';
 import { isSalespersonPawn } from './salesperson';
 
@@ -50,10 +50,7 @@ export function initReroll(): void {
   });
 
   // Cast: swap the targeted inter-round lobby hero for a random new one
-  const castTrigger = Trigger.create();
-  castTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
-  castTrigger.addAction(() => {
-    if (GetSpellAbilityId() !== REROLL_ABILITY_ID) return;
+  onSpellEffect(REROLL_ABILITY_ID, () => {
     const target = GetSpellTargetUnit();
     if (target == null) return;
     const x = GetUnitX(target);

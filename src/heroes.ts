@@ -10,7 +10,7 @@ import { seededValueAt, deriveSeed, shuffleRandom, STREAMS } from './rng';
 import { gameState } from './state';
 import { getNeutralExtra } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
-import { KitItem, forEachUnitInWorld, getHumanPlayers, getInventoryKit, giveKit, nextFrame, isAlive, unitExists, removeUnitsSummonsFirst } from './util';
+import { KitItem, forEachUnitInWorld, getHumanPlayers, getInventoryKit, giveKit, nextFrame, isAlive, unitExists, removeUnitsSummonsFirst, forEachPeasant, onSpellEffect } from './util';
 import { spawnMercWithHeroes, releaseMercUnits } from './mercenary';
 
 /** Convert a FourCC integer to a 4-character string. */
@@ -21,13 +21,6 @@ function fourCCStr(id: number): string {
     math.floor(id / 0x100) % 256,
     id % 256,
   );
-}
-
-/** Run a callback for every peasant on the map. */
-function forEachPeasant(cb: (u: unit) => void): void {
-  forEachUnitInWorld(u => {
-    if (GetUnitTypeId(u) === PEASANT_ID) cb(u);
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -425,9 +418,9 @@ function transferPeasantsAndSpawnHeroes(casterX: number, casterY: number): void 
   const peasantPlayers = humans.filter(p => !chosenHeroPlayers.includes(p.id));
 
   // Find all peasants on the map and transfer hero players' peasants to peasant players
-  forEachPeasant(u => {
-    const owner = MapPlayer.fromHandle(GetOwningPlayer(u));
-    if (owner == null) return;
+  forEachPeasant(peasant => {
+    const u = peasant.handle;
+    const owner = peasant.owner;
     // Only transfer peasants owned by hero players
     if (!chosenHeroPlayers.includes(owner.id)) return;
     peasantOwnerMap.set(u, owner);
@@ -594,7 +587,7 @@ export function endHeroState(): void {
   peasantOwnerMap.clear();
 
   // Remove unsummon ability from all peasants
-  forEachPeasant(u => UnitRemoveAbility(u, UNSUMMON_ABILITY_ID));
+  forEachPeasant(u => UnitRemoveAbility(u.handle, UNSUMMON_ABILITY_ID));
 }
 
 /** How many heroes are fielded this round. Diagnostics for the tests, which
@@ -605,7 +598,7 @@ export function getChosenHeroCount(): number {
 
 /** Grant the Unsummon Heroes ability to all peasants. Called when all creeps are dead. */
 export function grantUnsummonToAllPeasants(): void {
-  forEachPeasant(u => UnitAddAbility(u, UNSUMMON_ABILITY_ID));
+  forEachPeasant(u => UnitAddAbility(u.handle, UNSUMMON_ABILITY_ID));
 }
 
 // ---------------------------------------------------------------------------
@@ -828,37 +821,26 @@ function returnPeasantsLentTo(leaving: MapPlayer): void {
 export function initHeroes(): void {
   onPlayerLeave(returnPeasantsLentTo);
 
-  // Summon Heroes spell trigger
-  const spellTrigger = Trigger.create();
-  spellTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
-  spellTrigger.addAction(() => {
-    if (GetSpellAbilityId() !== SUMMON_ABILITY_ID) return;
+  onSpellEffect(SUMMON_ABILITY_ID, caster => {
     if (!isInGameplay()) return;
     if (heroesSpawned) return;
-
-    const caster = Unit.fromEvent();
     // Same guard as Unsummon below. No creep in the camp list carries Roar
     // today, but the ability is a repurposed standard one and the camp list
     // grows, so the check belongs here rather than in a comment.
-    if (caster == null || caster.typeId !== PEASANT_ID) return;
+    if (caster.typeId !== PEASANT_ID) return;
 
     UnitRemoveAbility(caster.handle, SUMMON_ABILITY_ID);
     transferPeasantsAndSpawnHeroes(caster.x, caster.y);
   });
 
-  // Unsummon Heroes spell trigger
-  const unsummonTrigger = Trigger.create();
-  unsummonTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
-  unsummonTrigger.addAction(() => {
-    if (GetSpellAbilityId() !== UNSUMMON_ABILITY_ID) return;
+  onSpellEffect(UNSUMMON_ABILITY_ID, caster => {
     if (!isInGameplay()) return;
     // The caster MUST be one of ours. Unsummon Heroes is RoarNeutralHostile
     // repurposed, and four creeps in the camp list carry that same ability
     // natively as Roar -- Dire Wendigo, Dire Wolf, Wind Serpent and Sasquatch
     // Oracle. Without this check, a creep roaring at you dismissed your heroes
     // mid-fight, from an ability nobody could see it cast.
-    const caster = GetTriggerUnit();
-    if (caster == null || GetUnitTypeId(caster) !== PEASANT_ID) return;
+    if (caster.typeId !== PEASANT_ID) return;
     endHeroState();
   });
 
