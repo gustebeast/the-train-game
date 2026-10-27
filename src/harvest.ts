@@ -103,13 +103,13 @@ function findResourceDestAt(x: number, y: number): destructable | null {
 }
 
 export function initHarvest(): void {
-  // --- Resource drop triggers (must be initialized before spawnTerrain) ---
+  // --- Resource drop triggers (must be initialized before spawnTerrain) ------
   treeDeath = Trigger.create();
   treeDeath.addAction(() => dropResource(WOOD_ID));
   rockDeath = Trigger.create();
   rockDeath.addAction(() => dropResource(STONE_ID));
 
-  // --- Intercept target orders on resource destructables (in view) ---
+  // --- Intercept target orders on resource destructables (in view) -----------
   const destTargetTrigger = Trigger.create();
   destTargetTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
   destTargetTrigger.addAction(() => {
@@ -124,7 +124,7 @@ export function initHarvest(): void {
     handleResourceOrder(unit, dest);
   });
 
-  // --- Intercept point orders near resource destructables (out of fog) ---
+  // --- Intercept point orders near resource destructables (out of fog) -------
   //
   // A right-click on a tree under fog arrives as a POINT order at the tree, not
   // a target order. Only right-click (smart) and attack-move mean "work this":

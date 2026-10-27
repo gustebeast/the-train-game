@@ -89,7 +89,6 @@ function partyStanding(): boolean {
     forEachUnitOfPlayer(player.handle, u => {
       if (standing) return;
       if (isCharmedBossUnit(u)) return;
-      if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
       if (!isAlive(u)) return;
       standing = true;
     });

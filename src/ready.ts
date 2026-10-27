@@ -9,18 +9,18 @@ const REGION_HALF = 128; // 2x2 grid cells = 256 world units, half = 128
 
 interface ZoneConfig {
   message: string;
-  callback: () => void;
+  callback: (this: void) => void;
   /** Why this zone cannot do anything right now, or null when it can.
    *
    *  Asked the moment everyone is ready, so a circle that would achieve
    *  nothing -- Load Save with no saves, paging with only one -- says so at
    *  once instead of counting three down to nothing happening. */
-  blocked?: () => string | null;
+  blocked?: (this: void) => string | null;
   /** How many seconds the countdown should run, when three is not always
    *  enough. Asked when the countdown starts and again when it reaches zero,
    *  so something that changes in between -- a reroll restarting the sparring
    *  match -- extends it rather than being skipped past. */
-  seconds?: () => number;
+  seconds?: (this: void) => number;
 }
 
 interface ActiveZone {
@@ -130,8 +130,8 @@ function cancelCountdown(zone: ActiveZone): void {
 
 /** Register a ready zone type with its countdown message and completion callback. */
 export function registerReadyZone(
-  id: string, message: string, callback: () => void, blocked?: () => string | null,
-  seconds?: () => number,
+  id: string, message: string, callback: (this: void) => void, blocked?: (this: void) => string | null,
+  seconds?: (this: void) => number,
 ): void {
   zoneConfigs.set(id, { message, callback, blocked, seconds });
 }
@@ -139,7 +139,7 @@ export function registerReadyZone(
 /** Create a ready zone centered at (cx, cy) for the given registered zone id.
  *  Pass `members` to make it wait for those units instead of for a peasant
  *  from every player. */
-export function initReadyZone(
+export function createReadyZone(
   cx: number, cy: number, id: string, marker: Unit | null = null, members: unit[] | null = null,
 ): void {
   if (!listeningForLeavers) {
@@ -222,7 +222,7 @@ export function initReadyZone(
 }
 
 /** Destroy all ready zones and triggers. */
-export function cleanupReady(): void {
+export function clearReadyZones(): void {
   for (const [, zone] of activeZones) {
     cancelCountdown(zone);
     zone.enterTrigger.destroy();

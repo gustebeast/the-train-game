@@ -358,9 +358,7 @@ for (const comp of [STUN_COMP, CASTER_COMP, TANK_COMP, WEAK_COMP,
 }
 
 
-// ---------------------------------------------------------------------------
-// Five fights at once, in the real arena and four copies of it
-// ---------------------------------------------------------------------------
+// --- Five fights at once, in the real arena and four copies of it ------------
 
 /**
  * The same fight as runFight, but where it actually happens and five times over.

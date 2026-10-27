@@ -2,7 +2,7 @@ import { Grid, LOBBY_BACK_CENTRE, biomeForCampLevel, gridToWorld } from './const
 import { MusicTrack, setMusic } from '../music';
 import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateVictoryLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
 import { spawnTerrain, spawnReadyCircle, addBoardEffect, SpawnedTrain } from './spawn';
-import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
+import { setupRoundTrain, setupInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
 import { TROPHY_MODEL, TROPHY_SCALE } from '../constants';
 import { markUnit } from '../unitLabels';
@@ -18,12 +18,12 @@ import { resetBossKey } from '../bossKey';
 import { isBossVictory, placedTracks } from '../track/state';
 import { getNeutralExtra } from '../teams';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';
-import { getCampData, sparringSecondsToMinimum, startSparringMatch } from '../creeps';
+import { getCampData, getSparringSecondsToMinimum, startSparringMatch } from '../creeps';
 import { gameState } from '../state';
 import { loadFromSlot, listSaves, markCurrentSaveDefeated, markCurrentSaveVictorious, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
-  hasHeroes, initRandomHeroes, chooseHeroes, getInterRoundLobbyHeroUnits,
-  saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
+  hasHeroes, rollRandomRoster, chooseHeroes, getInterRoundLobbyHeroUnits,
+  saveHeroInterRoundLobbySnapshot,
 } from '../heroes';
 import { loadCrateForRound, loadCrateForInterRoundLobby } from '../items';
 import { resetChallengeProgress } from '../challengeList';
@@ -68,7 +68,7 @@ function endTutorial(): void {
  *  it starts. */
 export function beginNewRun(): void {
   resetToNewRun();
-  initRandomHeroes();
+  rollRandomRoster();
 }
 
 /** Into the inter-round lobby as if a round had just been won, for -lobby:
@@ -81,10 +81,10 @@ export function finishRoundToLobby(): void {
   loadInterRoundLobby();
 }
 
-/** Adopt a run that came off disk. The save carries its own roster, so this
- *  only covers a save written before there was one to carry. */
+/** Adopt a run that came off disk. A save carries its roster once one has
+ *  been rolled, so this only covers a run saved before that. */
 export function ensureRosterForLoadedRun(): void {
-  if (!hasHeroes()) initRandomHeroes();
+  if (!hasHeroes()) rollRandomRoster();
 }
 
 /** Wire up how boards lead to one another: the round's endings, the boss
@@ -145,7 +145,7 @@ export function initBoardFlow(): void {
   // heroes and summons hitting creeps still walking in -- which reads the party
   // as several times stronger than it is and scales the next camp to match.
   registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round),
-    undefined, sparringSecondsToMinimum);
+    undefined, getSparringSecondsToMinimum);
   registerReadyZone('newgame', 'Starting a new game', () => {
     beginNewRun();
     loadTerrain(0);
@@ -200,11 +200,7 @@ export function initBoardFlow(): void {
     beginNewRun();
     loadStartLobby();
   });
-  registerReadyZone('revert', 'Resetting purchases', () => {
-    revertToInterRoundLobbySnapshot();
-    revertHeroesToInterRoundLobbySnapshot(); // undoes rerolls bought this inter-round lobby
-    loadInterRoundLobby();
-  });
+  registerReadyZone('revert', 'Resetting purchases', resetPurchases);
 }
 
 /** Stand up a board that is NOT a round in progress: the five lobbies and the
@@ -235,8 +231,8 @@ function loadGameplay(grid: Grid): SpawnedTrain {
   resetBossKey();
   // Settle the roster for this round. Derived rather than loaded, so continuing
   // a run fields whoever the XP rule says instead of whatever pair a save
-  // happened to record -- deriving it here, and not only at victory, is what
-  // lets a save written by an older build heal itself on the way in.
+  // happened to record. Deriving it here, and not only at victory, is what
+  // covers a run that was loaded rather than played into this round.
   chooseHeroes();
   applyChallengeEffects();
   startDayNightForRound();
@@ -247,7 +243,7 @@ function loadGameplay(grid: Grid): SpawnedTrain {
   // starting track already down to know where the players' own work begins.
   resetChallengeProgress();
   if (spawned.engine != null && spawned.wagon != null) {
-    initTrain(spawned.engine, spawned.wagon);
+    setupRoundTrain(spawned.engine, spawned.wagon);
     loadCrateForRound();
   }
   return spawned;
@@ -288,8 +284,8 @@ export function loadTerrain(round: number): SpawnedTrain {
   return loadGameplay(generateTerrain(difficultyForRound(round), bossRound, biome));
 }
 
-/** -cheatmode drops straight into gameplay without passing a start lobby, so
- *  it has to answer for the roster itself. */
+/** -cheatmode swaps the round in progress for the cheat map. It does not come
+ *  through a start lobby, so it answers for the roster itself. */
 export function loadCheatTerrain(): void {
   ensureRosterForLoadedRun();
   loadGameplay(generateCheatTerrain());
@@ -303,8 +299,7 @@ function loadVictoryLobby(): void {
   // Snapshot first, as the inter-round lobby does: the roster hides anyone who
   // differs from the last snapshot behind a "?", and a hero rolled in the last
   // lobby has been met since -- in the boss fight -- so nobody here is a secret.
-  saveHeroInterRoundLobbySnapshot();
-  saveMercInterRoundLobbySnapshot();
+  snapshotLobbyRoster();
   enterBoard('victory', generateVictoryLobby());
   resetInterRoundLobbyRoster();
   refreshInterRoundLobbyRoster();
@@ -394,14 +389,28 @@ function giveLobbyPropsNoVision(spawned: SpawnedTrain): void {
   for (const t of placedTracks) t.owner = blind;
 }
 
+/** Remember who was standing in the roster column as this lobby began, so
+ *  anyone rolled since shows as a "?" (heroConcealed, mercConcealed). */
+function snapshotLobbyRoster(): void {
+  saveHeroInterRoundLobbySnapshot();
+  saveMercInterRoundLobbySnapshot();
+}
+
+/** Reset Purchases: back to the state this inter-round lobby visit began
+ *  with -- gold, upgrades, and the roster with any rerolls undone -- and into
+ *  the lobby again. */
+export function resetPurchases(): void {
+  revertToInterRoundLobbySnapshot();
+  loadInterRoundLobby();
+}
+
 export function loadInterRoundLobby(): void {
   // Snapshot before the board changes: this is the state Reset Purchases
   // reverts to, and it must be what the player walked in with.
   saveInterRoundLobbySnapshot();
-  saveHeroInterRoundLobbySnapshot();
-  saveMercInterRoundLobbySnapshot();
+  snapshotLobbyRoster();
   const spawned = enterBoard('interRound', generateInterRoundLobby());
-  if (spawned.engine != null && spawned.wagon != null) initInterRoundLobbyTrain(spawned.engine, spawned.wagon);
+  if (spawned.engine != null && spawned.wagon != null) setupInterRoundLobbyTrain(spawned.engine, spawned.wagon);
   giveLobbyPropsNoVision(spawned);
   loadCrateForInterRoundLobby();
   // Heroes and mercenaries stand in one column down the east edge, so the one

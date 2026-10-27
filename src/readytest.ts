@@ -1,6 +1,6 @@
 import { Timer } from 'w3ts';
 import { registerTest, TestReporter } from './testkit';
-import { registerReadyZone, initReadyZone } from './ready';
+import { registerReadyZone, createReadyZone } from './ready';
 import { PEASANT_ID } from './constants';
 import { getHumanPlayers, forEachUnitOfPlayer } from './util';
 import { loadStartLobby } from './terrain/load';
@@ -93,7 +93,7 @@ function runReadyCases(t: TestReporter): void {
       SetUnitPosition(p, homeX, homeY);
       t.after(1, () => runCase(i + 1));
     }), undefined, c.seconds);
-    initReadyZone(x, y, c.id);
+    createReadyZone(x, y, c.id);
     started = clock.elapsed;
     waitFrom = started;
     SetUnitPosition(p, x, y);

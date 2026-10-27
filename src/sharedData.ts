@@ -21,7 +21,7 @@ import { Destructables } from '@objectdata/destructables';
  * rule, and is loaded the same way.
  */
 
-// --- Objects compiletime.ts mints ---------------------------------------------
+// --- Objects compiletime.ts mints --------------------------------------------
 // Fresh rawcodes for copies, so a copy can never collide with a stock object
 // something else relies on. A000 is the exception: it was authored in the World
 // Editor and has no generated constant, so it is named here too.
@@ -56,7 +56,7 @@ export const GREATER_IMBUE_HORSE_ABILITY = 'A017';
 /** Every ability item spell's cooldown, in seconds (all of them on Q). */
 export const ABILITY_ITEM_COOLDOWN = 60;
 
-// --- Stock spells taken over --------------------------------------------------------
+// --- Stock spells taken over -------------------------------------------------
 
 /** Stock abilities the map takes over as its own peasant spells: buttons that
  *  only raise an event for a trigger to act on. The build strips their cost
@@ -70,7 +70,7 @@ export const PEASANT_SPELLS = {
   bridge: Abilities.FingerOfDeathNeutralHostile,
   waterTrain: Abilities.DrunkenHazeChen,
 };
-// --- Pools ----------------------------------------------------------------------
+// --- Pools -------------------------------------------------------------------
 
 /** Every hero a run can roll: the standard heroes, tavern included. The build
  *  sizes and paths each of them to match the peasant. */
@@ -94,7 +94,7 @@ export const CRITTER_TYPES: string[] = [
   Units.Rabbit, Units.Stag, Units.Sheep, Units.Pig, Units.Chicken, Units.Raccoon,
 ];
 
-// --- The board's destructables --------------------------------------------------
+// --- The board's destructables -----------------------------------------------
 // The build retunes each (hit points, selection, tint); the game places them
 // and recognises them by these rawcodes.
 
@@ -111,14 +111,14 @@ export const GRANITE_RAW = Destructables.RockChunks1;
 /** The cage a creep camp stands in. */
 export const CAGE_RAW = Destructables.Cage;
 
-// --- Movement -------------------------------------------------------------------
+// --- Movement ----------------------------------------------------------------
 
 /** WC3's gameplay-constant ceiling on move speed. A unit's own maximum clamps
  *  SetUnitMoveSpeed, so everything that has to reach it -- the dash, the train
  *  and its wagon -- is authored with this as its maximum. */
 export const MAX_MOVE_SPEED = 522;
 
-// --- How the materials look -------------------------------------------------------
+// --- How the materials look --------------------------------------------------
 // Each is worn twice: as the item's own model on the ground, and as the load
 // the engine or wagon is visibly carrying (cargoVisuals.ts).
 
@@ -130,7 +130,7 @@ export const SMALL_TRACK_MODEL = 'war3mapImported\\OmniTrackSmall.mdx';
 export const BUCKET_MODEL = 'war3mapImported\\Bucket.mdx';
 export const BUCKET_FULL_MODEL = 'war3mapImported\\BucketFull.mdx';
 
-// --- What a peasant shows it is carrying ----------------------------------------
+// --- What a peasant shows it is carrying -------------------------------------
 
 /** A model shown on a unit through an ability: one of the stock Item Damage
  *  Bonus abilities, repurposed purely for its attachment art (the build zeroes
@@ -152,7 +152,7 @@ export const READY_ORB: Attachment = {
   ability: Abilities.ItemDamageBonusPlus6, model: 'war3mapImported\\ReadyOrb.mdx', point: 'head',
 };
 
-// --- The train --------------------------------------------------------------------
+// --- The train ---------------------------------------------------------------
 
 /** The train's max HP at the start of a run. Repair Train resets to exactly
  *  this, so Flame Resistance upgrades bought earlier are not refunded. */
@@ -164,7 +164,7 @@ export const TRAIN_INITIAL_MAX_MANA = 100;
  *  down slowly, and water puts back what it lost. */
 export const TRAIN_HP_REGEN = -1;
 
-// --- The shop ---------------------------------------------------------------------
+// --- The shop ----------------------------------------------------------------
 
 /** What each shop upgrade does, quoted by its tooltip and applied on purchase. */
 export const FLAME_RESISTANCE_HP = 10;

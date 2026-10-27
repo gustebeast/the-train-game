@@ -23,9 +23,7 @@ function fourCCStr(id: number): string {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Persistent hero data (the roster, saved across rounds)
-// ---------------------------------------------------------------------------
+// --- Persistent hero data (the roster, saved across rounds) ------------------
 
 export interface HeroData {
   typeId: number;
@@ -93,7 +91,7 @@ export function decodeHero(raw: string): HeroData {
 }
 
 // One save segment per roster slot. Reset restores the uninitialized-hero
-// baseline (round-0 saves omit hN), letting initRandomHeroes re-roll.
+// baseline (round-0 saves omit hN), letting rollRandomRoster re-roll.
 for (let i = 0; i < HERO_SLOTS; i++) {
   const idx = i;
   registerSaveSegment(heroSaveKey(idx + 1),
@@ -103,9 +101,7 @@ for (let i = 0; i < HERO_SLOTS; i++) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Per-round state
-// ---------------------------------------------------------------------------
+// --- Per-round state ---------------------------------------------------------
 
 /** Indices into allHeroes fielded this round.
  *
@@ -118,9 +114,7 @@ for (let i = 0; i < HERO_SLOTS; i++) {
 let chosenIndices: number[] = [0, 1];
 
 
-// ---------------------------------------------------------------------------
-// Hero player control — which players control heroes vs peasants
-// ---------------------------------------------------------------------------
+// --- Hero player control — which players control heroes vs peasants ----------
 
 /** Number of times each player (by index) has controlled a summoned hero. */
 const heroControlCount: number[] = [];
@@ -164,8 +158,8 @@ registerSaveSegment('hp',
 /** Choose which players control heroes this round.
  *  Players with the lowest heroControlCount are selected. */
 export function chooseHeroPlayers(): void {
-  // Same reasoning as chooseHeroes: the loaded assignment covers the round being
-  // resumed, so this victory-time call must always re-pick.
+  // A loaded assignment covers the round being resumed, so this victory-time
+  // call must always re-pick for the next one.
   heroPlayersFromSave = false;
   pickLeastBusyHeroPlayers();
 }
@@ -240,20 +234,18 @@ function forgetSpawnedHeroes(): void {
 /** Whether heroes have been summoned this round. */
 let heroesSpawned = false;
 
-/** Callback invoked after heroes are summoned (with a 1-frame delay). */
-let onHeroesSpawnedCallback: ((heroes: Unit[]) => void) | null = null;
+const heroesSpawnedListeners: Array<(this: void, heroes: Unit[]) => void> = [];
 
-/** Register a callback to run after heroes are summoned. */
-export function onHeroesSpawned(cb: (heroes: Unit[]) => void): void {
-  onHeroesSpawnedCallback = cb;
+/** Run cb after heroes are summoned (a frame later, once their stats settle). */
+export function onHeroesSpawned(cb: (this: void, heroes: Unit[]) => void): void {
+  heroesSpawnedListeners.push(cb);
 }
 
-/** Callback invoked when every spawned hero has died. */
-let onAllHeroesDeadCallback: (() => void) | null = null;
+const allHeroesDeadListeners: Array<(this: void) => void> = [];
 
-/** Register a callback to run when all spawned heroes have died. */
-export function onAllHeroesDead(cb: () => void): void {
-  onAllHeroesDeadCallback = cb;
+/** Run cb when every spawned hero has died. */
+export function onAllHeroesDead(cb: (this: void) => void): void {
+  allHeroesDeadListeners.push(cb);
 }
 
 /** Returns true if the roster has been initialized. */
@@ -262,12 +254,11 @@ export function hasHeroes(): boolean {
 }
 
 
-// ---------------------------------------------------------------------------
-// Hero selection
-// ---------------------------------------------------------------------------
+// --- Hero selection ----------------------------------------------------------
 
-/** Fill the roster with unique random heroes and choose the first two. Called once at game start. */
-export function initRandomHeroes(): void {
+/** Fill the roster with unique random heroes and choose the round's pair.
+ *  Called whenever a run needs a roster: a new run, or a loaded one with none. */
+export function rollRandomRoster(): void {
   const available = [...HERO_POOL];
   for (let i = 0; i < HERO_SLOTS; i++) {
     const idx = GetRandomInt(0, available.length - 1);
@@ -318,8 +309,8 @@ export function chooseHeroes(): void {
     tie[i] = deriveSeed(STREAMS.heroPick + gameState.round * HERO_SLOTS + i);
   }
   indices.sort((a, b) => {
-    const byXp = allHeroes[a].xp - allHeroes[b].xp;
-    if (byXp !== 0) return byXp;
+    const byXP = allHeroes[a].xp - allHeroes[b].xp;
+    if (byXP !== 0) return byXP;
     const byDraw = tie[a] - tie[b];
     if (byDraw !== 0) return byDraw;
     return a - b;
@@ -347,7 +338,7 @@ const ROSTER_TIEBREAKS: number[] = [];
 /** Test hook: replace the roster outright and field its first two.
  *
  *  Measurements that depend on WHICH heroes fight -- the sparring match's
- *  convergence, say -- cannot live with initRandomHeroes' draw. */
+ *  convergence, say -- cannot live with rollRandomRoster's draw. */
 export function setRosterForTest(heroes: HeroData[]): void {
   // Copies, not the caller's records: the roster is live state -- XP lands on
   // it and every skill a spawned hero learns is written back to it -- so
@@ -355,7 +346,7 @@ export function setRosterForTest(heroes: HeroData[]): void {
   // next's, until an Alchemist spawned with no point left for Transmute.
   for (let i = 0; i < allHeroes.length; i++) {
     const h = heroes[i];
-    allHeroes[i] = h != null ? { ...h, skills: { ...h.skills }, items: h.items.map(e => ({ id: e.id, charges: e.charges })) } : emptyHero();
+    allHeroes[i] = h != null ? cloneHero(h) : emptyHero();
   }
   chosenIndices = [0, 1];
 }
@@ -383,9 +374,7 @@ function syncHeroXP(): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Per-round lifecycle
-// ---------------------------------------------------------------------------
+// --- Per-round lifecycle -----------------------------------------------------
 
 /** Reset per-round hero state. Called at the start of each round.
  *  Snapshots hero items if heroes are still alive (e.g. victory without unsummoning). */
@@ -471,7 +460,7 @@ export function spawnHeroFromData(
   if (hero == null) return null;
   if (data.xp > 0) SetHeroXP(hero.handle, data.xp, true);
   applySpells(hero, data.skills);
-  giveKit(hero, data.items);
+  giveKit(hero.handle, data.items);
   nextFrame(() => {
     const h = hero.handle;
     if (!unitExists(h)) return; // removed before the frame elapsed
@@ -491,9 +480,10 @@ function spawnHeroUnit(dataIdx: number, owner: MapPlayer, x: number, y: number):
   return spawnHeroFromData(allHeroes[dataIdx], owner, x, y);
 }
 
-/** Spawn the 2 chosen heroes. Each owner in the array gets one hero.
- *  If only 1 owner, both heroes go to that player.
- *  Fires onHeroesSpawnedCallback after one frame. */
+/** Spawn heroes from the roster -- the round's chosen pair unless `indices`
+ *  says otherwise (the boss fight passes wholeRoster()). Owners take one hero
+ *  each in order; the last owner takes any left over.
+ *  Tells the onHeroesSpawned listeners after one frame. */
 export function spawnHeroes(
   owners: MapPlayer[], x: number, y: number, indices: ReadonlyArray<number> = chosenIndices,
 ): void {
@@ -509,7 +499,7 @@ export function spawnHeroes(
     }
   }
   // Wait one frame for hero stats (XP/skills) to finalize, then register
-  // death triggers and notify (tome bonuses are applied by spawnHeroUnit)
+  // death triggers and notify (tome bonuses are applied by spawnHeroFromData)
   nextFrame(() => {
     for (const entry of spawnedHeroes) {
       const deathTrig = Trigger.create();
@@ -519,17 +509,16 @@ export function spawnHeroes(
         // Check if all heroes are dead
         if (spawnedHeroes.every(s => !isAlive(s.unit.handle))) {
           endHeroState();
-          if (onAllHeroesDeadCallback != null) onAllHeroesDeadCallback();
+          for (const cb of allHeroesDeadListeners) cb();
         }
       });
     }
-    if (onHeroesSpawnedCallback != null) onHeroesSpawnedCallback(getSpawnedHeroes());
+    const heroes = getSpawnedHeroes();
+    for (const cb of heroesSpawnedListeners) cb(heroes);
   });
 }
 
-// ---------------------------------------------------------------------------
-// End hero state — restore peasant control, remove heroes
-// ---------------------------------------------------------------------------
+// --- End hero state — restore peasant control, remove heroes -----------------
 
 /** Remove the units spawned by the last spawnHeroes() and forget them.
  *
@@ -601,11 +590,8 @@ export function grantUnsummonToAllPeasants(): void {
   forEachPeasant(u => UnitAddAbility(u.handle, UNSUMMON_ABILITY_ID));
 }
 
-// ---------------------------------------------------------------------------
-// Item state tracking
-// ---------------------------------------------------------------------------
+// --- Item state tracking -----------------------------------------------------
 
-/** Snapshot the current inventory of all spawned heroes into persistent state. */
 /** Record what each summoned hero is carrying, leaving it on the field. */
 export function snapshotHeroItems(): void {
   for (const { unit, dataIdx } of spawnedHeroes) {
@@ -623,9 +609,7 @@ export function areHeroesSpawned(): boolean {
   return heroesSpawned;
 }
 
-// ---------------------------------------------------------------------------
-// Inter-round lobby hero display + reroll
-// ---------------------------------------------------------------------------
+// --- Inter-round lobby hero display + reroll ---------------------------------
 
 /** Neutral display copies of the hero roster, inter-round lobby only.
  *  (Terrain cleanup removes the units; clearInterRoundLobbyHeroes drops the handles.) */
@@ -676,7 +660,7 @@ export function getInterRoundLobbyHeroUnits(): Unit[] {
  *  contract purchase conceals itself the same way a reroll does. */
 function heroConcealed(dataIdx: number): boolean {
   if (lobbyHeroSnapshot == null) return false;
-  return lobbyHeroSnapshot[dataIdx].typeId !== allHeroes[dataIdx].typeId;
+  return lobbyHeroSnapshot[dataIdx] !== allHeroes[dataIdx].typeId;
 }
 
 /** The roster unit for a hero slot: the hero, or the "?" standing in for them.
@@ -743,7 +727,7 @@ export function rerollInterRoundLobbyHero(unitHandle: unit): boolean {
   // C and A, and the player -- who cannot see either -- has no way to tell that
   // one of their rerolls handed back a hero they already had.
   const currentTypes = allHeroes.map(h => h.typeId);
-  const startedWith = lobbyHeroSnapshot == null ? [] : lobbyHeroSnapshot.map(h => h.typeId);
+  const startedWith = lobbyHeroSnapshot ?? [];
   const candidates = HERO_POOL.map(n => FourCC(n))
     .filter(id => !currentTypes.includes(id) && !startedWith.includes(id));
   if (candidates.length === 0) return false;
@@ -768,11 +752,6 @@ export function rerollInterRoundLobbyHero(unitHandle: unit): boolean {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-// Inter-round lobby snapshot — pairs with gameState's inter-round lobby snapshot so the inter-round lobby's
-// "revert purchases" zone also undoes rerolls
-// ---------------------------------------------------------------------------
-
 function cloneHero(h: HeroData): HeroData {
   return {
     typeId: h.typeId, xp: h.xp,
@@ -781,19 +760,18 @@ function cloneHero(h: HeroData): HeroData {
   };
 }
 
-let lobbyHeroSnapshot: HeroData[] | null = null;
+// --- Inter-round lobby snapshot ----------------------------------------------
 
-/** Snapshot hero data on inter-round lobby entry, for revert. */
+/** Roster types as they stood when this inter-round lobby visit began, so a
+ *  hero rolled since can be told apart from one you already had (see
+ *  heroConcealed). Only the types: Reset Purchases puts the roster itself back
+ *  through the save bundle (save.revertToInterRoundLobbySnapshot), which holds
+ *  every hero in full. Mirrored by the mercenary snapshot in mercenary.ts. */
+let lobbyHeroSnapshot: number[] | null = null;
+
+/** Snapshot the roster's types on inter-round lobby entry. */
 export function saveHeroInterRoundLobbySnapshot(): void {
-  lobbyHeroSnapshot = allHeroes.map(h => cloneHero(h));
-}
-
-/** Restore hero data from the inter-round lobby snapshot (undoes rerolls). */
-export function revertHeroesToInterRoundLobbySnapshot(): void {
-  if (lobbyHeroSnapshot == null) return;
-  for (let i = 0; i < HERO_SLOTS; i++) {
-    allHeroes[i] = cloneHero(lobbyHeroSnapshot[i]);
-  }
+  lobbyHeroSnapshot = allHeroes.map(h => h.typeId);
 }
 
 /** Find the allHeroes index for a spawned hero unit, or -1 if not a spawned hero. */

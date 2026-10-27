@@ -138,9 +138,9 @@ function ensureBoard(): { board: multiboard; fresh: boolean } | null {
  *
  *  Reuses this board rather than making a second multiboard: the sizing and
  *  collapse-memory lessons above were expensive to learn once. */
-let panel: { title: string; lines: () => string[] } | null = null;
+let panel: { title: string; lines: (this: void) => string[] } | null = null;
 
-export function showPanel(title: string, lines: () => string[]): void {
+export function showPanel(title: string, lines: (this: void) => string[]): void {
   panel = { title, lines };
   draw();
 }
@@ -227,7 +227,7 @@ export function initChallengeUI(): void {
 }
 
 /** What the board is showing right now, for tests: empty title when hidden. */
-export function challengeUIState(): { title: string; progress: string; previewing: boolean } {
+export function getChallengeUIState(): { title: string; progress: string; previewing: boolean } {
   return { title: lastTitle, progress: lastProgress, previewing: preview != null };
 }
 

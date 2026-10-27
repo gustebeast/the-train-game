@@ -5,6 +5,7 @@ import { saveToFile, listSaves, loadFromSlot, resetToNewRun } from './save';
 import { getHeldAbilityItem } from './abilityItems';
 import { getTrain } from './train';
 import { TRACK_SIZE } from './track/constants';
+import { worldToTile } from './terrain/constants';
 import {
   AXE_ID, PEASANT_ID, CRATE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID,
   RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID,
@@ -89,8 +90,8 @@ function holding(t: TestReporter): void {
   t.expectTrue('peasantFound', p != null);
   if (p == null) { t.done(); return; }
   clearInventory(p);
-  cx = Math.floor(GetUnitX(p) / TRACK_SIZE + 0.5) * TRACK_SIZE;
-  cy = Math.floor(GetUnitY(p) / TRACK_SIZE + 0.5) * TRACK_SIZE;
+  cx = worldToTile(GetUnitX(p)) * TRACK_SIZE;
+  cy = worldToTile(GetUnitY(p)) * TRACK_SIZE;
   clearArea(cx, cy, p);
   SetUnitX(p, cx);
   SetUnitY(p, cy);

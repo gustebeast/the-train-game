@@ -25,9 +25,7 @@ import { UNKNOWN_UNIT_ID, MAX_MERCS, MAX_PLAYERS } from './constants';
 const MERC_INVENTORY_ABILITY_ID = FourCC(Abilities.InventoryHero);
 
 
-// ---------------------------------------------------------------------------
-// Persistent state (saved via the 'mm' segment)
-// ---------------------------------------------------------------------------
+// --- Persistent state (saved via the 'mm' segment) ---------------------------
 
 /**
  * Mercenaries live in ORDERED SLOTS, at most two of them.
@@ -84,9 +82,7 @@ export function getMercCampLevel(): number {
   return 1 + getLivingMercCount();
 }
 
-// ---------------------------------------------------------------------------
-// Per-fight state
-// ---------------------------------------------------------------------------
+// --- Per-fight state ---------------------------------------------------------
 
 /** Player ids owning each spawned hero this summon (duplicates = 2 heroes). */
 let currentHeroOwnerIds: number[] = [];
@@ -102,9 +98,7 @@ function clearMercDeathTrigger(sl: MercSlot): void {
   sl.deathTrig = null;
 }
 
-// ---------------------------------------------------------------------------
-// Control fairness — fewest heroes wins, ties go to least-recently-controlled
-// ---------------------------------------------------------------------------
+// --- Control fairness — fewest heroes wins, ties go to least-recently-controlled ---
 
 let controlSeq = 0;
 /** Last control-assignment sequence number per player index (hero or merc). */
@@ -160,9 +154,7 @@ function pickMercController(): MapPlayer | null {
   return best;
 }
 
-// ---------------------------------------------------------------------------
-// Rolling
-// ---------------------------------------------------------------------------
+// --- Rolling -----------------------------------------------------------------
 
 /** Every creep type drawn from, up to `maxLevel` camps, each type once.
  *
@@ -196,9 +188,7 @@ function rollMercType(maxLevel: number): number {
   return FourCC(pool[seededInt(0, pool.length - 1)]);
 }
 
-// ---------------------------------------------------------------------------
-// Purchases
-// ---------------------------------------------------------------------------
+// --- Purchases ---------------------------------------------------------------
 
 /** Whether at least one mercenary is alive. */
 export function hasActiveMerc(): boolean {
@@ -258,9 +248,7 @@ export function buySecondContract(): boolean {
   return hire(3);
 }
 
-// ---------------------------------------------------------------------------
-// Spawn / lifecycle
-// ---------------------------------------------------------------------------
+// --- Spawn / lifecycle -------------------------------------------------------
 
 /** What a mercenary IS, for the purpose of standing one up: a creep type and
  *  whatever it is carrying. */
@@ -289,7 +277,7 @@ export function spawnMercFromData(
   const u = Unit.create(owner, data.typeId, x, y, 270);
   if (u == null) return null;
   UnitAddAbility(u.handle, MERC_INVENTORY_ABILITY_ID);
-  giveKit(u, data.items);
+  giveKit(u.handle, data.items);
   return u;
 }
 
@@ -409,9 +397,7 @@ export function releaseMercUnits(): void {
   currentHeroOwnerIds = [];
 }
 
-// ---------------------------------------------------------------------------
-// Inter-round lobby display + reroll
-// ---------------------------------------------------------------------------
+// --- Inter-round lobby display + reroll --------------------------------------
 
 /** Slot types as they stood when this inter-round lobby visit began, so a
  *  mercenary rolled since can be told apart from one you already had. Mirrors

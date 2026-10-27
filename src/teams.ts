@@ -28,7 +28,7 @@ export function initTeams(): void {
     p.setState(PLAYER_STATE_RESOURCE_LUMBER, 0);
   });
 
-  // Full allied vision between humans and neutral passive (tracks/crates)
+  // Full allied vision between humans and neutral passive (the track)
   const visionGroup: MapPlayer[] = [...humanPlayers, neutralPassive];
   visionGroup.forEach(p => {
     visionGroup.forEach(q => {
@@ -50,7 +50,7 @@ export function initTeams(): void {
   // DPS check player -- computer-controlled, allied (no vision) with humans.
   // Allied but WITHOUT vision, for everyone. The first human used to be given
   // vision of the sparring match as a special case, which meant one player
-  // watched the lobby's corner light up while the others saw nothing, and it
+  // watched the match light up while the others saw nothing, and it
   // was not a choice anybody made. -viewdps hands it to whoever asks instead.
   SetPlayerTeam(dpsCheckPlayer.handle, 0);
   SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
@@ -108,7 +108,7 @@ const dpsVision: boolean[] = [];
  *
  *  One-way on purpose: the check player shares its vision with the watcher,
  *  and nothing is shared back. Per player, so one person looking does not put
- *  the lobby corner on everybody's screen. */
+ *  the match on everybody's screen. */
 export function toggleDPSVision(who: player): boolean {
   const id = GetPlayerId(who);
   const on = !(dpsVision[id] ?? false);

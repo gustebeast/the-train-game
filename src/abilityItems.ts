@@ -1,11 +1,8 @@
 import { Trigger } from 'w3ts';
 import { registerSaveSegment } from './save';
 import { isPeasantAbilityItem } from './itemRules';
-import { nextFrame, INVENTORY_SLOTS, firstPeasantOf } from './util';
-import {
-  PEASANT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
-  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
-} from './constants';
+import { nextFrame, firstPeasantOf, findInventoryItem, giveItems } from './util';
+import { PEASANT_ID, ABILITY_ITEM_IDS } from './constants';
 
 /**
  * Which peasant holds which ability item, kept across boards and in the save.
@@ -23,18 +20,13 @@ import {
  */
 const held = new Map<number, number>();
 
-/** Save codes, so a save holds a digit instead of a rawcode. Append only. */
-const SAVE_CODES: number[] = [
-  RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
-  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
-];
+/** Save codes, so a save holds a digit instead of a rawcode: the item's index
+ *  in ABILITY_ITEM_IDS. */
+const SAVE_CODES = ABILITY_ITEM_IDS;
 
 function abilityItemOf(u: unit): number {
-  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
-    const it = UnitItemInSlot(u, slot);
-    if (it != null && isPeasantAbilityItem(GetItemTypeId(it))) return GetItemTypeId(it);
-  }
-  return 0;
+  const it = findInventoryItem(u, isPeasantAbilityItem);
+  return it != null ? GetItemTypeId(it) : 0;
 }
 
 function rereadPlayer(playerId: number): void {
@@ -49,8 +41,7 @@ function rereadPlayer(playerId: number): void {
 export function restoreAbilityItem(peasant: unit): void {
   const itemType = held.get(GetPlayerId(GetOwningPlayer(peasant)));
   if (itemType == null) return;
-  const it = CreateItem(itemType, GetUnitX(peasant), GetUnitY(peasant));
-  if (it != null) UnitAddItem(peasant, it);
+  giveItems(peasant, [itemType]);
 }
 
 /** The ability item type a player is recorded as holding, or 0. */

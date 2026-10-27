@@ -9,7 +9,7 @@ import { beginNewRun, loadTerrain } from './terrain/load';
  *    burning          1 once the fire is lit
  *    manaBurning      train mana while burning (production locked => 0)
  *    wrecked          1 once max HP has been eaten down to the floor
- *    maxHpFloor       max HP after the decay stops (must be 1, never 0)
+ *    maxHPFloor       max HP after the decay stops (must be 1, never 0)
  *    manaWrecked      mana while wrecked (still 0)
  *    burningAfterWater 1 -- a wrecked train cannot be put out
  *    manaAfterWater   still 0 -- water must not restore production
@@ -33,7 +33,7 @@ function runBurnTest(t: TestReporter): void {
 
   gameState.trainMaxHP = 4;
   BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
-  t.report('startMaxHp', gameState.trainMaxHP);
+  t.report('startMaxHP', gameState.trainMaxHP);
 
   // Under 2 HP is what lights the fire.
   SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
@@ -46,7 +46,7 @@ function runBurnTest(t: TestReporter): void {
   // 4 -> 1 is three ticks; allow plenty of slack for a loaded VM.
   t.after(9, () => {
     t.expectTrue('wrecked', isWrecked());
-    t.expect('maxHpFloor', gameState.trainMaxHP, 1);
+    t.expect('maxHPFloor', gameState.trainMaxHP, 1);
     t.expect('manaWrecked', train.mana, 0);
 
     // The water bucket's effect. On a wrecked train it must do nothing.

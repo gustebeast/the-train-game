@@ -10,7 +10,7 @@ import { gameState, isInGameplay, setInGameplay, registerSyncCallback, syncState
 import { setStorageItem } from './items';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 
-import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
+import { setupProduction, setMoveOrderCallback, pauseProduction, resumeProduction } from './production';
 
 const OVERSHOOT = 16;
 const REGION_HALF = 2; // 4x4 region → half-size = 2
@@ -180,7 +180,7 @@ export function getTrainTarget(): Unit | undefined {
 }
 
 /** Called by build.ts when a new track piece is placed. */
-export function onTrackPlaced(): void {
+export function noteTrackPlaced(): void {
   if (crashDeadline == 0) {
     return;
   }
@@ -257,7 +257,7 @@ export function syncTrainStats(): void {
 
 registerSyncCallback(syncTrainStats);
 
-export function initInterRoundLobbyTrain(engine: Unit, wagon: Unit): void {
+export function setupInterRoundLobbyTrain(engine: Unit, wagon: Unit): void {
   setInGameplay(false);
   setupTrainUnit(engine);
   setupWagonUnit(wagon);
@@ -307,17 +307,17 @@ function enterInterRoundLobby(): void {
   if (onVictory != null) onVictory();
 }
 
-let lowHpTrigger: Trigger | null = null;
+let lowHPTrigger: Trigger | null = null;
 
-function initTrainUnit(engine: Unit, wagon: Unit): void {
+function setupTrainAndWagon(engine: Unit, wagon: Unit): void {
   setupTrainUnit(engine);
-  initProduction(engine, wagon);
+  setupProduction(engine, wagon);
 
   // Re-register HP trigger for the new unit handle
-  if (lowHpTrigger != null) lowHpTrigger.destroy();
-  lowHpTrigger = Trigger.create();
-  TriggerRegisterUnitStateEvent(lowHpTrigger.handle, engine.handle, UNIT_STATE_LIFE, LESS_THAN, 2.0);
-  lowHpTrigger.addAction(() => {
+  if (lowHPTrigger != null) lowHPTrigger.destroy();
+  lowHPTrigger = Trigger.create();
+  TriggerRegisterUnitStateEvent(lowHPTrigger.handle, engine.handle, UNIT_STATE_LIFE, LESS_THAN, 2.0);
+  lowHPTrigger.addAction(() => {
     if (burning || !isInGameplay()) return;
     burning = true;
     igniteBurnVisuals(engine);
@@ -341,7 +341,7 @@ function initTrainUnit(engine: Unit, wagon: Unit): void {
 
 let arrivalTrigger: Trigger | null = null;
 
-export function initTrain(engine: Unit, wagon: Unit): void {
+export function setupRoundTrain(engine: Unit, wagon: Unit): void {
   // Reset state from previous train. The engine spawns on the second track
   // (index 1) with the wagon behind it on the first (index 0); the runway
   // track (index 2) gives it an initial move target.
@@ -357,7 +357,7 @@ export function initTrain(engine: Unit, wagon: Unit): void {
 
   setInGameplay(true);
   setupWagonUnit(wagon);
-  initTrainUnit(engine, wagon);
+  setupTrainAndWagon(engine, wagon);
   // Seed the order history: the engine's spawn point acts as its "previous
   // order", so the wagon's first order sends it to the engine's start tile.
   enginePoint = { x: engine.x, y: engine.y };

@@ -126,6 +126,37 @@ export const GREATER_UNHOLY_FRENZY_ABILITY_ID = FourCC(GREATER_UNHOLY_FRENZY_ABI
 export const IMBUE_HORSE_ABILITY_ID = FourCC(IMBUE_HORSE_ABILITY);
 export const GREATER_IMBUE_HORSE_ABILITY_ID = FourCC(GREATER_IMBUE_HORSE_ABILITY);
 
+/** A peasant ability item and its Greater version: the spell each grants
+ *  (null for Muscle Milk™, which works by being held), and the key the
+ *  Secret Salesperson saves his offers under.
+ *
+ *  The ONE list of them. The salesperson's stock and prices, the holding rules,
+ *  the abilities they grant and the ability-item save codes are all read off
+ *  it, so a new item is added here and nowhere else. The order IS the save
+ *  code (see ABILITY_ITEM_IDS) and the keys are saved too: append only, never
+ *  reorder or rename. */
+export interface AbilityItemFamily {
+  key: string;
+  plain: number;
+  greater: number;
+  spell: number | null;
+  greaterSpell: number | null;
+}
+export const ABILITY_ITEM_FAMILIES: ReadonlyArray<AbilityItemFamily> = [
+  // One spell for both vacuums: the Greater one reaches further (vacuumReach).
+  { key: 'v', plain: RESOURCE_VACUUM_ID, greater: GREATER_RESOURCE_VACUUM_ID,
+    spell: VACUUM_ABILITY_ID, greaterSpell: VACUUM_ABILITY_ID },
+  { key: 'u', plain: UNHOLY_BONE_ID, greater: GREATER_UNHOLY_BONE_ID,
+    spell: UNHOLY_FRENZY_ABILITY_ID, greaterSpell: GREATER_UNHOLY_FRENZY_ABILITY_ID },
+  { key: 'h', plain: HORSE_ESSENCE_ID, greater: GREATER_HORSE_ESSENCE_ID,
+    spell: IMBUE_HORSE_ABILITY_ID, greaterSpell: GREATER_IMBUE_HORSE_ABILITY_ID },
+  { key: 'm', plain: MUSCLE_MILK_ID, greater: GREATER_MUSCLE_MILK_ID, spell: null, greaterSpell: null },
+];
+/** Every ability item, each family's plain then Greater. An item's index here
+ *  is its save code. */
+export const ABILITY_ITEM_IDS: ReadonlyArray<number> = ABILITY_ITEM_FAMILIES.reduce(
+  (ids: number[], f) => { ids.push(f.plain, f.greater); return ids; }, []);
+
 /** Everything the shop sells that is consumed on acquisition. */
 export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = [
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,

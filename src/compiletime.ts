@@ -1,5 +1,5 @@
 compiletime(({ objectData, constants }) => {
-  // --- Shared data -------------------------------------------------------------
+  // --- Shared data -----------------------------------------------------------
   //
   // Values the game reads as well -- rawcodes, pools, prices, tables -- live in
   // plain-data modules (sharedData.ts, track/constants.ts) and
@@ -56,15 +56,15 @@ compiletime(({ objectData, constants }) => {
   const shared = loadShared('src/sharedData.ts') as typeof import('./sharedData');
   const trackData = loadShared('src/track/constants.ts') as typeof import('./track/constants');
 
-  /** Everything visible is drawn at peasant scale. Shared by the blanket
-   *  loop below and the hero block near the end of this file. */
+  /** Everything visible is drawn at peasant scale: the blanket loop below,
+   *  and the units authored here that set their own (train, wagon, boss). */
   const UNIT_SCALE = 0.6;
 
   // Everything in the world is peasant-sized unless we say otherwise.
   //
-  // The heroes are scaled to 0.6 to match the peasant (see the hero block near
-  // the end of this file), which left every creep, mercenary and summoned unit
-  // towering over them. Rather than enumerate what to shrink, shrink EVERYTHING
+  // The heroes have to match the peasant, and scaling only them left every
+  // creep, mercenary and summoned unit towering over them. Rather than
+  // enumerate what to shrink, shrink EVERYTHING
   // and let the units we author ourselves set their own scale further down --
   // this loop runs first, so every later assignment simply overrides it.
   //
@@ -172,8 +172,9 @@ compiletime(({ objectData, constants }) => {
   trackWagon.sightRadiusNight = 400;
   trackWagon.speedMaximum = shared.MAX_MOVE_SPEED;
   trackWagon.speedMinimum = 1;
-  // Match the engine's turn rate (its hbew default is 0.6) so both cars lose
-  // the same speed rounding corners and the coupling gap stays constant
+  // Match the engine's turn rate (the War Wagon's stock 0.4; a Wagon's own is
+  // 0.6) so both cars lose the same speed rounding corners and the coupling
+  // gap stays constant
   trackWagon.turnRate = 0.4;
 
   const peasant = objectData.units.get(constants.units.Peasant)!;
@@ -341,11 +342,11 @@ compiletime(({ objectData, constants }) => {
       }
     }
   }
-  // Channel fields whose real WC3 default differs from the library's stored default
-  // (library thinks 0 is default, so it won't write them — we must inject manually)
   const Modification = require('mdx-m3-viewer-th/dist/cjs/parsers/w3x/w3u/modification').default;
   const ModifiedObject = require('mdx-m3-viewer-th/dist/cjs/parsers/w3x/w3u/modifiedobject').default;
-  // Forced mods: fields whose real WC3 default differs from what the library stores
+  // Forced mods: fields whose real WC3 default differs from what the library
+  // stores. The library thinks 0 is the default, so it will not write a 0; these
+  // are injected into the saved tables directly.
   //
   // Every spell repurposed as a trigger-only cast (shared.PEASANT_SPELLS) wants
   // the same things off: it is a button that raises an event, so mana,
@@ -381,10 +382,6 @@ compiletime(({ objectData, constants }) => {
     // because 0 is what the library THINKS the default is, so assigning
     // goldCostFactor = 0 would write nothing at all.
     ANtm: zeroedTransmutePayout,
-    // The Strange Key's throw, a COPY of Transmute (see the keyThrow block).
-    // A copy starts from the stock Transmute, not from the ANtm fix above, so
-    // it needs its own: no gold, and free for a peasant with no mana.
-    // concat, not a spread: spreads break this block's eval (see project notes).
     // Peasant ability item spells (see their blocks). Copies, so these REPLACE
     // what the copy inherits -- which is why none of them lists the cooldown
     // or duration it sets itself. No mana: a peasant has none.
@@ -409,6 +406,10 @@ compiletime(({ objectData, constants }) => {
       { id: 'Blo1', variableType: 2, dataPointer: 1, value: 0 },
       { id: 'Blo3', variableType: 2, dataPointer: 3, value: 0 },
     ],
+    // The Strange Key's throw, a COPY of Transmute (see the keyThrow block).
+    // A copy starts from the stock Transmute, not from the ANtm fix above, so
+    // it needs its own: no gold, and free for a peasant with no mana.
+    // concat, not a spread: spreads break this block's eval (see project notes).
     [shared.KEY_THROW_ABILITY]: zeroedSpellCost.concat(zeroedTransmutePayout),
     // NOTE: there was an Aihn (UnitInventoryHuman) block here configuring
     // "mercenary inventory, no drop on death". It was dead: no unit anywhere
@@ -509,7 +510,7 @@ compiletime(({ objectData, constants }) => {
     // GUARD: every item the map customises must be one creeps never drop.
     //
     // The map identifies its items by rawcode alone -- shop.ts reads "a unit
-    // picked up this rawcode" as a purchase wherever it happened, and items.ts
+    // picked up this rawcode" as a purchase wherever it happened, and itemRules.ts
     // reads another as the peasant's axe -- so a customised rawcode that is
     // also in WC3's random drop pool means a creep corpse hands out a free
     // upgrade or a free tool. Measured before the rawcodes were moved: 90 of
@@ -770,23 +771,6 @@ compiletime(({ objectData, constants }) => {
   granite.tintingColor2Green = 40;
   granite.tintingColor3Blue = 40;
 
-  // The Strange Rock: seals the boss exit until somebody brings the key.
-  //
-  // A UNIT dressed as a rock, not a destructable. The key breaks it by throwing
-  // a copy of Transmute (A012), and Transmute will not target a destructable at
-  // all -- the order is refused outright, measured. As a unit it is a legal
-  // target, and the engine does everything: the throw, the missile, and the
-  // kill when it lands.
-  //
-  // Copied from the Barracks only because it is a plain building nothing else
-  // here modifies; everything that makes it a barracks is cleared.
-  //
-  // Classified ANCIENT so the key can target it and nothing else: the key's
-  // targets are "ancient structure", and this is the only one in the map.
-  //
-  // Made invulnerable when spawned (bossRock.ts), like the water tiles: no
-  // health bar, and attacks get the engine's refusal. The 999999 HP is only a
-  // backstop. Transmute kills rather than damages, invulnerable or not.
   // Secret Salesperson: a shop that turns up on snow rounds, selling peasant
   // ability items. A Marketplace copy because the Marketplace is the one shop
   // whose runtime stock (AddItemToStock) displays -- see the shop below -- and
@@ -812,6 +796,25 @@ compiletime(({ objectData, constants }) => {
     // Secret: finding him is the point, so he is not on the minimap.
     salesGoblin.hideMinimapDisplay = true;
   }
+
+  // The Strange Rock: seals the boss exit until somebody brings the key.
+  //
+  // A UNIT dressed as a rock, not a destructable. The key breaks it by throwing
+  // a copy of Transmute (A012), and Transmute will not target a destructable at
+  // all -- the order is refused outright, measured. As a unit it is a legal
+  // target, and the engine does everything: the throw, the missile, and the
+  // kill when it lands.
+  //
+  // Copied from the Barracks only because it is a plain building nothing else
+  // here modifies; everything that makes it a barracks is cleared.
+  //
+  // Classified ANCIENT so the key can target it and nothing else: the key's
+  // targets are "ancient structure", and this is the only one in the map.
+  //
+  // Made invulnerable when spawned (bossRock.ts), like the water tiles: no
+  // health bar, and attacks get the engine's refusal. The 999999 HP is only a
+  // backstop. Transmute kills rather than damages, invulnerable or not.
+  //
   // Note what a copy inherits: it starts from the object as THIS file has left
   // it so far, so the rock already carries the blanket scale from the top.
   const sealRock = objectData.units.copy(constants.units.Barracks, shared.STRANGE_ROCK)!;
@@ -1002,7 +1005,7 @@ compiletime(({ objectData, constants }) => {
   shadyDealer.itemsSold = constants.items.Shimmerweed;
   shadyDealer.itemsMade = '';
 
-  // --- The shelf ---------------------------------------------------------------
+  // --- The shelf -------------------------------------------------------------
   //
   // Everything the shop and the dealer sell is consumed the instant it is
   // bought: shop.ts turns the pickup into the upgrade. Price and shelf size come
@@ -1128,7 +1131,8 @@ compiletime(({ objectData, constants }) => {
   }
 
   // The "?" that stands in for a hero or mercenary whose identity you have
-  // rolled but not yet seen (see hiddenRoll in heroes.ts / mercenary.ts).
+  // rolled but not yet seen (placeholder.ts; heroConcealed in heroes.ts,
+  // mercConcealed in mercenary.ts).
   //
   // A COPY of the peasant rather than a repurposed stock unit: every stock unit
   // worth taking is already spoken for -- towers are track, the marketplace is
@@ -1160,7 +1164,12 @@ compiletime(({ objectData, constants }) => {
   unknown.attacksEnabled = '0';
   unknown.unitsTrained = '';
 
-  // --- The final boss ------------------------------------------------------
+  /** Thunder Clap's mana cost, the same at all three levels. Stamped onto the
+   *  copy below rather than inherited, so the add's mana pool can be defined as
+   *  "exactly two casts" and stay true if the cost is ever retuned. */
+  const THUNDER_CLAP_MANA = 75;
+
+  // --- The final boss --------------------------------------------------------
   //
   // An Infernal, twice a hero's size and standing on a 2x2 tile footprint. Its stats are FIXED rather than scaled off a DPS measurement
   // the way creep camps are, so the numbers below are the balance dial.
@@ -1178,11 +1187,6 @@ compiletime(({ objectData, constants }) => {
   //
   // Copying rather than editing ANin in place, for the same reason the dash is
   // a Channel copy: a fresh rawcode cannot collide with anything.
-  /** Thunder Clap's mana cost, the same at all three levels. Stamped onto the
-   *  copy below rather than inherited, so the add's mana pool can be defined as
-   *  "exactly two casts" and stay true if the cost is ever retuned. */
-  const THUNDER_CLAP_MANA = 75;
-
   const inferno = objectData.abilities.copy(
     constants.abilities.InfernoNeutralHostile, shared.BOSS_INFERNO_ABILITY)!;
   {

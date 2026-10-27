@@ -110,14 +110,14 @@ function runInventoryFlowLoaded(t: TestReporter): void {
 
   t.after(0.5, () => {
     clearGround(...here());
-    // --- A ---
+    // --- A -------------------------------------------------------------------
     UnitAddItem(p, CreateItem(REROLL_ITEM_ID, ...here())!);
     t.after(0.5, () => {
       t.expect('A_rerollSlot', slotOf(p, REROLL_ITEM_ID), 0);
       t.expect('A_axeHeld', countHeld(p, AXE_ID), 0);
       t.expect('A_axeAtFeet', groundCount(...here(), AXE_ID), 1);
 
-      // --- A2 ---
+      // --- A2 ----------------------------------------------------------------
       let groundAxe: item | null = null;
       const r = Rect(GetUnitX(p) - 300, GetUnitY(p) - 300, GetUnitX(p) + 300, GetUnitY(p) + 300);
       EnumItemsInRect(r, undefined, () => {
@@ -131,7 +131,7 @@ function runInventoryFlowLoaded(t: TestReporter): void {
         t.expect('A2_rerollHeld', countHeld(p, REROLL_ITEM_ID), 0);
         t.expect('A2_rerollAtFeet', groundCount(...here(), REROLL_ITEM_ID), 1);
 
-        // --- B ---
+        // --- B ---------------------------------------------------------------
         clearGround(...here());
         setGold(5);
         const goldBefore = gameState.gold;

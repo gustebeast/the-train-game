@@ -1,7 +1,7 @@
 import { Trigger, Unit } from 'w3ts';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 import { STONE_MODEL, WOOD_MODEL, SMALL_TRACK_MODEL } from './sharedData';
-import { findItemByType } from './items';
+import { chargesOf } from './items';
 import { nextFrame, unitExists } from './util';
 import { getTrain, getTrackWagon } from './train';
 
@@ -58,8 +58,7 @@ const wagonVisuals: CargoVisual[] = [
 ];
 
 function hasCargo(u: Unit, itemTypeId: number): boolean {
-  const it = findItemByType(u, itemTypeId);
-  return it != null && it.charges > 0;
+  return chargesOf(u, itemTypeId) > 0;
 }
 
 /** Create/destroy the visual's effect to match the unit's current cargo. */
@@ -129,7 +128,7 @@ export function initCargoVisuals(): void {
 }
 
 /** Which models are currently showing on the CURRENT cars. For tests. */
-export function cargoShowing(): { stone: boolean; wood: boolean; tracks: boolean } {
+export function getCargoShowing(): { stone: boolean; wood: boolean; tracks: boolean } {
   const on = (v: CargoVisual, u: Unit | null): boolean =>
     v.effect != null && u != null && v.attachedTo === u.handle;
   const train = getTrain();

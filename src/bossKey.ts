@@ -52,7 +52,7 @@ export function resetBossKey(): void {
 }
 
 /** Called when a cage breaks and its camp comes out to fight. */
-export function onCampFightStarted(campLevel: number): void {
+export function noteCampFightStarted(campLevel: number): void {
   fightCampLevel = campLevel;
   partyLost = false;
 }
@@ -106,7 +106,7 @@ function campClearEarnsKey(campLevel: number): boolean {
  *
  *  The camp's level is passed in rather than read back from creeps.ts, which
  *  imports this module -- the pair would otherwise require each other. */
-export function onCampCleared(x: number, y: number, campLevel: number): void {
+export function noteCampCleared(x: number, y: number, campLevel: number): void {
   fightCampLevel = 0;
   if (!campClearEarnsKey(campLevel)) return;
   keyDropped = true;

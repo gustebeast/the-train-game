@@ -50,6 +50,26 @@ export function forEachUnitInRange(x: number, y: number, radius: number, cb: (th
   DestroyGroup(g);
 }
 
+/** The unit within `radius` of (x, y) nearest to it that passes `matches`, or
+ *  null if none does. */
+export function nearestUnitInRange(
+  x: number, y: number, radius: number, matches: (this: void, u: unit) => boolean,
+): unit | null {
+  let nearest: unit | null = null;
+  let bestDist = math.huge;
+  forEachUnitInRange(x, y, radius, u => {
+    if (!matches(u)) return;
+    const dx = GetUnitX(u) - x;
+    const dy = GetUnitY(u) - y;
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) {
+      bestDist = dist;
+      nearest = u;
+    }
+  });
+  return nearest;
+}
+
 /** Run cb for every unit a player owns.
  *
  *  The group is created, enumerated and destroyed here, and cb only ever sees a
@@ -170,17 +190,20 @@ export function forEachInventoryItem(handle: unit, cb: (this: void, it: item) =>
   }
 }
 
-/** Give a unit one of each item id, created at its feet.
- *
- *  Four places restored a kit this way -- a hero, a mercenary, a rerolled
- *  mercenary and a concealed placeholder -- and they did not agree on how.
- *  Three tested CreateItem's result; the hero path asserted it with `!`, which
- *  hands UnitAddItem a null the one time the engine declines. */
-export function giveItems(u: Unit, itemIds: ReadonlyArray<number>): void {
-  for (const id of itemIds) {
-    const it = CreateItem(id, u.x, u.y);
-    if (it != null) UnitAddItem(u.handle, it);
+/** The first item in a unit's inventory, in slot order, whose type passes
+ *  `matches`, or null. */
+export function findInventoryItem(handle: unit, matches: (this: void, itemTypeId: number) => boolean): item | null {
+  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
+    const it = UnitItemInSlot(handle, slot);
+    if (it != null && matches(GetItemTypeId(it))) return it;
   }
+  return null;
+}
+
+/** Give a unit one of each item id, created at its feet, with their default
+ *  charges. A remembered kit, charges and all, goes through giveKit. */
+export function giveItems(target: unit, itemIds: ReadonlyArray<number>): void {
+  giveKit(target, itemIds.map(id => ({ id, charges: 0 })));
 }
 
 /** One carried item as it is remembered between spawns: its type, and its
@@ -200,11 +223,11 @@ export function getInventoryKit(handle: unit): KitItem[] {
 }
 
 /** Hand a unit a remembered kit, charges and all. */
-export function giveKit(u: Unit, kit: ReadonlyArray<KitItem>): void {
+export function giveKit(target: unit, kit: ReadonlyArray<KitItem>): void {
   for (const entry of kit) {
-    const it = CreateItem(entry.id, u.x, u.y);
+    const it = CreateItem(entry.id, GetUnitX(target), GetUnitY(target));
     if (it == null) continue;
     if (entry.charges > 0) SetItemCharges(it, entry.charges);
-    UnitAddItem(u.handle, it);
+    UnitAddItem(target, it);
   }
 }

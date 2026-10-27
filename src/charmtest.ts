@@ -7,7 +7,7 @@ import { startBossFight, setBossArenaCallbacks, getBossArenaCallbacks } from './
 import { setMercsForTest, spawnMercFromData, spawnMercWithHeroes, getSpawnedMercUnits, removeSpawnedMercUnits } from './mercenary';
 import { CREEP_CAMPS } from './creepCamps';
 import {
-  setCampForTest, getCampOrigin, getSparringStatus, getDpsMeasured, dpsSampleBreakdown,
+  setCampForTest, getCampOrigin, getSparringStatus, getDPSMeasured, getDPSSampleBreakdown,
   SPARRING_DURATION,
 } from './creeps';
 import { getDPSCheckPlayer } from './teams';
@@ -77,7 +77,7 @@ function campCreeps(): unit[] {
   return out;
 }
 
-// --- In a real round --------------------------------------------------------
+// --- In a real round ---------------------------------------------------------
 
 /** A full four-hero roster for a round. A round fields the two LEAST
  *  experienced heroes, so a roster of just the two wanted left the two empty
@@ -298,7 +298,7 @@ registerTest('charmkey', runCharmKey);
 
 
 
-// --- In the sparring match ----------------------------------------------------
+// --- In the sparring match ---------------------------------------------------
 
 /** The six-copy match with this party, left to the AI: does it cast either
  *  ultimate, and what does each do to the two HP-lost totals? Sampled every
@@ -327,7 +327,7 @@ function runCharmSparring(t: TestReporter): void {
   let lastOurs = 0;
   for (let s = 1; s <= 29; s++) {
     t.after(1 + s, () => {
-      const b = dpsSampleBreakdown();
+      const b = getDPSSampleBreakdown();
       const k = s < 10 ? '0' + tostring(s) : tostring(s);
       // Per-second change in each total: a spell's effect shows as a spike.
       t.report('dCreepLost' + k, b.creepHPLost - lastCreep);
@@ -353,12 +353,12 @@ function runCharmSparring(t: TestReporter): void {
     casts.forEach((v, n) => cn.push(n + '=' + tostring(v)));
     t.report('casts', cn.join(' '));
     t.report('ultimateCasts', castTimes.join(' '));
-    const m = getDpsMeasured();
+    const m = getDPSMeasured();
     t.report('heroDPSPerCopy', m.heroDPS);
     t.report('creepDPSPerCopy', m.creepDPS);
     const ratio = m.creepDPS > 0 ? m.heroDPS / m.creepDPS : 0;
     t.report('ratio', ratio);
-    const b = dpsSampleBreakdown();
+    const b = getDPSSampleBreakdown();
     t.report('creepsTakenOutEarly', b.removals);
     t.report('creditedForThem', b.removalCredit);
     // Before the fix this party measured -1055 DPS and a ratio of -115: a
@@ -371,7 +371,7 @@ function runCharmSparring(t: TestReporter): void {
 
 registerTest('charmspar', runCharmSparring);
 
-// --- In the boss fight ------------------------------------------------------
+// --- In the boss fight -------------------------------------------------------
 
 /**
  * A charmed Lesser Infernal must not hold the boss fight open.

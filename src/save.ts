@@ -164,9 +164,8 @@ export function parseNumberList(raw: string): number[] {
   return parseList(raw).map(entry => tonumber(entry) ?? 0);
 }
 
-/** A kit as one field value: "id,id*charges,..." -- the charges only for an
- *  item that has them, so a save written before charges were kept still reads
- *  (its items simply come back with their default charges). */
+/** A kit as one field value: "id,id*charges,..." -- the charges written only
+ *  for an item that has them, so a bare id is an item without charges. */
 export function encodeKit(kit: ReadonlyArray<KitItem>): string {
   const parts: string[] = [];
   for (const entry of kit) {
@@ -199,11 +198,19 @@ function preloadStore(cacheFile: string, cacheKey: string, encoded: string): voi
   Preload('")\ncall StoreString(InitGameCache("' + cacheFile + '"),"' + CACHE_CAT + '","' + cacheKey + '","' + encoded + '")\n//');
 }
 
-/** Extra data segments to save alongside core state. Populated by other modules. */
-const extraKeys: string[] = [];
-const extraEncoders: Array<() => string> = [];
-const extraDecoders: Array<(raw: string) => void> = [];
-const extraResets: Array<(() => void) | null> = [];
+/** A data segment saved alongside core state, registered by the module that
+ *  owns it. The functions are `this: void` because they are called off the
+ *  record (`segment.decode(raw)`), which TSTL otherwise emits as a method call
+ *  that hands the record over as the first argument. */
+interface SaveSegment {
+  key: string;
+  encode: (this: void) => string;
+  decode: (this: void, raw: string) => void;
+  reset: ((this: void) => void) | null;
+}
+/** Every segment registered, in registration order -- the order a bundle
+ *  holds their encodings in. */
+const registered: SaveSegment[] = [];
 
 /** Register an extra save/load segment with its own cache key.
  *  `reset` (optional) restores the segment's baseline state; every reset
@@ -211,14 +218,11 @@ const extraResets: Array<(() => void) | null> = [];
  *  and a save without a segment truly means "back to default". */
 export function registerSaveSegment(
   key: string,
-  encode: () => string,
-  decode: (raw: string) => void,
-  reset?: () => void,
+  encode: (this: void) => string,
+  decode: (this: void, raw: string) => void,
+  reset?: (this: void) => void,
 ): void {
-  extraKeys.push(key);
-  extraEncoders.push(encode);
-  extraDecoders.push(decode);
-  extraResets.push(reset ?? null);
+  registered.push({ key, encode, decode, reset: reset ?? null });
 }
 
 /** A complete restorable state: core gameState plus every extra segment,
@@ -232,7 +236,7 @@ interface StateBundle {
  *  of writing a save file). */
 function captureStateBundle(): StateBundle {
   const segments: string[] = [];
-  for (const encode of extraEncoders) {
+  for (const { encode } of registered) {
     segments.push(encode());
   }
   return { core: { ...gameState }, segments };
@@ -245,13 +249,13 @@ function captureStateBundle(): StateBundle {
 function applyStateBundle(bundle: StateBundle): void {
   // Reset all segments first — a bundle without a segment means "back to
   // default", never "keep whatever the current session has"
-  for (const reset of extraResets) {
+  for (const { reset } of registered) {
     if (reset != null) reset();
   }
-  for (let i = 0; i < extraKeys.length; i++) {
+  for (let i = 0; i < registered.length; i++) {
     const raw = bundle.segments[i];
     if (raw != null && raw !== '') {
-      extraDecoders[i](raw);
+      registered[i].decode(raw);
     }
   }
   applyState(bundle.core);
@@ -288,7 +292,7 @@ export interface SavedMercSlot extends SavedMerc {
   dead: boolean;
 }
 
-/** Per slot n: tn is the type, dn the death flag, in the kit. A never-hired
+/** Per slot n: tn is the type, dn the death flag, and `in` the kit. A never-hired
  *  slot writes nothing. */
 export function encodeMercSlots(slots: ReadonlyArray<SavedMercSlot>): string {
   const parts: string[] = [];
@@ -475,9 +479,9 @@ function writeSlot(slot: number, defeated: boolean, victorious = false): void {
   PreloadGenClear();
   PreloadGenStart();
   put('core', encodeRecord(gameState as unknown as Record<string, number>, KEY_TO_SHORT));
-  for (let i = 0; i < extraKeys.length; i++) {
-    const encoded = extraEncoders[i]();
-    if (encoded !== '') put(extraKeys[i], encoded);
+  for (const { key, encode } of registered) {
+    const encoded = encode();
+    if (encoded !== '') put(key, encoded);
   }
   put(KEY_VERSION, I2S(SAVE_VERSION)!);
   put(KEY_SEQ, I2S(highestSeq + 1)!);
@@ -520,10 +524,7 @@ export function markCurrentSaveVictorious(): void {
 export function resetToNewRun(): void {
   // Deliberately NOT clearing sessionData: what is on disk is on disk, and a
   // new run must still see the saves the session has already written.
-  for (const reset of extraResets) {
-    if (reset != null) reset();
-  }
-  applyState(DEFAULT_STATE);
+  applyStateBundle({ core: DEFAULT_STATE, segments: [] });
   currentSlot = 0;
 }
 
@@ -549,7 +550,7 @@ function readSlotInto(slot: number): boolean {
     if (!versionMatches(get)) return null;
     const core = readCore(get);
     if (core == null) return null;
-    return { core, segments: extraKeys.map(key => get(key)) };
+    return { core, segments: registered.map(({ key }) => get(key)) };
   });
   if (bundle == null) return false;
   applyStateBundle(bundle);

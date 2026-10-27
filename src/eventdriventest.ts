@@ -4,16 +4,16 @@ import { Units } from '@objectdata/units';
 import { beginNewRun, loadTerrain, loadBossBattlefield } from './terrain/load';
 import { armChallenge, clearChallenges, isChallengeArmed, getArmedChallenge } from './challenges';
 import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
-import { challengeUIState, initChallengeUI } from './challengeUI';
+import { getChallengeUIState, initChallengeUI } from './challengeUI';
 import { isBossFightWatched, startBossFight } from './bossArena';
 import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer, isAlive } from './util';
 import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID,
   TRAIN_ID, TRACK_WAGON_ID } from './constants';
 import { Item, Unit } from 'w3ts';
-import { cargoShowing } from './cargoVisuals';
+import { getCargoShowing } from './cargoVisuals';
 import { spawnStrangeRock } from './bossRock';
 import { placedTracks } from './track/state';
-import { auditMinimapIcons, minimapIconCount } from './minimapIcons';
+import { auditMinimapIcons, getMinimapIconCount } from './minimapIcons';
 import { getTrain, getTrackWagon } from './train';
 import { setStorageItem, giveToStorage, findItemByType } from './items';
 
@@ -28,7 +28,7 @@ import { setStorageItem, giveToStorage, findItemByType } from './items';
  *  half-second tick these systems used to ride. */
 const ONE_FRAME = 0.05;
 
-// --- the challenge board --------------------------------------------------
+// --- the challenge board -----------------------------------------------------
 
 function runBoardEvents(t: TestReporter): void {
   beginNewRun();
@@ -36,21 +36,21 @@ function runBoardEvents(t: TestReporter): void {
   initChallengeUI();
   armChallenge(CH_DASH);
   // Same frame: armed means shown.
-  t.expectTrue('shownOnArm', challengeUIState().title === 'Challenge');
-  const before = challengeUIState().progress;
+  t.expectTrue('shownOnArm', getChallengeUIState().title === 'Challenge');
+  const before = getChallengeUIState().progress;
   noteDash();
-  const after = challengeUIState().progress;
+  const after = getChallengeUIState().progress;
   t.report('progressBefore', before);
   t.report('progressAfter', after);
   // Same frame: the counter moving IS the redraw.
   t.expectTrue('redrawnOnCount', before !== after);
   clearChallenges();
-  t.expectTrue('hiddenOnClear', challengeUIState().title === '');
+  t.expectTrue('hiddenOnClear', getChallengeUIState().title === '');
   t.done();
 }
 registerTest('boardevents', runBoardEvents);
 
-// --- the dealer's preview -------------------------------------------------
+// --- the dealer's preview ----------------------------------------------------
 
 function firstUnitOfType(typeId: number): unit | null {
   let found: unit | null = null;
@@ -78,11 +78,11 @@ function runDealerSelect(t: TestReporter): void {
   // of a session has been measured at just over a second (1.05s, against 0.4-0.75s
   // later), so the limit leaves room for that; a missing reaction still fails.
   SelectUnitForPlayerSingle(dealer, me);
-  waitFor(t, () => challengeUIState().previewing, SELECTION_LIMIT, (ok, waited) => {
+  waitFor(t, () => getChallengeUIState().previewing, SELECTION_LIMIT, (ok, waited) => {
     t.report('selectLatency', waited);
     t.expectTrue('previewOnSelect', ok);
     SelectUnitForPlayerSingle(peasant!, me);
-    waitFor(t, () => !challengeUIState().previewing, SELECTION_LIMIT, (ok2, waited2) => {
+    waitFor(t, () => !getChallengeUIState().previewing, SELECTION_LIMIT, (ok2, waited2) => {
       t.report('deselectLatency', waited2);
       t.expectTrue('previewClearedOnDeselect', ok2);
       t.done();
@@ -106,7 +106,7 @@ function waitFor(
 }
 registerTest('dealerselect', runDealerSelect);
 
-// --- the boss fight's endings ---------------------------------------------
+// --- the boss fight's endings ------------------------------------------------
 
 function killAll(filter: (u: unit) => boolean): number {
   const doomed: unit[] = [];
@@ -161,7 +161,7 @@ function runBossEnding(t: TestReporter): void {
 }
 registerTest('bossending', runBossEnding);
 
-// --- Union Rules ----------------------------------------------------------
+// --- Union Rules -------------------------------------------------------------
 
 function runUnionRules(t: TestReporter): void {
   beginNewRun();
@@ -194,7 +194,7 @@ function runUnionRules(t: TestReporter): void {
 }
 registerTest('unionrules', runUnionRules);
 
-// --- cargo models on the train cars ---------------------------------------
+// --- cargo models on the train cars ------------------------------------------
 
 /** Each way cargo reaches or leaves a car, read two frames after it happens
  *  (the sync waits one frame, because DROP fires before the item leaves). */
@@ -216,7 +216,7 @@ function runCargoEvents(t: TestReporter): void {
   setStorageItem(train, STONE_ID, 0);
   setStorageItem(wagon, TRACK_PIECE_ID, 0);
   t.after(wait, () => {
-    const c0 = cargoShowing();
+    const c0 = getCargoShowing();
     t.expectFalse('emptyShowsNothing', (c0.wood || c0.stone || c0.tracks));
 
     // In: setStorageItem adding a new stack (production's path to the wagon).
@@ -230,7 +230,7 @@ function runCargoEvents(t: TestReporter): void {
     // In: setStorageItem on the engine.
     setStorageItem(train, WOOD_ID, 1);
     t.after(wait, () => {
-      const c1 = cargoShowing();
+      const c1 = getCargoShowing();
       t.expectTrue('tracksOnAfterStore', c1.tracks);
       t.expectTrue('stoneOnAfterGive', c1.stone);
       t.expectTrue('woodOnAfterStore', c1.wood);
@@ -244,7 +244,7 @@ function runCargoEvents(t: TestReporter): void {
       // Out: a stack set to zero.
       setStorageItem(wagon, TRACK_PIECE_ID, 0);
       t.after(wait, () => {
-        const c2 = cargoShowing();
+        const c2 = getCargoShowing();
         t.expectFalse('woodOffWhenUsedUp', c2.wood);
         t.expectFalse('tracksOffAtZero', c2.tracks);
         t.expectTrue('stoneStaysOnChargeChange', c2.stone);
@@ -255,7 +255,7 @@ function runCargoEvents(t: TestReporter): void {
         const newTrain = getTrain();
         if (newTrain != null) setStorageItem(newTrain, WOOD_ID, 1);
         t.after(wait, () => {
-          t.expectTrue('woodOnNewTrain', cargoShowing().wood);
+          t.expectTrue('woodOnNewTrain', getCargoShowing().wood);
           t.done();
         });
       });
@@ -264,7 +264,7 @@ function runCargoEvents(t: TestReporter): void {
 }
 registerTest('cargoevents', runCargoEvents);
 
-// --- minimap tool icons ---------------------------------------------------
+// --- minimap tool icons ------------------------------------------------------
 
 /**
  * "Reliable" is defined against the scanner this replaced: after every kind of
@@ -287,26 +287,26 @@ function runMinimapEvents(t: TestReporter): void {
   };
 
   t.after(wait, () => {
-    t.report('iconsAfterLoad', minimapIconCount());
-    if (minimapIconCount() === 0) t.fail('iconsAfterLoad', 'no tools on the ground, nothing tested');
+    t.report('iconsAfterLoad', getMinimapIconCount());
+    if (getMinimapIconCount() === 0) t.fail('iconsAfterLoad', 'no tools on the ground, nothing tested');
     t.expect('auditAfterLoad', auditMinimapIcons(), 0);
 
     const axe = groundAxe();
     if (axe == null) { t.fail('axe', 'no ground axe'); t.done(); return; }
-    const icons0 = minimapIconCount();
+    const icons0 = getMinimapIconCount();
     const carrier = CreateUnit(me.handle, PEASANT_ID, GetItemX(axe), GetItemY(axe), 0)!;
 
     // Picked up.
     UnitAddItem(carrier, axe);
     t.after(wait, () => {
-      t.expect('pickupRemovesIcon', icons0 - minimapIconCount(), 1);
+      t.expect('pickupRemovesIcon', icons0 - getMinimapIconCount(), 1);
       t.expect('auditAfterPickup', auditMinimapIcons(), 0);
 
       // Dropped somewhere else.
       SetUnitPosition(carrier, GetUnitX(carrier) + 256, GetUnitY(carrier));
       UnitRemoveItem(carrier, axe);
       t.after(wait, () => {
-        t.expect('dropRestoresIcon', minimapIconCount(), icons0);
+        t.expect('dropRestoresIcon', getMinimapIconCount(), icons0);
         t.expect('auditAfterDrop', auditMinimapIcons(), 0);
 
         // Carried, and the carrier dies.
@@ -314,7 +314,7 @@ function runMinimapEvents(t: TestReporter): void {
         t.after(wait, () => {
           KillUnit(carrier);
           t.after(wait, () => {
-            t.expect('carrierDeathRestoresIcon', minimapIconCount(), icons0);
+            t.expect('carrierDeathRestoresIcon', getMinimapIconCount(), icons0);
             t.expect('auditAfterCarrierDeath', auditMinimapIcons(), 0);
 
             // Moved on the ground, hidden, shown, then created and removed.
@@ -323,14 +323,14 @@ function runMinimapEvents(t: TestReporter): void {
               t.expect('auditAfterMove', auditMinimapIcons(), 0);
               SetItemVisible(axe, false);
               t.after(wait, () => {
-                t.expect('hideRemovesIcon', icons0 - minimapIconCount(), 1);
+                t.expect('hideRemovesIcon', icons0 - getMinimapIconCount(), 1);
                 SetItemVisible(axe, true);
                 const spare = CreateItem(PICKAXE_ID, 0, 0)!;
                 t.after(wait, () => {
-                  t.expect('createAddsIcon', minimapIconCount(), icons0 + 1);
+                  t.expect('createAddsIcon', getMinimapIconCount(), icons0 + 1);
                   RemoveItem(spare);
                   // Same frame: removal is handled inside the call.
-                  t.expect('removeDropsIconSameFrame', minimapIconCount(), icons0);
+                  t.expect('removeDropsIconSameFrame', getMinimapIconCount(), icons0);
                   t.after(wait, () => {
                     t.expect('auditAfterCreateRemove', auditMinimapIcons(), 0);
 
@@ -339,7 +339,7 @@ function runMinimapEvents(t: TestReporter): void {
                     const swap = Unit.create(me, PEASANT_ID, 0, 0, 0)!;
                     UnitAddItem(swap.handle, CreateItem(BUCKET_FULL_ID, 0, 0)!);
                     t.after(wait, () => {
-                      t.expect('createThenCarryNoIcon', minimapIconCount(), icons0);
+                      t.expect('createThenCarryNoIcon', getMinimapIconCount(), icons0);
                       t.expect('auditAfterSwap', auditMinimapIcons(), 0);
 
                       // Destroyed on the ground, the way it happens in play:
@@ -358,7 +358,7 @@ function runMinimapEvents(t: TestReporter): void {
                         loadTerrain(0);
                         t.after(wait, () => {
                           t.expect('auditAfterRegen', auditMinimapIcons(), 0);
-                          t.report('iconsAfterRegen', minimapIconCount());
+                          t.report('iconsAfterRegen', getMinimapIconCount());
                           t.done();
                         });
                       });
@@ -375,7 +375,7 @@ function runMinimapEvents(t: TestReporter): void {
 }
 registerTest('minimapevents', runMinimapEvents);
 
-// --- tools can't be broken ------------------------------------------------
+// --- tools can't be broken ---------------------------------------------------
 
 /** The tools and the key carry 999999 HP, so an A-click cannot destroy them.
  *  Read off real items, which is what proves the object data reached the built
@@ -405,7 +405,7 @@ function runToolHealth(t: TestReporter): void {
 }
 registerTest('toolhealth', runToolHealth);
 
-// --- Transmute must not pay gold -------------------------------------------
+// --- Transmute must not pay gold ---------------------------------------------
 
 /** The Alchemist's Transmute kills a creep and pays its owner gold. Gold here
  *  lives in gameState and is copied onto native gold by syncGold, so a payout
@@ -454,7 +454,7 @@ function runKillBounty(t: TestReporter): void {
 }
 registerTest('killbounty', runKillBounty);
 
-// --- the Strange Key ------------------------------------------------------
+// --- the Strange Key ---------------------------------------------------------
 
 function holdsKey(u: unit): boolean {
   for (let slot = 0; slot < 6; slot++) {

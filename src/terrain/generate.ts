@@ -9,7 +9,7 @@ import { CH_CRITTERPOCALYPSE } from '../challengeList';
 /** Run cb for every in-bounds orthogonal neighbour of a cell index.
  *
  *  The two flood fills below walked neighbours identically. Deliberately not
- *  used by the first-match scan above them, which breaks out as soon as it
+ *  used by the first-match scan further down, which breaks out as soon as it
  *  finds one and wants a different shape. */
 function forEachNeighbour(ci: number, cb: (this: void, ni: number) => void): void {
   const coords = idxToCoords(ci);
@@ -22,7 +22,7 @@ function forEachNeighbour(ci: number, cb: (this: void, ni: number) => void): voi
 }
 
 
-// --- Grid creation ---
+// --- Grid creation -----------------------------------------------------------
 
 function createGrid(): Grid {
   const size = GRID_W * GRID_H;
@@ -35,7 +35,7 @@ function createGrid(): Grid {
   return { cells, path, exit: { x: GRID_MAX_X, y: 0 }, bossExit: null, biome: Biome.SUMMER };
 }
 
-// --- Find a random empty tile (no entity, not reserved) ---
+// --- Find a random empty tile (no entity, not reserved) ----------------------
 
 function findEmpty(
   grid: Grid,
@@ -54,7 +54,7 @@ function findEmpty(
   return candidates[GetRandomInt(0, candidates.length - 1)];
 }
 
-// --- Grow a blob of connected tiles ---
+// --- Grow a blob of connected tiles ------------------------------------------
 
 function growBlob(
   grid: Grid,
@@ -102,9 +102,7 @@ function growBlob(
   return placed;
 }
 
-// ============================================================
-// Step 1: Generate guaranteed path from start to end
-// ============================================================
+// --- Step 1: Generate guaranteed path from start to end ----------------------
 
 function generatePath(grid: Grid, exitX: number): void {
   let x = GRID_MIN_X;
@@ -222,11 +220,9 @@ function generateBossExit(grid: Grid, exitX: number): void {
   grid.path[idx(exitX, bossY)] = true;
 }
 
-// ============================================================
-// Step 2: Place granite using open-space-carving approach
-// Guarantees no enclosures by construction: all non-granite
-// tiles form one connected region.
-// ============================================================
+// --- Step 2: Place granite using open-space-carving approach ------------------
+// Guarantees no enclosures by construction: all non-granite tiles form one
+// connected region.
 
 function placeGranite(grid: Grid, difficulty: number): void {
   const density = 0.10 + (difficulty / 100) * 0.40; // 10% at diff 0, 50% at diff 100
@@ -334,9 +330,7 @@ function placeGranite(grid: Grid, difficulty: number): void {
   }
 }
 
-// ============================================================
-// Step 3: Place water blobs, spread east-to-west
-// ============================================================
+// --- Step 3: Place water blobs, spread east-to-west --------------------------
 
 function placeWater(grid: Grid, difficulty: number): void {
   // Count non-granite tiles
@@ -386,9 +380,7 @@ function placeWater(grid: Grid, difficulty: number): void {
   }
 }
 
-// ============================================================
-// Step 4: Place trees and rocks
-// ============================================================
+// --- Step 4: Place trees and rocks -------------------------------------------
 
 function placeResources(grid: Grid, difficulty: number): void {
   // Count path length and water-on-path
@@ -436,9 +428,7 @@ function placeResources(grid: Grid, difficulty: number): void {
   }
 }
 
-// ============================================================
-// Step 5: Place creep camp (one per level)
-// ============================================================
+// --- Step 5: Place the creep camp --------------------------------------------
 
 /** Tiles reachable from the start without crossing granite. Trees, rocks and
  *  water count as reachable: they can be chopped, mined or bridged. */
@@ -538,9 +528,7 @@ function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
   grid.cells[idx(cx, cy)].entity = Entity.CREEP_CAMP;
 }
 
-// ============================================================
-// Train start layout (shared by inter-round lobby and round generation)
-// ============================================================
+// --- Train start layout (shared by inter-round lobby and round generation) ---
 
 /** Place the train start: track wagon on the anchor tile, engine one tile
  *  east, start crate below the wagon. With runway (gameplay), one empty
@@ -557,9 +545,7 @@ function placeTrainStart(grid: Grid, gx: number, gy: number, runway: boolean): v
   grid.cells[idx(gx, gy - 1)].entity = Entity.CRATE_START;
 }
 
-// ============================================================
-// Inter-round lobby grid (post-victory)
-// ============================================================
+// --- Inter-round lobby grid (post-victory) -----------------------------------
 
 // 9x9 inter-round lobby grid (no water border).
 // Shorthand: terrain + optional entity
@@ -590,9 +576,7 @@ const LOBBY_GRID: Cell[][] = [
   [ M, M, M, M, M, M, M, M, M], // y=-4
 ].reverse();
 
-// ============================================================
-// Boss battlefield
-// ============================================================
+// --- Boss battlefield --------------------------------------------------------
 
 /** Half-width of the playable floor, matching the inter-round lobby's 9x9. */
 const BOSS_HALF = 4;
@@ -731,7 +715,8 @@ export function generateInterRoundLobby(): Grid {
   // minus the runway (the inter-round lobby train never moves)
   placeTrainStart(grid, -4, 0, false);
 
-  // Sparring area: 6x3 at the far bottom-right of the grid
+  // The cage at the far bottom-right marks the sparring camp's origin; the
+  // match itself is fought in the water-side strips (creeps.ts)
   // [N, N, N, N, N, N]
   // [N, N, N, N, C, N]
   // [N, N, N, N, N, N]
@@ -898,9 +883,7 @@ export function generateChooseSaveLobby(): Grid {
   return grid;
 }
 
-// ============================================================
-// Main orchestrator
-// ============================================================
+// --- Main orchestrator -------------------------------------------------------
 
 function placeEntities(grid: Grid): void {
   // Fill reserved areas with grassy dirt terrain
@@ -949,9 +932,7 @@ function placeEntities(grid: Grid): void {
   grid.cells[idx(GRID_MIN_X + 6, -2)].entity = Entity.PLAYER_4;
 }
 
-// ============================================================
-// Step 6: Place critters on random grass tiles
-// ============================================================
+// --- Step 6: Place critters on random grass tiles ----------------------------
 
 const CRITTER_COUNT = 15;
 

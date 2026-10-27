@@ -81,7 +81,7 @@ export function initReroll(): void {
       // hand a fresh one back
       print('Hero Reroll can only target the heroes in the inter-round lobby.');
       const caster = Unit.fromEvent();
-      if (caster != null && unitExists(caster.handle)) giveItems(caster, [REROLL_ITEM_ID]);
+      if (caster != null && unitExists(caster.handle)) giveItems(caster.handle, [REROLL_ITEM_ID]);
     }
   });
 }

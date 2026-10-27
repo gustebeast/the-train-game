@@ -2,7 +2,7 @@ import { MapPlayer, Timer, Trigger, Unit } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { BOSS_ADD_ID, BOSS_ID, BOSS_INFERNO_ABILITY_ID } from './constants';
 import { getNeutralAggressive } from './teams';
-import { isAlive, forEachUnitInRange } from './util';
+import { isAlive, nearestUnitInRange } from './util';
 
 /**
  * The final boss: an oversized Infernal that calls down lesser infernals.
@@ -126,19 +126,10 @@ const HUNT_RANGE = 900;
 
 function nearestEnemy(boss: Unit): { x: number; y: number } {
   const owner = boss.owner.handle;
-  let bestX = boss.x;
-  let bestY = boss.y;
-  let bestDist = -1;
-  forEachUnitInRange(boss.x, boss.y, HUNT_RANGE, e => {
-    if (!IsUnitEnemy(e, owner)) return;
-    if (!isAlive(e)) return;
-    if (IsUnitType(e, UNIT_TYPE_STRUCTURE)) return;
-    const dx = GetUnitX(e) - boss.x;
-    const dy = GetUnitY(e) - boss.y;
-    const dist = dx * dx + dy * dy;
-    if (bestDist < 0 || dist < bestDist) { bestDist = dist; bestX = GetUnitX(e); bestY = GetUnitY(e); }
-  });
-  return { x: bestX, y: bestY };
+  const e = nearestUnitInRange(boss.x, boss.y, HUNT_RANGE,
+    u => IsUnitEnemy(u, owner) && isAlive(u) && !IsUnitType(u, UNIT_TYPE_STRUCTURE));
+  // Nobody in reach: aim at the boss's own feet.
+  return e != null ? { x: GetUnitX(e), y: GetUnitY(e) } : { x: boss.x, y: boss.y };
 }
 
 /** Stop every boss casting. */

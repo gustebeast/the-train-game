@@ -6,21 +6,19 @@ import { registerTest, TestReporter } from './testkit';
 import {
   getSparringStatus, forceLevel3Camp, getCampData, restartSparringMatch, measureFieldedForce,
   cancelSparringMatch, getCheckPlayerUnitCount, getCampOrigin, setCampForTest,
-  sparringSecondsToMinimum, getDpsMeasured, dpsSampleBreakdown,
+  getSparringSecondsToMinimum, getDPSMeasured, getDPSSampleBreakdown,
   SPARRING_DURATION, SPARRING_HP, SPARRING_MIN_SECONDS,
 } from './creeps';
 import { CREEP_CAMPS } from './creepCamps';
 import {
   HeroData, setRosterForTest, spawnHeroes, hasHeroes, getChosenHeroCount,
-  revertHeroesToInterRoundLobbySnapshot,
 } from './heroes';
 import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from './mercenary';
 import { getDPSCheckPlayer, toggleDPSVision } from './teams';
 import { getHumanPlayers, forEachUnitOfPlayer } from './util';
-import { loadInterRoundLobby, beginNewRun } from './terrain/load';
+import { loadInterRoundLobby, beginNewRun, resetPurchases } from './terrain/load';
 import { purchaseSummonUpgrade, isSummonUpgradePurchased } from './summonUpgrade';
 import { refreshInterRoundLobbyRoster } from './interRoundLobbyRoster';
-import { revertToInterRoundLobbySnapshot } from './save';
 
 /**
  * The sparring match: the fight the inter-round lobby runs against the next
@@ -62,9 +60,7 @@ function countItems(): number {
   return n;
 }
 
-// ---------------------------------------------------------------------------
-// Fields and measures
-// ---------------------------------------------------------------------------
+// --- Fields and measures -----------------------------------------------------
 
 /** gnoll assassins x2, overseer, warden: four creeps. */
 const FIELD_CAMP = 217;
@@ -93,7 +89,7 @@ const FIELD_CAMP = 217;
 function runSparringFields(t: TestReporter): void {
   t.report('purchasedAtStart', isSummonUpgradePurchased() ? 1 : 0);
   beginNewRun();
-  t.expect('heroesPickedUnbought', hasHeroes() ? 1 : 0, 1);
+  t.expectTrue('heroesPickedUnbought', hasHeroes());
   t.expect('chosenThisRoundUnbought', getChosenHeroCount(), 2);
   setRosterForTest([
     level5(Units.FarSeer, [Abilities.FeralSpirit, Abilities.ChainLightning, Abilities.FarSight]),
@@ -143,13 +139,13 @@ function runSparringFields(t: TestReporter): void {
       t.report('lowestCreepMaxHP', lowest);
       if (lowest < share) t.fail('lowestCreepMaxHP', 'expected at least ' + I2S(share));
 
-      const wait = sparringSecondsToMinimum();
+      const wait = getSparringSecondsToMinimum();
       t.report('waitAtStart', wait);
       if (wait <= 0 || wait > SPARRING_MIN_SECONDS) {
         t.fail('waitAtStart', 'expected a wait of up to ' + I2S(SPARRING_MIN_SECONDS) + 's');
       }
 
-      t.waitFor('minimumReached', () => sparringSecondsToMinimum() === 0, SPARRING_MIN_SECONDS + 2, () => {
+      t.waitFor('minimumReached', () => getSparringSecondsToMinimum() === 0, SPARRING_MIN_SECONDS + 2, () => {
         let strays = 0;
         forEachUnitOfPlayer(check, u => {
           let nearest = 1e12;
@@ -163,7 +159,7 @@ function runSparringFields(t: TestReporter): void {
         t.expect('unitsAwayFromAnyCamp', strays, 0);
         t.report('castsByMinimum', casts);
         if (casts < s.copies) t.fail('castsByMinimum', 'expected every copy to have cast');
-        const mid = dpsSampleBreakdown().creepHPLost;
+        const mid = getDPSSampleBreakdown().creepHPLost;
         t.report('midCreepHPLost', mid);
         if (mid < 0) t.fail('midCreepHPLost', 'rigging banked as damage');
 
@@ -180,8 +176,8 @@ function runSparringFields(t: TestReporter): void {
 
           t.expect('creepsLeft', getSparringStatus().creeps, 0);
           t.expect('itemsLeftLying', countItems() - itemsBefore, 0);
-          const m = getDpsMeasured();
-          const final = dpsSampleBreakdown().creepHPLost;
+          const m = getDPSMeasured();
+          const final = getDPSSampleBreakdown().creepHPLost;
           t.report('finalCreepHPLost', final);
           t.report('heroDPSPerCopy', m.heroDPS);
           t.report('creepDPSPerCopy', m.creepDPS);
@@ -199,9 +195,7 @@ function runSparringFields(t: TestReporter): void {
 
 registerTest('sparfields', runSparringFields);
 
-// ---------------------------------------------------------------------------
-// Out of sight
-// ---------------------------------------------------------------------------
+// --- Out of sight ------------------------------------------------------------
 
 /**
  * The match is fought out of sight, for everybody, unless asked for.
@@ -221,11 +215,11 @@ function runSparringVision(t: TestReporter): void {
   const me = humans[0];
   const sharing = (p: player): boolean => GetPlayerAlliance(dps, p, ALLIANCE_SHARED_VISION);
   t.expect('nobodySeesByDefault', humans.filter(p => sharing(p.handle)).length, 0);
-  t.expect('toggleOn', toggleDPSVision(me.handle) ? 1 : 0, 1);
-  t.expect('watcherSees', sharing(me.handle) ? 1 : 0, 1);
+  t.expectTrue('toggleOn', toggleDPSVision(me.handle));
+  t.expectTrue('watcherSees', sharing(me.handle));
   t.expect('othersStillBlind', humans.filter(p => p.handle !== me.handle && sharing(p.handle)).length, 0);
-  t.expect('toggleOff', toggleDPSVision(me.handle) ? 1 : 0, 0);
-  t.expect('watcherBlindAgain', sharing(me.handle) ? 1 : 0, 0);
+  t.expectFalse('toggleOff', toggleDPSVision(me.handle));
+  t.expectFalse('watcherBlindAgain', sharing(me.handle));
 
   beginNewRun();
   loadInterRoundLobby();
@@ -246,9 +240,7 @@ function runSparringVision(t: TestReporter): void {
 
 registerTest('sparvision', runSparringVision);
 
-// ---------------------------------------------------------------------------
-// Restarts and clears away
-// ---------------------------------------------------------------------------
+// --- Restarts and clears away ------------------------------------------------
 
 /**
  * The match measures A SPECIFIC CAMP, so whatever changes the camp restarts
@@ -271,7 +263,7 @@ registerTest('sparvision', runSparringVision);
  */
 function runSparringRestart(t: TestReporter): void {
   beginNewRun();
-  t.expect('mercHired', buyMercContract() && hasActiveMerc() ? 1 : 0, 1);
+  t.expectTrue('mercHired', buyMercContract() && hasActiveMerc());
   loadInterRoundLobby();
 
   t.waitFor('matchStarts', () => matchRunning() && getSparringStatus().elapsed >= 1, START_WAIT + 1, () => {
@@ -280,7 +272,7 @@ function runSparringRestart(t: TestReporter): void {
     const cameraX = GetCameraTargetPositionX();
     const cameraY = GetCameraTargetPositionY();
 
-    t.expect('meatChangedCamp', forceLevel3Camp() ? 1 : 0, 1);
+    t.expectTrue('meatChangedCamp', forceLevel3Camp());
     t.waitFor('meatMatchRestarts', matchRunning, START_WAIT, () => {
       const swapped = getSparringStatus();
       const meatCamp = getCampData();
@@ -297,9 +289,7 @@ function runSparringRestart(t: TestReporter): void {
       t.report('meatCameraMoved', moved);
       if (moved > 64) t.fail('meatCameraMoved', 'camera jumped');
 
-      revertToInterRoundLobbySnapshot();
-      revertHeroesToInterRoundLobbySnapshot();
-      loadInterRoundLobby();
+      resetPurchases();
       t.waitFor('revertMatchRestarts', matchRunning, START_WAIT, () => {
         const after = getSparringStatus();
         const revertCamp = getCampData();
@@ -332,9 +322,7 @@ function runSparringRestart(t: TestReporter): void {
 
 registerTest('sparrestart', runSparringRestart);
 
-// ---------------------------------------------------------------------------
-// What a mercenary does to the scaling
-// ---------------------------------------------------------------------------
+// --- What a mercenary does to the scaling ------------------------------------
 
 /**
  * A mercenary raises both halves of the camp's scaling.
@@ -349,7 +337,7 @@ registerTest('sparrestart', runSparringRestart);
  */
 function runForceScale(t: TestReporter): void {
   beginNewRun();
-  t.expect('mercHired', buyMercContract() && hasActiveMerc() ? 1 : 0, 1);
+  t.expectTrue('mercHired', buyMercContract() && hasActiveMerc());
   spawnHeroes([Players[0]], 0, 0);
   spawnMercWithHeroes(0, -96, [Players[0].id]);
   // A frame for hero tome bonuses to land before anything is read.

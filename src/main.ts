@@ -1,7 +1,7 @@
 import { W3TS_HOOK, addScriptHook } from 'w3ts/hooks';
 
 import './compiletime';
-// Must be imported for its side effect: it wraps the engine's config(), which
+// Must be imported for its side effect: it hooks the engine's config(), which
 // runs while the pre-game lobby is open, long before tsMain.
 import './music';
 import { initTeams } from './teams';
@@ -75,7 +75,7 @@ function tsMain() {
 
     // Boot into the start lobby rather than straight into round 1: the host
     // chooses there whether to start a run, play the tutorial or load a save.
-    // No train exists yet, so nothing here may assume one -- initTrain runs
+    // No train exists yet, so nothing here may assume one -- setupRoundTrain runs
     // when a round actually loads.
     initBoardFlow();
     loadStartLobby();

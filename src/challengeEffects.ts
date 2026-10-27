@@ -14,7 +14,7 @@ import { PEASANT_ID } from './constants';
  * per-round only, so nothing here is saved.
  */
 
-// --- hidden UI ------------------------------------------------------------
+// --- hidden UI ---------------------------------------------------------------
 
 let uiHidden = false;
 
@@ -23,7 +23,7 @@ let uiHidden = false;
  *
  *  Hotkeys keep working, which is the point of the challenge: the abilities are
  *  all still castable, you just have to remember where they were. */
-function setUiHidden(hidden: boolean): void {
+function setUIHidden(hidden: boolean): void {
   if (uiHidden === hidden) return;
   uiHidden = hidden;
   BlzHideOriginFrames(hidden);
@@ -33,7 +33,7 @@ function setUiHidden(hidden: boolean): void {
   if (minimap != null) BlzFrameSetVisible(minimap, !hidden);
 }
 
-// --- over-the-shoulder camera ---------------------------------------------
+// --- over-the-shoulder camera ------------------------------------------------
 
 /** Close enough that the peasant reads as the subject of the shot rather than a
  *  figure in a landscape -- roughly double its on-screen size versus the first
@@ -154,17 +154,17 @@ export function toggleShoulderCam(): boolean {
   return otsActive;
 }
 
-// --- lifecycle ------------------------------------------------------------
+// --- lifecycle ---------------------------------------------------------------
 
 /** Apply whatever the armed challenge asks for. Called when a round starts. */
 export function applyChallengeEffects(): void {
-  setUiHidden(isChallengeArmed(CH_NO_UI));
+  setUIHidden(isChallengeArmed(CH_NO_UI));
   setShoulderCam(isChallengeArmed(CH_SHOULDER_CAM));
 }
 
 /** Undo everything. Called when leaving gameplay by any route. */
 export function clearChallengeEffects(): void {
-  setUiHidden(false);
+  setUIHidden(false);
   setShoulderCam(false);
 }
 

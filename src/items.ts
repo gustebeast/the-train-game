@@ -2,15 +2,11 @@ import { Item, Trigger, Unit } from 'w3ts';
 import { updateCarryingVisual } from './carrying';
 import { gameState } from './state';
 import { canHold, isPeasantAbilityItem, isResourceItem, isShopUpgrade } from './itemRules';
-import { INVENTORY_SLOTS, giveItems, nextFrame } from './util';
+import { INVENTORY_SLOTS, giveItems, nextFrame, findInventoryItem } from './util';
 import {
-  WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
-  PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
-  RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID,
-  UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, UNHOLY_FRENZY_ABILITY_ID, GREATER_UNHOLY_FRENZY_ABILITY_ID,
-  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, IMBUE_HORSE_ABILITY_ID, GREATER_IMBUE_HORSE_ABILITY_ID,
-  MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
-  BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID, FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID,
+  WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID, PEASANT_ID, TRAIN_ID,
+  TRACK_WAGON_ID, CRATE_ID, MUSCLE_MILK_ID, BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID,
+  FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID, ABILITY_ITEM_FAMILIES,
 } from './constants';
 
 let onTrainInventoryChanged: (() => void) | null = null;
@@ -43,12 +39,9 @@ export function getCrateStart(): Unit | null {
  *  counted and silently failed to carry over. */
 export function bankCrateForNextRound(): void {
   if (crate == null) return;
-  const tracks = findItemByType(crate, TRACK_PIECE_ID);
-  const wood = findItemByType(crate, WOOD_ID);
-  const stone = findItemByType(crate, STONE_ID);
-  gameState.crateTrackCount = tracks != null ? tracks.charges : 0;
-  gameState.crateWoodCount = wood != null ? wood.charges : 0;
-  gameState.crateStoneCount = stone != null ? stone.charges : 0;
+  gameState.crateTrackCount = chargesOf(crate, TRACK_PIECE_ID);
+  gameState.crateWoodCount = chargesOf(crate, WOOD_ID);
+  gameState.crateStoneCount = chargesOf(crate, STONE_ID);
 }
 
 /** Set an item's charges on a storage unit, creating or removing the item as
@@ -62,13 +55,36 @@ export function setStorageItem(target: Unit, itemTypeId: number, charges: number
   if (existing != null) {
     existing.charges = charges;
   } else {
-    const newItem = Item.create(itemTypeId, target.x, target.y);
-    if (newItem != null) {
-      newItem.charges = charges;
-      UnitAddItem(target.handle, newItem.handle);
-      UnitDropItemSlot(target.handle, newItem.handle, getStorageSlot(target, itemTypeId));
-    }
+    addToStack(target, itemTypeId, charges, true);
   }
+}
+
+/** Add charges to a unit's stack of an item, starting the stack if it has
+ *  none. `inStorageSlot` puts a new stack in the carrier's own slot for that
+ *  resource (getStorageSlot); otherwise it goes wherever the engine puts it. */
+function addToStack(target: Unit, itemTypeId: number, charges: number, inStorageSlot: boolean): void {
+  const existing = findItemByType(target, itemTypeId);
+  if (existing != null) {
+    existing.charges += charges;
+    return;
+  }
+  const newItem = Item.create(itemTypeId, target.x, target.y);
+  if (newItem == null) return;
+  newItem.charges = charges;
+  UnitAddItem(target.handle, newItem.handle);
+  if (inStorageSlot) UnitDropItemSlot(target.handle, newItem.handle, getStorageSlot(target, itemTypeId));
+}
+
+/** Move as many charges of `source` as `dest` has room for (its stack cap,
+ *  getMaxStack), removing `source` once it is empty. Returns how many moved. */
+function moveCharges(source: Item, dest: Unit, inStorageSlot: boolean): number {
+  const room = getMaxStack(dest) - chargesOf(dest, source.typeId);
+  if (room <= 0) return 0;
+  const moved = math.min(source.charges, room);
+  addToStack(dest, source.typeId, moved, inStorageSlot);
+  source.charges -= moved;
+  if (source.charges <= 0) RemoveItem(source.handle);
+  return moved;
 }
 
 /** Populate the start crate from saved counts and reset them. Called at round start. */
@@ -91,18 +107,19 @@ export function loadCrateForInterRoundLobby(): void {
 }
 
 /** Abilities granted while carrying the matching item type. */
-const ITEM_GATED_ABILITIES: ReadonlyArray<readonly [number, number]> = [
-  [TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID],
-  [WOOD_ID, BRIDGE_ABILITY_ID],
-  [BUCKET_ID, FILL_ABILITY_ID],
-  [BUCKET_FULL_ID, WATER_TRAIN_ABILITY_ID],
-  [RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID],
-  [GREATER_RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID],
-  [UNHOLY_BONE_ID, UNHOLY_FRENZY_ABILITY_ID],
-  [GREATER_UNHOLY_BONE_ID, GREATER_UNHOLY_FRENZY_ABILITY_ID],
-  [HORSE_ESSENCE_ID, IMBUE_HORSE_ABILITY_ID],
-  [GREATER_HORSE_ESSENCE_ID, GREATER_IMBUE_HORSE_ABILITY_ID],
-];
+const ITEM_GATED_ABILITIES: ReadonlyArray<readonly [number, number]> = (() => {
+  const gated: [number, number][] = [
+    [TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID],
+    [WOOD_ID, BRIDGE_ABILITY_ID],
+    [BUCKET_ID, FILL_ABILITY_ID],
+    [BUCKET_FULL_ID, WATER_TRAIN_ABILITY_ID],
+  ];
+  for (const f of ABILITY_ITEM_FAMILIES) {
+    if (f.spell != null) gated.push([f.plain, f.spell]);
+    if (f.greaterSpell != null) gated.push([f.greater, f.greaterSpell]);
+  }
+  return gated;
+})();
 
 /** Grant or revoke item-gated abilities (build track, bridge, fill, water
  *  train, and the ability items' spells). An ability two items grant is kept while either is held. */
@@ -121,11 +138,20 @@ export function updateBuildAbility(u: Unit): void {
   }
 }
 
+/** Which of an ability item family's two a unit holds: 2 for the Greater
+ *  version, 1 for the plain one, 0 for neither. `plain` names the family. */
+export function abilityItemTier(u: Unit, plain: number): number {
+  for (const f of ABILITY_ITEM_FAMILIES) {
+    if (f.plain !== plain) continue;
+    if (findItemByType(u, f.greater) != null) return 2;
+    if (findItemByType(u, f.plain) != null) return 1;
+  }
+  return 0;
+}
+
 /** Extra a peasant carries per stack for the Muscle Milk™ it holds. */
 function carryBonus(u: Unit): number {
-  if (findItemByType(u, GREATER_MUSCLE_MILK_ID) != null) return 2;
-  if (findItemByType(u, MUSCLE_MILK_ID) != null) return 1;
-  return 0;
+  return abilityItemTier(u, MUSCLE_MILK_ID);
 }
 
 /** A peasant carrying more than it now may -- its Muscle Milk™ just left --
@@ -135,11 +161,19 @@ function dropExcessStack(u: Unit): void {
   const maxStack = getMaxStack(u);
   for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
     const it = u.getItemInSlot(slot);
-    if (it == null || !isResourceItem(it.typeId) || it.charges <= maxStack) continue;
-    const rest = CreateItem(it.typeId, u.x, u.y);
-    if (rest != null) SetItemCharges(rest, it.charges - maxStack);
-    it.charges = maxStack;
+    if (it == null || !isResourceItem(it.typeId)) continue;
+    splitExcess(it, maxStack, u.x, u.y);
   }
+}
+
+/** Cut a stack down to `cap`, the rest becoming a new item on the ground at
+ *  (x, y). Returns that item, or null if the stack already fit. */
+function splitExcess(it: Item, cap: number, x: number, y: number): item | null {
+  if (it.charges <= cap) return null;
+  const rest = CreateItem(it.typeId, x, y);
+  if (rest != null) SetItemCharges(rest, it.charges - cap);
+  it.charges = cap;
+  return rest ?? null;
 }
 
 /** An inventory changed: refresh what the unit can build AND what it looks like
@@ -258,6 +292,11 @@ export function getMaxStack(u: Unit): number {
   return gameState.peasantMaxStack + carryBonus(u);
 }
 
+/** How many of an item a unit carries: its stack's charges, 0 if it has none. */
+export function chargesOf(u: Unit, itemTypeId: number): number {
+  return findItemByType(u, itemTypeId)?.charges ?? 0;
+}
+
 /** Use up one charge of a carried item, removing it at zero. Returns false if
  *  the unit carries none. */
 export function spendCharge(u: Unit, itemTypeId: number): boolean {
@@ -277,7 +316,7 @@ export function swapCarriedItem(u: Unit, from: number, to: number): boolean {
   const old = findItemByType(u, from);
   if (old == null) return false;
   RemoveItem(old.handle);
-  giveItems(u, [to]);
+  giveItems(u.handle, [to]);
   refreshCarrierNextFrame(u.handle);
   return true;
 }
@@ -289,21 +328,15 @@ export function getSlot0Item(u: Unit): Item | null {
 
 /** Find an item of the given type in a unit's inventory. */
 export function findItemByType(u: Unit, itemTypeId: number): Item | null {
-  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
-    const it = u.getItemInSlot(slot);
-    if (it != null && it.typeId === itemTypeId) return it;
-  }
-  return null;
+  const it = findInventoryItem(u.handle, id => id === itemTypeId);
+  return it != null ? Item.fromHandle(it) ?? null : null;
 }
 
 /** Find the item a unit is carrying -- anything but a peasant ability item,
  *  which rides in its own slot and never counts against the one-item rule. */
 function findAnyItem(u: Unit): Item | null {
-  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
-    const it = u.getItemInSlot(slot);
-    if (it != null && !isPeasantAbilityItem(it.typeId)) return it;
-  }
-  return null;
+  const it = findInventoryItem(u.handle, id => !isPeasantAbilityItem(id));
+  return it != null ? Item.fromHandle(it) ?? null : null;
 }
 
 /**
@@ -383,7 +416,7 @@ export function validateTake(taker: Unit, storage: Unit): string | null {
     return null;
   }
 
-  // General take — slot 0 is empty, just check storage has something
+  // An empty-handed take: storage just has to have something
   const takeType = chooseTakeType(storage);
   if (takeType === 0) {
     return 'Nothing to take!';
@@ -397,33 +430,8 @@ export function validateTake(taker: Unit, storage: Unit): string | null {
  * Moves as many charges as possible; removes the giver's item if fully transferred.
  */
 export function giveToStorage(giverItem: Item, storage: Unit): boolean {
-  const itemType = giverItem.typeId;
-  const maxStack = getMaxStack(storage);
-  const existing = findItemByType(storage, itemType);
-  const currentCharges = existing != null ? existing.charges : 0;
-  const canGive = maxStack - currentCharges;
-  if (canGive <= 0) return false;
-
-  const toGive = math.min(giverItem.charges, canGive);
-
-  if (existing != null) {
-    existing.charges += toGive;
-  } else {
-    const newItem = Item.create(itemType, storage.x, storage.y);
-    if (newItem != null) {
-      newItem.charges = toGive;
-      UnitAddItem(storage.handle, newItem.handle);
-      UnitDropItemSlot(storage.handle, newItem.handle, getStorageSlot(storage, itemType));
-    }
-  }
-
-  giverItem.charges -= toGive;
-  if (giverItem.charges <= 0) {
-    RemoveItem(giverItem.handle);
-  }
-
+  if (moveCharges(giverItem, storage, true) === 0) return false;
   notifyStorageChanged(storage);
-
   return true;
 }
 
@@ -444,32 +452,9 @@ export function takeFromStorage(taker: Unit, storage: Unit): boolean {
 
   const source = findItemByType(storage, takeType);
   if (source == null || source.charges <= 0) return false;
-
-  const maxStack = getMaxStack(taker);
-  const existing = findItemByType(taker, takeType);
-  const currentCharges = existing != null ? existing.charges : 0;
-  const canTake = maxStack - currentCharges;
-  if (canTake <= 0) return false;
-
-  const toTake = math.min(source.charges, canTake);
-
-  if (existing != null) {
-    existing.charges += toTake;
-  } else {
-    const newItem = Item.create(takeType, taker.x, taker.y);
-    if (newItem != null) {
-      newItem.charges = toTake;
-      UnitAddItem(taker.handle, newItem.handle);
-    }
-  }
-
-  source.charges -= toTake;
-  if (source.charges <= 0) {
-    RemoveItem(source.handle);
-  }
-
+  // Not into a storage slot: the taker's pickup handling places what it gets.
+  if (moveCharges(source, taker, false) === 0) return false;
   notifyStorageChanged(storage);
-
   return true;
 }
 
@@ -615,16 +600,8 @@ export function initItems(): void {
       // A storage's own limit holds however big the stack handed over: a
       // peasant with Muscle Milk™ carries more than some storage takes. The
       // rest goes back to the giver.
-      const maxStack = getMaxStack(unit);
-      if (picked.charges > maxStack) {
-        const rest = picked.charges - maxStack;
-        const back = CreateItem(pickedType, unit.x, unit.y);
-        picked.charges = maxStack;
-        if (back != null) {
-          SetItemCharges(back, rest);
-          if (giver != null) UnitAddItem(giver, back);
-        }
-      }
+      const back = splitExcess(picked, getMaxStack(unit), unit.x, unit.y);
+      if (back != null && giver != null) UnitAddItem(giver, back);
       // Move to the correct fixed slot for this resource type
       UnitDropItemSlot(unit.handle, picked.handle, getStorageSlot(unit, pickedType));
     }
@@ -632,18 +609,11 @@ export function initItems(): void {
     // A pile off the ground (Vacuum Resources makes them) can hold more than a
     // peasant carries: take a full stack and leave the rest where it lay.
     if (unit.typeId === PEASANT_ID && pickedIsResource && UnitHasItem(unit.handle, picked.handle)) {
-      const maxStack = getMaxStack(unit);
-      if (picked.charges > maxStack) {
-        const rest = CreateItem(pickedType, unit.x, unit.y);
-        if (rest != null) SetItemCharges(rest, picked.charges - maxStack);
-        picked.charges = maxStack;
-      }
+      splitExcess(picked, getMaxStack(unit), unit.x, unit.y);
     }
 
     // Update train production when the engine's or track wagon's inventory changes
-    if ((isTrain(unit) || isTrackWagon(unit)) && onTrainInventoryChanged != null) {
-      onTrainInventoryChanged();
-    }
+    notifyStorageChanged(unit);
 
     refreshCarrier(unit);
   });

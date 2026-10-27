@@ -16,7 +16,7 @@ import { markUnit } from './unitLabels';
 let offered: SaveSlotInfo[] = [];
 let selected = 0;
 
-/** Hero display units for the current selection, cleared on every refresh. */
+/** Hero and mercenary display units for the current selection, cleared on every refresh. */
 let display: Unit[] = [];
 let label: texttag | null = null;
 

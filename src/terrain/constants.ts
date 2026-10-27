@@ -161,7 +161,7 @@ export function inArea(area: Area, gx: number, gy: number): boolean {
   return gx >= area.minX && gx <= area.maxX && gy >= area.minY && gy <= area.maxY;
 }
 
-// --- Grid coordinate helpers ---
+// --- Grid coordinate helpers -------------------------------------------------
 
 export function idx(gx: number, gy: number): number {
   return (gy - GRID_MIN_Y) * GRID_W + (gx - GRID_MIN_X);
@@ -194,7 +194,13 @@ export function gridToWorld(pos: GridPos): GridPos {
   return { x: pos.x * TRACK_SIZE, y: pos.y * TRACK_SIZE };
 }
 
-// --- Destructables ---
+/** The tile a world coordinate is on, along one axis: the nearest grid line,
+ *  so the inverse of gridToWorld. */
+export function worldToTile(v: number): number {
+  return Math.floor(v / TRACK_SIZE + 0.5);
+}
+
+// --- Destructables -----------------------------------------------------------
 // The ones the build retunes (trees, rocks, granite, the cage) are named in
 // sharedData.ts.
 

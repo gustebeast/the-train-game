@@ -6,7 +6,8 @@ import { gameState } from './state';
  *
  * WC3's GetRandomInt is fresh every session, so `-load`, reroll, dislike it,
  * `-load` again gave a different hero each time -- the Reset Purchases circle
- * cannot close that hole, because loading a save bypasses the inter-round lobby entirely.
+ * cannot close that hole, because a load starts from the save on disk, not
+ * from the lobby snapshot the circle restores.
  *
  * A draw here is a pure function of (seed, draw index), and BOTH live in the
  * save. Restoring a save therefore restores the exact point in the sequence,
@@ -31,13 +32,15 @@ export const STREAMS = {
   challenge: 1,
   /** Map generation, offset by the round (terrain/load.ts). */
   terrain: 2,
+  /** The Secret Salesperson's offer order (salesperson.ts). */
+  salesperson: 3,
   /** Tie-breaks when choosing the round's heroes, offset by round and slot
    *  (heroes.ts). Far from the others because the offsets climb. */
   heroPick: 1000,
 };
 
 /** Hash the draw index into the stream so a draw depends on both, and a seed of
- *  0 (an old save) still produces a usable spread once refreshed. */
+ *  0 (not yet minted) still produces a usable spread. */
 function valueAt(seed: number, index: number): number {
   let x = (seed % M + M) % M;
   if (x === 0) x = 1;

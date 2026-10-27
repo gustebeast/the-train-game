@@ -136,7 +136,7 @@ export function labelUnit(u: unit, text: string, red: number, green: number, blu
  *  Presence is asked of the world by enumeration, not GetUnitTypeId: RemoveUnit
  *  is deferred, and for the rest of the frame a removed unit still reports its
  *  type and life. Enumeration already leaves it out. */
-export function unitLabelStats(): { total: number; orphaned: number } {
+export function getUnitLabelStats(): { total: number; orphaned: number } {
   const probe = CreateGroup()!;
   let total = 0;
   let orphaned = 0;

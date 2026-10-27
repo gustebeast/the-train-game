@@ -16,11 +16,11 @@ import { CHALLENGE_BONUS } from './sharedData';
  * over every system in the map.
  *
  * WHICH challenge is on sale is seeded, not rolled: the offer is a pure
- * function of the saved seed and the list of challenges already bought, so a
+ * function of the saved seed and the challenges already offered this lap, so a
  * given save always walks the same sequence. That is also why Reset Purchases
  * cannot be used to shop for a different challenge — it rewinds the purchase,
- * and the same offer comes back. Once every challenge has been bought the
- * history clears and the sequence starts again.
+ * and the same offer comes back. Once every challenge has been offered the lap
+ * ends and the sequence starts again.
  */
 
 
@@ -31,7 +31,7 @@ export interface ChallengeDef {
   description: string;
   /** Progress line for the overlay ("7 / 15", "0:08"). Omit for a challenge
    *  with nothing meaningful to count. */
-  progress?: () => string;
+  progress?: (this: void) => string;
   /** Won simply by reaching the end of the line with it armed: nothing to
    *  count, so it pays out when the last track is laid. */
   completesOnFinalTrack?: boolean;
@@ -56,7 +56,7 @@ function findDef(id: string): ChallengeDef | null {
   return null;
 }
 
-// --- state ----------------------------------------------------------------
+// --- state -------------------------------------------------------------------
 
 /** The challenge bought and not yet resolved, or null. Only one at a time. */
 let armedId: string | null = null;
@@ -111,7 +111,7 @@ export function completeChallenge(id: string): void {
     + '! +' + I2S(CHALLENGE_BONUS) + ' bonus gold.');
 }
 
-// --- seeded offer ---------------------------------------------------------
+// --- seeded offer ------------------------------------------------------------
 
 /** Deterministic order over the registered ids: the same for a given save
  *  every time it is loaded, and different on every lap (the cycle count is
@@ -153,12 +153,12 @@ export function advanceChallengeOffer(): void {
 /** The challenge currently for sale, or null if none are registered. */
 export function getOfferedChallenge(): ChallengeDef | null {
   if (defs.length === 0) return null;
-  // A save from before offers were tracked, or a fresh run: put one out now.
+  // A fresh run has no offer yet: put one out now.
   if (offeredId == null) advanceChallengeOffer();
   return offeredId == null ? null : findDef(offeredId);
 }
 
-// --- save -----------------------------------------------------------------
+// --- save --------------------------------------------------------------------
 
 /** "s=<seed>;n=<cycles>;a=<armedId>;o=<offeredId>;p=<id,id,...>" -- n, a, o
  *  and p only when set. */
@@ -183,9 +183,6 @@ function decodeChallenges(raw: string): void {
   if (o != null && o !== '') offeredId = o;
   const p = fields['p'];
   if (p != null && p !== '') seen = parseList(p);
-  // Legacy saves used "c=1"/"t=1" for the two original challenges.
-  if (fields['c'] === '1') armedId = 'crit';
-  if (fields['t'] === '1') armedId = 'camp';
 }
 
 /** Full reset for a new game: the seed is re-rolled, so a fresh save gets a

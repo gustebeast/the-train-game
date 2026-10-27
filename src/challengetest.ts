@@ -9,13 +9,6 @@ import {
 } from './challengeList';
 import { TRACK_SIZE } from './track/constants';
 
-/** Record a measurement AND hold it to an expected value.
- *
- *  Plain `report` was not enough: this file used to report a repeat count that
- *  had silently gone from 0 to 9 -- the rotation had genuinely stopped
- *  advancing under the test -- and the run still came back green, because
- *  nothing was watching the number. Anything worth reporting is worth
- *  asserting. */
 /** Exercise the challenge system's rules: the offer never repeats until the
  *  list is exhausted, the sequence is stable for a given seed, completion pays,
  *  and a counter challenge actually completes when its counter fills. */

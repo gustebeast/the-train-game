@@ -13,14 +13,15 @@
  * them: a cycle).
  */
 
-let listener: (() => void) | null = null;
+const listeners: Array<(this: void) => void> = [];
 
-/** The board registers its redraw here. One listener is all there is. */
-export function onBoardChanged(cb: () => void): void {
-  listener = cb;
+/** Run cb whenever the board's contents change. The board's redraw is the
+ *  one listener today. */
+export function onBoardChanged(cb: (this: void) => void): void {
+  listeners.push(cb);
 }
 
 /** Call wherever anything the board displays has just changed. */
 export function boardChanged(): void {
-  if (listener != null) listener();
+  for (const cb of listeners) cb();
 }

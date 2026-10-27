@@ -173,7 +173,7 @@ export function initCheat(): void {
 
   // Watch the inter-round lobby's DPS sparring match, which is otherwise
   // fought out of sight. Per player and toggleable, so one person looking does
-  // not reveal the corner for everyone.
+  // not reveal the match for everyone.
   onChatCommand('-viewdps', () => {
     const who = GetTriggerPlayer();
     if (who == null) return;

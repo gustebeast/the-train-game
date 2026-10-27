@@ -1,19 +1,15 @@
 import { Trigger, Unit } from 'w3ts';
-import {
-  findItemByType,
-  getMaxStack,
-  setStorageItem,
-  setTrainInventoryCallback,
-} from './items';
+import { getMaxStack, setStorageItem, setTrainInventoryCallback, chargesOf, spendCharge } from './items';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 import { gameState } from './state';
 
-
-let onProductionInventoryChanged: (() => void) | null = null;
+/** Re-issues the train's move order: production's inventory changes issue
+ *  implicit orders that cancel it. */
+let moveOrderCallback: (() => void) | null = null;
 
 /** Register a callback to re-issue the train's move order after inventory changes. */
 export function setMoveOrderCallback(cb: () => void): void {
-  onProductionInventoryChanged = cb;
+  moveOrderCallback = cb;
 }
 
 let train: Unit;
@@ -34,35 +30,23 @@ export function resumeProduction(): void {
 
 /** Check if the train has resources to produce and the wagon isn't at max tracks. */
 function canProduce(): boolean {
-  const wood = findItemByType(train, WOOD_ID);
-  const stone = findItemByType(train, STONE_ID);
-  if (wood == null || wood.charges <= 0) return false;
-  if (stone == null || stone.charges <= 0) return false;
-  const tracks = findItemByType(trackWagon, TRACK_PIECE_ID);
-  const maxStack = getMaxStack(trackWagon);
-  if (tracks != null && tracks.charges >= maxStack) return false;
-  return true;
+  if (chargesOf(train, WOOD_ID) <= 0 || chargesOf(train, STONE_ID) <= 0) return false;
+  return chargesOf(trackWagon, TRACK_PIECE_ID) < getMaxStack(trackWagon);
 }
 
-/** Called when the train's mana reaches 100. */
+/** Called when the train's mana fills (gameState.trainMaxMana): one track made. */
 function onManaFull(): void {
-  const wood = findItemByType(train, WOOD_ID);
-  const stone = findItemByType(train, STONE_ID);
-  if (wood == null || stone == null) {
+  // Both checked before either is spent, so wood is never used up without stone
+  if (chargesOf(train, WOOD_ID) <= 0 || chargesOf(train, STONE_ID) <= 0) {
     // Resources removed mid-regen — reset
     stopProduction();
     return;
   }
+  spendCharge(train, WOOD_ID);
+  spendCharge(train, STONE_ID);
 
-  // Consume 1 wood and 1 stone
-  wood.charges -= 1;
-  if (wood.charges <= 0) RemoveItem(wood.handle);
-  stone.charges -= 1;
-  if (stone.charges <= 0) RemoveItem(stone.handle);
-
-  // Create or add to the track wagon's track stack in slot 0
-  const tracks = findItemByType(trackWagon, TRACK_PIECE_ID);
-  setStorageItem(trackWagon, TRACK_PIECE_ID, (tracks?.charges ?? 0) + 1);
+  // Create or add to the track wagon's track stack in its slot
+  setStorageItem(trackWagon, TRACK_PIECE_ID, chargesOf(trackWagon, TRACK_PIECE_ID) + 1);
 
   // Reset mana
   train.mana = 0;
@@ -75,7 +59,7 @@ function onManaFull(): void {
   }
 
   // UnitAddItem/UnitDropItemSlot issue implicit orders that cancel movement
-  if (onProductionInventoryChanged != null) onProductionInventoryChanged();
+  if (moveOrderCallback != null) moveOrderCallback();
 }
 
 /** Start mana regen. */
@@ -110,7 +94,7 @@ function updateProduction(): void {
 let manaTrigger: Trigger | null = null;
 
 /** Initialize the production system. Must be called after the train is created. */
-export function initProduction(trainUnit: Unit, trackWagonUnit: Unit): void {
+export function setupProduction(trainUnit: Unit, trackWagonUnit: Unit): void {
   train = trainUnit;
   trackWagon = trackWagonUnit;
   // A new train starts unlocked. The fire's pause is only lifted by putting
@@ -133,6 +117,6 @@ export function initProduction(trainUnit: Unit, trackWagonUnit: Unit): void {
   // Register callback so items.ts can notify us without a circular import
   setTrainInventoryCallback(() => {
     updateProduction();
-    if (onProductionInventoryChanged != null) onProductionInventoryChanged();
+    if (moveOrderCallback != null) moveOrderCallback();
   });
 }

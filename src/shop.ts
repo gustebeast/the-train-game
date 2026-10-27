@@ -91,17 +91,7 @@ export function stockShop(shop: Unit): void {
     // that the repair would then throw away.
     stock(gameState.trainMaxHP < TRAIN_INITIAL_MAX_HP ? RESTORE_HP_ID : FLAME_RESISTANCE_ID);
     if (!isSummonUpgradePurchased()) stock(SUMMON_UPGRADE_ITEM_ID);
-    // The two contracts are steps on a ladder, so exactly one is ever on the
-    // shelf: none alive offers the first, one alive offers the second, two
-    // alive offers neither. A death drops you a rung and puts that rung's
-    // contract back up.
-    if (mercContractsUseful()) {
-      if (canBuyMercContract()) {
-        stock(MERC_CONTRACT_ID);
-      } else if (canBuySecondContract()) {
-        stock(MERC_CONTRACT_2_ID);
-      }
-    }
+    stockMercContract();
     // Strange Meat is on the shelf only with both mercenaries alive -- which is
     // the same thing as "the second contract is bought and neither has been
     // lost", and also exactly the condition under which a level 3 camp can
@@ -112,14 +102,28 @@ export function stockShop(shop: Unit): void {
   });
 }
 
+/** The two contracts are steps on a ladder, so at most one is ever on the
+ *  shelf: none alive offers the first, one alive offers the second, two alive
+ *  offers neither. A death drops you a rung and puts that rung's contract back
+ *  up. Neither is offered until Summon Heroes makes a mercenary worth having. */
+function stockMercContract(): void {
+  if (!mercContractsUseful()) return;
+  if (canBuyMercContract()) {
+    stock(MERC_CONTRACT_ID);
+  } else if (canBuySecondContract()) {
+    stock(MERC_CONTRACT_2_ID);
+  }
+}
+
 /** Put whoever a purchase just added into the inter-round lobby, and make sure the Reroll
  *  item is on the shelf for them. Both contracts and Summon Heroes change who
  *  is standing in the corner, and the shop is an inter-round lobby fixture, so the display
  *  can catch up immediately instead of waiting for the next inter-round lobby load. */
 function addRosterToInterRoundLobby(): void {
   refreshInterRoundLobbyRoster();
-  // Summon Heroes is what makes a contract worth buying, so the contract goes
-  // up the moment it is owned rather than waiting for the next lobby.
+  // Summon Heroes is what makes a contract worth buying, so the first contract
+  // goes up the moment it is owned rather than waiting for the next lobby. Only
+  // the first: the second waits for a visit, as the ladder always has.
   if (mercContractsUseful() && canBuyMercContract()) stock(MERC_CONTRACT_ID);
   if (hasInterRoundLobbyRerollTargets()) stock(REROLL_ITEM_ID);
 }

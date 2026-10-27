@@ -16,7 +16,7 @@ const GIVE_TAKE_ABILITY_ID = FourCC(Abilities.Channel);
  *  and the refusal has to be SPOKEN as well as returned: a silently ignored
  *  order reads as the spell being broken rather than as the rule it is. */
 function giveTakeCaster(): Unit | null {
-  // The give/take spell is a Channel copy, so it is ordered as "channel".
+  // The give/take spell is stock Channel, so it is ordered as "channel".
   if (GetIssuedOrderId() !== OrderId('channel')) return null;
   const unit = Unit.fromEvent();
   if (unit == null) return null;
@@ -28,7 +28,7 @@ function giveTakeCaster(): Unit | null {
 }
 
 export function initGiveTake(): void {
-  // --- Intercept Channel spell point orders ---
+  // --- Intercept Channel spell point orders ----------------------------------
   const pointOrder = Trigger.create();
   pointOrder.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER);
   pointOrder.addAction(() => {
@@ -45,7 +45,7 @@ export function initGiveTake(): void {
     nextFrame(() => UnitDropItemPoint(unitHandle, itemHandle, x, y));
   });
 
-  // --- Intercept Channel spell target orders ---
+  // --- Intercept Channel spell target orders ---------------------------------
   const targetOrder = Trigger.create();
   targetOrder.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
   targetOrder.addAction(() => {
@@ -96,7 +96,7 @@ export function initGiveTake(): void {
     // If valid, Channel spell walks up and SPELL_CHANNEL handles the give
   });
 
-  // --- SPELL_CHANNEL: execute the give or take when the unit arrives ---
+  // --- SPELL_CHANNEL: execute the give or take when the unit arrives ---------
   const channelTrigger = Trigger.create();
   channelTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_CHANNEL);
   channelTrigger.addAction(() => {

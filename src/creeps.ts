@@ -16,10 +16,10 @@ import {
 import { isChallengeArmed, completeChallenge } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
 import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
-import { onCampCleared, onCampFightStarted } from './bossKey';
+import { noteCampCleared, noteCampFightStarted } from './bossKey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
-import { forEachUnitOfPlayer, isAlive, unitExists, forEachUnitInRange, removeUnitsSummonsFirst } from './util';
+import { forEachUnitOfPlayer, isAlive, unitExists, removeUnitsSummonsFirst, nearestUnitInRange } from './util';
 
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
@@ -71,7 +71,7 @@ const SPARRING_COPIES: ReadonlyArray<{ x: number; y: number; approach: number }>
  * Measured by cutting real matches short: before about 8 seconds the opening
  * dominates and the result is off by 2-6x; by 10 the typical error is about a
  * quarter, and a full 30 seconds only improves that to about a sixth. The ready
- * countdown waits for it -- see sparringSecondsToMinimum.
+ * countdown waits for it -- see getSparringSecondsToMinimum.
  */
 export const SPARRING_MIN_SECONDS = 10;
 /** How far from its camp each copy's party starts. */
@@ -100,9 +100,7 @@ let sparringTimer: Timer | null = null;
 /** HP each creep started the sparring match with. */
 let sparringCreepStartHP = 0;
 
-// ---------------------------------------------------------------------------
-// Creep camp state — persisted as an index into the flat camp list
-// ---------------------------------------------------------------------------
+// --- Creep camp state — persisted as an index into the flat camp list --------
 
 let campIndex: number | null = null;
 
@@ -135,9 +133,7 @@ let cageDestructable: Destructable | null = null;
 /** The trigger registered on the current cage, so we can clean it up between rounds. */
 let cageTrigger: Trigger | null = null;
 
-// ---------------------------------------------------------------------------
-// Save/load
-// ---------------------------------------------------------------------------
+// --- Save/load ---------------------------------------------------------------
 
 /** Encode as "i=index;e1=...;e2=...;e3=..." -- one met-list per level. */
 function encodeCamp(): string {
@@ -174,13 +170,13 @@ function decodeCamp(raw: string): void {
   campIndex = index;
 }
 
-// Reset re-rolls the camp — the new-game baseline is a fresh random pick
 /** Start the camp rotation over: nothing has been met, so every unlocked camp
  *  is eligible again. Used by the new-game/reset baseline. */
 export function clearCampRotation(): void {
   for (const level of [1, 2, 3]) encountered[level] = [];
 }
 
+// The new-game baseline re-rolls the camp: a fresh random pick.
 registerSaveSegment('cc', encodeCamp, decodeCamp, () => {
   clearCampRotation();
   rollCreepCamp();
@@ -188,9 +184,7 @@ registerSaveSegment('cc', encodeCamp, decodeCamp, () => {
 onHeroesSpawned((heroes) => scaleCreepStats(heroes));
 onAllHeroesDead(() => removeSpawnedCreeps());
 
-// ---------------------------------------------------------------------------
-// Camp selection
-// ---------------------------------------------------------------------------
+// --- Camp selection ----------------------------------------------------------
 
 /** Pick the next creep camp: a seeded draw from the camps you have unlocked
  *  and NOT yet met.
@@ -225,24 +219,32 @@ export function rollCreepCamp(): void {
   }
   if (levels.length === 0) return;
   const level = levels[seededInt(0, levels.length - 1)];
+  const chosen = drawCampAtLevel(level);
+  if (chosen != null) campIndex = chosen;
+}
 
-  // Each level keeps its own met-list and finishes its own lap, so running out
-  // of unseen camps at one level never changes how often that level is drawn.
+/** Draw a camp of one level not met in its current lap, and record it as met.
+ *  Returns its index into CREEP_CAMPS, or null if the level has no camps.
+ *
+ *  Each level keeps its own met-list and finishes its own lap, so running out
+ *  of unseen camps at one level never changes how often that level is drawn:
+ *  once every camp at it has been met, THIS level's list is wiped and the
+ *  next lap begins with the draw. */
+function drawCampAtLevel(level: number): number | null {
   const atLevel: number[] = [];
-  for (let i = 0; i < camps.length; i++) {
-    if (camps[i].level === level) atLevel.push(i);
+  for (let i = 0; i < CREEP_CAMPS.length; i++) {
+    if (CREEP_CAMPS[i].level === level) atLevel.push(i);
   }
+  if (atLevel.length === 0) return null;
   const met = metAtLevel(level);
   let fresh = atLevel.filter(i => !met.includes(i));
   if (fresh.length === 0) {
-    // Every camp at this level has been met: wipe THIS level's list only.
     encountered[level] = [];
     fresh = atLevel;
   }
-
   const chosen = fresh[seededInt(0, fresh.length - 1)];
   metAtLevel(level).push(chosen);
-  campIndex = chosen;
+  return chosen;
 }
 
 /** Make the camp waiting for the next round a level 3 one -- what the Strange
@@ -253,21 +255,12 @@ export function rollCreepCamp(): void {
  *  arrives, before anybody reaches the shop. A flag would sit unread until the
  *  round after the one it was bought for.
  *
- *  Prefers a level 3 camp not met yet, so the meat shows you something new
- *  where it can; falls back to any of them once the pool has been round once.
- *  Reads and records against level 3's own met-list, so buying meat spends a
- *  slot in that lap exactly as an ordinary level 3 roll would. */
+ *  Drawn exactly as an ordinary level 3 roll is, from level 3's own lap, so
+ *  the meat shows you a camp you have not met where it can and spends a slot
+ *  in that lap. */
 export function forceLevel3Camp(): boolean {
-  const top: number[] = [];
-  for (let i = 0; i < CREEP_CAMPS.length; i++) {
-    if (CREEP_CAMPS[i].level === 3) top.push(i);
-  }
-  if (top.length === 0) return false;
-  const met = metAtLevel(3);
-  let pool = top.filter(i => !met.includes(i));
-  if (pool.length === 0) pool = top;
-  const chosen = pool[seededInt(0, pool.length - 1)];
-  if (!met.includes(chosen)) met.push(chosen);
+  const chosen = drawCampAtLevel(3);
+  if (chosen == null) return false;
   campIndex = chosen;
   // The lobby is very likely measuring the camp this just replaced, so the
   // measurement has to follow the camp. Here rather than at the call site, so a
@@ -293,12 +286,10 @@ export function getCampData(): CreepCamp | null {
   return CREEP_CAMPS[campIndex];
 }
 
-// ---------------------------------------------------------------------------
-// Cage tracking
-// ---------------------------------------------------------------------------
+// --- Cage tracking -----------------------------------------------------------
 
 /** Clean up the previous cage trigger (if any) without spawning creeps. */
-export function cleanupCage(): void {
+export function clearCage(): void {
   if (cageTrigger != null) {
     cageTrigger.destroy();
     cageTrigger = null;
@@ -311,9 +302,7 @@ export function setCage(dest: Destructable): void {
   cageDestructable = dest;
 }
 
-// ---------------------------------------------------------------------------
-// Creep spawning (3x3 grid around cage position)
-// ---------------------------------------------------------------------------
+// --- Creep spawning (3x3 grid around cage position) --------------------------
 
 // Grid offsets: top-left, top-center, top-right, mid-left, mid-center, mid-right, bot-left, bot-center, bot-right
 const GRID_OFFSETS: ReadonlyArray<readonly [number, number]> = [
@@ -417,16 +406,16 @@ function removeSpawnedCreeps(): void {
   forgetSpawnedCreeps();
 }
 
-// ---------------------------------------------------------------------------
-// Stat scaling — called after heroes are summoned
-// ---------------------------------------------------------------------------
+// --- Stat scaling — called after heroes are summoned -------------------------
 
 /** Get average damage per hit for a unit (base + average dice roll). */
 function getAvgDamage(u: unit): number {
-  const base = BlzGetUnitBaseDamage(u, 0);
-  const dice = BlzGetUnitDiceNumber(u, 0);
-  const sides = BlzGetUnitDiceSides(u, 0);
-  return base + dice * (sides + 1) / 2;
+  return BlzGetUnitBaseDamage(u, 0) + diceAverage(u);
+}
+
+/** The average roll of a unit's damage dice, on top of its base damage. */
+function diceAverage(u: unit): number {
+  return BlzGetUnitDiceNumber(u, 0) * (BlzGetUnitDiceSides(u, 0) + 1) / 2;
 }
 
 /** Get effective attack cooldown for a unit. */
@@ -443,8 +432,13 @@ function getDPS(u: unit): number {
 /** Effective HP accounting for armor: ehp = hp * (1 + 0.06 * armor).
  *  Armor of 0 is treated as 0 (no bonus). */
 function getEffectiveHP(u: unit): number {
-  const armor = math.max(0, BlzGetUnitArmor(u));
-  return BlzGetUnitMaxHP(u) * (1 + 0.06 * armor);
+  return BlzGetUnitMaxHP(u) * armorMultiplier(u);
+}
+
+/** How much further a unit's armour stretches its hit points (negative armour
+ *  counted as none). */
+function armorMultiplier(u: unit): number {
+  return 1 + 0.06 * math.max(0, BlzGetUnitArmor(u));
 }
 
 /** Total effective HP and damage across a set of units.
@@ -467,7 +461,7 @@ function sumForce(units: Unit[]): { ehp: number; dps: number } {
 
 /** How much harder than the force a camp is allowed to hit. Tough Camp raises
  *  it; everything that quotes or applies the damage scale asks here. */
-function currentDpsAdvantage(): number {
+function currentDPSAdvantage(): number {
   return isChallengeArmed(CH_TOUGH_CAMP) ? TOUGH_CAMP_DPS_ADVANTAGE : CREEP_DPS_ADVANTAGE;
 }
 
@@ -527,7 +521,7 @@ function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
   const forceDPS = measuredHeroDPS > 0 ? measuredHeroDPS : fielded.dps;
   const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
   return {
-    dpsScale: effectiveCreepDPS > 0 ? (forceDPS * currentDpsAdvantage()) / effectiveCreepDPS : 1,
+    dpsScale: effectiveCreepDPS > 0 ? (forceDPS * currentDPSAdvantage()) / effectiveCreepDPS : 1,
     ehpScale: creepEHP > 0 ? forceEHP / creepEHP : 1,
   };
 }
@@ -538,7 +532,7 @@ function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
  *  camp comes out absurdly hard or absurdly soft this is where the answer is:
  *  how much of our side's HP loss was taken by the force, and how much by
  *  summons standing in front of it. */
-export function dpsSampleBreakdown(): {
+export function getDPSSampleBreakdown(): {
   creepHPLost: number; ourHPLost: number; summonHPLost: number;
   removals: number; removalCredit: number;
 } {
@@ -555,17 +549,17 @@ export function dpsSampleBreakdown(): {
  *  their ladder values, 3 triples them. A number far from 1 means the match
  *  measured something lopsided. It uses the same advantage the next camp will
  *  get, so it is honest with Tough Camp armed. */
-export function getDpsMeasured(): { heroDPS: number; creepDPS: number; scale: number } {
+export function getDPSMeasured(): { heroDPS: number; creepDPS: number; scale: number } {
   return {
     heroDPS: measuredHeroDPS,
     creepDPS: measuredCreepDPS,
-    scale: measuredCreepDPS > 0 ? measuredHeroDPS * currentDpsAdvantage() / measuredCreepDPS : 0,
+    scale: measuredCreepDPS > 0 ? measuredHeroDPS * currentDPSAdvantage() / measuredCreepDPS : 0,
   };
 }
 
 /** The same three numbers as lines, for -dpsnumbers to print. */
 export function getDpsMeasurementReport(): string[] {
-  const measured = getDpsMeasured();
+  const measured = getDPSMeasured();
   const lines: string[] = [];
   lines.push('Our DPS (measured): ' + I2S(R2I(measured.heroDPS)));
   lines.push('Creep DPS (measured): ' + I2S(R2I(measured.creepDPS)));
@@ -637,7 +631,7 @@ function checkCampBeaten(): void {
   completeChallenge(CH_TOUGH_CAMP);
   const origin = campOrigin;
   const level = getCampData();
-  if (origin != null && level != null) onCampCleared(origin.x, origin.y, level.level);
+  if (origin != null && level != null) noteCampCleared(origin.x, origin.y, level.level);
 }
 
 /** Scale creep stats, remove invulnerability, register death triggers. */
@@ -678,13 +672,10 @@ export function scaleCreepStats(heroes: Unit[]): void {
       const originalDPS = getDPS(h);
       const targetDPS = originalDPS * dpsScale;
       const targetAvgDmg = targetDPS * cd;
-      const diceAvg = BlzGetUnitDiceNumber(h, 0) * (BlzGetUnitDiceSides(h, 0) + 1) / 2;
-      const scaledDamage = math.max(1, math.floor(targetAvgDmg - diceAvg));
+      const scaledDamage = math.max(1, math.floor(targetAvgDmg - diceAverage(h)));
 
       // EHP-based HP scaling: keep armor, scale raw HP to match target EHP
-      const armor = math.max(0, BlzGetUnitArmor(h));
-      const armorMultiplier = 1 + 0.06 * armor;
-      const scaledHP = math.max(1, math.floor(getEffectiveHP(h) * ehpScale / armorMultiplier));
+      const scaledHP = math.max(1, math.floor(getEffectiveHP(h) * ehpScale / armorMultiplier(h)));
 
       BlzSetUnitBaseDamage(h, scaledDamage, 0);
       BlzSetUnitMaxHP(h, scaledHP);
@@ -734,9 +725,7 @@ export function scaleCreepStats(heroes: Unit[]): void {
   if (sparringActive) startMatchSampling();
 }
 
-// ---------------------------------------------------------------------------
-// The sparring match: the inter-round lobby fight that measures real DPS
-// ---------------------------------------------------------------------------
+// --- The sparring match: the inter-round lobby fight that measures real DPS ---
 
 /** End the sparring match: measure damage, compute DPS, clean up all state.
  *  Safe to call at any point — handles the case where the timer hasn't started yet. */
@@ -784,7 +773,7 @@ function teardownSparringMatch(record: boolean): void {
 
 /** Seconds until the running sparring match reaches its minimum length, or 0
  *  when it has, or when there is no match to wait for. */
-export function sparringSecondsToMinimum(): number {
+export function getSparringSecondsToMinimum(): number {
   if (sparringTimer == null) return 0;
   return math.max(0, SPARRING_MIN_SECONDS - sparringTimer.elapsed);
 }
@@ -1124,9 +1113,7 @@ export function restartSparringMatch(): void {
   fieldDPSHeroes();
 }
 
-// ---------------------------------------------------------------------------
-// Cage death trigger
-// ---------------------------------------------------------------------------
+// --- Cage death trigger ------------------------------------------------------
 
 /** Register a death trigger on the current cage. Call after setCage(). */
 export function registerCageTrigger(): void {
@@ -1135,7 +1122,7 @@ export function registerCageTrigger(): void {
   cageTrigger = trig;
   TriggerRegisterDeathEvent(trig.handle, cageDestructable.handle);
   trig.addAction(() => {
-    // Guard: if cleanupCage() already cleared us, do nothing (cage was
+    // Guard: if clearCage() already cleared us, do nothing (cage was
     // destroyed as part of map cleanup, not by the player).
     if (cageTrigger !== trig || cageDestructable == null) return;
     const camp = getCampData();
@@ -1143,21 +1130,10 @@ export function registerCageTrigger(): void {
     const cx = cageDestructable.x;
     const cy = cageDestructable.y;
     spawnCreepsAt(cx, cy, camp);
-    onCampFightStarted(camp.level);
+    noteCampFightStarted(camp.level);
     // Grant Summon Heroes ability to the nearest peasant
     // (GetKillingUnit() doesn't work for destructable death events)
-    let nearest: unit | null = null;
-    let bestDist = math.huge;
-    forEachUnitInRange(cx, cy, 300, u => {
-      if (GetUnitTypeId(u) !== PEASANT_ID) return;
-      const dx = GetUnitX(u) - cx;
-      const dy = GetUnitY(u) - cy;
-      const dist = dx * dx + dy * dy;
-      if (dist < bestDist) {
-        bestDist = dist;
-        nearest = u;
-      }
-    });
+    const nearest = nearestUnitInRange(cx, cy, 300, u => GetUnitTypeId(u) === PEASANT_ID);
     if (nearest != null) {
       UnitAddAbility(nearest, SUMMON_ABILITY_ID);
     }

@@ -10,7 +10,7 @@ import {
 } from './state';
 import { spendCharge, updateBuildAbility } from '../items';
 import { TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID } from '../constants';
-import { onTrackPlaced } from '../train';
+import { noteTrackPlaced } from '../train';
 import { triggerVictory } from '../victory';
 import { recountTrackShapes, noteFinalTrackPlaced } from '../challengeList';
 
@@ -89,7 +89,7 @@ function onTrackBuilt() {
     // second neighbour, so its shape is now decided. Re-measure the whole line
     // rather than crediting that one piece -- see computeTrackShapes.
     recountTrackShapes();
-    onTrackPlaced();
+    noteTrackPlaced();
     // Either exit finishes the line. The boss exit is only ever present in a
     // round that can reach the boss, and it is remembered here rather than
     // re-derived on arrival, because the terrain is gone by then.

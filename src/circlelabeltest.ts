@@ -1,6 +1,6 @@
 import { registerTest, startRunInLobby, TestReporter } from './testkit';
 import { Units } from '@objectdata/units';
-import { unitLabelStats } from './unitLabels';
+import { getUnitLabelStats } from './unitLabels';
 import { loadInterRoundLobby } from './terrain/load';
 import { forEachUnitInWorld } from './util';
 
@@ -31,32 +31,32 @@ function runCircleLabelTest(t: TestReporter): void {
   const first = circlesOnMap().length;
   t.report('circlesInLobby', first);
   if (first === 0) t.fail('circlesInLobby', 'no circles, so nothing is being tested');
-  t.expect('labelsMatchCircles', unitLabelStats().total, first);
+  t.expect('labelsMatchCircles', getUnitLabelStats().total, first);
 
   // Regenerate, and look in the same frame.
   loadInterRoundLobby();
   const second = circlesOnMap().length;
-  const now = unitLabelStats();
+  const now = getUnitLabelStats();
   t.expect('orphansSameFrameAfterRegen', now.orphaned, 0);
   t.expect('labelsMatchCirclesAfterRegen', now.total, second);
 
   loadInterRoundLobby();
-  t.expect('noPileUpAfterSecondRegen', unitLabelStats().total, circlesOnMap().length);
+  t.expect('noPileUpAfterSecondRegen', getUnitLabelStats().total, circlesOnMap().length);
 
   // Remove one circle outside any cleanup path, and look in the same frame:
   // the RemoveUnit hook has to have dropped its label already.
   const victim = circlesOnMap()[0];
-  const before = unitLabelStats().total;
+  const before = getUnitLabelStats().total;
   RemoveUnit(victim);
-  t.expect('removalDroppedLabelSameFrame', before - unitLabelStats().total, 1);
+  t.expect('removalDroppedLabelSameFrame', before - getUnitLabelStats().total, 1);
 
   // And a circle that dies rather than being removed.
   const dying = circlesOnMap()[0];
-  const beforeDeath = unitLabelStats().total;
+  const beforeDeath = getUnitLabelStats().total;
   SetUnitInvulnerable(dying, false);
   KillUnit(dying);
   t.after(0.5, () => {
-    const after = unitLabelStats();
+    const after = getUnitLabelStats();
     t.expect('deathDroppedLabel', beforeDeath - after.total, 1);
     t.expect('orphansAtEnd', after.orphaned, 0);
     t.done();

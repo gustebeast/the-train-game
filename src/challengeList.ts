@@ -15,18 +15,7 @@ import { boardChanged } from './boardSignal';
  * only have to say what happened.
  */
 
-/*
- * IMPLEMENTED SINCE, for the record: night blindness, the hidden UI and the
- * over-the-shoulder camera are all in (see daynight.ts and challengeEffects.ts).
- *
- * The one thing that did NOT hold: a fog modifier is not a harmless overlay.
- * Masking the map WIPES what each player has explored, so simply lifting it at
- * dawn left the map black instead of explored-grey. daynight.ts now samples the
- * explored state before the blackout and re-flashes it afterwards.
- */
-
-
-// --- ids (persisted; never reuse or renumber) ------------------------------
+// --- ids (persisted; never reuse or renumber) --------------------------------
 export const CH_CRITTERPOCALYPSE = 'crit';
 export const CH_TOUGH_CAMP = 'camp';
 export const CH_STRAIGHT_15 = 'str';
@@ -45,7 +34,7 @@ const DASHES_PER_PLAYER = 50;
 const BRINK_SECONDS = 10;
 export const BRINK_TRACKS = 2;
 
-// --- per-round counters ---------------------------------------------------
+// --- per-round counters ------------------------------------------------------
 /** Derived from the line itself by recountTrackShapes -- never incremented.
  *  See computeTrackShapes for why. */
 let straightRun = 0;      // longest unbroken run, not a total
@@ -82,7 +71,7 @@ function dashTarget(): number {
   return getHumanPlayers().length * DASHES_PER_PLAYER;
 }
 
-// --- definitions ----------------------------------------------------------
+// --- definitions -------------------------------------------------------------
 //
 // NOTE: the `description` strings are built when this module loads, and I2S is
 // NOT usable that early -- it returns an empty string, so "Lay 15 curved track
@@ -170,7 +159,7 @@ defineChallenge({
   completesOnFinalTrack: true,
 });
 
-// --- event hooks, called by the systems that see the events ---------------
+// --- event hooks, called by the systems that see the events ------------------
 
 /** A point on the line. Exported for the test, which builds lines by hand. */
 export interface TrackPoint { x: number; y: number; }

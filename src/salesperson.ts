@@ -2,14 +2,10 @@ import { Trigger } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { gameState, syncState } from './state';
 import { showFloatingText } from './items';
-import { INVENTORY_SLOTS, nextFrame } from './util';
+import { nextFrame, findInventoryItem, unitExists, giveItems, giveKit } from './util';
 import { registerSaveSegment, parseFields } from './save';
-import { deriveSeed } from './rng';
-import {
-  SALESPERSON_ID, PEASANT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID,
-  UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
-  MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID, UPGRADE_PEASANT_ABILITY_ID,
-} from './constants';
+import { deriveSeed, STREAMS } from './rng';
+import { SALESPERSON_ID, PEASANT_ID, UPGRADE_PEASANT_ABILITY_ID, ABILITY_ITEM_FAMILIES } from './constants';
 
 /**
  * The Secret Salesperson: a goblin who turns up on snow rounds selling peasant
@@ -21,15 +17,6 @@ import {
  * syncState overwrites. A purchase that turns out to be useless is not charged
  * and its item is taken back.
  */
-/** The ability items he sells, one per visit, each with its Greater version.
- *  The keys are save codes: append only, never reorder. */
-const ABILITY_ITEMS: [string, number, number][] = [
-  ['v', RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID],
-  ['u', UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID],
-  ['h', HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID],
-  ['m', MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID],
-];
-
 const ITEM_PRICE = 2;
 const UPGRADE_PRICE = 3;
 /** What he pays for an ability item sold back to him: 1, or 2 for a Greater.
@@ -38,22 +25,20 @@ const BUYBACK = new Map<number, number>();
 /** Each ability item and its Greater version. */
 const GREATER_VERSION = new Map<number, number>();
 const PRICES = new Map<number, number>([[UPGRADE_PEASANT_ABILITY_ID, UPGRADE_PRICE]]);
-for (const [, plain, greater] of ABILITY_ITEMS) {
+for (const { plain, greater } of ABILITY_ITEM_FAMILIES) {
   BUYBACK.set(plain, 1);
   BUYBACK.set(greater, 2);
   GREATER_VERSION.set(plain, greater);
   PRICES.set(plain, ITEM_PRICE);
 }
 
-// --- what's on offer -------------------------------------------------------
+// --- what's on offer ---------------------------------------------------------
 //
 // One ability item per visit, walked like the dealer's challenges: a seeded
 // shuffle of the whole list, no repeats until every item has been offered,
 // then a fresh shuffle for the next lap. Seeded per save, so a reload brings
 // back the same sequence.
 
-/** Stream id for the offer order (see rng.deriveSeed). */
-const OFFER_STREAM = 3;
 let seed = 0;
 let cycles = 0;
 /** Keys offered this lap. */
@@ -61,7 +46,7 @@ let seen: string[] = [];
 let offeredKey: string | null = null;
 
 function shuffledKeys(): string[] {
-  const keys = ABILITY_ITEMS.map(([key]) => key);
+  const keys = ABILITY_ITEM_FAMILIES.map(f => f.key);
   let state = ((seed !== 0 ? seed : 1) + cycles * 2654435761) % 4294967296;
   for (let i = keys.length - 1; i > 0; i--) {
     state = (1664525 * state + 1013904223) % 4294967296;
@@ -75,7 +60,7 @@ function shuffledKeys(): string[] {
 
 /** Move the offer on to the next item of the lap. Called once per visit. */
 function advanceOffer(): void {
-  if (seed === 0) seed = deriveSeed(OFFER_STREAM);
+  if (seed === 0) seed = deriveSeed(STREAMS.salesperson);
   let next = shuffledKeys().find(key => !seen.includes(key));
   if (next == null) {
     seen = [];
@@ -88,7 +73,7 @@ function advanceOffer(): void {
 
 /** The ability item on offer at the current visit, or 0 before the first. */
 export function getOfferedAbilityItem(): number {
-  for (const [key, plain] of ABILITY_ITEMS) if (key === offeredKey) return plain;
+  for (const f of ABILITY_ITEM_FAMILIES) if (f.key === offeredKey) return f.plain;
   return 0;
 }
 
@@ -123,10 +108,8 @@ registerSaveSegment('sp',
 export function stockSalesperson(salesperson: unit): void {
   advanceOffer();
   const offered = getOfferedAbilityItem();
-  const t = CreateTimer()!;
-  TimerStart(t, 0, false, () => {
-    DestroyTimer(t);
-    if (GetUnitTypeId(salesperson) === 0) return;
+  nextFrame(() => {
+    if (!unitExists(salesperson)) return;
     AddItemToStock(salesperson, offered, 10, 10);
     AddItemToStock(salesperson, UPGRADE_PEASANT_ABILITY_ID, 10, 10);
   });
@@ -134,11 +117,7 @@ export function stockSalesperson(salesperson: unit): void {
 
 /** The buyer's ability item that has a Greater version, if any. */
 function upgradableItem(buyer: unit): item | null {
-  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
-    const it = UnitItemInSlot(buyer, slot);
-    if (it != null && GREATER_VERSION.has(GetItemTypeId(it))) return it;
-  }
-  return null;
+  return findInventoryItem(buyer, id => GREATER_VERSION.has(id));
 }
 
 /** Take back an item the buyer shouldn't have, uncharged. */
@@ -179,8 +158,7 @@ export function initSalesperson(): void {
       RemoveItem(sold);
       const greater = GREATER_VERSION.get(GetItemTypeId(current))!;
       RemoveItem(current);
-      const upgraded = CreateItem(greater, GetUnitX(buyer), GetUnitY(buyer));
-      if (upgraded != null) UnitAddItem(buyer, upgraded);
+      giveItems(buyer, [greater]);
     }
     // An ability item goes on into the buyer's inventory as a pickup, where
     // items.ts gives it the last slot (swapping out any one already held).
@@ -237,11 +215,7 @@ export function initSalespersonBuyback(): void {
     }
     const charges = GetItemCharges(sold);
     RemoveItem(sold);
-    const back = CreateItem(itemType, GetUnitX(seller), GetUnitY(seller));
-    if (back != null) {
-      SetItemCharges(back, charges);
-      UnitAddItem(seller, back);
-    }
+    giveKit(seller, [{ id: itemType, charges }]);
     showFloatingText(seller, "He's not buying that!");
   });
 }

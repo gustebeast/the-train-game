@@ -13,10 +13,10 @@ import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { spawnStrangeRock } from '../bossRock';
 import { placedTracks, setVictoryTile, setBossVictoryTile, resetLineEnd } from '../track/state';
-import { initReadyZone, cleanupReady } from '../ready';
+import { createReadyZone, clearReadyZones } from '../ready';
 import { labelUnit } from '../unitLabels';
 import { setCrate, setCrateStart } from '../items';
-import { setCage, registerCageTrigger, cleanupCage, cancelSparringMatch } from '../creeps';
+import { setCage, registerCageTrigger, clearCage, cancelSparringMatch } from '../creeps';
 import { resetHeroState } from '../heroes';
 import { stockShop, registerDealer } from '../shop';
 import { stockSalesperson } from '../salesperson';
@@ -25,7 +25,7 @@ import { destroyAllTimers } from '../timers';
 import { SALESPERSON_ID, AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID, CRITTER_TYPE_IDS } from '../constants';
 import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
 
-// --- Terrain tile FourCCs ---
+// --- Terrain tile FourCCs ----------------------------------------------------
 // GRASS, GRASSY_DIRT and POOL depend on the biome; see tileFor.
 const TERRAIN_FOURCC: Record<Exclude<Terrain, Terrain.GRASS | Terrain.GRASSY_DIRT | Terrain.POOL>, string> = {
   [Terrain.ROCK]: 'Lrok',
@@ -137,7 +137,7 @@ const READY_CIRCLES: { [entity: number]: { label: string; zone: string; warning?
 /** Stand a ready-zone circle at a world position and arm its zone. An empty
  *  label makes an unmarked circle: no floating text, and no name when it is
  *  selected. `members` makes it wait for those units rather than for a peasant
- *  from every player (see initReadyZone). */
+ *  from every player (see createReadyZone). */
 export function spawnReadyCircle(
   x: number, y: number, spec: { label: string; zone: string; warning?: boolean },
   members: unit[] | null = null,
@@ -153,7 +153,7 @@ export function spawnReadyCircle(
   // red tint on the circle itself.
   if (spec.label !== '') labelUnit(circle.handle, spec.label, 255, 255, 255);
   if (spec.warning === true) SetUnitVertexColor(circle.handle, 255, 180, 180, 255);
-  initReadyZone(x, y, spec.zone, circle, members);
+  createReadyZone(x, y, spec.zone, circle, members);
 }
 
 /** Take the current board down completely: every unit, destructable, item and
@@ -169,8 +169,8 @@ function clearBoard(): void {
   destroyAllTimers();
   cancelSparringMatch();
   resetHeroState();
-  cleanupReady();
-  cleanupCage();
+  clearReadyZones();
+  clearCage();
   pauseResourceDrops();
   EnumDestructablesInRect(getWorldBounds(), undefined, () => RemoveDestructable(GetEnumDestructable()!));
   forEachUnitInWorld(u => RemoveUnit(u));
@@ -281,7 +281,8 @@ export function spawnTerrain(grid: Grid): SpawnedTrain {
         }
 
         case Entity.CRATE_START: {
-          // Starting crate (left side) — syncCrateInventory populates from state or shows max in inter-round lobby
+          // Starting crate (left side) — loadCrateForRound fills it from state, or
+          // loadCrateForInterRoundLobby shows it full in the inter-round lobby
           const startCrate = Unit.create(getNeutralExtra(), CRATE_ID, world.x, world.y, 270);
           if (startCrate != null) setCrateStart(startCrate);
           break;
@@ -362,7 +363,7 @@ export function spawnTerrain(grid: Grid): SpawnedTrain {
         case Entity.CRITTER: {
           const critterType = CRITTER_TYPE_IDS[GetRandomInt(0, CRITTER_TYPE_IDS.length - 1)];
           // Neutral EXTRA, not neutral passive. Players share vision with
-          // neutral passive so their own rail line and crates are visible, and
+          // neutral passive so their own rail line is visible, and
           // critters owned there each became a permanent eye -- a round opened
           // with wildlife-shaped patches of the map already uncovered instead of
           // black. Neutral extra is allied without vision, which is what

@@ -1,8 +1,9 @@
 import { Unit } from 'w3ts';
 import { TRACK_SIZE } from './track/constants';
-import { findItemByType } from './items';
+import { worldToTile } from './terrain/constants';
+import { abilityItemTier } from './items';
 import { onSpellEffect } from './util';
-import { VACUUM_ABILITY_ID, GREATER_RESOURCE_VACUUM_ID, WOOD_ID, STONE_ID } from './constants';
+import { VACUUM_ABILITY_ID, WOOD_ID, STONE_ID, RESOURCE_VACUUM_ID } from './constants';
 
 /** Vacuum Resources (Q): every log and stone lying within reach of the
  *  caster's tile is pulled into one pile of each, on the caster's tile.
@@ -20,14 +21,14 @@ const VACUUMED: ReadonlyArray<readonly [number, number]> = [
 /** Tiles of reach for the caster: 1 or 2. */
 export function vacuumReach(caster: unit): number {
   const u = Unit.fromHandle(caster);
-  return u != null && findItemByType(u, GREATER_RESOURCE_VACUUM_ID) != null ? 2 : 1;
+  return u != null && abilityItemTier(u, RESOURCE_VACUUM_ID) === 2 ? 2 : 1;
 }
 
 /** Pull the loose wood and stone within `reach` tiles of (x, y)'s tile into
  *  one pile of each on that tile. */
 export function vacuumResources(x: number, y: number, reach: number): void {
-  const cx = Math.floor(x / TRACK_SIZE + 0.5) * TRACK_SIZE;
-  const cy = Math.floor(y / TRACK_SIZE + 0.5) * TRACK_SIZE;
+  const cx = worldToTile(x) * TRACK_SIZE;
+  const cy = worldToTile(y) * TRACK_SIZE;
   const half = (reach + 0.5) * TRACK_SIZE;
   const area = Rect(cx - half, cy - half, cx + half, cy + half)!;
   for (const [itemType, offset] of VACUUMED) {

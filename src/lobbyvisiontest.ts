@@ -9,13 +9,7 @@ import { getInterRoundLobbyHeroUnits } from './heroes';
 import { getInterRoundLobbyMercUnits, buyMercContract, buySecondContract } from './mercenary';
 import { getTrain, getTrackWagon } from './train';
 import { placedTracks } from './track/state';
-import { TRACK_SIZE } from './track/constants';
-
-/** Grid coordinate of a world coordinate, for asserting a layout in the units
- *  the layout was written in. */
-function toGrid(world: number): number {
-  return R2I(world / TRACK_SIZE);
-}
+import { worldToTile } from './terrain/constants';
 
 /**
  * Nothing standing in the inter-round lobby may hand the players vision.
@@ -104,8 +98,8 @@ function runLobbyVisionTest(t: TestReporter): void {
   let north = 0;
   let south = 0;
   for (const sp of column) {
-    if (toGrid(sp.x) !== 4) offColumn += 1;
-    const gy = toGrid(sp.y);
+    if (worldToTile(sp.x) !== 4) offColumn += 1;
+    const gy = worldToTile(sp.y);
     if (gy === 0) onCentreLine += 1;
     if (gy > 0) north += 1;
     if (gy < 0) south += 1;
@@ -115,17 +109,17 @@ function runLobbyVisionTest(t: TestReporter): void {
   t.expect('onCentreLine', onCentreLine, 0);
   t.expect('northOfCentre', north, 3);
   t.expect('southOfCentre', south, 3);
-  t.expect('mercY0', toGrid(spots.mercs[0].y), 3);
-  t.expect('mercY1', toGrid(spots.mercs[1].y), 2);
-  t.expect('heroY0', toGrid(spots.heroes[0].y), 1);
-  t.expect('heroY1', toGrid(spots.heroes[1].y), -1);
-  t.expect('heroY2', toGrid(spots.heroes[2].y), -2);
-  t.expect('heroY3', toGrid(spots.heroes[3].y), -3);
+  t.expect('mercY0', worldToTile(spots.mercs[0].y), 3);
+  t.expect('mercY1', worldToTile(spots.mercs[1].y), 2);
+  t.expect('heroY0', worldToTile(spots.heroes[0].y), 1);
+  t.expect('heroY1', worldToTile(spots.heroes[1].y), -1);
+  t.expect('heroY2', worldToTile(spots.heroes[2].y), -2);
+  t.expect('heroY3', worldToTile(spots.heroes[3].y), -3);
 
   // And the units really are standing on those spots.
   let offSpot = 0;
   for (const u of [...mercs, ...heroes]) {
-    if (toGrid(u.x) !== 4) offSpot += 1;
+    if (worldToTile(u.x) !== 4) offSpot += 1;
   }
   t.expect('unitsOffColumn', offSpot, 0);
 
