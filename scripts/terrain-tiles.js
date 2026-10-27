@@ -12,9 +12,10 @@
 //   yet. That row is the map's boundary, outside the camera bounds, so nothing
 //   painted there is ever seen.
 //
-// The list may exceed the World Editor's 16: with 21, WC3 3.0 drew every
-// board in Definitive (winter's tiles past index 16 included), and the 2.0.4
-// VMs passed the full suite on it (2026-10-27).
+// The list may exceed the World Editor's 16. Checked 2026-10-27 in the user's
+// WC3 3.0 Definitive: a 20-tile test list drew winter's tiles at indices
+// 17-19, and this build's 21 drew both lobbies and a summer round (the boss
+// arena's floor was not seen). The 2.0.4 VMs passed the full suite on 21.
 //
 // Format 12 (the only one known here): 'W3E!', version, tileset char, custom
 // flag, tile count + ids, cliff count + ids, width, height, offset x, y, then
