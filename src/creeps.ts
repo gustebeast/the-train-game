@@ -11,8 +11,7 @@ import {
   spawnHeroFromData, getChosenHeroData,
 } from './heroes';
 import {
-  SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, FILL_ABILITY_ID, BRIDGE_ABILITY_ID,
-  WATER_TRAIN_ABILITY_ID, PEASANT_ID,
+  SUMMON_ABILITY_ID, PEASANT_SPELL_IDS, PEASANT_ID,
 } from './constants';
 import { isChallengeArmed, completeChallenge } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
@@ -129,17 +128,6 @@ function metAtLevel(level: number): number[] {
   }
   return list;
 }
-
-/** Standard abilities the map has taken over for its own spells. Any creep
- *  that carries one natively must have it removed on spawn -- see the spawn
- *  loop. Keep in step with the repurposed abilities in compiletime.ts. */
-const REPURPOSED_ABILITY_IDS = [
-  UNSUMMON_ABILITY_ID,      // RoarNeutralHostile -- 4 creeps carry it
-  SUMMON_ABILITY_ID,        // Roar
-  FILL_ABILITY_ID,          // UndefinedNeutralHostile
-  BRIDGE_ABILITY_ID,        // FingerOfDeathNeutralHostile
-  WATER_TRAIN_ABILITY_ID,   // DrunkenHazeChen
-];
 
 /** The cage destructable spawned for this round. */
 let cageDestructable: Destructable | null = null;
@@ -410,7 +398,7 @@ function placeCamp(cx: number, cy: number, camp: CreepCamp): void {
     // and leaving it on means a selected creep shows an "Unsummon Heroes"
     // button. The trigger that acts on it also checks the caster, so this is
     // the second of two locks rather than the only one.
-    for (const abilityId of REPURPOSED_ABILITY_IDS) {
+    for (const abilityId of PEASANT_SPELL_IDS) {
       UnitRemoveAbility(u.handle, abilityId);
     }
     BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);

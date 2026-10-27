@@ -5,7 +5,7 @@ import { Upgrades } from '@objectdata/upgrades';
 import {
   UNKNOWN_UNIT, STRANGE_ROCK, DASH_ABILITY, KEY_THROW_ABILITY, BOSS_UNIT, BOSS_ADD_UNIT,
   BOSS_INFERNO_ABILITY, CRITTER_TYPES, SALESPERSON_UNIT, VACUUM_ABILITY, UNHOLY_FRENZY_ABILITY,
-  GREATER_UNHOLY_FRENZY_ABILITY, IMBUE_HORSE_ABILITY, GREATER_IMBUE_HORSE_ABILITY,
+  GREATER_UNHOLY_FRENZY_ABILITY, IMBUE_HORSE_ABILITY, GREATER_IMBUE_HORSE_ABILITY, PEASANT_SPELLS,
 } from './sharedData';
 
 // Units
@@ -49,12 +49,14 @@ export const MAX_MERCS = 2;
 export const CRITTER_TYPE_IDS: ReadonlyArray<number> = CRITTER_TYPES.map(id => FourCC(id));
 
 // Abilities
-export const SUMMON_ABILITY_ID = FourCC(Abilities.Roar);
-export const UNSUMMON_ABILITY_ID = FourCC(Abilities.RoarNeutralHostile);
+export const SUMMON_ABILITY_ID = FourCC(PEASANT_SPELLS.summonHeroes);
+export const UNSUMMON_ABILITY_ID = FourCC(PEASANT_SPELLS.unsummonHeroes);
+export const BRIDGE_ABILITY_ID = FourCC(PEASANT_SPELLS.bridge);
+export const FILL_ABILITY_ID = FourCC(PEASANT_SPELLS.fillBucket);
+export const WATER_TRAIN_ABILITY_ID = FourCC(PEASANT_SPELLS.waterTrain);
+/** Every stock ability taken over as a peasant spell; see PEASANT_SPELLS. */
+export const PEASANT_SPELL_IDS: ReadonlyArray<number> = Object.values(PEASANT_SPELLS).map(id => FourCC(id));
 export const BUILD_TRACK_ABILITY_ID = FourCC(Abilities.BuildTinyFarm);
-export const BRIDGE_ABILITY_ID = FourCC(Abilities.FingerOfDeathNeutralHostile);
-export const FILL_ABILITY_ID = FourCC(Abilities.UndefinedNeutralHostile);
-export const WATER_TRAIN_ABILITY_ID = FourCC(Abilities.DrunkenHazeChen);
 // The Wand of Illusion's ability repurposed as the Hero Reroll cast (its
 // native illusion is irrelevant -- the target is replaced the moment the spell
 // lands)

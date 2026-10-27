@@ -347,10 +347,9 @@ compiletime(({ objectData, constants }) => {
   const ModifiedObject = require('mdx-m3-viewer-th/dist/cjs/parsers/w3x/w3u/modifiedobject').default;
   // Forced mods: fields whose real WC3 default differs from what the library stores
   //
-  // Every spell repurposed as a trigger-only cast wants the same four things
-  // off: it is a button that raises an event, so mana, cooldown, duration and
-  // area are all in the way. Five abilities spelled that out identically.
-  // Shared safely because the consumer only READS these into fresh
+  // Every spell repurposed as a trigger-only cast (shared.PEASANT_SPELLS) wants
+  // the same things off: it is a button that raises an event, so mana,
+  // cooldown, duration and area are all in the way. Shared safely because the consumer only READS these into fresh
   // Modification objects; it never writes back through them.
   const zeroedSpellCost = [
     { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
@@ -374,11 +373,6 @@ compiletime(({ objectData, constants }) => {
       { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
       { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
     ],
-    Afod: zeroedSpellCost, // FingerOfDeath neutral hostile (bridge spell)
-    Acdh: zeroedSpellCost, // DrunkenHaze Chen (water train spell)
-    Aroa: zeroedSpellCost, // Roar (summon heroes spell)
-    ACro: zeroedSpellCost, // RoarNeutralHostile (unsummon heroes spell)
-    ACss: zeroedSpellCost, // ShadowStrike neutral hostile (fill bucket spell)
     // The Alchemist's Transmute pays its caster gold for the creep it kills.
     // Gold here is gameState.gold, copied onto native gold by syncGold, so the
     // payout only ever showed as phantom gold: the counter jumped (66 for one
@@ -429,7 +423,9 @@ compiletime(({ objectData, constants }) => {
     // mercenary.ts's death trigger, so that code is load-bearing, not a
     // belt-and-braces backstop.
   };
-  /** Add each forced modification the object does not already carry. */
+  for (const key of Object.keys(shared.PEASANT_SPELLS)) {
+    forcedMods[(shared.PEASANT_SPELLS as Record<string, string>)[key]] = zeroedSpellCost;
+  }
   /** Add each forced field the object lacks. A copy also inherits whatever
    *  this file did to its base -- the vacuum, a copy of Channel, came out with
    *  give/take's "unit or point" target type -- so for a copy (`replace`) a
@@ -931,38 +927,26 @@ compiletime(({ objectData, constants }) => {
   trackPiece.modelUsed = 'war3mapImported\\OmniTrack.mdx';
   trackPiece.scalingValue = 0.5;
 
-  // Bridge spell: FingerOfDeath (neutral hostile) repurposed as a no-mana, unit+building-targeting spell
-  const bridge = objectData.abilities.get(constants.abilities.FingerOfDeathNeutralHostile)!;
-  bridge.heroAbility = false;
-  bridge.levels = 1;
-  bridge.castRange = 80;
-  bridge.targetsAllowed = 'alive,allies,friend,ground,hero,invulnerable,mechanical,neutral,nonhero,notself,organic,player,structure,vulnerable';
-  bridge.tooltipNormal = 'Build Bridge';
-  bridge.tooltipNormalExtended = 'Consumes one wood to convert a water block into a tile you can walk and build on';
-  bridge.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
-  bridge.hotkeyNormal = 'D';
-
-  // Water train spell: DrunkenHaze (Chen) repurposed as a no-mana, train-targeting spell
-  const waterTrain = objectData.abilities.get(constants.abilities.DrunkenHazeChen)!;
-  waterTrain.heroAbility = false;
-  waterTrain.levels = 1;
-  waterTrain.castRange = 80;
-  waterTrain.targetsAllowed = 'alive,allies,friend,ground,hero,invulnerable,mechanical,neutral,nonhero,notself,organic,player,structure,vulnerable';
-  waterTrain.tooltipNormal = 'Water Train';
-  waterTrain.tooltipNormalExtended = 'Pours water on the train to restore it to full HP.';
-  waterTrain.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
-  waterTrain.hotkeyNormal = 'D';
-
-  // Fill bucket spell: ShadowStrike (neutral hostile) repurposed as a no-mana, water-targeting spell
-  const fillBucket = objectData.abilities.get(constants.abilities.UndefinedNeutralHostile)!;
-  fillBucket.heroAbility = false;
-  fillBucket.levels = 1;
-  fillBucket.castRange = 80;
-  fillBucket.targetsAllowed = 'alive,allies,friend,ground,hero,invulnerable,mechanical,neutral,nonhero,notself,organic,player,structure,vulnerable';
-  fillBucket.tooltipNormal = 'Fill Bucket';
-  fillBucket.tooltipNormalExtended = 'Fills a bucket with water from a water block.';
-  fillBucket.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
-  fillBucket.hotkeyNormal = 'D';
+  // The peasant's three targeted spells: each a stock spell taken over as a
+  // free cast at point-blank range, with the trigger deciding what the target
+  // must be (shared.PEASANT_SPELLS; their cost is zeroed in forcedMods).
+  const authorTargetSpell = (rawcode: string, name: string, description: string): void => {
+    const spell = objectData.abilities.get(rawcode)!;
+    spell.heroAbility = false;
+    spell.levels = 1;
+    spell.castRange = 80;
+    spell.targetsAllowed = 'alive,allies,friend,ground,hero,invulnerable,mechanical,neutral,nonhero,notself,organic,player,structure,vulnerable';
+    spell.tooltipNormal = name;
+    spell.tooltipNormalExtended = description;
+    spell.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
+    spell.hotkeyNormal = 'D';
+  };
+  authorTargetSpell(shared.PEASANT_SPELLS.bridge, 'Build Bridge',
+    'Consumes one wood to convert a water block into a tile you can walk and build on');
+  authorTargetSpell(shared.PEASANT_SPELLS.waterTrain, 'Water Train',
+    'Pours water on the train to restore it to full HP.');
+  authorTargetSpell(shared.PEASANT_SPELLS.fillBucket, 'Fill Bucket',
+    'Fills a bucket with water from a water block.');
 
   // Summon Heroes tech: MagicSentry upgrade repurposed as the requirement
   // gating the summon ability. Granted via SetPlayerTechResearched when the
@@ -975,7 +959,7 @@ compiletime(({ objectData, constants }) => {
   summonTech.tooltipExtended = 'Unlocks the Summon Heroes ability.';
 
   // Summon Heroes spell: Roar repurposed as a no-target instant-cast ability
-  const summonHeroes = objectData.abilities.get(constants.abilities.Roar)!;
+  const summonHeroes = objectData.abilities.get(shared.PEASANT_SPELLS.summonHeroes)!;
   summonHeroes.heroAbility = false;
   summonHeroes.levels = 1;
   summonHeroes.tooltipNormal = 'Summon Heroes';
@@ -989,7 +973,7 @@ compiletime(({ objectData, constants }) => {
   summonHeroes.requirements = constants.upgrades.MagicSentry;
 
   // Unsummon Heroes spell: RoarNeutralHostile repurposed as a no-target instant-cast ability
-  const unsummonHeroes = objectData.abilities.get(constants.abilities.RoarNeutralHostile)!;
+  const unsummonHeroes = objectData.abilities.get(shared.PEASANT_SPELLS.unsummonHeroes)!;
   unsummonHeroes.heroAbility = false;
   unsummonHeroes.levels = 1;
   unsummonHeroes.tooltipNormal = 'Unsummon Heroes';

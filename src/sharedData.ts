@@ -54,6 +54,21 @@ export const IMBUE_HORSE_ABILITY = 'A016';
 export const GREATER_IMBUE_HORSE_ABILITY = 'A017';
 /** Every ability item spell's cooldown, in seconds (all of them on Q). */
 export const ABILITY_ITEM_COOLDOWN = 60;
+
+// --- Stock spells taken over --------------------------------------------------------
+
+/** Stock abilities the map takes over as its own peasant spells: buttons that
+ *  only raise an event for a trigger to act on. The build strips their cost
+ *  and rewrites their text; the game strips them off any creep that carries
+ *  one natively, where it would show as a stray "Unsummon Heroes" button.
+ *  Both sides walk this table, so a new one is added here and nowhere else. */
+export const PEASANT_SPELLS = {
+  summonHeroes: Abilities.Roar,
+  unsummonHeroes: Abilities.RoarNeutralHostile,
+  fillBucket: Abilities.UndefinedNeutralHostile,
+  bridge: Abilities.FingerOfDeathNeutralHostile,
+  waterTrain: Abilities.DrunkenHazeChen,
+};
 // --- Pools ----------------------------------------------------------------------
 
 /** Every hero a run can roll: the standard heroes, tavern included. The build
