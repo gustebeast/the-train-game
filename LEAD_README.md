@@ -148,6 +148,26 @@ plumbing with a shared failure mode, so it needs one owner.
   harness) and `scripts/vmtest/VM-SETUP.md` (building/re-minting, and the traps
   that each cost hours).
 
+## Testing on the user's own machine
+
+The VMs run WC3 2.0.4 with classic graphics and can never show HD
+(Definitive / Reforged) rendering. For that, the lead can drive the user's own
+WC3 (3.0, online), **only when the user has offered it** -- it takes over
+their screen, and the game simulates only while it is in the foreground:
+
+1. Build, then `node scripts/host-launch.js <map.w3x>`: it launches WC3
+   straight into the map (`-loadfile`, the same as `npm run test`). A map the
+   user should keep separately goes into Download as `TheTrainGame-lead.w3x`.
+2. The computer-use tools need two grants: `Warcraft III` (the launcher) and
+   the game process itself, requested as `Warcraft III.exe` once it is
+   running -- before that the window is masked.
+3. Press a key past the loading screen; drive it with chat commands
+   (`-lobby`, `-cheatmode` in a round, `-arena`) and clicks. Double-clicking
+   the hero portrait (bottom-left) re-centres the camera on the peasant.
+4. Close the game when done (`taskkill /IM "Warcraft III.exe" /F`) to hand
+   the screen back. The graphics mode is whatever the user last chose in
+   WC3's options.
+
 ## Project context in one paragraph
 
 TheTrainGame is a WC3 map: TypeScript in `src/` compiled to Lua via

@@ -14,6 +14,7 @@ import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { spawnStrangeRock } from '../bossRock';
 import { placedTracks, setVictoryTile, setBossVictoryTile, resetLineEnd, noteLineChanged } from '../track/state';
+import { FIXED_TILES } from './tiles';
 import { createReadyZone, clearReadyZones } from '../ready';
 import { labelUnit } from '../unitLabels';
 import { setCrate, setCrateStart } from '../items';
@@ -28,16 +29,17 @@ import { SALESPERSON_ID, AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TR
 import { getHumanPlayers, getWorldBounds, forEachUnitInWorld, forEachGroundItem, forEachDestructable } from '../util';
 
 // --- Terrain tile FourCCs ----------------------------------------------------
-// GRASS, GRASSY_DIRT and POOL depend on the biome; see tileFor.
+// GRASS, GRASSY_DIRT and POOL depend on the biome; see tileFor. Every tile
+// painted here must be in tiles.ts, or HD graphics will not draw it.
 const TERRAIN_FOURCC: Record<Exclude<Terrain, Terrain.GRASS | Terrain.GRASSY_DIRT | Terrain.POOL>, string> = {
-  [Terrain.ROCK]: 'Lrok',
-  [Terrain.ROUGH_DIRT]: 'Ldro',
-  [Terrain.WHITE_MARBLE]: 'Xwmb',
-  [Terrain.BLACK_BRICKS]: 'Ibkb',
-  [Terrain.DUNGEON_DIRT]: 'Ddrt',
-  [Terrain.DUNGEON_BRICK]: 'Dbrk',
-  [Terrain.DUNGEON_RED_STONE]: 'Drds',
-  [Terrain.LAVA_CRACKS]: 'Dlvc',
+  [Terrain.ROCK]: FIXED_TILES.rock,
+  [Terrain.ROUGH_DIRT]: FIXED_TILES.roughDirt,
+  [Terrain.WHITE_MARBLE]: FIXED_TILES.whiteMarble,
+  [Terrain.BLACK_BRICKS]: FIXED_TILES.blackBricks,
+  [Terrain.DUNGEON_DIRT]: FIXED_TILES.dungeonDirt,
+  [Terrain.DUNGEON_BRICK]: FIXED_TILES.dungeonBrick,
+  [Terrain.DUNGEON_RED_STONE]: FIXED_TILES.dungeonRedStone,
+  [Terrain.LAVA_CRACKS]: FIXED_TILES.lavaCracks,
 };
 
 // PLAYER_1..PLAYER_4 entity types mapped to player slot indices

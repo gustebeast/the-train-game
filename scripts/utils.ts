@@ -6,6 +6,9 @@ const { combine, timestamp, printf } = format;
 const luamin = require('luamin');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { writeLegacyFormats } = require("./legacy-format.js");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { ensureRuntimeTiles } = require("./terrain-tiles.js");
+import { RUNTIME_TILES } from "../src/terrain/tiles";
 
 export interface IProjectConfig {
   mapFolder: string;
@@ -151,6 +154,11 @@ export function compileMap(config: IProjectConfig) {
   // test VMs are pinned to 2.0.4, because 3.0 cannot run offline, and 3.0
   // reads the older formats too (scripts/legacy-format.js).
   writeLegacyFormats(`./dist/${config.mapFolder}`);
+
+  // Every tile the script paints, listed and painted once, or HD graphics
+  // draw the ground underneath instead (scripts/terrain-tiles.js).
+  const tiles = ensureRuntimeTiles(`./dist/${config.mapFolder}/war3map.w3e`, RUNTIME_TILES);
+  logger.info(`Terrain: ${tiles.added.length} tile(s) added to the list, ${tiles.placed.length} painted on the edge row`);
 
   logger.info("Transpiling TypeScript to Lua...");
   execSync('tstl -p tsconfig.json', { stdio: 'inherit' });

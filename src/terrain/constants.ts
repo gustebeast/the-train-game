@@ -1,5 +1,6 @@
 import { TRACK_SIZE } from '../track/constants';
 import { TREE_WALLS } from '../sharedData';
+import { BIOME_TILES } from './tiles';
 
 // Grid dimensions (in tile coordinates)
 export const GRID_MIN_X = -20;
@@ -64,9 +65,9 @@ export interface BiomeArt {
 }
 
 export const BIOMES: Record<Biome, BiomeArt> = {
-  [Biome.SUMMER]: { grass: 'Lgrs', grassyDirt: 'Lgrd', pool: 'Lrok', tree: TREE_WALLS.summer },
-  [Biome.FALL]: { grass: 'Fgrs', grassyDirt: 'Fgrd', pool: 'Frok', tree: TREE_WALLS.fall },
-  [Biome.WINTER]: { grass: 'Wsnw', grassyDirt: 'Wsng', pool: 'Wrok', tree: TREE_WALLS.winter },
+  [Biome.SUMMER]: { ...BIOME_TILES.summer, tree: TREE_WALLS.summer },
+  [Biome.FALL]: { ...BIOME_TILES.fall, tree: TREE_WALLS.fall },
+  [Biome.WINTER]: { ...BIOME_TILES.winter, tree: TREE_WALLS.winter },
 };
 
 /** Camp level 1/2/3 -> summer/fall/winter. No camp (or anything out of range)

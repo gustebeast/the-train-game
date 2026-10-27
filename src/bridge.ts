@@ -3,8 +3,7 @@ import { refreshCarrierNextFrame, registerPeasantTargetCheck, spendCharge } from
 import { WOOD_ID, WATER_ID, BRIDGE_ABILITY_ID } from './constants';
 import { noteBuiltBridge } from './tutorialBoard';
 import { onSpellEffect } from './util';
-
-const TERRAIN_BRICKS = 'Zbkl'; // Dalaran Large Bricks
+import { FIXED_TILES } from './terrain/tiles';
 
 export function initBridge(): void {
   // The bridge spell is Finger of Death underneath, so it is ordered as one.
@@ -20,7 +19,7 @@ export function initBridge(): void {
     const tx = target.x;
     const ty = target.y;
     target.destroy();
-    SetTerrainType(tx, ty, FourCC(TERRAIN_BRICKS), -1, 1, 0);
+    SetTerrainType(tx, ty, FourCC(FIXED_TILES.bridge), -1, 1, 0);
     noteBuiltBridge(u.owner.id);
   });
 }
