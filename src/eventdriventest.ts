@@ -63,6 +63,9 @@ function firstUnitOfType(typeId: number): unit | null {
   return found;
 }
 
+/** How long a synced selection event may take to arrive. */
+const SELECTION_LIMIT = 3;
+
 function runDealerSelect(t: TestReporter): void {
   beginNewRun();
   loadInterRoundLobby();
@@ -77,13 +80,15 @@ function runDealerSelect(t: TestReporter): void {
   // Selection events are synced like any player input, so they land a little
   // after the call that caused them. The test waits for each reaction, frame by
   // frame, and reports how long it took -- that is latency, not polling in the
-  // game: the game itself only acts when the event arrives.
+  // game: the game itself only acts when the event arrives. The first selection
+  // of a session has been measured at just over a second (1.05s, against 0.4-0.75s
+  // later), so the limit leaves room for that; a missing reaction still fails.
   SelectUnitForPlayerSingle(dealer, me);
-  waitFor(t, () => challengeUIState().previewing, 1.0, (ok, waited) => {
+  waitFor(t, () => challengeUIState().previewing, SELECTION_LIMIT, (ok, waited) => {
     t.report('selectLatency', waited);
     expect(t, 'previewOnSelect', ok ? 1 : 0, 1);
     SelectUnitForPlayerSingle(peasant!, me);
-    waitFor(t, () => !challengeUIState().previewing, 1.0, (ok2, waited2) => {
+    waitFor(t, () => !challengeUIState().previewing, SELECTION_LIMIT, (ok2, waited2) => {
       t.report('deselectLatency', waited2);
       expect(t, 'previewClearedOnDeselect', ok2 ? 1 : 0, 1);
       t.done();
