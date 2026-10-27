@@ -26,7 +26,7 @@ export function vacuumReach(caster: unit): number {
 
 /** Pull the loose wood and stone within `reach` tiles of (x, y)'s tile into
  *  one pile of each on that tile. */
-export function vacuumResources(x: number, y: number, reach: number): void {
+function vacuumResources(x: number, y: number, reach: number): void {
   const cx = worldToTile(x) * TRACK_SIZE;
   const cy = worldToTile(y) * TRACK_SIZE;
   const half = (reach + 0.5) * TRACK_SIZE;

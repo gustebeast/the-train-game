@@ -78,6 +78,21 @@ let cycles = 0;
 /** Fixed per save, so the offer sequence is reproducible. 0 = not yet chosen. */
 let seed = 0;
 
+const armedListeners: Array<(this: void) => void> = [];
+
+/** Run cb whenever the armed challenge changes: armed, paid, spent, or
+ *  replaced by a load or a new run. */
+export function onArmedChallengeChanged(cb: (this: void) => void): void {
+  armedListeners.push(cb);
+}
+
+/** The one place armedId changes, so no change goes unannounced. */
+function setArmed(id: string | null): void {
+  if (armedId === id) return;
+  armedId = id;
+  for (const cb of armedListeners) cb();
+}
+
 export function isChallengeArmed(id: string): boolean {
   return armedId === id;
 }
@@ -87,14 +102,14 @@ export function getArmedChallenge(): ChallengeDef | null {
 }
 
 export function armChallenge(id: string): void {
-  armedId = id;
+  setArmed(id);
   boardChanged();
 }
 
 /** Disarm without paying: how a lost wager is spent at the end of a round, so
  *  it never reaches the save. */
 export function clearChallenges(): void {
-  armedId = null;
+  setArmed(null);
   boardChanged();
 }
 
@@ -103,7 +118,7 @@ export function clearChallenges(): void {
 export function completeChallenge(id: string): void {
   if (armedId !== id) return;
   const def = findDef(id);
-  armedId = null;
+  setArmed(null);
   boardChanged();
   gainGold(CHALLENGE_BONUS);
   print('Challenge complete: ' + (def != null ? def.name : id)
@@ -177,7 +192,7 @@ function decodeChallenges(raw: string): void {
   const n = fields['n'];
   if (n != null) cycles = tonumber(n) ?? 0;
   const a = fields['a'];
-  if (a != null && a !== '') armedId = a;
+  if (a != null && a !== '') setArmed(a);
   const o = fields['o'];
   if (o != null && o !== '') offeredId = o;
   const p = fields['p'];
@@ -187,7 +202,7 @@ function decodeChallenges(raw: string): void {
 /** Full reset for a new game: the seed is re-rolled, so a fresh save gets a
  *  fresh sequence, while a loaded save keeps the one it was created with. */
 function resetChallenges(): void {
-  armedId = null;
+  setArmed(null);
   seen = [];
   offeredId = null;
   seed = 0;
