@@ -17,10 +17,11 @@ export function createTimer(): Timer {
   return t;
 }
 
-/** Destroy a tracked timer before the sweep does, and stop tracking it. */
+/** Destroy a tracked timer before the sweep does, and stop tracking it. A
+ *  timer the sweep already took is left alone, so a module holding on to one
+ *  across a board change cannot destroy it twice. */
 export function destroyTimer(t: Timer): void {
-  activeTimers.delete(t);
-  t.destroy();
+  if (activeTimers.delete(t)) t.destroy();
 }
 
 /** Start a one-shot tracked timer. Automatically unregisters when it fires. */

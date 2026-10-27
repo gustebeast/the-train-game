@@ -184,13 +184,30 @@ export function chooseHeroPlayers(): void {
   pickLeastBusyHeroPlayers();
 }
 
+/** How many players take the heroes, for a game of `numPlayers`. */
+function heroControllerCount(numPlayers: number): number {
+  return numPlayers > 3 ? 2 : 1;
+}
+
+/** Keep the chosen controllers only if they still fit the game being played:
+ *  everyone of them present, and as many as this many players call for. A
+ *  save from a bigger game, or a controller who has since left, would
+ *  otherwise hand the heroes to an empty slot -- nobody controls them, and
+ *  nobody is lent a peasant either. */
+function ensureHeroPlayersPresent(): void {
+  const present = getHumanPlayers().map(p => p.id);
+  const fits = chosenHeroPlayers.length === heroControllerCount(present.length)
+    && chosenHeroPlayers.every(id => present.includes(id));
+  if (!fits) pickLeastBusyHeroPlayers();
+}
+
 /** Choose the player(s) with the lowest heroControlCount. */
 function pickLeastBusyHeroPlayers(): void {
   const humans = getHumanPlayers();
   const numPlayers = humans.length;
   if (numPlayers === 0) return;
 
-  const numHeroControllers = numPlayers > 3 ? 2 : 1;
+  const numHeroControllers = heroControllerCount(numPlayers);
 
   // Build indices of human players (by player slot index)
   const playerIndices = humans.map(p => p.id);
@@ -406,6 +423,7 @@ function applySpells(hero: Unit, spells: Record<string, number>): void {
 
 /** Transfer peasants from hero players to peasant players, and spawn heroes. */
 function transferPeasantsAndSpawnHeroes(casterX: number, casterY: number): void {
+  ensureHeroPlayersPresent();
   const humans = getHumanPlayers();
   const heroPlayers = chosenHeroPlayers.map(i => MapPlayer.fromIndex(i)!);
   const peasantPlayers = humans.filter(p => !chosenHeroPlayers.includes(p.id));

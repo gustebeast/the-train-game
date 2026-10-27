@@ -113,6 +113,11 @@ let manaTrigger: Trigger | null = null;
 export function initProduction(trainUnit: Unit, trackWagonUnit: Unit): void {
   train = trainUnit;
   trackWagon = trackWagonUnit;
+  // A new train starts unlocked. The fire's pause is only lifted by putting
+  // the fire out, so a round that ENDED burning -- a defeat, or a wrecked
+  // train that still made it -- used to hand the lock to the next one.
+  paused = false;
+  producing = false;
   // Train starts with 0 mana, 0 regen — production begins when resources arrive
   train.mana = 0;
   BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);
