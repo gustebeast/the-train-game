@@ -59,11 +59,6 @@ function setGold(n: number): void {
   syncState();
 }
 
-function expect(t: TestReporter, key: string, actual: number, want: number): void {
-  if (actual === want) t.report(key, actual);
-  else t.fail(key, `got ${actual}, want ${want}`);
-}
-
 function clearInventory(p: unit): void {
   for (let s = 0; s < 6; s++) {
     const it = UnitItemInSlot(p, s);
@@ -94,8 +89,8 @@ function runInventoryFlowLoaded(t: TestReporter): void {
   const me = getHumanPlayers()[0].handle;
   let peasant: unit | null = null;
   forEachUnitOfPlayer(me, u => { if (peasant == null && GetUnitTypeId(u) === PEASANT_ID) peasant = u; });
-  expect(t, 'shopFound', shop != null ? 1 : 0, 1);
-  expect(t, 'peasantFound', peasant != null ? 1 : 0, 1);
+  t.expectTrue('shopFound', shop != null);
+  t.expectTrue('peasantFound', peasant != null);
   if (shop == null || peasant == null) { t.done(); return; }
   const p: unit = peasant;
   const here = (): [number, number] => [GetUnitX(p), GetUnitY(p)];
@@ -118,9 +113,9 @@ function runInventoryFlowLoaded(t: TestReporter): void {
     // --- A ---
     UnitAddItem(p, CreateItem(REROLL_ITEM_ID, ...here())!);
     t.after(0.5, () => {
-      expect(t, 'A_rerollSlot', slotOf(p, REROLL_ITEM_ID), 0);
-      expect(t, 'A_axeHeld', countHeld(p, AXE_ID), 0);
-      expect(t, 'A_axeAtFeet', groundCount(...here(), AXE_ID), 1);
+      t.expect('A_rerollSlot', slotOf(p, REROLL_ITEM_ID), 0);
+      t.expect('A_axeHeld', countHeld(p, AXE_ID), 0);
+      t.expect('A_axeAtFeet', groundCount(...here(), AXE_ID), 1);
 
       // --- A2 ---
       let groundAxe: item | null = null;
@@ -132,9 +127,9 @@ function runInventoryFlowLoaded(t: TestReporter): void {
       RemoveRect(r);
       if (groundAxe != null) UnitAddItem(p, groundAxe);
       t.after(0.5, () => {
-        expect(t, 'A2_axeSlot', slotOf(p, AXE_ID), 0);
-        expect(t, 'A2_rerollHeld', countHeld(p, REROLL_ITEM_ID), 0);
-        expect(t, 'A2_rerollAtFeet', groundCount(...here(), REROLL_ITEM_ID), 1);
+        t.expect('A2_axeSlot', slotOf(p, AXE_ID), 0);
+        t.expect('A2_rerollHeld', countHeld(p, REROLL_ITEM_ID), 0);
+        t.expect('A2_rerollAtFeet', groundCount(...here(), REROLL_ITEM_ID), 1);
 
         // --- B ---
         clearGround(...here());
@@ -142,10 +137,10 @@ function runInventoryFlowLoaded(t: TestReporter): void {
         const goldBefore = gameState.gold;
         IssueNeutralImmediateOrderById(me, shop, RESOURCE_CAPACITY_ID);
         t.after(1, () => {
-          expect(t, 'B_goldSpent', goldBefore - gameState.gold, 1);
-          expect(t, 'B_axeSlot', slotOf(p, AXE_ID), 0);
-          expect(t, 'B_axeAtFeet', groundCount(...here(), AXE_ID), 0);
-          expect(t, 'B_upgradeHeld', countHeld(p, RESOURCE_CAPACITY_ID), 0);
+          t.expect('B_goldSpent', goldBefore - gameState.gold, 1);
+          t.expect('B_axeSlot', slotOf(p, AXE_ID), 0);
+          t.expect('B_axeAtFeet', groundCount(...here(), AXE_ID), 0);
+          t.expect('B_upgradeHeld', countHeld(p, RESOURCE_CAPACITY_ID), 0);
 
           runMoveSlot(t, p);
         });
@@ -162,8 +157,8 @@ function runMoveSlot(t: TestReporter, p: unit): void {
   // The engine moves it at once; the game puts it back a frame later.
   t.report('D_slotAfterDrag', slotOf(p, AXE_ID));
   t.after(0.5, () => {
-    expect(t, 'D_slotAfterRevert', slotOf(p, AXE_ID), 0);
-    expect(t, 'D_axeHeld', countHeld(p, AXE_ID), 1);
+    t.expect('D_slotAfterRevert', slotOf(p, AXE_ID), 0);
+    t.expect('D_axeHeld', countHeld(p, AXE_ID), 1);
     t.done();
   });
 }

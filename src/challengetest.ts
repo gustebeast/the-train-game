@@ -53,7 +53,7 @@ function runChallengeTest(t: TestReporter): void {
   armChallenge(CH_CURVED_15);
   completeChallenge(CH_CURVED_15);
   t.expect('bonusPaid', gameState.gold, 2);
-  t.expect('disarmedAfterPay', isChallengeArmed(CH_CURVED_15) ? 1 : 0, 0);
+  t.expectFalse('disarmedAfterPay', isChallengeArmed(CH_CURVED_15));
 
   t.done();
 }

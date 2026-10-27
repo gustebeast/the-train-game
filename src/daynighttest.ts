@@ -37,16 +37,12 @@ registerTest('daynight', runDayNightTest);
  *  it is noon or midnight, and brightness proves nothing there. */
 function runNightTest(t: TestReporter): void {
   beginNight();
-  t.report('nightIsNight', isNight() ? 1 : 0);
-  const atNight = R2I(GetFloatGameState(GAME_STATE_TIME_OF_DAY) * 1000);
-  t.report('timeAtNight', atNight);
-  if (atNight !== 0) t.fail('timeAtNight', 'expected midnight, got ' + I2S(atNight));
+  t.expectTrue('nightIsNight', isNight());
+  t.expect('timeAtNight', R2I(GetFloatGameState(GAME_STATE_TIME_OF_DAY) * 1000), 0);
 
   endNight();
-  t.report('backToDay', isNight() ? 1 : 0);
-  const atDay = R2I(GetFloatGameState(GAME_STATE_TIME_OF_DAY) * 1000);
-  t.report('timeAfterEndNight', atDay);
-  if (atDay !== 12000) t.fail('timeAfterEndNight', 'expected noon, got ' + I2S(atDay));
+  t.expectFalse('backToDay', isNight());
+  t.expect('timeAfterEndNight', R2I(GetFloatGameState(GAME_STATE_TIME_OF_DAY) * 1000), 12000);
 
   // And the clock must still be frozen afterwards -- a night that leaves the
   // scale running would put the cycle straight back.

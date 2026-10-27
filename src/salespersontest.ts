@@ -46,8 +46,8 @@ function setup(t: TestReporter): void {
   forEachUnitOfPlayer(me, u => { if (p == null && GetUnitTypeId(u) === PEASANT_ID) p = u; });
   let shop: unit | null = null;
   forEachUnitInWorld(u => { if (shop == null && GetUnitTypeId(u) === FourCC(Units.Marketplace)) shop = u; });
-  t.expect('peasantFound', p != null ? 1 : 0, 1);
-  t.expect('shopFound', shop != null ? 1 : 0, 1);
+  t.expectTrue('peasantFound', p != null);
+  t.expectTrue('shopFound', shop != null);
   if (p == null || shop == null) { t.done(); return; }
   const peasant: unit = p;
   const mainShop: unit = shop;
@@ -90,7 +90,7 @@ function selling(t: TestReporter, sp: unit, p: unit, hero: unit, mainShop: unit)
       UnitAddItem(hero, loot);
       UnitDropItemTarget(hero, loot, sp);
       t.after(2.5, () => {
-        t.expect('heroLootHandedBack', slotOf(hero, FourCC('ratc')) >= 0 ? 1 : 0, 1);
+        t.expectTrue('heroLootHandedBack', slotOf(hero, FourCC('ratc')) >= 0);
         t.expect('heroLootNotPaid', gameState.gold, 22);
         t.expect('screenGoldStillMatches', nativeGold(), 22);
         const vac = CreateItem(RESOURCE_VACUUM_ID, GetUnitX(p), GetUnitY(p))!;
@@ -141,7 +141,7 @@ function runSalespersonSpawn(t: TestReporter): void {
     if (firstLap.indexOf(item) !== -1) covered += 1;
   }
   t.expect('firstLapOffersAllFour', covered, 4);
-  t.expect('nextLapOffersOne', offered[4] !== 0 ? 1 : 0, 1);
+  t.expectTrue('nextLapOffersOne', offered[4] !== 0);
   t.done();
 }
 

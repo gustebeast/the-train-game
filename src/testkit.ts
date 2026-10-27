@@ -68,6 +68,8 @@ export interface TestReporter {
   expect(key: string, actual: number | string, expected: number | string): void;
   /** expect() for a yes/no: reported as 1 or 0, and must be 1. */
   expectTrue(key: string, condition: boolean): void;
+  /** expect() for a yes/no that must NOT hold: reported as 1 or 0, must be 0. */
+  expectFalse(key: string, condition: boolean): void;
   /** Mark the run complete. The runner waits for this before reading results,
    *  and the map's own watchdog fails the test if it never arrives -- see
    *  DEFAULT_TEST_BUDGET. Always finish, including on the failure paths. */
@@ -126,6 +128,7 @@ function createReporter(name: string): TestReporter {
       reporter.fail(key, 'expected ' + asText(expected) + ', got ' + asText(actual));
     },
     expectTrue: (key, condition) => reporter.expect(key, condition ? 1 : 0, 1),
+    expectFalse: (key, condition) => reporter.expect(key, condition ? 1 : 0, 0),
     done: () => {
       if (finished) return;
       lines.push('done');

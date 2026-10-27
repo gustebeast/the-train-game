@@ -86,7 +86,7 @@ let cy = 0;
 
 function holding(t: TestReporter): void {
   const p = myPeasant();
-  t.expect('peasantFound', p != null ? 1 : 0, 1);
+  t.expectTrue('peasantFound', p != null);
   if (p == null) { t.done(); return; }
   clearInventory(p);
   cx = Math.floor(GetUnitX(p) / TRACK_SIZE + 0.5) * TRACK_SIZE;
@@ -126,7 +126,7 @@ function refusals(t: TestReporter, p: unit): void {
   for (const [name, target] of targets) {
     const it = CreateItem(RESOURCE_VACUUM_ID, GetUnitX(target), GetUnitY(target))!;
     UnitAddItem(target, it);
-    t.expect(name + 'Refused', UnitHasItem(target, it) ? 0 : 1, 1);
+    t.expectFalse(name + 'Refused', UnitHasItem(target, it));
     RemoveItem(it);
   }
   const other = CreateUnit(me, PEASANT_ID, cx - 150, cy + 150, 0)!;
@@ -157,7 +157,7 @@ function vacuuming(t: TestReporter, p: unit): void {
   const track = CreateItem(TRACK_PIECE_ID, cx, cy - T)!;
   const farWood = CreateItem(WOOD_ID, cx + 2 * T, cy + 2 * T)!;
   CreateItem(STONE_ID, cx - 4 * T, cy);
-  t.expect('castAccepted', IssueImmediateOrder(p, 'whirlwind') ? 1 : 0, 1);
+  t.expectTrue('castAccepted', IssueImmediateOrder(p, 'whirlwind'));
   t.after(0.5, () => {
     const wood = looseItems(cx, cy, 1, WOOD_ID);
     const stone = looseItems(cx, cy, 1, STONE_ID);
@@ -165,10 +165,10 @@ function vacuuming(t: TestReporter, p: unit): void {
     t.expect('woodPileSize', wood.length === 1 ? GetItemCharges(wood[0]) : -1, 3);
     t.expect('stonePiles', stone.length, 1);
     t.expect('stonePileSize', stone.length === 1 ? GetItemCharges(stone[0]) : -1, 2);
-    t.expect('trackLeftAlone', GetItemY(track) === cy - T ? 1 : 0, 1);
-    t.expect('farWoodLeftAlone', GetItemX(farWood) === cx + 2 * T ? 1 : 0, 1);
+    t.expectTrue('trackLeftAlone', GetItemY(track) === cy - T);
+    t.expectTrue('farWoodLeftAlone', GetItemX(farWood) === cx + 2 * T);
     const cd = BlzGetUnitAbilityCooldownRemaining(p, VACUUM_ABILITY_ID);
-    t.expect('cooldown60', cd > 55 && cd <= 60 ? 1 : 0, 1);
+    t.expectTrue('cooldown60', cd > 55 && cd <= 60);
 
     // Greater: picking it up swaps the plain one out, and reaches two tiles.
     UnitAddItem(p, CreateItem(GREATER_RESOURCE_VACUUM_ID, cx, cy)!);
@@ -185,8 +185,8 @@ function vacuuming(t: TestReporter, p: unit): void {
           const wood2 = looseItems(cx, cy, 2, WOOD_ID);
           t.expect('greaterWoodPiles', wood2.length, 1);
           t.expect('greaterWoodPileSize', wood2.length === 1 ? GetItemCharges(wood2[0]) : -1, 4);
-          t.expect('outsideStoneLeftAlone', looseItems(cx, cy, 2, STONE_ID).length === 1
-            && looseItems(cx, cy, 5, STONE_ID).length === 2 ? 1 : 0, 1);
+          t.expectTrue('outsideStoneLeftAlone', looseItems(cx, cy, 2, STONE_ID).length === 1
+            && looseItems(cx, cy, 5, STONE_ID).length === 2);
           // A pile is picked up a full stack at a time.
           if (wood2.length === 1) UnitAddItem(p, wood2[0]);
           t.after(0.2, () => {
@@ -212,12 +212,12 @@ function keeping(t: TestReporter, p: unit): void {
   for (const info of listSaves()) if (info.seq > newest.seq) newest = info;
   resetToNewRun();
   t.expect('clearedByNewRun', getHeldAbilityItem(myId), 0);
-  t.expect('loaded', loadFromSlot(newest.slot) ? 1 : 0, 1);
+  t.expectTrue('loaded', loadFromSlot(newest.slot));
   t.expect('restoredFromSave', getHeldAbilityItem(myId), GREATER_RESOURCE_VACUUM_ID);
   loadInterRoundLobby();
   t.after(1, () => {
     const p2 = myPeasant();
-    t.expect('nextBoardPeasant', p2 != null ? 1 : 0, 1);
+    t.expectTrue('nextBoardPeasant', p2 != null);
     if (p2 == null) { t.done(); return; }
     t.expect('carriedToNextBoard', slotOf(p2, GREATER_RESOURCE_VACUUM_ID), INVENTORY_SLOTS - 1);
     t.expect('carriedGrantsQ', GetUnitAbilityLevel(p2, VACUUM_ABILITY_ID), 1);

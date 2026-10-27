@@ -144,7 +144,7 @@ function runBossEnding(t: TestReporter): void {
     // Victory: everything hostile dies.
     t.report('enemiesKilled', killAll(isEnemy));
     t.after(ONE_FRAME * 4, () => {
-      t.expect('endedOnVictory', isBossFightWatched() ? 1 : 0, 0);
+      t.expectFalse('endedOnVictory', isBossFightWatched());
 
       // Defeat: a fresh fight, and the party dies instead.
       beginNewRun();
@@ -153,7 +153,7 @@ function runBossEnding(t: TestReporter): void {
       t.expectTrue('watchingSecondFight', isBossFightWatched());
       t.report('partyKilled', killAll(isParty));
       t.after(ONE_FRAME * 4, () => {
-        t.expect('endedOnDefeat', isBossFightWatched() ? 1 : 0, 0);
+        t.expectFalse('endedOnDefeat', isBossFightWatched());
         t.done();
       });
     });
@@ -177,8 +177,8 @@ function runUnionRules(t: TestReporter): void {
   t.after(ONE_FRAME, () => {
     const allowed = getArmedChallenge();
     t.report('progressAfterDifferentTools', allowed != null && allowed.progress != null ? allowed.progress() : '-');
-    t.expect('differentToolsAllowed', isChallengeArmed(CH_SOLO_TOOLS)
-      && allowed != null && allowed.progress != null && allowed.progress() === 'No tool shared yet' ? 1 : 0, 1);
+    t.expectTrue('differentToolsAllowed', isChallengeArmed(CH_SOLO_TOOLS)
+      && allowed != null && allowed.progress != null && allowed.progress() === 'No tool shared yet');
 
     // The same tool in two hands, arriving by script UnitAddItem -- the path
     // the give/take system uses, and the one most worth proving fires pickup.
@@ -217,7 +217,7 @@ function runCargoEvents(t: TestReporter): void {
   setStorageItem(wagon, TRACK_PIECE_ID, 0);
   t.after(wait, () => {
     const c0 = cargoShowing();
-    t.expect('emptyShowsNothing', (c0.wood || c0.stone || c0.tracks) ? 1 : 0, 0);
+    t.expectFalse('emptyShowsNothing', (c0.wood || c0.stone || c0.tracks));
 
     // In: setStorageItem adding a new stack (production's path to the wagon).
     setStorageItem(wagon, TRACK_PIECE_ID, 2);
@@ -245,8 +245,8 @@ function runCargoEvents(t: TestReporter): void {
       setStorageItem(wagon, TRACK_PIECE_ID, 0);
       t.after(wait, () => {
         const c2 = cargoShowing();
-        t.expect('woodOffWhenUsedUp', c2.wood ? 1 : 0, 0);
-        t.expect('tracksOffAtZero', c2.tracks ? 1 : 0, 0);
+        t.expectFalse('woodOffWhenUsedUp', c2.wood);
+        t.expectFalse('tracksOffAtZero', c2.tracks);
         t.expectTrue('stoneStaysOnChargeChange', c2.stone);
 
         // A new round replaces both cars. Cargo that arrives on the NEW engine
@@ -395,7 +395,7 @@ function runToolHealth(t: TestReporter): void {
     // A far harder hit than any A-click, which must leave it standing.
     UnitDamageTarget(hitter, it, 5000, true, false,
       ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
-    t.expect(name + 'SurvivesHeavyHit', GetWidgetLife(it) > 0 ? 1 : 0, 1);
+    t.expectTrue(name + 'SurvivesHeavyHit', GetWidgetLife(it) > 0);
     RemoveItem(it);
   }
   const wood = CreateItem(WOOD_ID, 0, 0)!;
@@ -494,9 +494,9 @@ function runStrangeKey(t: TestReporter): void {
   // ancient flag is what excludes it), and the peasant's own side.
   const kobold = CreateUnit(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, FourCC('nkob'), 150, 200, 0)!;
   const track = placedTracks[0];
-  t.expect('refusedOnCreep', UnitUseItemTarget(p, key, kobold) ? 1 : 0, 0);
-  t.expect('refusedOnTrack', track != null && UnitUseItemTarget(p, key, track.handle) ? 1 : 0, 0);
-  t.expect('refusedOnSelf', UnitUseItemTarget(p, key, p) ? 1 : 0, 0);
+  t.expectFalse('refusedOnCreep', UnitUseItemTarget(p, key, kobold));
+  t.expectFalse('refusedOnTrack', track != null && UnitUseItemTarget(p, key, track.handle));
+  t.expectFalse('refusedOnSelf', UnitUseItemTarget(p, key, p));
   t.expectTrue('keyKeptAfterRefusals', holdsKey(p));
 
   // Invulnerable, as water is: no health bar, and a player's attack on it is
@@ -516,8 +516,8 @@ function runStrangeKey(t: TestReporter): void {
     // The missile is still in the air: thrown, not instant.
     t.report('rockAliveWhileInFlight', isAlive(rock) ? 1 : 0);
     t.after(3, () => {
-      t.expect('rockBrokenOnImpact', isAlive(rock) ? 1 : 0, 0);
-      t.expect('keySpent', holdsKey(p) ? 1 : 0, 0);
+      t.expectFalse('rockBrokenOnImpact', isAlive(rock));
+      t.expectFalse('keySpent', holdsKey(p));
       let keysOnGround = 0;
       EnumItemsInRect(GetWorldBounds()!, null!, () => {
         const it = GetEnumItem();

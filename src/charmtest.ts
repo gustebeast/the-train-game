@@ -180,7 +180,7 @@ function runCharmCamp(t: TestReporter): void {
       if (GetUnitTypeId(h.handle) === FourCC(Units.DarkRanger)) dr = h.handle;
     }
     const creeps = campCreeps();
-    expect(t, 'campCreeps', creeps.length, 3);
+    t.expect('campCreeps', creeps.length, 3);
     if (alch == null || dr == null || creeps.length < 3) { t.fail('cast', 'missing a hero or a creep'); t.done(); return; }
     const alchemist: unit = alch;
     const charmed = creeps[0];
@@ -197,13 +197,13 @@ function runCharmCamp(t: TestReporter): void {
     }
     const itemsBefore = itemsNear(cx, cy, 700);
     const xpBefore = heroXP();
-    expect(t, 'charmOrdered', IssueTargetOrder(dr, 'charm', charmed) ? 1 : 0, 1);
+    t.expectTrue('charmOrdered', IssueTargetOrder(dr, 'charm', charmed));
 
     t.after(3, () => {
-      expect(t, 'charmedNowOurs', GetOwningPlayer(charmed) === getHumanPlayers()[0].handle ? 1 : 0, 1);
-      expect(t, 'charmPaysNoXP', heroXP() - xpBefore, 0);
+      t.expectTrue('charmedNowOurs', GetOwningPlayer(charmed) === getHumanPlayers()[0].handle);
+      t.expect('charmPaysNoXP', heroXP() - xpBefore, 0);
       // Inherited from the mercenary types' object data, and stripped at spawn.
-      expect(t, 'charmedHasNoInventory', UnitInventorySize(charmed), 0);
+      t.expect('charmedHasNoInventory', UnitInventorySize(charmed), 0);
       // Who the transmuted creep belongs to as it dies: the camp pays XP only
       // for a creep that died as the camp's.
       const deathWatch = CreateTrigger()!;
@@ -213,10 +213,10 @@ function runCharmCamp(t: TestReporter): void {
         DestroyTrigger(deathWatch);
       });
       t.report('creepOwnerId', GetPlayerId(Player(PLAYER_NEUTRAL_AGGRESSIVE)!));
-      expect(t, 'transmuteOrdered', IssueTargetOrder(alchemist, 'transmute', transmuted) ? 1 : 0, 1);
+      t.expectTrue('transmuteOrdered', IssueTargetOrder(alchemist, 'transmute', transmuted));
 
       t.after(3, () => {
-        expect(t, 'transmutedDead', GetWidgetLife(transmuted) <= 0.405 ? 1 : 0, 1);
+        t.expectTrue('transmutedDead', GetWidgetLife(transmuted) <= 0.405);
         t.report('xpFromTransmute', heroXP() - xpBefore);
         if (heroXP() - xpBefore <= 0) t.fail('xpFromTransmute', 'a kill should pay XP');
         // Finish the rest as the fight would.
@@ -230,14 +230,14 @@ function runCharmCamp(t: TestReporter): void {
             t.report('level_' + nm, GetHeroLevel(h.handle));
             t.report('xp_' + nm, GetHeroXP(h.handle));
           }
-          expect(t, 'dropsOnlyFromTheKilled', itemsNear(cx, cy, 700) - itemsBefore, dropsExpected);
+          t.expect('dropsOnlyFromTheKilled', itemsNear(cx, cy, 700) - itemsBefore, dropsExpected);
           const p = peasantNear(cx, cy);
-          expect(t, 'campCountsAsBeaten', p != null && GetUnitAbilityLevel(p, UNSUMMON_ABILITY_ID) > 0 ? 1 : 0, 1);
+          t.expectTrue('campCountsAsBeaten', p != null && GetUnitAbilityLevel(p, UNSUMMON_ABILITY_ID) > 0);
           if (p != null) IssueImmediateOrder(p, 'roar');
 
           t.after(2, () => {
-            expect(t, 'charmedGoneAfterUnsummon', GetUnitTypeId(charmed) === 0 ? 1 : 0, 1);
-            expect(t, 'heroesGoneAfterUnsummon', getSpawnedHeroes().length, 0);
+            t.expectTrue('charmedGoneAfterUnsummon', GetUnitTypeId(charmed) === 0);
+            t.expect('heroesGoneAfterUnsummon', getSpawnedHeroes().length, 0);
             t.done();
           });
         });
@@ -277,7 +277,7 @@ function runCharmKey(t: TestReporter): void {
     t.report('mercsFielded', getSpawnedMercUnits().length);
     t.report('mercsAliveAtClear', getSpawnedMercUnits().filter(m => GetWidgetLife(m.handle) > 0.405).length);
     const creeps = campCreeps();
-    expect(t, 'campCreeps', creeps.length, CREEP_CAMPS[LEVEL3_CAMP].creeps.length);
+    t.expect('campCreeps', creeps.length, CREEP_CAMPS[LEVEL3_CAMP].creeps.length);
     if (creeps.length < 2) { t.done(); return; }
     SetUnitOwner(creeps[0], getHumanPlayers()[0].handle, true);
     for (let i = 1; i < creeps.length; i++) KillUnit(creeps[i]);
@@ -288,7 +288,7 @@ function runCharmKey(t: TestReporter): void {
         if (GetItemTypeId(it) !== BOSS_KEY_ITEM_ID) return;
         if ((GetItemX(it) - cx) ** 2 + (GetItemY(it) - cy) ** 2 <= 200 * 200) keys += 1;
       });
-      expect(t, 'keyAtCageAfterCharmedClear', keys, 1);
+      t.expect('keyAtCageAfterCharmedClear', keys, 1);
       t.done();
     });
   });
@@ -370,11 +370,6 @@ function runCharmSparring(t: TestReporter): void {
 }
 
 registerTest('charmspar', runCharmSparring);
-
-function expect(t: TestReporter, key: string, actual: number, want: number): void {
-  t.report(key, actual);
-  if (actual !== want) t.fail(key, 'expected ' + I2S(want) + ', got ' + I2S(actual));
-}
 
 // --- In the boss fight ------------------------------------------------------
 
@@ -478,7 +473,7 @@ function runCharmBoss(t: TestReporter, ending: 'win' | 'lose'): void {
       t.after(0.5, decide);
       return;
     }
-    expect(t, 'addCharmedToPlayer', ours(add) ? 1 : 0, 1);
+    t.expectTrue('addCharmedToPlayer', ours(add));
     const at = clock;
     if (ending === 'win') {
       if (boss != null) KillUnit(boss);
@@ -498,7 +493,7 @@ function runCharmBoss(t: TestReporter, ending: 'win' | 'lose'): void {
       if (fired !== want) t.fail('ending', 'expected ' + want + ' within 4s, got ' + (fired === '' ? 'nothing' : fired));
       if (ending === 'win') {
         t.report('survivors', survivorCount);
-        expect(t, 'charmedInfernalNotASurvivor', survivorInfernals, 0);
+        t.expect('charmedInfernalNotASurvivor', survivorInfernals, 0);
       }
       restore();
       t.done();
@@ -535,7 +530,7 @@ function runMercKeepsItems(t: TestReporter): void {
     for (const [label, type] of [['ogreLord', 'nogl'], ['furbolg', 'nfrl']] as Array<[string, string]>) {
       const u = spawnMercFromData({ typeId: FourCC(type), items: [] }, me, 0, 0);
       if (u == null) { t.fail(label, 'did not spawn'); continue; }
-      expect(t, label + '_slots', UnitInventorySize(u.handle), 6);
+      t.expect(label + '_slots', UnitInventorySize(u.handle), 6);
       RemoveUnit(u.handle);
     }
     setMercsForTest([FourCC('nfrl')]);
@@ -543,21 +538,21 @@ function runMercKeepsItems(t: TestReporter): void {
     const y = 0;
     spawnMercWithHeroes(x, y, [me.id]);
     const first = getSpawnedMercUnits();
-    expect(t, 'fielded', first.length, 1);
+    t.expect('fielded', first.length, 1);
     if (first.length === 0) { t.done(); return; }
     const merc = first[0].handle;
-    expect(t, 'slots', UnitInventorySize(merc), 6);
+    t.expect('slots', UnitInventorySize(merc), 6);
     const item = CreateItem(FourCC('rst1'), x + 200, y)!;
     IssueTargetOrder(merc, 'smart', item);
 
     t.after(4, () => {
-      expect(t, 'pickedUp', UnitHasItem(merc, item) ? 1 : 0, 1);
+      t.expectTrue('pickedUp', UnitHasItem(merc, item));
       // Put away as a round's end does: kit snapshotted, unit removed.
       removeSpawnedMercUnits();
       t.after(0.5, () => {
         spawnMercWithHeroes(x, y, [me.id]);
         const again = getSpawnedMercUnits();
-        expect(t, 'fieldedAgain', again.length, 1);
+        t.expect('fieldedAgain', again.length, 1);
         if (again.length === 0) { t.done(); return; }
         const back = again[0].handle;
         let kept = 0;
@@ -565,7 +560,7 @@ function runMercKeepsItems(t: TestReporter): void {
           const it = UnitItemInSlot(back, i);
           if (it != null && GetItemTypeId(it) === FourCC('rst1')) kept += 1;
         }
-        expect(t, 'itemKeptBetweenFields', kept, 1);
+        t.expect('itemKeptBetweenFields', kept, 1);
 
         // And on death the item stays with the slot, not on the ground.
         const bx = GetUnitX(back);
@@ -578,7 +573,7 @@ function runMercKeepsItems(t: TestReporter): void {
             if (GetItemTypeId(it) !== FourCC('rst1')) return;
             if ((GetItemX(it) - bx) ** 2 + (GetItemY(it) - by) ** 2 <= 300 * 300) lying += 1;
           });
-          expect(t, 'noDropOnDeath', lying, 0);
+          t.expect('noDropOnDeath', lying, 0);
           t.done();
         });
       });
@@ -621,7 +616,7 @@ function runUnsummonSummons(t: TestReporter): void {
       if (GetUnitTypeId(h.handle) === FourCC(Units.FarSeer)) farSeer = h.handle;
     }
     if (farSeer == null) { t.fail('setup', 'no Far Seer fielded'); t.done(); return; }
-    t.expect('feralSpiritOrdered', IssueImmediateOrder(farSeer, 'spiritwolf') ? 1 : 0, 1);
+    t.expectTrue('feralSpiritOrdered', IssueImmediateOrder(farSeer, 'spiritwolf'));
     t.waitFor('wolvesArrive', () => summonsOfMine() >= 2, 5, () => {
       t.report('summonsBeforeUnsummon', summonsOfMine());
       for (const c of campCreeps()) KillUnit(c);

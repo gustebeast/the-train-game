@@ -36,13 +36,13 @@ function runSaveTest(t: TestReporter): void {
 
   resetToNewRun();
   t.expect('resetRound', gameState.round, 0);
-  t.expect('loadedOk', loadFromSlot(slot) ? 1 : 0, 1);
+  t.expectTrue('loadedOk', loadFromSlot(slot));
   t.expect('loadedRound', gameState.round, 7);
   t.expect('loadedGold', gameState.gold, 3);
 
   markCurrentSaveDefeated();
   const stillListed = listSaves().some(info => info.slot === slot);
-  t.expect('hiddenWhenDefeated', stillListed ? 0 : 1, 1);
+  t.expectFalse('hiddenWhenDefeated', stillListed);
   const kept = listSaves(true).some(info => info.slot === slot && info.defeated);
 
   // A kit keeps its charges through the save format, and an id written
@@ -62,9 +62,9 @@ function runSaveTest(t: TestReporter): void {
   t.expect('mercSlots', mercs.length, 2);
   t.expect('mercFirstEmpty', mercs[0].typeId, 0);
   t.expect('mercSecondType', mercs[1].typeId, 2002);
-  t.expect('mercSecondDead', mercs[1].dead ? 1 : 0, 1);
+  t.expectTrue('mercSecondDead', mercs[1].dead);
   t.expect('mercSecondKit', mercs[1].items.length, 1);
-  t.expect('keptOnDisk', kept ? 1 : 0, 1);
+  t.expectTrue('keptOnDisk', kept);
   t.done();
 }
 
