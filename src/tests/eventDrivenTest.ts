@@ -6,7 +6,7 @@ import { armChallenge, clearChallenges, isChallengeArmed, getArmedChallenge } fr
 import { CH_DASH, CH_SOLO_TOOLS, noteDash } from '../challengeList';
 import { getChallengeUIState, initChallengeUI } from '../challengeUI';
 import { isBossFightWatched, startBossFight } from '../bossArena';
-import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer, isAlive } from '../util';
+import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer, isAlive, forEachGroundItem } from '../util';
 import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID,
   TRAIN_ID, TRACK_WAGON_ID } from '../constants';
 import { Item, Unit } from 'w3ts';
@@ -279,9 +279,8 @@ function runMinimapEvents(t: TestReporter): void {
 
   const groundAxe = (): item | null => {
     let found: item | null = null;
-    EnumItemsInRect(GetWorldBounds()!, null!, () => {
-      const it = GetEnumItem();
-      if (found == null && it != null && GetItemTypeId(it) === AXE_ID && !IsItemOwned(it)) found = it;
+    forEachGroundItem((it) => {
+      if (found == null && GetItemTypeId(it) === AXE_ID && !IsItemOwned(it)) found = it;
     });
     return found;
   };
@@ -474,9 +473,9 @@ function runStrangeKey(t: TestReporter): void {
   // peasant dropped onto water or granite gets shoved aside, and the throw then
   // fails for reasons that have nothing to do with the key.
   const area = Rect(-200, -300, 700, 400)!;
-  EnumDestructablesInRect(area, null!, () => RemoveDestructable(GetEnumDestructable()!));
+  EnumDestructablesInRect(area, undefined, () => RemoveDestructable(GetEnumDestructable()!));
   const clear = CreateGroup()!;
-  GroupEnumUnitsInRect(clear, area, null!);
+  GroupEnumUnitsInRect(clear, area, undefined);
   ForGroup(clear, () => {
     const u = GetEnumUnit()!;
     if (GetUnitTypeId(u) !== TRAIN_ID && GetUnitTypeId(u) !== TRACK_WAGON_ID) RemoveUnit(u);
@@ -519,9 +518,8 @@ function runStrangeKey(t: TestReporter): void {
       t.expectFalse('rockBrokenOnImpact', isAlive(rock));
       t.expectFalse('keySpent', holdsKey(p));
       let keysOnGround = 0;
-      EnumItemsInRect(GetWorldBounds()!, null!, () => {
-        const it = GetEnumItem();
-        if (it != null && GetItemTypeId(it) === BOSS_KEY_ITEM_ID) keysOnGround += 1;
+      forEachGroundItem((it) => {
+        if (GetItemTypeId(it) === BOSS_KEY_ITEM_ID) keysOnGround += 1;
       });
       t.expect('keyNotLeftOnGround', keysOnGround, 0);
       t.expect('noGoldFromThrow', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - gold0, 0);

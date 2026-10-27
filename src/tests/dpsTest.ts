@@ -15,7 +15,7 @@ import {
 } from '../heroes';
 import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from '../mercenary';
 import { getDPSCheckPlayer, toggleDPSVision } from '../teams';
-import { getHumanPlayers, forEachUnitOfPlayer } from '../util';
+import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem } from '../util';
 import { loadInterRoundLobby, beginNewRun, resetPurchases } from '../terrain/load';
 import { purchaseSummonUpgrade, isSummonUpgradePurchased } from '../summonUpgrade';
 import { refreshInterRoundLobbyRoster } from '../interRoundLobbyRoster';
@@ -56,7 +56,7 @@ function level5(type: string, skills: ReadonlyArray<string>): HeroData {
 
 function countItems(): number {
   let n = 0;
-  EnumItemsInRect(GetWorldBounds()!, undefined, () => { n += 1; });
+  forEachGroundItem(() => { n += 1; });
   return n;
 }
 

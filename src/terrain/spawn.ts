@@ -23,7 +23,7 @@ import { stockSalesperson } from '../salesperson';
 import { restoreAbilityItem } from '../abilityItems';
 import { destroyAllTimers } from '../timers';
 import { SALESPERSON_ID, AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID, CRITTER_TYPE_IDS } from '../constants';
-import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
+import { getHumanPlayers, getWorldBounds, forEachUnitInWorld, forEachGroundItem, forEachDestructable } from '../util';
 
 // --- Terrain tile FourCCs ----------------------------------------------------
 // GRASS, GRASSY_DIRT and POOL depend on the biome; see tileFor.
@@ -172,9 +172,9 @@ function clearBoard(): void {
   clearReadyZones();
   clearCage();
   pauseResourceDrops();
-  EnumDestructablesInRect(getWorldBounds(), undefined, () => RemoveDestructable(GetEnumDestructable()!));
+  forEachDestructable(d => RemoveDestructable(d));
   forEachUnitInWorld(u => RemoveUnit(u));
-  EnumItemsInRect(getWorldBounds(), undefined, () => RemoveItem(GetEnumItem()!));
+  forEachGroundItem(it => RemoveItem(it));
   for (const fx of boardEffects) DestroyEffect(fx);
   boardEffects.length = 0;
   resumeResourceDrops();

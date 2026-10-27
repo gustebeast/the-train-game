@@ -11,6 +11,7 @@ export function getHumanPlayers(): MapPlayer[] {
 
 /** Run a callback on the next frame (one-shot 0-second timer). */
 export function nextFrame(cb: () => void): void {
+  // untracked: one frame; callers check what they touch still exists.
   const t = Timer.create();
   t.start(0, false, () => {
     t.destroy();
@@ -37,6 +38,23 @@ export function forEachUnitInWorld(cb: (u: unit) => void): void {
     if (u != null) cb(u);
   });
   DestroyGroup(g);
+}
+
+/** Every item lying on the ground, anywhere on the map. A carried item is
+ *  not on the ground and is not visited. */
+export function forEachGroundItem(cb: (this: void, it: item) => void): void {
+  EnumItemsInRect(getWorldBounds(), undefined, () => {
+    const it = GetEnumItem();
+    if (it != null) cb(it);
+  });
+}
+
+/** Every destructable on the map. */
+export function forEachDestructable(cb: (this: void, d: destructable) => void): void {
+  EnumDestructablesInRect(getWorldBounds(), undefined, () => {
+    const d = GetEnumDestructable();
+    if (d != null) cb(d);
+  });
 }
 
 /** Run cb for every unit within `radius` of (x, y). */

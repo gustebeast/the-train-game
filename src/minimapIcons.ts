@@ -1,6 +1,6 @@
 import { Trigger } from 'w3ts';
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, BUCKET_FULL_ID } from './constants';
-import { getWorldBounds, nextFrame } from './util';
+import { forEachGroundItem, nextFrame } from './util';
 
 interface IconStyle {
   red: number;
@@ -113,9 +113,8 @@ function refreshNextFrame(it: item | undefined | null): void {
 export function auditMinimapIcons(): number {
   let fixed = 0;
   const found = new Set<item>();
-  EnumItemsInRect(getWorldBounds(), undefined, () => {
-    const it = GetEnumItem();
-    if (it == null || !wantsIcon(it)) return;
+  forEachGroundItem((it) => {
+    if (!wantsIcon(it)) return;
     found.add(it);
     const e = tracked.get(it);
     if (e == null || e.typeId !== GetItemTypeId(it) || e.x !== GetItemX(it) || e.y !== GetItemY(it)) {

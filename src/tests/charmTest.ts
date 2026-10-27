@@ -15,7 +15,7 @@ import { purchaseSummonUpgrade } from '../summonUpgrade';
 import { CAGE_RAW } from '../sharedData';
 import { PEASANT_ID, SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, BOSS_ID, BOSS_ADD_ID, BOSS_KEY_ITEM_ID } from '../constants';
 import { gameState, isInGameplay } from '../state';
-import { getHumanPlayers, forEachUnitOfPlayer } from '../util';
+import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem, forEachDestructable } from '../util';
 
 /**
  * Charm and Transmute against a creep camp.
@@ -53,8 +53,7 @@ const DARK_RANGER = level6(Units.DarkRanger,
 
 function findCage(): destructable | null {
   let cage: destructable | null = null;
-  EnumDestructablesInRect(GetWorldBounds()!, undefined, () => {
-    const d = GetEnumDestructable()!;
+  forEachDestructable((d) => {
     if (GetDestructableTypeId(d) === FourCC(CAGE_RAW) && GetWidgetLife(d) > 0) cage = d;
   });
   return cage;
@@ -106,8 +105,7 @@ function peasantNear(x: number, y: number): unit | null {
 
 function itemsNear(x: number, y: number, r: number): number {
   let n = 0;
-  EnumItemsInRect(GetWorldBounds()!, undefined, () => {
-    const it = GetEnumItem()!;
+  forEachGroundItem((it) => {
     if ((GetItemX(it) - x) ** 2 + (GetItemY(it) - y) ** 2 <= r * r) n += 1;
   });
   return n;
@@ -283,8 +281,7 @@ function runCharmKey(t: TestReporter): void {
     for (let i = 1; i < creeps.length; i++) KillUnit(creeps[i]);
     t.after(1.5, () => {
       let keys = 0;
-      EnumItemsInRect(GetWorldBounds()!, undefined, () => {
-        const it = GetEnumItem()!;
+      forEachGroundItem((it) => {
         if (GetItemTypeId(it) !== BOSS_KEY_ITEM_ID) return;
         if ((GetItemX(it) - cx) ** 2 + (GetItemY(it) - cy) ** 2 <= 200 * 200) keys += 1;
       });
@@ -568,8 +565,7 @@ function runMercKeepsItems(t: TestReporter): void {
         KillUnit(back);
         t.after(1, () => {
           let lying = 0;
-          EnumItemsInRect(GetWorldBounds()!, undefined, () => {
-            const it = GetEnumItem()!;
+          forEachGroundItem((it) => {
             if (GetItemTypeId(it) !== FourCC('rst1')) return;
             if ((GetItemX(it) - bx) ** 2 + (GetItemY(it) - by) ** 2 <= 300 * 300) lying += 1;
           });
