@@ -17,7 +17,8 @@ import { placedTracks, setVictoryTile, setBossVictoryTile, resetLineEnd, noteLin
 import { createReadyZone, clearReadyZones } from '../ready';
 import { labelUnit } from '../unitLabels';
 import { setCrate, setCrateStart } from '../items';
-import { setCage, registerCageTrigger, clearCage, cancelSparringMatch } from '../creeps';
+import { setCage, registerCageTrigger, clearCage } from '../creeps';
+import { isDPSCheckUnit } from '../dpsCheck';
 import { resetHeroState } from '../heroes';
 import { stockShop, noteDealerPlaced } from '../shop';
 import { stockSalesperson } from '../salesperson';
@@ -168,13 +169,14 @@ export function spawnReadyCircle(
  *  spawnTerrain on the way into a board is set up on the old one. */
 function clearBoard(): void {
   destroyAllTimers();
-  cancelSparringMatch();
   resetHeroState();
   clearReadyZones();
   clearCage();
   pauseResourceDrops();
   forEachDestructable(d => RemoveDestructable(d));
-  forEachUnitInWorld(u => RemoveUnit(u));
+  // Except the DPS check's fights, out beyond the wall: they carry on from the
+  // inter-round lobby into the round (dpsCheck.ts), and stop themselves.
+  forEachUnitInWorld(u => { if (!isDPSCheckUnit(u)) RemoveUnit(u); });
   forEachGroundItem(it => RemoveItem(it));
   for (const fx of boardEffects) DestroyEffect(fx);
   boardEffects.length = 0;
@@ -220,7 +222,19 @@ function wallBoard(): void {
     wallAt(GRID_MIN_X - 1, gy, 0, 1);
     wallAt(GRID_MAX_X + 1, gy, 0, 1);
   }
+  // And a second wall, map-wide, three cells further out above and below:
+  // the DPS check fights beyond it, no closer to the board than a test fight
+  // that could not be heard from it (about 500 out).
+  for (let gx = -KEEP_OUT_HALF_WIDTH; gx <= KEEP_OUT_HALF_WIDTH; gx++) {
+    wallAt(gx, GRID_MIN_Y - KEEP_OUT_CELLS, 1, 0);
+    wallAt(gx, GRID_MAX_Y + KEEP_OUT_CELLS, 1, 0);
+  }
 }
+
+/** How many cells beyond the board's edge the DPS check's wall stands. */
+const KEEP_OUT_CELLS = 3;
+/** The map's half-width in cells (it is 6144 across). */
+const KEEP_OUT_HALF_WIDTH = 24;
 
 /** Replace the board: clear the old one (clearBoard), then paint the grid's
  *  terrain and create everything it places. Returns the train units if the

@@ -18,7 +18,8 @@ import { resetBossKey } from '../bossKey';
 import { isBossVictory, placedTracks } from '../track/state';
 import { getNeutralExtra } from '../teams';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';
-import { getCampData, getSparringSecondsToMinimum, startSparringMatch } from '../creeps';
+import { getCampData } from '../creeps';
+import { getDPSCheckSecondsToMinimum, startDPSCheck, stopDPSCheck } from '../dpsCheck';
 import { gameState } from '../state';
 import { loadFromSlot, listSaves, isSaveCatalogReady, markCurrentSaveDefeated, markCurrentSaveVictorious, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
@@ -140,12 +141,12 @@ export function initBoardFlow(): void {
     if (inTutorial) return;
     awardVictory();
   });
-  // The countdown waits out the sparring match's minimum: starting the round
-  // ends the match, and one cut short measures the opening seconds -- ranged
-  // heroes and summons hitting creeps still walking in -- which reads the party
-  // as several times stronger than it is and scales the next camp to match.
+  // The countdown waits out the DPS check's minimum: its rigged opening and a
+  // first round of real fights, so even a party that readies at once starts
+  // the round on a measured camp rather than a guess. The check carries on
+  // into the round after that (dpsCheck.ts).
   registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round),
-    undefined, getSparringSecondsToMinimum);
+    undefined, getDPSCheckSecondsToMinimum);
   registerReadyZone('newgame', 'Starting a new game', () => {
     beginNewRun();
     loadTerrain(0);
@@ -215,6 +216,9 @@ export function initBoardFlow(): void {
  *  come up in the dark, and coming up in the dark is exactly what the lobbies
  *  did until the clock was frozen at init. */
 function enterBoard(track: MusicTrack | null, grid: Grid): SpawnedTrain {
+  // The DPS check runs from the inter-round lobby into the round that follows
+  // it; any other board means that round is not coming.
+  if (track !== 'interRound') stopDPSCheck();
   hideChallengeUI();
   clearChallengeEffects();
   stopDayNight();
@@ -421,5 +425,5 @@ export function loadInterRoundLobby(): void {
   // the previous inter-round lobby's display units, and their handles must not be reused.
   resetInterRoundLobbyRoster();
   refreshInterRoundLobbyRoster();
-  startSparringMatch();
+  startDPSCheck();
 }

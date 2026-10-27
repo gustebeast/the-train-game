@@ -7,7 +7,7 @@ import './shopTest'; // Repair Train purchase effect
 import './challengeTest'; // challenge sequencing and payouts
 import './fogTest'; // blackout must give the map back at dawn
 import './bossBalance'; // final boss balance harness
-import './campBattleTest'; // camp scaling balance: scaled camp vs the party, for real
+import './boardWallTest'; // the board's edge holds: no walking, flying or seeing off it
 import './dpsTest'; // watch the lobby DPS sparring match
 import './lobbyVisionTest'; // lobby scenery must not hand out vision
 import './readyTest'; // how long a ready countdown actually runs

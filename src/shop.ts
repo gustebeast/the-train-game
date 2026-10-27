@@ -20,7 +20,7 @@ import {
   isMercDead, buyMercContract, buySecondContract,
   canBuyMercContract, canBuySecondContract, getLivingMercCount,
 } from './mercenary';
-import { forceLevel3Camp, restartSparringMatch } from './creeps';
+import { forceLevel3Camp } from './creeps';
 import { nextFrame, unitExists, forEachPeasant } from './util';
 import { armChallenge, getOfferedChallenge } from './challenges';
 import { showChallengePreview, clearChallengePreview } from './challengeUI';
@@ -237,8 +237,7 @@ export function initShop(): void {
       buyMercContract();
       // Sold out until this one dies, at which point stockShop offers it again.
       unstock(MERC_CONTRACT_ID);
-      // The party just changed, so the match measuring it has to start over.
-      restartSparringMatch();
+      // The party just changed; the DPS check sees it and starts over.
       addRosterToInterRoundLobby();
       print(wasRevive
         ? 'Mercenary Contract renewed: a fresh mercenary takes the job, carrying the gear the last one was holding. Level 2 creep camps are back.'
@@ -247,7 +246,6 @@ export function initShop(): void {
     } else if (itemTypeId === MERC_CONTRACT_2_ID) {
       buySecondContract();
       unstock(MERC_CONTRACT_2_ID);
-      restartSparringMatch();
       addRosterToInterRoundLobby();
       print('Second Contract signed: a second mercenary joins you, and level 3 creep camps open up.');
       if (buyer != null) effectTargets = [buyer];

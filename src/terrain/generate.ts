@@ -715,29 +715,6 @@ export function generateInterRoundLobby(): Grid {
   // minus the runway (the inter-round lobby train never moves)
   placeTrainStart(grid, -4, 0, false);
 
-  // The cage at the far bottom-right marks the sparring camp's origin; the
-  // match itself is fought in the water-side strips (creeps.ts)
-  // [N, N, N, N, N, N]
-  // [N, N, N, N, C, N]
-  // [N, N, N, N, N, N]
-  const dpsBaseX = GRID_MAX_X - 5;  // 15
-  const dpsBaseY = GRID_MIN_Y;      // -10
-  for (let dy = 0; dy < 3; dy++) {
-    for (let dx = 0; dx < 6; dx++) {
-      const gx = dpsBaseX + dx;
-      const gy = dpsBaseY + dy;
-      if (inBounds(gx, gy)) {
-        const cell = grid.cells[idx(gx, gy)];
-        cell.terrain = Terrain.GRASS;
-        cell.entity = Entity.NONE;
-      }
-    }
-  }
-  // Place cage at (dpsBaseX+4, dpsBaseY+1) — the C in the diagram
-  if (inBounds(dpsBaseX + 4, dpsBaseY + 1)) {
-    grid.cells[idx(dpsBaseX + 4, dpsBaseY + 1)].entity = Entity.CREEP_CAMP;
-  }
-
   return grid;
 }
 

@@ -1,104 +1,50 @@
-import { Destructable, Timer, Trigger, Unit } from 'w3ts';
+import { Destructable, Trigger, Unit } from 'w3ts';
 import { CREEP_CAMPS, CreepCamp, CreepUnit } from './creepCamps';
-import {
-  getMercCampLevel, spawnMercsForOwner, getSpawnedMercUnits, removeSpawnedMercUnits,
-  spawnMercFromData, getLivingMercData,
-} from './mercenary';
+import { getMercCampLevel, getSpawnedMercUnits } from './mercenary';
 import { registerSaveSegment, parseFields, parseNumberList } from './save';
 import {
-  awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, spawnHeroes,
-  grantUnsummonToAllPeasants, hasHeroes, clearSpawnedHeroUnits,
-  spawnHeroFromData, getChosenHeroData,
+  awardHeroXP, getSpawnedHeroes, onHeroesSpawned, onAllHeroesDead, grantUnsummonToAllPeasants,
 } from './heroes';
 import {
   SUMMON_ABILITY_ID, PEASANT_SPELL_IDS, PEASANT_ID,
 } from './constants';
 import { isChallengeArmed, completeChallenge } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
-import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
+import { getNeutralAggressive } from './teams';
 import { noteCampCleared, noteCampFightStarted } from './bossKey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
-import { forEachUnitOfPlayer, isAlive, unitExists, removeUnitsSummonsFirst, nearestUnitInRange } from './util';
+import { isAlive, unitExists, nearestUnitInRange } from './util';
 
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
-/** How long a sparring match runs. Exported so tests wait on it rather than on
- *  a number of their own. */
-export const SPARRING_DURATION = 30;
-
-/**
- * The sparring match is fought six times over, at once, and measured as one.
- *
- * A single match is a noisy measurement. Whether the camp's spells land on a
- * hero or on a heavily armoured mercenary, which unit ends up in front, how
- * many casts happen in the window -- each swings the result, and repeat runs
- * of the same party against the same camp read anywhere from 1.4 to 3.4.
- * Six copies, summed, average most of that out: measured at six, the combined
- * result moved by about 5-10% between runs instead.
- *
- * Each copy approaches its camp from a different side, so the average is over
- * who gets hit first rather than six repeats of one arrangement. The top copy
- * of each strip tilts up, the bottom one down, the middle stays level: a tilt
- * toward a neighbour walks the heroes into its camp.
- *
- * Where they stand matters as much as how many:
- *   - out in the two walkable strips either side of the lobby's water, which
- *     no player can see. The walkable board is only x +-2624 by y +-1344;
- *     north and south of that is unwalkable boundary, and units placed there
- *     are shoved hundreds of units away before the fight begins;
- *   - 950 apart, which kept copies from fighting each other's camps;
- *   - NOT in the lobby's sparring corner, where the single match used to be.
- *     That camp sat jammed against the board edge, which favoured the heroes:
- *     the same fight measured about 1.6x stronger there than on open ground,
- *     and the next camp was scaled to match.
- *
- * Every copy belongs to the one check player. It is the only slot the map sets
- * up as a computer player, and an AI started in any other slot never casts --
- * which is half of what the match exists to measure.
- */
-const SPARRING_COPIES: ReadonlyArray<{ x: number; y: number; approach: number }> = [
-  { x: -1984, y: -950, approach: 210 },
-  { x: -1984, y: 0, approach: 0 },
-  { x: -1984, y: 950, approach: 150 },
-  { x: 2048, y: -950, approach: 330 },
-  { x: 2048, y: 0, approach: 180 },
-  { x: 2048, y: 950, approach: 30 },
-];
-/**
- * The shortest sparring match whose result is kept as it is.
- *
- * Measured by cutting real matches short: before about 8 seconds the opening
- * dominates and the result is off by 2-6x; by 10 the typical error is about a
- * quarter, and a full 30 seconds only improves that to about a sixth. The ready
- * countdown waits for it -- see getSparringSecondsToMinimum.
- */
-export const SPARRING_MIN_SECONDS = 10;
-/** How far from its camp each copy's party starts. */
-const SPARRING_APPROACH = 4 * TRACK_SIZE;
-/** How far one of the match's units may wander from its own copy before it is
- *  sent back. The check player's AI picks camps to attack for itself, and with
- *  six on the map it occasionally sends a party at a neighbour's. */
-const SPARRING_LEASH = 700;
-/** Creep DPS multiplier — scales creep output above measured hero DPS as a balance constant. */
+/** How much harder than the force a camp hits when the DPS check has not
+ *  measured anything to scale from -- a round entered without passing through
+ *  the inter-round lobby. The unit-stat estimate it multiplies is a poor one;
+ *  the check (dpsCheck.ts) replaces it whenever it has run. */
 const CREEP_DPS_ADVANTAGE = 1.1;
-/** Creep DPS multiplier when the Tough Creep Camp challenge is armed. */
+/** The same, with the Tough Creep Camp challenge armed. */
 const TOUGH_CAMP_DPS_ADVANTAGE = 1.5;
 
-/** Whether the inter-round lobby's sparring match is running. */
-let sparringActive = false;
+/** The multiplier on the next camp's damage, as the DPS check last set it, or
+ *  0 when there is none and the estimate stands in. */
+let campDamageScale = 0;
 
-/** Measured hero DPS from the lobby's sparring match. Used for gameplay scaling. */
-let measuredHeroDPS = 0;
+/** Set by the DPS check whenever its estimate moves. 0 clears it. */
+export function setCampDamageScale(scale: number): void {
+  campDamageScale = scale;
+}
 
-/** Measured creep DPS from the lobby's sparring match (accounts for hero stuns/spells). */
-let measuredCreepDPS = 0;
+export function getCampDamageScale(): number {
+  return campDamageScale;
+}
 
-/** The running sparring match's timer, so it can be cancelled early. */
-let sparringTimer: Timer | null = null;
+const cageBrokenListeners: Array<(this: void) => void> = [];
 
-/** HP each creep started the sparring match with. */
-let sparringCreepStartHP = 0;
+/** Run cb when a round's cage is broken, just before its creeps appear. */
+export function onCageBroken(cb: (this: void) => void): void {
+  cageBrokenListeners.push(cb);
+}
 
 // --- Creep camp state — persisted as an index into the flat camp list --------
 
@@ -255,11 +201,9 @@ function drawCampAtLevel(level: number): number | null {
 export function forceLevel3Camp(): boolean {
   const chosen = drawCampAtLevel(3);
   if (chosen == null) return false;
+  // The DPS check sees the camp change for itself (dpsCheck.ts describeSubject)
+  // and starts over against the new one.
   campIndex = chosen;
-  // The lobby is very likely measuring the camp this just replaced, so the
-  // measurement has to follow the camp. Here rather than at the call site, so a
-  // future way of changing the camp cannot forget to.
-  restartSparringMatch();
   return true;
 }
 
@@ -333,7 +277,6 @@ function forgetSpawnedCreeps(): void {
     if (c.charmTrig != null) c.charmTrig.destroy();
   }
   spawnedCreeps = [];
-  naturalHP.clear();
 }
 
 /** Where the current camp's cage stood, so a drop can be placed there after the
@@ -348,18 +291,8 @@ export function getCampOrigin(): { x: number; y: number } | null {
 function spawnCreepsAt(cx: number, cy: number, camp: CreepCamp): void {
   campOrigin = { x: cx, y: cy };
   forgetSpawnedCreeps();
-  // The sparring match puts the camp down once per copy, out in the strips;
-  // the cage only says where it would have been, which restarts still need.
-  if (sparringActive) {
-    for (const c of SPARRING_COPIES) placeCamp(c.x, c.y, camp);
-  } else {
-    placeCamp(cx, cy, camp);
-  }
+  placeCamp(cx, cy, camp);
 }
-
-/** Each spawned creep's own max HP before anything rigged or scaled it, by
- *  handle id. The sparring match needs it after rigging has replaced it. */
-const naturalHP = new Map<number, number>();
 
 /** One camp's creeps on the 3x3 grid round (cx, cy), appended to spawnedCreeps. */
 function placeCamp(cx: number, cy: number, camp: CreepCamp): void {
@@ -370,7 +303,6 @@ function placeCamp(cx: number, cy: number, camp: CreepCamp): void {
     const u = Unit.create(owner, FourCC(creeps[i].id), cx + dx, cy + dy, 270);
     if (u == null) continue;
     prepareCampCreep(u);
-    naturalHP.set(GetHandleId(u.handle), BlzGetUnitMaxHP(u.handle));
     spawnedCreeps.push({ unit: u, campUnit: creeps[i], deathTrig: null, charmTrig: null });
   }
 }
@@ -394,10 +326,8 @@ function prepareCampCreep(u: Unit): void {
 }
 
 /** Remove all spawned creeps (and their corpses). Called when all heroes die,
- *  so the failed camp doesn't leave creeps roaming the map. Not used in DPS
- *  test mode — cancelSparringMatch owns creep cleanup there. */
+ *  so the failed camp doesn't leave creeps roaming the map. */
 function removeSpawnedCreeps(): void {
-  if (sparringActive) return;
   for (const c of spawnedCreeps) {
     if (unitExists(c.unit.handle)) {
       RemoveUnit(c.unit.handle);
@@ -441,155 +371,65 @@ function armorMultiplier(u: unit): number {
   return 1 + 0.06 * Math.max(0, BlzGetUnitArmor(u));
 }
 
-/** Total effective HP and damage across a set of units.
+/** Total HP, effective HP and damage across a set of units.
  *
  *  One place that answers "how strong is this force", so the only question a
  *  caller has to get right is WHICH units it passes. That is where the bug was
  *  when EHP was summed from the heroes alone while DPS covered heroes and
  *  mercenaries together: two copies of the same sum, disagreeing about the
  *  force they were measuring. */
-function sumForce(units: Unit[]): { ehp: number; dps: number } {
+function sumForce(units: Unit[]): { hp: number; ehp: number; dps: number } {
+  let hp = 0;
   let ehp = 0;
   let dps = 0;
   for (const u of units) {
+    hp += BlzGetUnitMaxHP(u.handle);
     ehp += getEffectiveHP(u.handle);
     dps += getDPS(u.handle);
   }
-  return { ehp, dps };
+  return { hp, ehp, dps };
 }
 
 
-/** How much harder than the force a camp is allowed to hit. Tough Camp raises
- *  it; everything that quotes or applies the damage scale asks here. */
-function currentDPSAdvantage(): number {
+/** How much harder than the force a camp hits when only the estimate is to
+ *  hand. Tough Camp raises it. Exported for the DPS check, which starts its
+ *  search from it. */
+export function getCampDPSAdvantage(): number {
   return isChallengeArmed(CH_TOUGH_CAMP) ? TOUGH_CAMP_DPS_ADVANTAGE : CREEP_DPS_ADVANTAGE;
 }
 
-/** Compute DPS and EHP scale factors for creep stat scaling. */
-function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
-  if (sparringActive) {
-    sparringCreepStartHP = SPARRING_HP;
-    // What one camp and one copy of the party are worth BEFORE rigging, for
-    // crediting a creep taken out early (see removalCredit). Copy 0 is the
-    // roster's own units; every copy is the same party.
-    sparringForceEHP = sumForce([...getSpawnedHeroes(), ...getSpawnedMercUnits()]).ehp;
-    let campEHP = 0;
-    for (const c of spawnedCreeps) campEHP += getEffectiveHP(c.unit.handle);
-    sparringCampEHP = campEHP / SPARRING_COPIES.length;
-    sparringRemovals = 0;
-    sparringRemovalCredit = 0;
-    // Mercenaries too: one that dies mid-match stops dealing damage and stops
-    // taking it, quietly biasing both numbers.
-    for (const h of fieldedForce()) {
-      BlzSetUnitMaxHP(h.handle, SPARRING_HP);
-      SetUnitState(h.handle, UNIT_STATE_LIFE, SPARRING_HP);
-    }
-    // Sampling does NOT start here. Only OUR side has been rigged at this
-    // point; the creeps are still on their natural HP and do not get their
-    // 99999-between-them pool until scaleCreepStats applies it, a hundred
-    // lines below. Baselining them here recorded a creep at, say, 500 HP and
-    // then read the jump to 33000 as 32500 HP of damage DEALT -- per creep,
-    // in the first quarter-second. That made measuredHeroDPS large and
-    // NEGATIVE, and since the camp's damage multiplier is
-    // (our DPS x advantage) / creep DPS, it came out negative too and every
-    // creep in the next round was floored at minimum damage.
-    // startMatchSampling() is called at the end of scaleCreepStats instead,
-    // once both sides are actually rigged.
-    // Factors are unused in test mode -- scaleCreepStats splits
-    // sparringCreepStartHP evenly and leaves creep damage at defaults.
-    return { dpsScale: 1, ehpScale: 1 };
-  }
-
-  return roundScaleFactors(spawnedCreeps.map(c => c.unit), fieldedForce(), currentDPSAdvantage());
+/** Everyone fighting on our side in a round: the summoned heroes and any
+ *  mercenaries. Difficulty scaling makes no distinction between them. */
+function fieldedForce(): Unit[] {
+  const all = getSpawnedHeroes();
+  for (const m of getSpawnedMercUnits()) all.push(m);
+  return all;
 }
 
-/** A real round's scale factors for a camp against a force: the camp's damage
- *  pegged to the force's (measured) damage times the advantage, its effective
- *  HP to the force's. */
-function roundScaleFactors(
-  creeps: Unit[], force: Unit[], dpsAdvantage: number,
-): { dpsScale: number; ehpScale: number } {
+/**
+ * A camp's scale factors against a force: the multiplier on each creep's
+ * damage, and the one on its HP.
+ *
+ * The damage scale is the DPS check's whenever it has one: it is found by
+ * fighting this camp against this party for real, at several scales, until the
+ * party just barely loses (dpsCheck.ts). HP is then pegged to the force's raw
+ * HP -- the check's fights are scaled the same way, so the damage scale it
+ * found is the one that goes with it.
+ *
+ * With no check to hand, the units' own damage stands in, times the advantage,
+ * and HP is pegged by EFFECTIVE health, since that estimate takes no armour
+ * into its damage.
+ */
+function roundScaleFactors(creeps: Unit[], force: Unit[]): { dpsScale: number; hpScale: number } {
   const camp = sumForce(creeps);
-  const creepDPS = camp.dps;
-  const creepEHP = camp.ehp;
-  // Heroes AND mercenaries, on both axes. The measured DPS already covered the
-  // whole force -- it is taken from damage the creeps took, whoever dealt it --
-  // but EHP had no measured counterpart and was summed from the heroes alone,
-  // so a camp's HP was pegged to a force smaller than the one it would meet.
-  // That made every camp easier the better your mercenary was, on every round
-  // rather than only before the first measurement.
   const fielded = sumForce(force);
-  const forceEHP = fielded.ehp;
-  // The measured figure when there is one: it is taken from damage the creeps
-  // took, so it already covers whoever dealt it. Before the first match there
-  // is nothing to measure, and the units' own damage stands in.
-  const forceDPS = measuredHeroDPS > 0 ? measuredHeroDPS : fielded.dps;
-  const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
-  return {
-    dpsScale: effectiveCreepDPS > 0 ? (forceDPS * dpsAdvantage) / effectiveCreepDPS : 1,
-    ehpScale: creepEHP > 0 ? forceEHP / creepEHP : 1,
-  };
-}
-
-/** What the last match's sampling actually saw, in raw HP.
- *
- *  measuredCreepDPS is the denominator of the whole difficulty scale, so when a
- *  camp comes out absurdly hard or absurdly soft this is where the answer is:
- *  how much of our side's HP loss was taken by the force, and how much by
- *  summons standing in front of it. */
-export function getDPSSampleBreakdown(): {
-  creepHPLost: number; ourHPLost: number; summonHPLost: number;
-  removals: number; removalCredit: number;
-} {
-  return {
-    creepHPLost, ourHPLost, summonHPLost,
-    removals: sparringRemovals, removalCredit: sparringRemovalCredit,
-  };
-}
-
-/** What the last completed match measured, and what it is doing to the next
- *  camp. Printed by -dpsnumbers.
- *
- *  scale is the multiplier applied to every creep's damage: 1 leaves them at
- *  their ladder values, 3 triples them. A number far from 1 means the match
- *  measured something lopsided. It uses the same advantage the next camp will
- *  get, so it is honest with Tough Camp armed. */
-export function getDPSMeasured(): { heroDPS: number; creepDPS: number; scale: number } {
-  return {
-    heroDPS: measuredHeroDPS,
-    creepDPS: measuredCreepDPS,
-    scale: measuredCreepDPS > 0 ? measuredHeroDPS * currentDPSAdvantage() / measuredCreepDPS : 0,
-  };
-}
-
-/** The same three numbers as lines, for -dpsnumbers to print. */
-export function getDpsMeasurementReport(): string[] {
-  const measured = getDPSMeasured();
-  const lines: string[] = [];
-  lines.push('Our DPS (measured): ' + I2S(R2I(measured.heroDPS)));
-  lines.push('Creep DPS (measured): ' + I2S(R2I(measured.creepDPS)));
-  lines.push('HP taken off the creeps: ' + I2S(R2I(creepHPLost)));
-  if (sparringRemovals > 0) {
-    lines.push('  of which ' + I2S(sparringRemovals) + ' creep(s) charmed or killed outright, credited '
-      + I2S(R2I(sparringRemovalCredit)));
+  if (campDamageScale > 0) {
+    return { dpsScale: campDamageScale, hpScale: camp.hp > 0 ? fielded.hp / camp.hp : 1 };
   }
-  lines.push('HP taken off our side: ' + I2S(R2I(ourHPLost))
-    + ' (of which summons took ' + I2S(R2I(summonHPLost)) + ')');
-  if (measured.creepDPS > 0) {
-    lines.push('=> creep damage scale: ' + I2S(R2I(measured.scale * 100)) + '%');
-  } else {
-    lines.push('=> no creep DPS measured; scaling falls back to the estimate');
-  }
-  return lines;
-}
-
-/** How many units the check player still owns. Zero except while a match is
- *  running: anything the match brings on -- heroes, mercenaries, and whatever
- *  they summon -- belongs to it, so this is what "the field is clear" means. */
-export function getCheckPlayerUnitCount(): number {
-  let n = 0;
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, () => { n += 1; });
-  return n;
+  return {
+    dpsScale: camp.dps > 0 ? fielded.dps * getCampDPSAdvantage() / camp.dps : 1,
+    hpScale: camp.ehp > 0 ? fielded.ehp / camp.ehp : 1,
+  };
 }
 
 /** The force's health and damage, split by kind. Diagnostics only: it exists so
@@ -643,7 +483,7 @@ function checkCampBeaten(): void {
 export function scaleCreepStats(heroes: Unit[]): void {
   if (spawnedCreeps.length === 0 || heroes.length === 0) return;
 
-  const { dpsScale, ehpScale } = computeScaleFactors();
+  const { dpsScale, hpScale } = roundScaleFactors(spawnedCreeps.map(c => c.unit), fieldedForce());
 
   // Compute XP rewards: use creep level as weight, scale to target total
   const isFirstCamp = heroes.every(h => GetHeroXP(h.handle) === 0);
@@ -662,23 +502,10 @@ export function scaleCreepStats(heroes: Unit[]): void {
   for (let i = 0; i < spawnedCreeps.length; i++) {
     const c = spawnedCreeps[i];
     const h = c.unit.handle;
+    applyRoundScale(c.unit, dpsScale, hpScale);
 
-    if (sparringActive) {
-      // High HP so heroes can't kill them; damage left at defaults to measure actual creep DPS
-      // Split per CAMP: spawnedCreeps holds every copy's creeps, and dividing
-      // the pool by all of them would leave each creep a sixth of its share.
-      const perCamp = Math.max(1, spawnedCreeps.length / SPARRING_COPIES.length);
-      const scaledHP = Math.max(1, Math.floor(sparringCreepStartHP / perCamp));
-      BlzSetUnitMaxHP(h, scaledHP);
-      SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
-      BlzSetUnitWeaponIntegerField(h, UNIT_WEAPON_IF_ATTACK_ATTACK_TYPE, 0, 5);
-      c.unit.invulnerable = false;
-    } else {
-      applyRoundScale(c.unit, dpsScale, ehpScale);
-    }
-
-    // Register per-creep death trigger for XP award + item drops (gameplay only)
-    if (!sparringActive) {
+    // Per-creep death trigger for XP award + item drops
+    {
       const xpReward = creepXPRewards[i];
       const drops = c.campUnit.itemDrops;
       const deathTrig = Trigger.create();
@@ -712,24 +539,16 @@ export function scaleCreepStats(heroes: Unit[]): void {
     }
   }
   campBeatenPaid = false;
-
-  // Both sides are rigged now, so a baseline taken here is honest. Anything
-  // earlier reads one side's rigging as the other side's damage.
-  if (sparringActive) startMatchSampling();
 }
 
-/** Scale one camp creep for a real round and let it fight. */
-function applyRoundScale(u: Unit, dpsScale: number, ehpScale: number): void {
+/** Scale one camp creep and let it fight. */
+function applyRoundScale(u: Unit, dpsScale: number, hpScale: number): void {
   const h = u.handle;
   // DPS-based damage scaling: keep cooldown, scale base damage to match target DPS
   const cd = getCooldown(h);
-  const originalDPS = getDPS(h);
-  const targetDPS = originalDPS * dpsScale;
-  const targetAvgDmg = targetDPS * cd;
+  const targetAvgDmg = getDPS(h) * dpsScale * cd;
   const scaledDamage = Math.max(1, Math.floor(targetAvgDmg - diceAverage(h)));
-
-  // EHP-based HP scaling: keep armor, scale raw HP to match target EHP
-  const scaledHP = Math.max(1, Math.floor(getEffectiveHP(h) * ehpScale / armorMultiplier(h)));
+  const scaledHP = Math.max(1, Math.floor(BlzGetUnitMaxHP(h) * hpScale));
 
   BlzSetUnitBaseDamage(h, scaledDamage, 0);
   BlzSetUnitMaxHP(h, scaledHP);
@@ -738,18 +557,14 @@ function applyRoundScale(u: Unit, dpsScale: number, ehpScale: number): void {
   u.invulnerable = false;
 }
 
-/** Test hook: put the current camp down at (cx, cy) and scale it against
- *  `force` exactly as a real round would, from the last match's measurement --
- *  with the damage advantage and an HP multiplier given rather than the
- *  constants, so a balance harness can try others. The creeps are the
- *  caller's: no XP, drops or camp-beaten checks are attached. */
-export function spawnScaledCampForTest(
-  cx: number, cy: number, force: Unit[], dpsAdvantage: number, ehpMultiplier: number,
-  rawHP = false,
-): { creeps: Unit[]; dpsScale: number; ehpScale: number } {
+/** The current camp's creeps around (cx, cy), unscaled and invulnerable, with
+ *  the map's own spells stripped. The caller's alone: none is in
+ *  spawnedCreeps, and nothing a round's camp carries -- XP, drops, the
+ *  camp-beaten check -- is attached. */
+export function spawnUnscaledCampCopy(cx: number, cy: number): Unit[] {
   const camp = getCampData();
   const creeps: Unit[] = [];
-  if (camp == null) return { creeps, dpsScale: 0, ehpScale: 0 };
+  if (camp == null) return creeps;
   for (let i = 0; i < camp.creeps.length && i < 9; i++) {
     const [dx, dy] = GRID_OFFSETS[i];
     const u = Unit.create(getNeutralAggressive(), FourCC(camp.creeps[i].id), cx + dx, cy + dy, 270);
@@ -757,418 +572,18 @@ export function spawnScaledCampForTest(
     prepareCampCreep(u);
     creeps.push(u);
   }
-  const factors = roundScaleFactors(creeps, force, dpsAdvantage);
-  const dpsScale = factors.dpsScale;
-  let ehpScale = factors.ehpScale;
-  if (rawHP) {
-    // Camp raw HP pegged to the force's raw HP, armour left to the measured
-    // damage (which has already had both sides' armour taken out of it).
-    let forceHP = 0;
-    for (const u of force) forceHP += BlzGetUnitMaxHP(u.handle);
-    let campHP = 0;
-    for (const u of creeps) campHP += BlzGetUnitMaxHP(u.handle);
-    ehpScale = campHP > 0 ? forceHP / campHP : 1;
-  }
-  for (const u of creeps) applyRoundScale(u, dpsScale, ehpScale * ehpMultiplier);
-  return { creeps, dpsScale, ehpScale: ehpScale * ehpMultiplier };
+  return creeps;
 }
 
-/** The advantage a real round gives the camp right now. Exported for tests. */
-export function getCampDPSAdvantage(): number {
-  return currentDPSAdvantage();
-}
-
-// --- The sparring match: the inter-round lobby fight that measures real DPS ---
-
-/** End the sparring match: measure damage, compute DPS, clean up all state.
- *  Safe to call at any point — handles the case where the timer hasn't started yet. */
-export function cancelSparringMatch(): void {
-  teardownSparringMatch(true);
-}
-
-/** Tear the match down. `record` says whether its numbers are worth keeping.
- *
- *  They are not, if the match was measuring a camp that is no longer the camp
- *  you will face -- see restartSparringMatch. */
-function teardownSparringMatch(record: boolean): void {
-  if (sparringTimer != null) {
-    const elapsed = sparringTimer.elapsed;
-    sparringTimer.destroy();
-    sparringTimer = null;
-    if (record && elapsed > 0) {
-      sampleDPS();   // bank whatever landed since the last sample
-      // Per copy, so "DPS" keeps meaning one party's against one camp. The
-      // ratio between the two -- all the scaling uses -- is unchanged by it.
-      measuredHeroDPS = creepHPLost / elapsed / SPARRING_COPIES.length;
-      measuredCreepDPS = ourHPLost / elapsed / SPARRING_COPIES.length;
-    }
-  }
-  // Clean up the sparring creeps so they don't linger into the next round
-  stopDPSSampling();
-  if (sparringActive) {
-    for (const c of spawnedCreeps) {
-      c.unit.destroy();
-    }
-    forgetSpawnedCreeps();
-    // Order matters twice over. Summons go first: one whose summoner has
-    // already been removed cannot be, and a Far Seer's wolves survived every
-    // match that way. And the mercenary's kit is snapshotted off its live
-    // unit, so that happens before the sweep removes it.
-    clearCheckPlayerSummons();
-    removeSpawnedMercUnits();
-    clearSpawnedHeroUnits();
-    clearCheckPlayerUnits();
-    sparringExtras = [];
-    sparringHome.clear();
-  }
-  sparringActive = false;
-}
-
-/** Seconds until the running sparring match reaches its minimum length, or 0
- *  when it has, or when there is no match to wait for. */
-export function getSparringSecondsToMinimum(): number {
-  if (sparringTimer == null) return 0;
-  return Math.max(0, SPARRING_MIN_SECONDS - sparringTimer.elapsed);
-}
-
-/** What the sparring match is doing right now. Diagnostics only -- nothing in the
- *  game reads this; it exists so a test can watch the sparring match from the
- *  outside instead of inferring it. */
-export function getSparringStatus(): {
-  creeps: number; heroes: number; mercs: number; timer: boolean;
-  elapsed: number; campIndex: number; copies: number;
-} {
-  return {
-    copies: SPARRING_COPIES.length,
-    campIndex: campIndex ?? -1,
-    mercs: getSpawnedMercUnits().length,
-    creeps: spawnedCreeps.length,
-    heroes: getSpawnedHeroes().length,
-    timer: sparringTimer != null,
-    elapsed: sparringTimer != null ? sparringTimer.elapsed : 0,
-  };
-}
-
-/** Start the sparring match: destroy the cage to spawn creeps, field the roster,
- *  and let them fight.
- *  Called after inter-round lobby terrain is spawned. */
-export function startSparringMatch(): void {
-  if (cageDestructable == null) return;
-  // No roster means spawnHeroes produces nobody, and a match with no heroes is
-  // worse than no match: scaleCreepStats bails on an empty hero list, so the
-  // timer is never created, the creeps are never scaled or made vulnerable, and
-  // sparringActive stays true with them standing in the lobby until the next
-  // rebuild. Reachable through -lobby, which jumps here without playing the
-  // round that picks the roster.
-  if (!hasHeroes()) return;
-
-  sparringActive = true;
-
-  // Destroy cage → triggers creep spawn via registerCageTrigger, which puts
-  // one camp down per copy because sparringActive is already set.
-  cageDestructable.kill();
-
-  fieldDPSHeroes();
-}
-
-/** Put the roster in against whatever creeps are standing, which is what
- *  starts the clock: spawnHeroes fires onHeroesSpawned a frame later, and
- *  scaleCreepStats is where the timer is created. */
-function fieldDPSHeroes(): void {
-  const check = getDPSCheckPlayer();
-  sparringExtras = [];
-  sparringHome.clear();
-  const start = (c: { x: number; y: number; approach: number }): [number, number] => [
-    c.x + SPARRING_APPROACH * Cos(c.approach * bj_DEGTORAD),
-    c.y + SPARRING_APPROACH * Sin(c.approach * bj_DEGTORAD),
-  ];
-  // Copies 1..5 first, from the roster's data. Order matters: tome bonuses
-  // land a frame after a hero spawns, and copy 0's spawn is what starts the
-  // clock a frame later. Spawned after it, these copies' tomes would land
-  // after sampling began and read as negative damage.
-  const heroes = getChosenHeroData();
-  const mercs = getLivingMercData();
-  for (let i = 1; i < SPARRING_COPIES.length; i++) {
-    const [hx, hy] = start(SPARRING_COPIES[i]);
-    for (const h of heroes) {
-      const u = spawnHeroFromData(h, check, hx, hy);
-      if (u != null) sparringExtras.push(u);
-    }
-    for (let m = 0; m < mercs.length; m++) {
-      const u = spawnMercFromData(mercs[m], check, hx + m * 96, hy - 96);
-      if (u != null) sparringExtras.push(u);
-    }
-  }
-  // Copy 0 through the roster's own spawn, which fires onHeroesSpawned and so
-  // starts the match.
-  const [hx0, hy0] = start(SPARRING_COPIES[0]);
-  spawnHeroes([check], hx0, hy0);
-  // Mercenaries fight alongside the heroes in a real round, so a measurement
-  // taken without them understates the force the camp will actually face and
-  // scales the next camp too easily. Owned by the check player like the heroes,
-  // so the same teardown reaches them and no human's camera is involved.
-  spawnMercsForOwner(check, hx0, hy0 - 96);
-}
-
-/** The match's units beyond copy 0's: copy 0 is the roster's own live units,
- *  which the hero and mercenary systems track; these are extra copies of them
- *  that only the match knows about. */
-let sparringExtras: Unit[] = [];
-
-/** Which copy each of the match's units belongs to, by handle id. Recorded the
- *  first time a unit is seen, when it is still beside its own camp. */
-const sparringHome = new Map<number, number>();
-
-function nearestCopy(x: number, y: number): number {
-  let best = 0;
-  let bestD = Infinity;
-  for (let i = 0; i < SPARRING_COPIES.length; i++) {
-    const dx = SPARRING_COPIES[i].x - x;
-    const dy = SPARRING_COPIES[i].y - y;
-    const d = dx * dx + dy * dy;
-    if (d < bestD) { bestD = d; best = i; }
-  }
-  return best;
-}
-
-/** Send anything that has wandered too far from its own copy back to it. */
-function leashSparring(u: unit): void {
-  const id = GetHandleId(u);
-  let home = sparringHome.get(id);
-  if (home == null) {
-    home = nearestCopy(GetUnitX(u), GetUnitY(u));
-    sparringHome.set(id, home);
-  }
-  const c = SPARRING_COPIES[home];
-  const dx = GetUnitX(u) - c.x;
-  const dy = GetUnitY(u) - c.y;
-  if (dx * dx + dy * dy > SPARRING_LEASH * SPARRING_LEASH) {
-    IssuePointOrder(u, 'attack', c.x, c.y);
-  }
-}
-
-/** Take EVERYTHING the check player owns off the field.
- *
- *  Not just the heroes and mercenaries that were fielded: whatever they
- *  SUMMONED belongs to the check player too, and nothing was removing it. A Far
- *  Seer's Feral Spirit wolves outlived the match that summoned them, so a
- *  restart -- which is what rerolling does -- began the next match with the
- *  previous one's wolves still standing and still fighting, on top of the ones
- *  the new roster would summon.
- *
- *  That is why a single clean match measured fine and a rerolled one did not:
- *  the wolves only pile up across restarts, and entering a round wipes them
- *  anyway when the terrain is rebuilt.
- *
- *  Sweeping by OWNER rather than by list is what makes this hold: anything the
- *  match brings onto the field is owned by the check player, whether or not
- *  this file knew it would exist. */
-function clearCheckPlayerUnits(): void {
-  const all: unit[] = [];
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => { all.push(u); });
-  removeUnitsSummonsFirst(all);
-}
-
-/** Just the summons the check player owns, ahead of the units that summoned
- *  them; see teardownSparringMatch. */
-function clearCheckPlayerSummons(): void {
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
-    if (IsUnitType(u, UNIT_TYPE_SUMMONED)) RemoveUnit(u);
-  });
-}
-
-/** HP lost by each side so far, banked as it happens. */
-let creepHPLost = 0;
-let ourHPLost = 0;
-/** The part of ourHPLost that summons took, rather than the fielded force.
- *  Diagnostic only -- nothing scales off it. */
-let summonHPLost = 0;
-
-/** A unit being watched, with the HP it had at the last sample. */
-interface TrackedHP {
-  unit: unit; lastHP: number; summon: boolean;
-  /** A creep already taken out of the fight and credited; see removalCredit. */
-  out?: boolean;
-}
-
-/** One copy of the party's effective HP, and one camp's, before rigging. */
-let sparringForceEHP = 0;
-let sparringCampEHP = 0;
-/** Creeps taken out early this match, and the HP credited for them. */
-let sparringRemovals = 0;
-let sparringRemovalCredit = 0;
-
-/**
- * What taking a creep out of the fight early is worth, in the match's units.
- *
- * Transmute kills a creep outright and Charm takes it over; either way, in a
- * real round the camp loses that creep's whole HP at once. Read naively the
- * match gets that badly wrong in both directions: a transmuted creep loses its
- * rigged share of the 99999 pool -- tens of thousands of HP in a quarter
- * second -- and a charmed one jumps to 99999 when our side rigs it, which read
- * as about -67000 HP of damage dealt. A party with both measured -1055 DPS.
- *
- * So the creep is credited with the HP it WOULD have had in the round: its own
- * natural HP scaled the way scaleCreepStats scales a real camp, by the party's
- * effective HP over the camp's. From then on a charmed creep is ours -- the
- * damage it deals and takes count on our side, because it has been picked up
- * and rigged like a summon.
- */
-function removalCredit(u: unit): number {
-  if (sparringCampEHP <= 0) return 0;
-  return (naturalHP.get(GetHandleId(u)) ?? 0) * (sparringForceEHP / sparringCampEHP);
-}
-let trackedCreeps: TrackedHP[] = [];
-let trackedOurs: TrackedHP[] = [];
-let dpsSampler: Timer | null = null;
-
-/** How often HP is sampled during the match. Often enough that a unit which
- *  dies or expires between samples loses at most a fraction of a second of
- *  contribution. */
-const DPS_SAMPLE_INTERVAL = 0.25;
-/** The HP every combatant in the match is rigged to (the creeps share it per
- *  camp). Exported for the tests. */
-export const SPARRING_HP = 99999;
-
-/** Rig a unit so the match cannot kill it, and start watching its HP. */
-function trackForDPS(list: TrackedHP[], u: unit, rig: boolean): void {
-  if (rig) {
-    BlzSetUnitMaxHP(u, SPARRING_HP);
-    SetUnitState(u, UNIT_STATE_LIFE, SPARRING_HP);
-  }
-  // `rig` is only ever true for a unit that appeared mid-match, which on our
-  // side means a summon. Remembered so the breakdown can say how much of our
-  // side's HP loss was taken by summons rather than by the force itself.
-  list.push({ unit: u, lastHP: GetUnitState(u, UNIT_STATE_LIFE), summon: rig });
-}
-
-/** Sample both sides and bank what they lost since the last look.
- *
- *  HP lost rather than damage events, because HP is the number that has already
- *  had armour taken out of it and regeneration put back in -- it is what the
- *  fight actually cost. Banking it every quarter second rather than reading it
- *  once at the end is what lets a unit die or expire without taking its
- *  contribution with it.
- *
- *  Newly appeared units on our side are summons -- wolves, treants, beetles.
- *  They are rigged and tracked the moment they show up, so they neither die
- *  mid-match nor go uncounted. */
-function sampleDPS(): void {
-  const creepOwner = getNeutralAggressive().handle;
-  for (const entry of trackedCreeps) {
-    if (entry.out === true || !unitExists(entry.unit)) continue;
-    const hp = GetUnitState(entry.unit, UNIT_STATE_LIFE);
-    // Dead (no creep dies to damage in the match -- the pool is too deep --
-    // so this is an instant kill) or charmed: credit it once, and stop
-    // reading its HP, which no longer means anything for the camp.
-    if (hp <= 0.405 || GetOwningPlayer(entry.unit) !== creepOwner) {
-      const credit = removalCredit(entry.unit);
-      creepHPLost += credit;
-      sparringRemovals += 1;
-      sparringRemovalCredit += credit;
-      entry.out = true;
-      continue;
-    }
-    creepHPLost += entry.lastHP - hp;
-    entry.lastHP = hp;
-  }
-  for (const entry of trackedOurs) {
-    if (!unitExists(entry.unit)) continue;
-    const hp = GetUnitState(entry.unit, UNIT_STATE_LIFE);
-    const lost = entry.lastHP - hp;
-    ourHPLost += lost;
-    if (entry.summon) summonHPLost += lost;
-    entry.lastHP = hp;
-  }
-  // Pick up anything the fight has summoned since the last sample, and keep
-  // every copy's units at their own camp.
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
-    leashSparring(u);
-    for (const e of trackedOurs) {
-      if (e.unit === u) return;
-    }
-    trackForDPS(trackedOurs, u, true);
-  });
-}
-
-/** Open the match: baseline both sides and start the clock that ends it.
- *
- *  Called from the END of scaleCreepStats, once the creeps have their pool.
- *  The order matters more than it looks: the sampler banks the DIFFERENCE
- *  between consecutive HP readings, so any HP change that is not damage --
- *  rigging included -- is indistinguishable from damage unless it has already
- *  happened before the first reading. */
-function startMatchSampling(): void {
-  beginDPSSampling();
-  // untracked: the sparring match owns it (cancelSparringMatch).
-  sparringTimer = Timer.create();
-  sparringTimer.start(SPARRING_DURATION, false, () => {
-    cancelSparringMatch();   // sweeps the field, summons included
-  });
-}
-
-/** Begin watching, once both sides have their rigged HP. */
-function beginDPSSampling(): void {
-  stopDPSSampling();
-  creepHPLost = 0;
-  ourHPLost = 0;
-  summonHPLost = 0;
-  trackedCreeps = [];
-  trackedOurs = [];
-  for (const c of spawnedCreeps) trackForDPS(trackedCreeps, c.unit.handle, false);
-  for (const h of fieldedForce()) trackForDPS(trackedOurs, h.handle, false);
-  // untracked: the match owns it (stopDPSSampling).
-  const t = Timer.create();
-  // periodic: HP lost is sampled, not summed from damage events, because it is
-  // what the fight cost -- armour off, regeneration back (see sampleDPS) -- and
-  // the same pass leashes the summons to their camp.
-  t.start(DPS_SAMPLE_INTERVAL, true, () => sampleDPS());
-  dpsSampler = t;
-}
-
-function stopDPSSampling(): void {
-  if (dpsSampler != null) {
-    dpsSampler.pause();
-    dpsSampler.destroy();
-    dpsSampler = null;
-  }
-}
-
-/** Everyone fighting on our side: the summoned heroes and any mercenaries.
- *
- *  Difficulty scaling makes no distinction between them. A mercenary has health
- *  and damage exactly as a hero does, and the camp has to get through all of it,
- *  so counting only the heroes understated the force on both axes. */
-function fieldedForce(): Unit[] {
-  const all = getSpawnedHeroes();
-  for (const m of getSpawnedMercUnits()) all.push(m);
-  for (const e of sparringExtras) all.push(e);
-  return all;
-}
-
-/** Throw the current match away and run it again against the camp as it now
- *  stands.
- *
- *  The match is a measurement OF A SPECIFIC CAMP -- it fights that camp's
- *  creeps and scales the next round from the result. Anything that changes
- *  which camp you will face therefore invalidates a match already in progress,
- *  and one that has already finished: its numbers describe creeps you are no
- *  longer going to meet.
- *
- *  The previous numbers are cleared rather than left standing, so a restart
- *  that cannot proceed falls back to the estimate instead of scaling the new
- *  camp by the old camp's measurement. */
-export function restartSparringMatch(): void {
-  const origin = campOrigin;
-  teardownSparringMatch(false);   // discard: they measured the camp you just replaced
-  measuredHeroDPS = 0;
-  measuredCreepDPS = 0;
-
-  const camp = getCampData();
-  if (origin == null || camp == null || !hasHeroes()) return;
-  sparringActive = true;
-  spawnCreepsAt(origin.x, origin.y, camp);
-  fieldDPSHeroes();
+/** One copy of the current camp at (cx, cy), scaled against `force` as a round
+ *  scales it but with the damage scale given: the DPS check's fights, each
+ *  trying a scale of its own. */
+export function spawnCampCopy(cx: number, cy: number, force: Unit[], dpsScale: number): Unit[] {
+  const creeps = spawnUnscaledCampCopy(cx, cy);
+  const campHP = sumForce(creeps).hp;
+  const hpScale = campHP > 0 ? sumForce(force).hp / campHP : 1;
+  for (const u of creeps) applyRoundScale(u, dpsScale, hpScale);
+  return creeps;
 }
 
 // --- Cage death trigger ------------------------------------------------------
@@ -1187,6 +602,8 @@ export function registerCageTrigger(): void {
     if (camp == null) return;
     const cx = cageDestructable.x;
     const cy = cageDestructable.y;
+    // The DPS check settles its estimate here, before the camp is scaled.
+    for (const cb of cageBrokenListeners) cb();
     spawnCreepsAt(cx, cy, camp);
     noteCampFightStarted(camp.level);
     // Grant Summon Heroes ability to the nearest peasant

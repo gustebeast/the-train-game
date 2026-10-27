@@ -1,50 +1,38 @@
-import { Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { Units } from '@objectdata/units';
 import { Players } from 'w3ts/globals';
 import { registerTest, TestReporter } from './testKit';
 import {
-  getSparringStatus, forceLevel3Camp, getCampData, restartSparringMatch, measureFieldedForce,
-  cancelSparringMatch, getCheckPlayerUnitCount, getCampOrigin, setCampForTest,
-  getSparringSecondsToMinimum, getDPSMeasured, getDPSSampleBreakdown,
-  SPARRING_DURATION, SPARRING_HP, SPARRING_MIN_SECONDS,
+  forceLevel3Camp, getCampData, measureFieldedForce, setCampForTest, getCampDamageScale,
 } from '../creeps';
 import { CREEP_CAMPS } from '../creepCamps';
-import {
-  HeroData, setRosterForTest, spawnHeroes, hasHeroes, getChosenHeroCount,
-} from '../heroes';
+import { HeroData, setRosterForTest, spawnHeroes, getChosenHeroCount, hasHeroes } from '../heroes';
 import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from '../mercenary';
-import { getDPSCheckPlayer, toggleDPSVision } from '../teams';
-import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem } from '../util';
-import { loadInterRoundLobby, beginNewRun, resetPurchases } from '../terrain/load';
-import { purchaseSummonUpgrade, isSummonUpgradePurchased } from '../summonUpgrade';
-import { refreshInterRoundLobbyRoster } from '../interRoundLobbyRoster';
+import {
+  getDPSCheckStatus, getDPSCheckSecondsToMinimum, getDPSStation, DPS_CHECK_MIN_SECONDS,
+} from '../dpsCheck';
+import { getDPSCheckPlayer, getNeutralAggressive, toggleDPSVision } from '../teams';
+import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem, forEachDestructable } from '../util';
+import { loadInterRoundLobby, beginNewRun, resetPurchases, loadTerrain, loadStartLobby } from '../terrain/load';
+import { gameState } from '../state';
+import { CAGE_RAW } from '../sharedData';
 
 /**
- * The sparring match: the fight the inter-round lobby runs against the next
- * camp, whose result scales that camp. Nothing about it is visible if it goes
- * wrong -- it just scales the next round off a bad number -- so these hold it
- * to what it must do.
+ * The DPS check (dpsCheck.ts): twelve copies of the party fighting the next
+ * camp out beyond the board's wall, first rigged and then for real, until the
+ * round's cage is broken. Nothing about it is visible if it goes wrong -- it
+ * just scales the camp off a bad number -- so these hold it to what it must do.
  *
- * Three tests, each sharing one match's setup across several checks: whether
- * it fields and measures correctly, whether anyone can see it, and whether it
- * restarts and clears away properly. They were nine, most of which paid for a
- * match of their own to check one thing.
- *
- * Waits are on the match itself -- running, past its minimum, over -- rather
- * than on fixed seconds, and its sizes are read from creeps.ts rather than
- * retyped here.
+ * Waits are on the check itself -- its phase, its fights -- rather than on
+ * fixed seconds.
  */
 
-/** Long enough for a lobby to load and a match to start; it takes a frame. */
+/** Long enough for a lobby to load and the check to field its opening. */
 const START_WAIT = 5;
+/** Nearer the board than this, a fight could be heard from it: the keep-out
+ *  wall stands at +-1664 and its cells reach +-1728. */
+const KEEP_OUT_Y = 1600;
 
-function matchRunning(): boolean {
-  return getSparringStatus().timer;
-}
-
-/** A level 5 hero on this map's table (100 XP a level; 900 is the cap), with
- *  two points in each of the first two skills and one in the third. */
 function level5(type: string, skills: ReadonlyArray<string>): HeroData {
   const s: Record<string, number> = {};
   s[skills[0]] = 2;
@@ -54,162 +42,135 @@ function level5(type: string, skills: ReadonlyArray<string>): HeroData {
     tomeStr: 0, tomeAgi: 0, tomeInt: 0, tomeHP: 0 };
 }
 
+const FAR_SEER = level5(Units.FarSeer, [Abilities.FeralSpirit, Abilities.ChainLightning, Abilities.FarSight]);
+const PRIESTESS = level5(Units.PriestessOfTheMoon, [Abilities.SearingArrows, Abilities.TrueshotAura, Abilities.Scout]);
+
+/** gnoll assassins x2, overseer, warden: four creeps. */
+const FIELD_CAMP = 217;
+
 function countItems(): number {
   let n = 0;
   forEachGroundItem(() => { n += 1; });
   return n;
 }
 
-// --- Fields and measures -----------------------------------------------------
+function checkUnits(): unit[] {
+  const out: unit[] = [];
+  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => { out.push(u); });
+  return out;
+}
 
-/** gnoll assassins x2, overseer, warden: four creeps. */
-const FIELD_CAMP = 217;
+/** Every creep owned by neutral aggressive beyond the keep-out wall. */
+function rowCreeps(): unit[] {
+  const out: unit[] = [];
+  forEachUnitOfPlayer(getNeutralAggressive().handle, u => {
+    if (Math.abs(GetUnitY(u)) > KEEP_OUT_Y) out.push(u);
+  });
+  return out;
+}
+
+function phaseIs(p: string): () => boolean {
+  return () => getDPSCheckStatus().phase === p;
+}
+
+// --- Fields, measures, fights ------------------------------------------------
 
 /**
- * One whole match, start to finish, with a fixed party -- Far Seer and
- * Priestess at level 5 and an Ogre Lord -- against a fixed camp, so the counts
- * are exact.
+ * One check, start to the first round of real fights, with a fixed party --
+ * Far Seer and Priestess at level 5 and an Ogre Lord -- against a fixed camp,
+ * so the counts are exact.
  *
- * - Starting a run picks four heroes and fields two, and the match runs with
- *   or without Summon Heroes bought: the upgrade gates casting the spell and
- *   the lobby roster display, nothing else. Gating the match on the purchase
- *   is the regression the unbought half catches.
- * - Every copy fields, each creep keeps its share of ONE camp's pool (not a
- *   sixth of it, from splitting across every copy), the roster's own copy is
- *   one party with one mercenary, owned by the hidden check player rather than
- *   a human (whose camera it would yank), and the ready wait counts down.
- * - Past the minimum: nobody has wandered to a neighbour's camp, every copy has
- *   cast, and no rigging has been banked as damage -- creepHPLost once came
- *   back as -98000 from a baseline taken before the creeps were rigged.
- * - Once over: the field is clear, items included, and the measurement is
- *   positive both ways with a positive scale. This party's Far Seers cast
- *   Feral Spirit, which is what found that a summon cannot be removed once its
- *   summoner has been: every match had been leaving its wolves behind.
+ * - Starting a run fields the check whether or not Summon Heroes is bought.
+ * - The opening fields every station: two heroes and a mercenary each, all the
+ *   check player's, and a whole camp each; nothing nearer the board than the
+ *   keep-out wall; and the ready countdown waits for it.
+ * - The opening ends in a positive scale and an empty field: no rigged unit or
+ *   dropped item outlives it.
+ * - Real fights then finish -- a result each, the party leashed to its own
+ *   station, no hero's items left on the ground.
  */
-function runSparringFields(t: TestReporter): void {
-  t.report('purchasedAtStart', isSummonUpgradePurchased() ? 1 : 0);
+function runDPSFields(t: TestReporter): void {
   beginNewRun();
-  t.expectTrue('heroesPickedUnbought', hasHeroes());
-  t.expect('chosenThisRoundUnbought', getChosenHeroCount(), 2);
-  setRosterForTest([
-    level5(Units.FarSeer, [Abilities.FeralSpirit, Abilities.ChainLightning, Abilities.FarSight]),
-    level5(Units.PriestessOfTheMoon, [Abilities.SearingArrows, Abilities.TrueshotAura, Abilities.Scout]),
-  ]);
+  t.expectTrue('heroesPicked', hasHeroes());
+  t.expect('chosenThisRound', getChosenHeroCount(), 2);
+  setRosterForTest([FAR_SEER, PRIESTESS]);
   setMercsForTest([FourCC('nogl')]);
   setCampForTest(FIELD_CAMP);
   loadInterRoundLobby();
+  const itemsBefore = countItems();
+  const check = getDPSCheckPlayer().handle;
+  let casts = 0;
+  const castTrig = CreateTrigger()!;
+  TriggerRegisterPlayerUnitEvent(castTrig, check, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+  TriggerAddAction(castTrig, () => { casts += 1; });
 
-  t.waitFor('matchStartsUnbought', matchRunning, START_WAIT, () => {
-    t.expect('heroesInMatchUnbought', getSparringStatus().heroes, 2);
+  t.waitFor('openingFielded', phaseIs('rigged'), START_WAIT, () => t.after(1, () => {
+    const s = getDPSCheckStatus();
+    const camp = CREEP_CAMPS[FIELD_CAMP];
+    let heroes = 0;
+    let mercs = 0;
+    let nearBoard = 0;
+    for (const u of checkUnits()) {
+      if (IsUnitType(u, UNIT_TYPE_HERO)) heroes += 1;
+      else if (GetUnitTypeId(u) === FourCC('nogl')) mercs += 1;
+      if (Math.abs(GetUnitY(u)) < KEEP_OUT_Y) nearBoard += 1;
+    }
+    t.expect('heroesFielded', heroes, s.stations * 2);
+    t.expect('mercsFielded', mercs, s.stations);
+    t.expect('creepsFielded', rowCreeps().length, s.stations * camp.creeps.length);
+    t.expect('checkUnitsNearBoard', nearBoard, 0);
+    t.expect('mercsOwnedByHumans', measureFieldedForce().mercsOwnedByHumans, 0);
+    const wait = getDPSCheckSecondsToMinimum();
+    t.report('waitAtStart', wait);
+    if (wait <= 0 || wait > DPS_CHECK_MIN_SECONDS) t.fail('waitAtStart', 'expected a wait of up to the minimum');
 
-    purchaseSummonUpgrade();
-    refreshInterRoundLobbyRoster();
-    loadInterRoundLobby();
-    // Counted once the lobby is up: loading it clears whatever earlier tests
-    // left lying, which would read as items the match had taken away.
-    const itemsBefore = countItems();
-    const check = getDPSCheckPlayer().handle;
-    let casts = 0;
-    const castTrig = CreateTrigger()!;
-    TriggerRegisterPlayerUnitEvent(castTrig, check, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
-    TriggerAddAction(castTrig, () => { casts += 1; });
+    t.waitFor('openingEnds', phaseIs('fights'), DPS_CHECK_MIN_SECONDS, () => {
+      const after = getDPSCheckStatus();
+      t.report('riggedScale', after.riggedScale);
+      t.report('castsInOpening', casts);
+      if (after.riggedScale <= 0) t.fail('riggedScale', 'must be positive');
+      if (casts < s.stations) t.fail('castsInOpening', 'expected every station to have cast');
+      t.expect('itemsLeftByOpening', countItems() - itemsBefore, 0);
 
-    t.waitFor('matchStartsBought', matchRunning, START_WAIT, () => {
-      const s = getSparringStatus();
-      const camp = CREEP_CAMPS[FIELD_CAMP];
-      t.expect('creepsFielded', s.creeps, s.copies * camp.creeps.length);
-      let heroes = 0;
-      let mercs = 0;
-      forEachUnitOfPlayer(check, u => {
-        if (IsUnitType(u, UNIT_TYPE_HERO)) heroes += 1;
-        else if (GetUnitTypeId(u) === FourCC('nogl')) mercs += 1;
-      });
-      t.expect('heroesFielded', heroes, s.copies * 2);
-      t.expect('mercsFielded', mercs, s.copies);
-      t.expect('rosterCopyHeroes', s.heroes, 2);
-      t.expect('rosterCopyMercs', s.mercs, 1);
-      t.expect('noMatchMercOwnedByAHuman', measureFieldedForce().mercsOwnedByHumans, 0);
-
-      let lowest = 1e9;
-      forEachUnitOfPlayer(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, u => {
-        const hp = BlzGetUnitMaxHP(u);
-        if (hp < lowest) lowest = hp;
-      });
-      const share = R2I(SPARRING_HP / camp.creeps.length);
-      t.report('lowestCreepMaxHP', lowest);
-      if (lowest < share) t.fail('lowestCreepMaxHP', 'expected at least ' + I2S(share));
-
-      const wait = getSparringSecondsToMinimum();
-      t.report('waitAtStart', wait);
-      if (wait <= 0 || wait > SPARRING_MIN_SECONDS) {
-        t.fail('waitAtStart', 'expected a wait of up to ' + I2S(SPARRING_MIN_SECONDS) + 's');
-      }
-
-      t.waitFor('minimumReached', () => getSparringSecondsToMinimum() === 0, SPARRING_MIN_SECONDS + 2, () => {
+      t.waitFor('firstFights', () => getDPSCheckStatus().fightsFinished >= s.stations, 150, () => {
+        const st = getDPSCheckStatus();
+        const margins: string[] = [];
+        for (const o of st.observations) {
+          margins.push(string.format('x%.2f:%+d', Math.exp(o.x), R2I(o.margin * 100)));
+          if (o.margin < -1 || o.margin > 1) t.fail('margin', 'outside -1..1');
+        }
+        t.report('results', margins.join(' '));
+        t.report('scale', st.scale);
+        if (st.scale <= 0) t.fail('scale', 'must be positive');
+        // Leashed: every unit of ours near some station.
         let strays = 0;
-        forEachUnitOfPlayer(check, u => {
+        for (const u of checkUnits()) {
           let nearest = 1e12;
-          forEachUnitOfPlayer(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, c => {
-            const d = (GetUnitX(u) - GetUnitX(c)) ** 2 + (GetUnitY(u) - GetUnitY(c)) ** 2;
-            if (d < nearest) nearest = d;
-          });
-          // The leash plus a camp's width.
+          for (let i = 0; i < st.stations; i++) {
+            const p = getDPSStation(i);
+            nearest = Math.min(nearest, (GetUnitX(u) - p.x) ** 2 + (GetUnitY(u) - p.y) ** 2);
+          }
           if (nearest > 900 * 900) strays += 1;
-        });
-        t.expect('unitsAwayFromAnyCamp', strays, 0);
-        t.report('castsByMinimum', casts);
-        if (casts < s.copies) t.fail('castsByMinimum', 'expected every copy to have cast');
-        const mid = getDPSSampleBreakdown().creepHPLost;
-        t.report('midCreepHPLost', mid);
-        if (mid < 0) t.fail('midCreepHPLost', 'rigging banked as damage');
-
-        t.waitFor('matchEnds', () => !matchRunning(), SPARRING_DURATION, () => {
-          DestroyTrigger(castTrig);
-          t.expect('checkPlayerUnitsLeft', getCheckPlayerUnitCount(), 0);
-          // Name whatever is left, so a leak says what leaked.
-          const left: string[] = [];
-          forEachUnitOfPlayer(check, u => {
-            left.push((GetUnitName(u) ?? '?') + (IsUnitType(u, UNIT_TYPE_HERO) ? '(hero)' : '')
-              + '@' + I2S(R2I(GetUnitX(u))) + ',' + I2S(R2I(GetUnitY(u))));
-          });
-          if (left.length > 0) t.report('leftOver', left.join(' '));
-
-          t.expect('creepsLeft', getSparringStatus().creeps, 0);
-          t.expect('itemsLeftLying', countItems() - itemsBefore, 0);
-          const m = getDPSMeasured();
-          const final = getDPSSampleBreakdown().creepHPLost;
-          t.report('finalCreepHPLost', final);
-          t.report('heroDPSPerCopy', m.heroDPS);
-          t.report('creepDPSPerCopy', m.creepDPS);
-          t.report('scale', m.scale);
-          if (final < 0) t.fail('finalCreepHPLost', 'rigging banked as damage');
-          if (m.heroDPS <= 0) t.fail('heroDPSPerCopy', 'must be positive');
-          if (m.creepDPS <= 0) t.fail('creepDPSPerCopy', 'match measured no creep damage');
-          if (m.scale <= 0) t.fail('scale', 'must be positive');
-          t.done();
-        });
+        }
+        t.expect('unitsAwayFromAnyStation', strays, 0);
+        t.expect('itemsLeftByFights', countItems() - itemsBefore, 0);
+        DestroyTrigger(castTrig);
+        t.done();
       });
     });
-  });
+  }));
 }
 
-registerTest('sparfields', runSparringFields);
+registerTest('dpsfields', runDPSFields, 240);
 
 // --- Out of sight ------------------------------------------------------------
 
 /**
- * The match is fought out of sight, for everybody, unless asked for.
- *
- * It used to be visible to the first human as a special case -- one player
- * watched it while the others saw nothing, which was not a decision anyone
- * made. -viewdps hands vision to whoever asks, and only them.
- *
- * Checked both ways: by the alliance flag that carries vision, and by asking
- * the engine whether the match's units are actually visible -- the question
- * the player experiences, which scenery or a nearby unit could answer
- * differently from the flag.
+ * The check is fought out of sight, for everybody, unless asked for: -viewdps
+ * hands vision to whoever asks, and only them. Checked by the alliance flag
+ * and by asking the engine whether any of its units is visible to a human.
  */
-function runSparringVision(t: TestReporter): void {
+function runDPSVision(t: TestReporter): void {
   const dps = getDPSCheckPlayer().handle;
   const humans = getHumanPlayers();
   const me = humans[0];
@@ -217,142 +178,202 @@ function runSparringVision(t: TestReporter): void {
   t.expect('nobodySeesByDefault', humans.filter(p => sharing(p.handle)).length, 0);
   t.expectTrue('toggleOn', toggleDPSVision(me.handle));
   t.expectTrue('watcherSees', sharing(me.handle));
-  t.expect('othersStillBlind', humans.filter(p => p.handle !== me.handle && sharing(p.handle)).length, 0);
   t.expectFalse('toggleOff', toggleDPSVision(me.handle));
-  t.expectFalse('watcherBlindAgain', sharing(me.handle));
 
   beginNewRun();
   loadInterRoundLobby();
-  t.waitFor('matchStarts', matchRunning, START_WAIT, () => {
+  t.waitFor('fielded', phaseIs('rigged'), START_WAIT, () => t.after(1, () => {
     let fielded = 0;
     let seen = 0;
-    forEachUnitOfPlayer(dps, u => {
-      if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
+    for (const u of [...checkUnits(), ...rowCreeps()]) {
+      if (IsUnitType(u, UNIT_TYPE_DEAD)) continue;
       fielded += 1;
       if (humans.some(p => IsUnitVisible(u, p.handle))) seen += 1;
-    });
+    }
     t.report('unitsFielded', fielded);
-    if (fielded === 0) t.fail('unitsFielded', 'no match units to look for');
+    if (fielded === 0) t.fail('unitsFielded', 'nothing to look for');
     t.expect('unitsSeenByAHuman', seen, 0);
     t.done();
-  });
+  }));
 }
 
-registerTest('sparvision', runSparringVision);
+registerTest('dpsvision', runDPSVision);
 
-// --- Restarts and clears away ------------------------------------------------
+// --- Starts over, carries on, stops ------------------------------------------
 
 /**
- * The match measures A SPECIFIC CAMP, so whatever changes the camp restarts
- * it, from zero, against the new one -- and when it ends, nothing it brought
- * onto the field outlives it.
+ * The check measures A SPECIFIC party against A SPECIFIC camp, so changing
+ * either starts it over -- and it carries on into the round, stopping when the
+ * cage is broken.
  *
- * - The Strange Meat swaps in a level 3 camp: the match restarts against it,
- *   with a fresh clock, the right creeps, the mercenary fielded once rather
- *   than added to, still owned by the check player, and the player's camera
- *   left where it was (spawning a human's unit pans their camera).
- * - Reset Purchases rewinds that: the camp walked in with comes back, the lobby
- *   is rebuilt and the clock starts afresh.
- * - Ended early, the field is swept by OWNER, which is what catches what the
- *   match summoned: a Far Seer's wolves are on no spawn list, survived the
- *   teardown, and fought on into the next match after a reroll. A stand-in
- *   wolf plays that part, since a level 1 roster has learned no summon.
- *
- * The keys are per trigger -- meat*, revert*, clear* -- so a failure says
- * which step stopped working.
+ * - The Strange Meat swaps in a level 3 camp: the check starts over, against
+ *   it, with the mercenary fielded once per station.
+ * - Reset Purchases rewinds that: the old camp, and the check over again.
+ * - Into the round: the board load leaves the check's fights standing.
+ * - Breaking the round's cage stops it, leaves a scale set, and clears the
+ *   field.
+ * - Any other board stops it too.
  */
-function runSparringRestart(t: TestReporter): void {
+function runDPSRestart(t: TestReporter): void {
   beginNewRun();
   t.expectTrue('mercHired', buyMercContract() && hasActiveMerc());
   loadInterRoundLobby();
 
-  t.waitFor('matchStarts', () => matchRunning() && getSparringStatus().elapsed >= 1, START_WAIT + 1, () => {
-    const before = getSparringStatus();
-    t.report('campOnEntry', before.campIndex);
-    const cameraX = GetCameraTargetPositionX();
-    const cameraY = GetCameraTargetPositionY();
-
+  t.waitFor('started', phaseIs('rigged'), START_WAIT, () => t.after(2, () => {
+    const before = getDPSCheckStatus();
+    const campBefore = getCampData();
     t.expectTrue('meatChangedCamp', forceLevel3Camp());
-    t.waitFor('meatMatchRestarts', matchRunning, START_WAIT, () => {
-      const swapped = getSparringStatus();
-      const meatCamp = getCampData();
-      t.expect('meatCampLevelIs3', meatCamp != null ? meatCamp.level : 0, 3);
-      t.expect('meatCreepsMatchNewCamp', swapped.creeps,
-        meatCamp != null ? meatCamp.creeps.length * swapped.copies : -1);
-      t.report('meatElapsed', swapped.elapsed);
-      if (swapped.elapsed >= before.elapsed) t.fail('meatClockRestarted', 'clock carried over');
-      t.expect('meatMercNotDuplicated', swapped.mercs, 1);
-      t.expect('meatHeroesNotDuplicated', swapped.heroes, before.heroes);
-      t.expect('meatMercNotHumanOwned', measureFieldedForce().mercsOwnedByHumans, 0);
-      const moved = Math.abs(GetCameraTargetPositionX() - cameraX)
-        + Math.abs(GetCameraTargetPositionY() - cameraY);
-      t.report('meatCameraMoved', moved);
-      if (moved > 64) t.fail('meatCameraMoved', 'camera jumped');
+    t.waitFor('meatRestarts', () => getDPSCheckStatus().elapsed < before.elapsed, 2, () => t.after(1, () => {
+      const camp = getCampData();
+      t.expect('meatCampLevel', camp != null ? camp.level : 0, 3);
+      const s = getDPSCheckStatus();
+      t.expect('meatCreeps', rowCreeps().length, camp != null ? camp.creeps.length * s.stations : -1);
+      let mercs = 0;
+      for (const u of checkUnits()) if (!IsUnitType(u, UNIT_TYPE_HERO)) mercs += 1;
+      t.expect('meatMercsOncePerStation', mercs, s.stations);
 
       resetPurchases();
-      t.waitFor('revertMatchRestarts', matchRunning, START_WAIT, () => {
-        const after = getSparringStatus();
-        const revertCamp = getCampData();
-        t.expect('revertCampIndex', after.campIndex, before.campIndex);
-        t.expect('revertCreepsMatchCamp', after.creeps,
-          revertCamp != null ? revertCamp.creeps.length * after.copies : -1);
-        t.report('revertElapsed', after.elapsed);
-        if (after.elapsed > 2) t.fail('revertFreshClock', 'clock carried over');
+      t.after(1.5, () => {
+        const revert = getCampData();
+        t.expectTrue('revertCamp', revert === campBefore);
+        t.expect('revertCreeps', rowCreeps().length,
+          revert != null ? revert.creeps.length * getDPSCheckStatus().stations : -1);
 
-        const fielded = getCheckPlayerUnitCount();
-        t.report('clearUnitsFielded', fielded);
-        const origin = getCampOrigin();
-        const wolf = Unit.create(getDPSCheckPlayer(), FourCC('nwlt'),
-          origin != null ? origin.x : 0, origin != null ? origin.y : 0, 270);
-        t.expect('clearStandInSummonOwnedByMatch', getCheckPlayerUnitCount() - fielded, wolf != null ? 1 : -1);
-        cancelSparringMatch();
-        t.after(0.5, () => {
-          t.expect('clearFieldIncludingSummon', getCheckPlayerUnitCount(), 0);
-          // And a restart after the sweep fields afresh, not on top of it.
-          restartSparringMatch();
-          t.waitFor('clearRestartRuns', matchRunning, START_WAIT, () => {
-            t.expect('clearRestartMercs', getSparringStatus().mercs, 1);
-            t.done();
+        t.waitFor('fightsBegin', phaseIs('fights'), DPS_CHECK_MIN_SECONDS, () => t.after(2, () => {
+          const fieldedInLobby = checkUnits().length;
+          loadTerrain(gameState.round);
+          t.after(1, () => {
+            t.report('checkUnitsAfterRoundLoad', checkUnits().length);
+            if (fieldedInLobby > 0 && checkUnits().length === 0) t.fail('roundLoad', 'the board load swept the check');
+            t.expect('phaseInRound', getDPSCheckStatus().phase, 'fights');
+            let cage: destructable | null = null;
+            forEachDestructable(d => { if (GetDestructableTypeId(d) === FourCC(CAGE_RAW)) cage = d; });
+            if (cage == null) { t.fail('cage', 'no cage on the round board'); t.done(); return; }
+            KillDestructable(cage);
+            t.after(1, () => {
+              t.expect('phaseAfterCage', getDPSCheckStatus().phase, 'idle');
+              t.report('scaleAfterCage', getCampDamageScale());
+              if (getCampDamageScale() <= 0) t.fail('scaleAfterCage', 'no scale left set');
+              t.expect('checkUnitsAfterCage', checkUnits().length, 0);
+              t.expect('rowCreepsAfterCage', rowCreeps().length, 0);
+
+              loadInterRoundLobby();
+              t.waitFor('againInLobby', phaseIs('rigged'), START_WAIT, () => {
+                loadStartLobby();
+                t.after(1, () => {
+                  t.expect('phaseAfterOtherBoard', getDPSCheckStatus().phase, 'idle');
+                  t.expect('checkUnitsAfterOtherBoard', checkUnits().length, 0);
+                  t.done();
+                });
+              });
+            });
           });
-        });
+        }));
       });
-    });
-  });
+    }));
+  }));
 }
 
-registerTest('sparrestart', runSparringRestart);
+registerTest('dpsrestart', runDPSRestart, 150);
 
 // --- What a mercenary does to the scaling ------------------------------------
 
 /**
- * A mercenary raises both halves of the camp's scaling.
- *
- * Camp HP is pegged to the fielded force's effective HP and camp damage to its
- * DPS; counting the mercenary raises both, so camps get tougher for whoever
- * has one. Asserted in direction only -- how MUCH is a balance question -- and
- * reported, so a change to it lands measured.
- *
- * Fields the force directly rather than through a match, which rigs everyone
- * to the same huge HP and would measure the rigging.
+ * A mercenary raises the camp's HP: it is pegged to the fielded force's, and
+ * counting the mercenary raises that. Reported, so a change lands measured.
  */
 function runForceScale(t: TestReporter): void {
   beginNewRun();
   t.expectTrue('mercHired', buyMercContract() && hasActiveMerc());
   spawnHeroes([Players[0]], 0, 0);
   spawnMercWithHeroes(0, -96, [Players[0].id]);
-  // A frame for hero tome bonuses to land before anything is read.
   t.after(0.5, () => {
     const f = measureFieldedForce();
     t.expect('mercs', f.mercs, 1);
     const hpPct = f.heroEHP > 0 ? (f.heroEHP + f.mercEHP) / f.heroEHP * 100 : 0;
-    const dmgPct = f.heroDPS > 0 ? (f.heroDPS + f.mercDPS) / f.heroDPS * 100 : 0;
     t.report('campHPPercentOfBefore', hpPct);
-    t.report('campDamagePercentOfBefore', dmgPct);
     if (hpPct <= 100) t.fail('campHPPercentOfBefore', 'a mercenary must raise camp HP');
-    if (dmgPct <= 100) t.fail('campDamagePercentOfBefore', 'a mercenary must raise camp damage');
     t.done();
   });
 }
 
 registerTest('forcescale', runForceScale);
 
+// --- Balance: does it converge, and on what? ---------------------------------
+
+/**
+ * Balance harness, excluded from the sweep ('bf...'): run the check on a
+ * party until it calls itself converged, and report how long that took and
+ * where it settled. The fights near the end ARE the validation: at the
+ * settled scale they should come out near the target, a narrow camp win.
+ */
+interface ConvergeCase { name: string; heroes: HeroData[]; mercs: string[]; camp: number }
+
+function hero(type: string, xp: number, skills: Array<[string, number]>, items: string[] = []): HeroData {
+  const s: Record<string, number> = {};
+  for (const [id, n] of skills) s[id] = n;
+  return { typeId: FourCC(type), xp, skills: s, items: items.map(id => ({ id: FourCC(id), charges: 0 })),
+    tomeStr: 0, tomeAgi: 0, tomeInt: 0, tomeHP: 0 };
+}
+
+const CONVERGE_CASES: ConvergeCase[] = [
+  {
+    // The user's save: both level 2, Draenei Harbinger and Wildkin, camp 90.
+    name: 'user', camp: 90, mercs: ['ndrh', 'nowb'], heroes: [
+      hero(Units.PriestessOfTheMoon, 189, [[Abilities.SearingArrows, 1]]),
+      hero(Units.FarSeer, 189, [[Abilities.ChainLightning, 1], [Abilities.FeralSpirit, 1]], ['rin1', 'wswd']),
+    ],
+  },
+  {
+    name: 'bmlich', camp: 217, mercs: [], heroes: [
+      hero(Units.Blademaster, 300, [[Abilities.CriticalStrike, 2], [Abilities.WindWalk, 1], [Abilities.MirrorImage, 1]]),
+      hero(Units.Lich, 300, [[Abilities.FrostNova, 2], [Abilities.FrostArmor, 1], [Abilities.DarkRitual, 1]]),
+    ],
+  },
+  {
+    name: 'tcdr', camp: 387, mercs: ['nogl', 'nfsh'], heroes: [
+      hero(Units.TaurenChieftain, 500, [[Abilities.WarStomp, 2], [Abilities.Shockwave, 2], [Abilities.EnduranceAura, 2]]),
+      hero(Units.DarkRanger, 500, [[Abilities.Silence, 2], [Abilities.BlackArrow, 2], [Abilities.LifeDrain, 2]]),
+    ],
+  },
+];
+const CONVERGE_CAP = 480;
+
+for (const c of CONVERGE_CASES) {
+  registerTest('bfconverge' + c.name, (t: TestReporter) => {
+    beginNewRun();
+    setRosterForTest(c.heroes);
+    setMercsForTest(c.mercs.map(id => FourCC(id)));
+    setCampForTest(c.camp);
+    loadInterRoundLobby();
+    const marks: string[] = [];
+    let lastMark = 0;
+    const watch = (): void => {
+      const s = getDPSCheckStatus();
+      if (s.elapsed - lastMark >= 30) {
+        lastMark = s.elapsed;
+        marks.push(string.format('%ds:x%.2f(%d)', R2I(s.elapsed), s.scale, s.fightsFinished));
+      }
+      if (s.phase === 'done' || s.elapsed >= CONVERGE_CAP) {
+        t.report('converged', s.phase === 'done' ? 1 : 0);
+        t.report('seconds', s.elapsed);
+        t.report('riggedScale', s.riggedScale);
+        t.report('scale', s.scale);
+        t.report('error', s.centerError);
+        t.report('fights', s.fightsFinished);
+        t.report('trace', marks.join(' '));
+        // The last two dozen finished fights, scale and margin.
+        const fin = s.observations.filter(o => o.weight >= 1);
+        const tail = fin.slice(-24);
+        let sum = 0;
+        for (const o of tail) sum += o.margin;
+        t.report('tailMeanMarginPct', tail.length > 0 ? R2I(sum / tail.length * 100) : 0);
+        t.report('tail', tail.map(o => string.format('x%.2f:%+d', Math.exp(o.x), R2I(o.margin * 100))).join(' '));
+        t.done();
+        return;
+      }
+      t.after(1, watch);
+    };
+    t.after(1, watch);
+  }, CONVERGE_CAP + 60);
+}

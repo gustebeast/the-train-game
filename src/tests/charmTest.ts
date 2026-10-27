@@ -6,10 +6,8 @@ import { HeroData, setRosterForTest, getSpawnedHeroes } from '../heroes';
 import { startBossFight, setBossArenaCallbacks, getBossArenaCallbacks } from '../bossArena';
 import { setMercsForTest, spawnMercFromData, spawnMercWithHeroes, getSpawnedMercUnits, removeSpawnedMercUnits } from '../mercenary';
 import { CREEP_CAMPS } from '../creepCamps';
-import {
-  setCampForTest, getCampOrigin, getSparringStatus, getDPSMeasured, getDPSSampleBreakdown,
-  SPARRING_DURATION,
-} from '../creeps';
+import { setCampForTest, getCampOrigin } from '../creeps';
+import { getDPSCheckStatus, DPS_CHECK_MIN_SECONDS } from '../dpsCheck';
 import { getDPSCheckPlayer } from '../teams';
 import { purchaseSummonUpgrade } from '../summonUpgrade';
 import { CAGE_RAW } from '../sharedData';
@@ -24,8 +22,9 @@ import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem, forEachDestruc
  * the caster's owner alive, Transmute kills it outright. The camp's own logic
  * only ever looked at deaths, so each needs checking -- in a real round, where
  * "camp defeated" grants Unsummon Heroes, the Tough Camp challenge and the
- * Strange Key; and in the sparring match, where a creep changing sides or
- * losing all of its rigged HP at once lands straight in the measurement.
+ * Strange Key; and in the DPS check, where a creep changing sides or losing
+ * all of its rigged HP at once lands straight in the opening's measurement,
+ * and a charmed creep has to end a real fight as surely as a dead one.
  *
  * Level 6, so both ultimates are learned. The camp is kobolds (two Kobolds and a
  * Kobold Geomancer): both spells refuse creeps above level 5.
@@ -301,12 +300,12 @@ registerTest('charmkey', runCharmKey);
 
 
 
-// --- In the sparring match ---------------------------------------------------
+// --- In the DPS check ----------------------------------------------------------
 
-/** The six-copy match with this party, left to the AI: does it cast either
- *  ultimate, and what does each do to the two HP-lost totals? Sampled every
- *  second so a jump shows when it happens, not just in the final number. */
-function runCharmSparring(t: TestReporter): void {
+/** The check with this party, left to the AI: does it cast either ultimate,
+ *  does the rigged opening still come out a sane positive scale, and do real
+ *  fights end when the camp has been charmed and transmuted away? */
+function runCharmCheck(t: TestReporter): void {
   beginNewRun();
   setRosterForTest([ALCHEMIST, DARK_RANGER]);
   setMercsForTest([]);
@@ -315,64 +314,33 @@ function runCharmSparring(t: TestReporter): void {
 
   const check = getDPSCheckPlayer().handle;
   const casts = new Map<string, number>();
-  const castTimes: string[] = [];
   const trig = CreateTrigger()!;
   TriggerRegisterPlayerUnitEvent(trig, check, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
   TriggerAddAction(trig, () => {
     const name = GetObjectName(GetSpellAbilityId()) ?? '?';
     casts.set(name, (casts.get(name) ?? 0) + 1);
-    if (GetSpellAbilityId() === FourCC(Abilities.Charm) || GetSpellAbilityId() === FourCC(Abilities.Transmute)) {
-      castTimes.push(name + '@' + tostring(R2I(getSparringStatus().elapsed * 10) / 10));
-    }
   });
 
-  let lastCreep = 0;
-  let lastOurs = 0;
-  for (let s = 1; s <= 29; s++) {
-    t.after(1 + s, () => {
-      const b = getDPSSampleBreakdown();
-      const k = s < 10 ? '0' + tostring(s) : tostring(s);
-      // Per-second change in each total: a spell's effect shows as a spike.
-      t.report('dCreepLost' + k, b.creepHPLost - lastCreep);
-      t.report('dOurLost' + k, b.ourHPLost - lastOurs);
-      lastCreep = b.creepHPLost;
-      lastOurs = b.ourHPLost;
-      let charmedNow = 0;
-      forEachUnitOfPlayer(check, u => {
-        if (!IsUnitType(u, UNIT_TYPE_HERO) && GetUnitLevel(u) > 0
-          && (GetUnitTypeId(u) === FourCC('nkob') || GetUnitTypeId(u) === FourCC('nkog'))) {
-          charmedNow += 1;
-        }
-      });
-      t.report('charmedHeld' + k, charmedNow);
+  t.waitFor('openingEnds', () => getDPSCheckStatus().phase === 'fights', DPS_CHECK_MIN_SECONDS + 5, () => {
+    const s = getDPSCheckStatus();
+    t.report('riggedScale', s.riggedScale);
+    // Before the fix this party measured -1055 DPS: a charmed creep's rigging
+    // read as damage dealt in reverse.
+    if (s.riggedScale <= 0 || s.riggedScale > 50) t.fail('riggedScale', 'outside anything a real party produces');
+    t.waitFor('fightsEnd', () => getDPSCheckStatus().fightsFinished >= s.stations, 120, () => {
+      DestroyTrigger(trig);
+      const cn: string[] = [];
+      casts.forEach((v, n) => cn.push(n + '=' + tostring(v)));
+      t.report('casts', cn.join(' '));
+      t.report('charmCasts', casts.get(GetObjectName(FourCC(Abilities.Charm)) ?? '') ?? 0);
+      t.report('transmuteCasts', casts.get(GetObjectName(FourCC(Abilities.Transmute)) ?? '') ?? 0);
+      t.report('fightsFinished', getDPSCheckStatus().fightsFinished);
+      t.done();
     });
-  }
-  // Once the match is over, which it decides for itself -- having first
-  // begun: right after the lobby loads it has not started, and "not running"
-  // would read as already over.
-  t.waitFor('matchStarts', () => getSparringStatus().timer, 5, () => t.waitFor('matchEnds', () => !getSparringStatus().timer, SPARRING_DURATION + 5, () => {
-    DestroyTrigger(trig);
-    const cn: string[] = [];
-    casts.forEach((v, n) => cn.push(n + '=' + tostring(v)));
-    t.report('casts', cn.join(' '));
-    t.report('ultimateCasts', castTimes.join(' '));
-    const m = getDPSMeasured();
-    t.report('heroDPSPerCopy', m.heroDPS);
-    t.report('creepDPSPerCopy', m.creepDPS);
-    const ratio = m.creepDPS > 0 ? m.heroDPS / m.creepDPS : 0;
-    t.report('ratio', ratio);
-    const b = getDPSSampleBreakdown();
-    t.report('creepsTakenOutEarly', b.removals);
-    t.report('creditedForThem', b.removalCredit);
-    // Before the fix this party measured -1055 DPS and a ratio of -115: a
-    // charmed creep's rigging read as damage dealt in reverse.
-    if (m.heroDPS <= 0) t.fail('heroDPSPerCopy', 'must be positive');
-    if (ratio <= 0 || ratio > 50) t.fail('ratio', 'outside anything a real party produces');
-    t.done();
-  }));
+  });
 }
 
-registerTest('charmspar', runCharmSparring);
+registerTest('charmspar', runCharmCheck, 180);
 
 // --- In the boss fight -------------------------------------------------------
 

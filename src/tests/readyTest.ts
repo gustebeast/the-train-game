@@ -8,10 +8,10 @@ import { loadStartLobby } from '../terrain/load';
 /**
  * How long a ready countdown actually runs.
  *
- * The start-the-round circle waits out the sparring match's minimum, so its
- * countdown is three seconds or however long the match still needs, whichever
+ * The start-the-round circle waits out the DPS check's minimum, so its
+ * countdown is three seconds or however long the check still needs, whichever
  * is longer -- and it asks again at zero, because a reroll mid-countdown
- * restarts the match. Three throwaway zones, timed from the moment the peasant
+ * restarts the check. Three throwaway zones, timed from the moment the peasant
  * steps on to the moment the callback fires:
  *
  *   plain   -- no wait asked for: the usual three seconds;
@@ -62,7 +62,7 @@ function runReadyCases(t: TestReporter): void {
   let waitFrom = 0;
   const cases: Array<{ id: string; seconds?: () => number; want: number }> = [
     { id: 'readytest_plain', want: 3 },
-    // Shrinking as time passes, as the sparring match's remaining minimum
+    // Shrinking as time passes, as the DPS check's remaining minimum
     // does -- a wait that never shrinks would never let the countdown end.
     { id: 'readytest_wait', seconds: () => Math.max(0, 7 - (clock.elapsed - waitFrom)), want: 7 },
     {
