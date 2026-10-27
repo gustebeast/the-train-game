@@ -141,30 +141,24 @@ function Get-TestVm {
 
 <#
 .SYNOPSIS
-  Mean brightness (0-255) of a rectangle in a PNG. Used to read coarse UI state
-  off a screenshot without OCR -- "is this list full or empty", not "what does
-  it say".
-.DESCRIPTION
-  Samples every 8th pixel: GetPixel is slow, this runs between menu clicks, and
-  a mean over several hundred samples is far more precision than a full/empty
-  decision needs. Thresholds against it should be MEASURED from real
-  screenshots of both states and left with a wide margin -- a guessed threshold
-  here produced a false positive that cost hours.
+  Whether a create-game screenshot shows map names below the browser's first
+  three rows -- the full top-level list -- rather than the near-empty Download
+  folder. Counts near-white text pixels, which the menu backdrop never has.
 #>
-function Get-ImageRegionBrightness {
+function Test-BrowserShowsMapList {
   [CmdletBinding()]
-  param([Parameter(Mandatory)][string]$Path, [int]$X, [int]$Y, [int]$W, [int]$H)
+  param([Parameter(Mandatory)][string]$Path)
   Add-Type -AssemblyName System.Drawing
   $bmp = [System.Drawing.Bitmap]::FromFile($Path)
   try {
-    $sum = 0.0; $n = 0
-    for ($yy = $Y; $yy -lt [Math]::Min($Y + $H, $bmp.Height); $yy += 8) {
-      for ($xx = $X; $xx -lt [Math]::Min($X + $W, $bmp.Width); $xx += 8) {
-        $p = $bmp.GetPixel($xx, $yy); $sum += ($p.R + $p.G + $p.B) / 3.0; $n++
+    $bright = 0
+    for ($yy = 430; $yy -lt [Math]::Min(990, $bmp.Height); $yy += 4) {
+      for ($xx = 660; $xx -lt [Math]::Min(960, $bmp.Width); $xx += 4) {
+        $p = $bmp.GetPixel($xx, $yy)
+        if (($p.R + $p.G + $p.B) / 3.0 -gt 150) { $bright++ }
       }
     }
-    if ($n -eq 0) { return 0 }
-    return [math]::Round($sum / $n, 2)
+    return $bright -ge 40
   } finally { $bmp.Dispose() }
 }
 
@@ -480,9 +474,13 @@ function Start-TestVmMatch {
   # A fixed click count cannot fix this: the states are one level apart, so any
   # count that normalises one breaks the other. So decide from the screen. The
   # two states are trivially separable well below the first rows -- inside
-  # Download the list has two entries and is empty beneath them, at the top
-  # level it is full of maps. Measured on real screens: ~5.5-6.1 inside
-  # Download, ~27.1-27.8 at the top level, hence the threshold of 15.
+  # Download the list has a couple of entries and is empty beneath them, at
+  # the top level it is full of map names. Counted as bright TEXT pixels
+  # (Test-BrowserShowsMapList), not as mean brightness: the menu's backdrop
+  # varies by VM, and brenner's brighter scenery read as 27.9 inside Download,
+  # the same as a full list, so the check bounced it back up a level five
+  # times. Measured: 0 bright pixels inside Download on all four VMs, 247 at
+  # the top level.
   # ...and CONFIRM it arrived, because the click is not reliably delivered.
   #
   # The map upload immediately before this makes WC3 rebuild the list, and a
@@ -506,7 +504,7 @@ function Start-TestVmMatch {
   foreach ($attempt in 1..5) {
     $probe = Vnc-Connect $Connection.port   # fresh connection: a reused one is sent only CHANGED regions
     try { Vnc-Shot $probe $shot } finally { $probe.cli.Close() }
-    if ((Get-ImageRegionBrightness $shot 590 430 390 560) -gt 15) {
+    if (Test-BrowserShowsMapList $shot) {
       # Top level: row 1 is the "Download" folder, so enter it and look again.
       Vnc-DblClick $Connection $ui.downloadFolder[0] $ui.downloadFolder[1]
       Start-Sleep -Milliseconds 1200
@@ -517,7 +515,7 @@ function Start-TestVmMatch {
     Start-Sleep -Milliseconds 500
     $probe = Vnc-Connect $Connection.port
     try { Vnc-Shot $probe $shot } finally { $probe.cli.Close() }
-    if ((Get-ImageRegionBrightness $shot 590 430 390 560) -le 15) { $selected = $true; break }
+    if (-not (Test-BrowserShowsMapList $shot)) { $selected = $true; break }
   }
   if (-not $selected) {
     throw ("$($Vm.Name): the map browser would not stay in the Download folder after 5 attempts " +
@@ -1256,4 +1254,4 @@ Export-ModuleMember -Function Invoke-MapTest, Invoke-MapTests, Get-MapTestNames,
   Stop-TestVm, Copy-MapToTestVm, Get-TestVmResultFile, Test-TestVmFile,
   Get-TestVmScreenshot, Send-TestVmChat, Start-TestVmMatch, Start-ManualSession,
   Start-PrewarmVm, Get-PrewarmState, Reset-OrResumeTestVm, Wait-TestVmReady,
-  Complete-TestVm, Set-TestVmHostOnly, Get-ImageRegionBrightness
+  Complete-TestVm, Set-TestVmHostOnly, Test-BrowserShowsMapList
