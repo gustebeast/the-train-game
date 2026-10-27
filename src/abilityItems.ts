@@ -4,7 +4,7 @@ import { isPeasantAbilityItem } from './itemRules';
 import { nextFrame, forEachUnitOfPlayer, INVENTORY_SLOTS } from './util';
 import {
   PEASANT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
-  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
+  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
 } from './constants';
 
 /**
@@ -26,7 +26,7 @@ const held = new Map<number, number>();
 /** Save codes, so a save holds a digit instead of a rawcode. Append only. */
 const SAVE_CODES: number[] = [
   RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
-  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
+  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
 ];
 
 function peasantOf(playerId: number): unit | null {

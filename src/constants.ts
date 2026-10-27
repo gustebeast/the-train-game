@@ -123,6 +123,9 @@ export const UNHOLY_BONE_ID = FourCC(Items.BloodKey);
 export const GREATER_UNHOLY_BONE_ID = FourCC(Items.GhostKey);
 export const HORSE_ESSENCE_ID = FourCC(Items.MoonKey);
 export const GREATER_HORSE_ESSENCE_ID = FourCC(Items.SunKey);
+/** No spell: a peasant holding it carries 1 more of any stack (2 Greater). */
+export const MUSCLE_MILK_ID = FourCC(Items.TheHeartOfSearinox);
+export const GREATER_MUSCLE_MILK_ID = FourCC(Items.UrnOfKingTerenas);
 /** The spells they grant, all on Q. Vacuum Resources serves both vacuums (the
  *  reach is read off the item); the others are one ability per item, since
  *  the Greater version differs in its numbers. */

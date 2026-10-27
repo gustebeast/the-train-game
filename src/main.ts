@@ -52,6 +52,7 @@ import './inventorytest'; // peasant inventory: swaps, purchases, slot moves
 import './abilityitemtest'; // Resource Vacuum: holding, vacuuming, keeping
 import './salespersontest'; // Secret Salesperson: buying, upgrading, selling back
 import './abilityspelltest'; // Unholy Frenzy and Imbue With Horse, cast for real
+import './musclemilktest'; // Muscle Milk: bigger stacks, storage limits kept
 import './dpsscaletest'; // what the DPS match actually measures, in raw HP
 import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included

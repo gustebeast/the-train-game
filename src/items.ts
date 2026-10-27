@@ -9,6 +9,7 @@ import {
   RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID,
   UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, UNHOLY_FRENZY_ABILITY_ID, GREATER_UNHOLY_FRENZY_ABILITY_ID,
   HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, IMBUE_HORSE_ABILITY_ID, GREATER_IMBUE_HORSE_ABILITY_ID,
+  MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
   BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID, FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID,
 } from './constants';
 
@@ -120,6 +121,27 @@ export function updateBuildAbility(u: Unit): void {
   }
 }
 
+/** Extra a peasant carries per stack for the Muscle Milk™ it holds. */
+function carryBonus(u: Unit): number {
+  if (findItemByType(u, GREATER_MUSCLE_MILK_ID) != null) return 2;
+  if (findItemByType(u, MUSCLE_MILK_ID) != null) return 1;
+  return 0;
+}
+
+/** A peasant carrying more than it now may -- its Muscle Milk™ just left --
+ *  drops the excess at its feet. */
+function dropExcessStack(u: Unit): void {
+  if (u.typeId !== PEASANT_ID) return;
+  const maxStack = getMaxStack(u);
+  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
+    const it = u.getItemInSlot(slot);
+    if (it == null || !isResourceItem(it.typeId) || it.charges <= maxStack) continue;
+    const rest = CreateItem(it.typeId, u.x, u.y);
+    if (rest != null) SetItemCharges(rest, it.charges - maxStack);
+    it.charges = maxStack;
+  }
+}
+
 /** An inventory changed: refresh what the unit can build AND what it looks like
  *  carrying.
  *
@@ -128,6 +150,7 @@ export function updateBuildAbility(u: Unit): void {
  *  peasant ends up still shouldering a log it has already spent, which is
  *  exactly what building a bridge with your last wood used to do. */
 export function refreshCarrier(u: Unit): void {
+  dropExcessStack(u);
   updateBuildAbility(u);
   updateCarryingVisual(u);
 }
@@ -232,7 +255,7 @@ export function getMaxStack(u: Unit): number {
   if (isTrain(u)) return gameState.trainCargoMaxStack;
   if (isTrackWagon(u)) return gameState.trainTrackMaxStack;
   if (u.typeId === CRATE_ID) return gameState.crateMaxStack;
-  return gameState.peasantMaxStack;
+  return gameState.peasantMaxStack + carryBonus(u);
 }
 
 /** Get the item in slot 0 (first inventory slot) for a unit. */
@@ -565,6 +588,19 @@ export function initItems(): void {
         UnitDropItemSlot(unit.handle, picked.handle, 0);
       }
     } else if (isStorage(unit) && pickedIsResource) {
+      // A storage's own limit holds however big the stack handed over: a
+      // peasant with Muscle Milk™ carries more than some storage takes. The
+      // rest goes back to the giver.
+      const maxStack = getMaxStack(unit);
+      if (picked.charges > maxStack) {
+        const rest = picked.charges - maxStack;
+        const back = CreateItem(pickedType, unit.x, unit.y);
+        picked.charges = maxStack;
+        if (back != null) {
+          SetItemCharges(back, rest);
+          if (giver != null) UnitAddItem(giver, back);
+        }
+      }
       // Move to the correct fixed slot for this resource type
       UnitDropItemSlot(unit.handle, picked.handle, getStorageSlot(unit, pickedType));
     }

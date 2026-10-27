@@ -8,7 +8,7 @@ import { forEachUnitInWorld, forEachUnitOfPlayer, getHumanPlayers, INVENTORY_SLO
 import { stockSalesperson, getOfferedAbilityItem } from './salesperson';
 import {
   AXE_ID, PEASANT_ID, SALESPERSON_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID,
-  UNHOLY_BONE_ID, HORSE_ESSENCE_ID,
+  UNHOLY_BONE_ID, HORSE_ESSENCE_ID, MUSCLE_MILK_ID,
 } from './constants';
 
 const LAST = INVENTORY_SLOTS - 1;
@@ -111,7 +111,7 @@ registerTest('salesperson', runSalesperson);
 
 /** He turns up on every snow round (a level 3 camp's round) and on no other:
  *  five rounds of each, counting him in the world after the real load. Each
- *  visit offers one ability item, and the first three visits offer all three
+ *  visit offers one ability item, and the first four visits offer all four
  *  -- no repeats within a lap. */
 function runSalespersonSpawn(t: TestReporter): void {
   beginNewRun();
@@ -135,13 +135,13 @@ function runSalespersonSpawn(t: TestReporter): void {
   }
   t.expect('everySnowRound', winterRounds, 5);
   t.expect('noOtherRound', summerRounds, 5);
-  const firstLap = [offered[0], offered[1], offered[2]];
+  const firstLap = [offered[0], offered[1], offered[2], offered[3]];
   let covered = 0;
-  for (const item of [RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, HORSE_ESSENCE_ID]) {
+  for (const item of [RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, HORSE_ESSENCE_ID, MUSCLE_MILK_ID]) {
     if (firstLap.indexOf(item) !== -1) covered += 1;
   }
-  t.expect('firstLapOffersAllThree', covered, 3);
-  t.expect('nextLapOffersOne', offered[3] !== 0 ? 1 : 0, 1);
+  t.expect('firstLapOffersAllFour', covered, 4);
+  t.expect('nextLapOffersOne', offered[4] !== 0 ? 1 : 0, 1);
   t.done();
 }
 

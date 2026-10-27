@@ -5,6 +5,7 @@ import {
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
   SHOP_UPGRADE_ITEM_IDS, UNKNOWN_UNIT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID,
   UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
+  MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
 } from './constants';
 
 /**
@@ -58,7 +59,7 @@ function isPeasantUtility(itemTypeId: number): boolean {
  *  and lives in the last inventory slot, out of the way of the carried item. */
 const PEASANT_ABILITY_ITEM_IDS: number[] = [
   RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
-  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
+  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
 ];
 
 export function isPeasantAbilityItem(itemTypeId: number): boolean {

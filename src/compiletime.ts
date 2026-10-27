@@ -707,7 +707,14 @@ compiletime(({ objectData, constants }) => {
   const greaterHorseEssence = objectData.items.get(constants.items.SunKey)!;
   greaterHorseEssence.name = 'Greater Horse Essence';
   greaterHorseEssence.description = 'Grants Imbue With Horse (Q): a friendly unit moves 70% faster for 20 seconds.';
+  const muscleMilk = objectData.items.get(constants.items.TheHeartOfSearinox)!;
+  muscleMilk.name = 'Muscle Milk™';
+  muscleMilk.description = 'Carry 1 more of any stack of wood, stone or tracks. Storage limits stay the same.';
+  const greaterMuscleMilk = objectData.items.get(constants.items.UrnOfKingTerenas)!;
+  greaterMuscleMilk.name = 'Greater Muscle Milk™';
+  greaterMuscleMilk.description = 'Carry 2 more of any stack of wood, stone or tracks. Storage limits stay the same.';
   const iconFor: [typeof unholyBone, string][] = [
+    [muscleMilk, 'BTNLesserRejuvPotion'], [greaterMuscleMilk, 'BTNGreaterRejuvPotion'],
     [resourceVacuum, 'BTNTornado'], [greaterResourceVacuum, 'BTNTornado'],
     [unholyBone, 'BTNBoneChimes'], [greaterUnholyBone, 'BTNBoneChimes'],
     [horseEssence, 'BTNRiderlessHorse'], [greaterHorseEssence, 'BTNRiderlessHorse'],
@@ -736,7 +743,7 @@ compiletime(({ objectData, constants }) => {
   const upgradeAbility = objectData.items.get(constants.items.Mooncrystal)!;
   upgradeAbility.name = 'Upgrade Peasant Ability';
   upgradeAbility.tooltipBasic = upgradeAbility.name;
-  upgradeAbility.description = 'Turns the peasant ability item you are holding into its Greater version: a Greater Resource Vacuum reaches two tiles, a Greater Unholy Bone frenzies harder, a Greater Horse Essence lasts twice as long. Refunded if you have nothing to upgrade.';
+  upgradeAbility.description = 'Turns the peasant ability item you are holding into its Greater version: a Greater Resource Vacuum reaches two tiles, a Greater Unholy Bone frenzies harder, a Greater Horse Essence lasts twice as long, Greater Muscle Milk™ carries 2 extra. Refunded if you have nothing to upgrade.';
   upgradeAbility.tooltipExtended = upgradeAbility.description;
   upgradeAbility.goldCost = 3;
   upgradeAbility.stockMaximum = 10;
@@ -750,7 +757,7 @@ compiletime(({ objectData, constants }) => {
   upgradeAbility.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGlyph.blp';
 
   for (const unbreakable of [axe, pickaxe, bucket, bucketFull, bossKey, resourceVacuum, greaterResourceVacuum,
-    unholyBone, greaterUnholyBone, horseEssence, greaterHorseEssence]) {
+    unholyBone, greaterUnholyBone, horseEssence, greaterHorseEssence, muscleMilk, greaterMuscleMilk]) {
     unbreakable.hitPoints = 999999;
   }
 
