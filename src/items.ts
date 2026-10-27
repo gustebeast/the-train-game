@@ -1,5 +1,6 @@
 import { Item, Trigger, Unit } from 'w3ts';
 import { updateCarryingVisual } from './carrying';
+import { restoreItemCooldown } from './abilityItems';
 import { gameState } from './state';
 import { canHold, isPeasantAbilityItem, isResourceItem, isShopUpgrade } from './itemRules';
 import { INVENTORY_SLOTS, giveItems, nextFrame, findInventoryItem } from './util';
@@ -131,7 +132,7 @@ export function updateBuildAbility(u: Unit): void {
   }
   for (const [, abilityId] of ITEM_GATED_ABILITIES) {
     if (granted.has(abilityId)) {
-      UnitAddAbility(u.handle, abilityId);
+      if (UnitAddAbility(u.handle, abilityId)) restoreItemCooldown(u.handle, abilityId);
     } else {
       UnitRemoveAbility(u.handle, abilityId);
     }
