@@ -667,7 +667,7 @@ compiletime(({ objectData, constants }) => {
     abilityItem.tooltipBasic = abilityItem.name;
     abilityItem.tooltipExtended = abilityItem.description;
     abilityItem.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\' + icon + '.blp';
-    abilityItem.goldCost = 2;
+    abilityItem.goldCost = shared.ABILITY_ITEM_PRICE;
     abilityItem.stockMaximum = 10;
     abilityItem.stockReplenishInterval = 3600;
     abilityItem.stockInitialAfterStartDelay = 10;
@@ -689,7 +689,7 @@ compiletime(({ objectData, constants }) => {
   upgradeAbility.tooltipBasic = upgradeAbility.name;
   upgradeAbility.description = 'Turns the peasant ability item you are holding into its Greater version: a Greater Resource Vacuum reaches two tiles, a Greater Unholy Bone frenzies harder, a Greater Horse Essence lasts twice as long, Greater Muscle Milk™ carries 2 extra. Refunded if you have nothing to upgrade.';
   upgradeAbility.tooltipExtended = upgradeAbility.description;
-  upgradeAbility.goldCost = 3;
+  upgradeAbility.goldCost = shared.UPGRADE_ABILITY_PRICE;
   upgradeAbility.stockMaximum = 10;
   upgradeAbility.stockReplenishInterval = 3600;
   upgradeAbility.stockInitialAfterStartDelay = 10;
@@ -1266,7 +1266,7 @@ compiletime(({ objectData, constants }) => {
   // Unholy Frenzy (Q), from the Unholy Bones: faster attacks -- which for a
   // peasant means faster chopping and mining -- for a drain on hit points. A
   // peasant is invulnerable, so the drain only bites when it is cast on a
-  // hero or a mercenary. Stock duration (45s).
+  // hero or a mercenary. 10 seconds, the Greater one too.
   type FrenzyAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>
     & { attackSpeedBonusPercent: number; damagePerSecondundefined: number };
   const frenzies: [string, number, number, string][] = [
@@ -1280,8 +1280,8 @@ compiletime(({ objectData, constants }) => {
     frenzy.levels = 1;
     frenzy.attackSpeedBonusPercent = attackRate;
     frenzy.damagePerSecondundefined = drain;
-    frenzy.durationNormal = 45;
-    frenzy.durationHero = 45;
+    frenzy.durationNormal = shared.UNHOLY_FRENZY_DURATION;
+    frenzy.durationHero = shared.UNHOLY_FRENZY_DURATION;
     frenzy.cooldown = shared.ABILITY_ITEM_COOLDOWN;
     frenzy.castRange = 500;
     // invulnerable: peasants are, and casting it on a peasant is the point.
@@ -1289,7 +1289,7 @@ compiletime(({ objectData, constants }) => {
     frenzy.name = name;
     frenzy.tooltipNormal = name;
     frenzy.tooltipNormalExtended = 'Increases a friendly unit\'s attack rate by ' + String(Math.round(attackRate * 100))
-      + '%, but drains ' + String(drain) + ' hit points per second. A peasant chops and mines faster. Lasts 45 seconds.|n|cffffcc00Cooldown:|r 60 seconds.';
+      + '%, but drains ' + String(drain) + ' hit points per second. A peasant chops and mines faster. Lasts ' + String(shared.UNHOLY_FRENZY_DURATION) + ' seconds.|n|cffffcc00Cooldown:|r 60 seconds.';
     frenzy.hotkeyNormal = 'Q';
     frenzy.buttonPositionNormalX = 0;
     frenzy.buttonPositionNormalY = 2;

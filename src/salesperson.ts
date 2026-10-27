@@ -5,6 +5,7 @@ import { showFloatingText } from './items';
 import { nextFrame, findInventoryItem, unitExists, giveItems, giveKit } from './util';
 import { registerSaveSegment, parseFields } from './save';
 import { deriveSeed, STREAMS } from './rng';
+import { ABILITY_ITEM_PRICE, UPGRADE_ABILITY_PRICE } from './sharedData';
 import { SALESPERSON_ID, PEASANT_ID, UPGRADE_PEASANT_ABILITY_ID, ABILITY_ITEM_FAMILIES } from './constants';
 
 /**
@@ -17,19 +18,17 @@ import { SALESPERSON_ID, PEASANT_ID, UPGRADE_PEASANT_ABILITY_ID, ABILITY_ITEM_FA
  * syncState overwrites. A purchase that turns out to be useless is not charged
  * and its item is taken back.
  */
-const ITEM_PRICE = 2;
-const UPGRADE_PRICE = 3;
 /** What he pays for an ability item sold back to him: 1, or 2 for a Greater.
  *  Nothing else is bought. */
 const BUYBACK = new Map<number, number>();
 /** Each ability item and its Greater version. */
 const GREATER_VERSION = new Map<number, number>();
-const PRICES = new Map<number, number>([[UPGRADE_PEASANT_ABILITY_ID, UPGRADE_PRICE]]);
+const PRICES = new Map<number, number>([[UPGRADE_PEASANT_ABILITY_ID, UPGRADE_ABILITY_PRICE]]);
 for (const { plain, greater } of ABILITY_ITEM_FAMILIES) {
   BUYBACK.set(plain, 1);
   BUYBACK.set(greater, 2);
   GREATER_VERSION.set(plain, greater);
-  PRICES.set(plain, ITEM_PRICE);
+  PRICES.set(plain, ABILITY_ITEM_PRICE);
 }
 
 // --- what's on offer ---------------------------------------------------------
