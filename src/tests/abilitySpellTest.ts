@@ -1,11 +1,11 @@
-import { registerTest, TestReporter } from './testkit';
-import { beginNewRun, loadTerrain } from './terrain/load';
-import { forEachUnitOfPlayer, getHumanPlayers } from './util';
+import { registerTest, TestReporter } from './testKit';
+import { beginNewRun, loadTerrain } from '../terrain/load';
+import { forEachUnitOfPlayer, getHumanPlayers } from '../util';
 import {
   PEASANT_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
   UNHOLY_FRENZY_ABILITY_ID, GREATER_UNHOLY_FRENZY_ABILITY_ID, IMBUE_HORSE_ABILITY_ID,
   GREATER_IMBUE_HORSE_ABILITY_ID, VACUUM_ABILITY_ID, RESOURCE_VACUUM_ID,
-} from './constants';
+} from '../constants';
 
 const FRENZY_BUFF = FourCC('BUhf');
 const HORSE_BUFF = FourCC('Bblo');

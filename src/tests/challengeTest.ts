@@ -1,13 +1,13 @@
-import { registerTest, TestReporter } from './testkit';
+import { registerTest, TestReporter } from './testKit';
 import {
   getOfferedChallenge, advanceChallengeOffer, armChallenge, completeChallenge,
   isChallengeArmed, getChallengeDefs, clearChallenges,
-} from './challenges';
-import { gameState } from './state';
+} from '../challenges';
+import { gameState } from '../state';
 import {
   computeTrackShapes, applyTrackShapes, TrackPoint, CH_STRAIGHT_15, CH_CURVED_15,
-} from './challengeList';
-import { TRACK_SIZE } from './track/constants';
+} from '../challengeList';
+import { TRACK_SIZE } from '../track/constants';
 
 /** Exercise the challenge system's rules: the offer never repeats until the
  *  list is exhausted, the sequence is stable for a given seed, completion pays,

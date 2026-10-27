@@ -147,7 +147,7 @@ is no shared fallback; the runner refuses `shared`/`base`/`traingametest`
 because that is the clone parent and testing on it can corrupt in-flight clones.
 
 **The VM infrastructure is lead-owned.** You write and run tests; you do not
-edit `scripts/vmtest/*`, `src/testkit.ts`, or re-mint VMs. When the harness
+edit `scripts/vmtest/*`, `src/tests/testKit.ts`, or re-mint VMs. When the harness
 misbehaves, run `scripts/vmtest/run-test.ps1 -SelfTest` first — it checks
 vmrun, your VM, the snapshot, UI coords, `initTestKit` wiring, test
 registration, and whether the built map is actually newer than `src/` — and

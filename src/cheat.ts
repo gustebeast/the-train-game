@@ -15,7 +15,7 @@ import {
   getChallengeDefs, armChallenge, clearChallenges,
 } from './challenges';
 import { applyTrackShapes } from './challengeList';
-import { beginNight, endNight, isNight } from './daynight';
+import { beginNight, endNight, isNight } from './dayNight';
 import { getNeutralExtra, getNeutralPassive, toggleDPSVision } from './teams';
 import { getDpsMeasurementReport } from './creeps';
 import { makeDancer } from './dance';

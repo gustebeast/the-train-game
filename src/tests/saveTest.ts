@@ -1,10 +1,10 @@
-import { registerTest, TestReporter } from './testkit';
-import { gameState } from './state';
-import { beginNewRun } from './terrain/load';
+import { registerTest, TestReporter } from './testKit';
+import { gameState } from '../state';
+import { beginNewRun } from '../terrain/load';
 import {
   saveToFile, listSaves, loadFromSlot, markCurrentSaveDefeated, resetToNewRun, encodeKit, decodeKit,
   encodeMercSlots, decodeMercSlots,
-} from './save';
+} from '../save';
 
 /** A save round trip, through the same reads the chooser and -load use.
  *

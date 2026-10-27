@@ -1,9 +1,9 @@
-import { registerTest, TestReporter } from './testkit';
-import { gameState, syncState } from './state';
+import { registerTest, TestReporter } from './testKit';
+import { gameState, syncState } from '../state';
 import { Units } from '@objectdata/units';
-import { beginNewRun, loadInterRoundLobby } from './terrain/load';
-import { forEachUnitInWorld, forEachUnitOfPlayer, getHumanPlayers } from './util';
-import { AXE_ID, PEASANT_ID, REROLL_ITEM_ID, RESOURCE_CAPACITY_ID } from './constants';
+import { beginNewRun, loadInterRoundLobby } from '../terrain/load';
+import { forEachUnitInWorld, forEachUnitOfPlayer, getHumanPlayers } from '../util';
+import { AXE_ID, PEASANT_ID, REROLL_ITEM_ID, RESOURCE_CAPACITY_ID } from '../constants';
 
 function firstUnitOfType(typeId: number): unit | null {
   let found: unit | null = null;

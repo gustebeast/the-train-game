@@ -2,23 +2,23 @@ import { Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { Units } from '@objectdata/units';
 import { Players } from 'w3ts/globals';
-import { registerTest, TestReporter } from './testkit';
+import { registerTest, TestReporter } from './testKit';
 import {
   getSparringStatus, forceLevel3Camp, getCampData, restartSparringMatch, measureFieldedForce,
   cancelSparringMatch, getCheckPlayerUnitCount, getCampOrigin, setCampForTest,
   getSparringSecondsToMinimum, getDPSMeasured, getDPSSampleBreakdown,
   SPARRING_DURATION, SPARRING_HP, SPARRING_MIN_SECONDS,
-} from './creeps';
-import { CREEP_CAMPS } from './creepCamps';
+} from '../creeps';
+import { CREEP_CAMPS } from '../creepCamps';
 import {
   HeroData, setRosterForTest, spawnHeroes, hasHeroes, getChosenHeroCount,
-} from './heroes';
-import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from './mercenary';
-import { getDPSCheckPlayer, toggleDPSVision } from './teams';
-import { getHumanPlayers, forEachUnitOfPlayer } from './util';
-import { loadInterRoundLobby, beginNewRun, resetPurchases } from './terrain/load';
-import { purchaseSummonUpgrade, isSummonUpgradePurchased } from './summonUpgrade';
-import { refreshInterRoundLobbyRoster } from './interRoundLobbyRoster';
+} from '../heroes';
+import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from '../mercenary';
+import { getDPSCheckPlayer, toggleDPSVision } from '../teams';
+import { getHumanPlayers, forEachUnitOfPlayer } from '../util';
+import { loadInterRoundLobby, beginNewRun, resetPurchases } from '../terrain/load';
+import { purchaseSummonUpgrade, isSummonUpgradePurchased } from '../summonUpgrade';
+import { refreshInterRoundLobbyRoster } from '../interRoundLobbyRoster';
 
 /**
  * The sparring match: the fight the inter-round lobby runs against the next

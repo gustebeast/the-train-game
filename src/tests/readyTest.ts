@@ -1,9 +1,9 @@
 import { Timer } from 'w3ts';
-import { registerTest, TestReporter } from './testkit';
-import { registerReadyZone, createReadyZone } from './ready';
-import { PEASANT_ID } from './constants';
-import { getHumanPlayers, forEachUnitOfPlayer } from './util';
-import { loadStartLobby } from './terrain/load';
+import { registerTest, TestReporter } from './testKit';
+import { registerReadyZone, createReadyZone } from '../ready';
+import { PEASANT_ID } from '../constants';
+import { getHumanPlayers, forEachUnitOfPlayer } from '../util';
+import { loadStartLobby } from '../terrain/load';
 
 /**
  * How long a ready countdown actually runs.

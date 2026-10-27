@@ -2,7 +2,7 @@ import { Unit } from 'w3ts';
 import { setVictoryTriggered } from './track/state';
 import { extinguish, getTrain, getTrackWagon } from './train';
 import { clearChallenges } from './challenges';
-import { cancelNightForVictory } from './daynight';
+import { cancelNightForVictory } from './dayNight';
 import { gameState, gainGold } from './state';
 import { saveToFile } from './save';
 import { rollCreepCamp } from './creeps';

@@ -5,7 +5,7 @@ import { Timer } from 'w3ts';
  *  board.
  *
  *  Only for timers whose life ends with the board. A module that already
- *  cancels its own timers on every exit (daynight.ts) keeps them untracked:
+ *  cancels its own timers on every exit (dayNight.ts) keeps them untracked:
  *  tracking them too means the sweep can destroy one the module still holds,
  *  and the module's own cancel then destroys it a second time. */
 const activeTimers = new Set<Timer>();

@@ -1,11 +1,11 @@
 import { Item, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { Abilities } from '@objectdata/abilities';
-import { AXE_ID, PICKAXE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID, PEASANT_ID } from './constants';
-import { updateCarryingVisual } from './carrying';
-import { getNeutralPassive } from './teams';
-import { getWorldBounds } from './util';
-import { registerTest, TestReporter } from './testkit';
+import { AXE_ID, PICKAXE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID, PEASANT_ID } from '../constants';
+import { updateCarryingVisual } from '../carrying';
+import { getNeutralPassive } from '../teams';
+import { getWorldBounds } from '../util';
+import { registerTest, TestReporter } from './testKit';
 
 interface Phase {
   label: string;

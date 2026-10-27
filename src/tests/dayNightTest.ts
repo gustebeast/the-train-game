@@ -1,5 +1,5 @@
-import { registerTest, TestReporter } from './testkit';
-import { beginNight, endNight, isNight } from './daynight';
+import { registerTest, TestReporter } from './testKit';
+import { beginNight, endNight, isNight } from '../dayNight';
 
 /** The clock must not move on its own.
  *
@@ -30,7 +30,7 @@ registerTest('daynight', runDayNightTest);
 
 /** beginNight/endNight, which is what -night drives.
  *
- *  Named 'nighttoggle' because fogtest.ts already owns 'night'.
+ *  Named 'nighttoggle' because fogTest.ts already owns 'night'.
  *
  *  Asserted against the clock rather than against the screen: the start lobby
  *  the harness lands in is mostly unexplored, so a screenshot is black whether

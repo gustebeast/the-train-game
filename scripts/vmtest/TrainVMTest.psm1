@@ -745,15 +745,15 @@ function Test-TestHarness {
 
   # 8. If a test name was given, it must be registered and its module imported.
   if ($Test) {
-    $srcDir = Join-Path $script:RepoRoot 'src'
+    $srcDir = Join-Path $script:RepoRoot 'src\tests'
     $hits = Select-String -Path (Join-Path $srcDir '*.ts') -Pattern ("registerTest\(\s*'" + [regex]::Escape($Test) + "'") -ErrorAction SilentlyContinue
     if ($hits) {
       $file = [IO.Path]::GetFileNameWithoutExtension($hits[0].Path)
-      $main = if (Test-Path (Join-Path $srcDir 'main.ts')) { Get-Content (Join-Path $srcDir 'main.ts') -Raw } else { '' }
-      if ($main -match ("import\s+'\./" + [regex]::Escape($file) + "'")) { Add-Check "test '$Test' registered" 'Pass' "$file.ts, imported by main.ts" }
-      else { Add-Check "test '$Test' registered" 'Fail' "registered in $file.ts but main.ts does not import './$file' -- it will never load" }
+      $index = if (Test-Path (Join-Path $srcDir 'index.ts')) { Get-Content (Join-Path $srcDir 'index.ts') -Raw } else { '' }
+      if ($index -match ("import\s+'\./" + [regex]::Escape($file) + "'")) { Add-Check "test '$Test' registered" 'Pass' "$file.ts, imported by tests/index.ts" }
+      else { Add-Check "test '$Test' registered" 'Fail' "registered in $file.ts but tests/index.ts does not import './$file' -- it will never load" }
     } else {
-      Add-Check "test '$Test' registered" 'Fail' "no registerTest('$Test', ...) found in src/"
+      Add-Check "test '$Test' registered" 'Fail' "no registerTest('$Test', ...) found in src/tests/"
     }
   }
 
@@ -858,7 +858,7 @@ function ConvertFrom-TestResult {
     Raw = ''; FailureReason = $null
   }
   if (-not $Raw) {
-    $r.FailureReason = "No results for '$Test'. Is it registered with registerTest('$Test', ...) and imported from main.ts?"
+    $r.FailureReason = "No results for '$Test'. Is it registered with registerTest('$Test', ...) and imported from tests/index.ts?"
     return $r
   }
   $r.Raw = $Raw

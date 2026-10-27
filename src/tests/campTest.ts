@@ -1,10 +1,10 @@
-import { registerTest, TestReporter } from './testkit';
-import { difficultyForRound, loadTerrain } from './terrain/load';
-import { GRANITE_RAW } from './sharedData';
-import { getTrain } from './train';
-import { getWorldBounds } from './util';
-import { CREEP_CAMPS } from './creepCamps';
-import { rollCreepCamp, getCampData, getCampIndex, clearCampRotation } from './creeps';
+import { registerTest, TestReporter } from './testKit';
+import { difficultyForRound, loadTerrain } from '../terrain/load';
+import { GRANITE_RAW } from '../sharedData';
+import { getTrain } from '../train';
+import { getWorldBounds } from '../util';
+import { CREEP_CAMPS } from '../creepCamps';
+import { rollCreepCamp, getCampData, getCampIndex, clearCampRotation } from '../creeps';
 
 /** The camp rotation: an even split across levels, and a lap per level.
  *

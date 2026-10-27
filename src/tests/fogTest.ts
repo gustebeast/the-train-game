@@ -1,11 +1,11 @@
-import { registerTest, TestReporter } from './testkit';
-import { armChallenge, clearChallenges } from './challenges';
-import { CH_NIGHT_BLACKOUT } from './challengeList';
+import { registerTest, TestReporter } from './testKit';
+import { armChallenge, clearChallenges } from '../challenges';
+import { CH_NIGHT_BLACKOUT } from '../challengeList';
 import {
   beginNight, endNight, isNight, startDayNightForRound, cancelNightForVictory,
-} from './daynight';
+} from '../dayNight';
 import { Players } from 'w3ts/globals';
-import { getWorldBounds } from './util';
+import { getWorldBounds } from '../util';
 
 /** Does the Blackout challenge give the map back at dawn?
  *

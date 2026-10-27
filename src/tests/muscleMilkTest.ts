@@ -1,11 +1,11 @@
-import { registerTest, TestReporter } from './testkit';
-import { gameState } from './state';
-import { beginNewRun, loadTerrain } from './terrain/load';
-import { getHumanPlayers, INVENTORY_SLOTS } from './util';
-import { getTrain } from './train';
-import { findItemByType } from './items';
+import { registerTest, TestReporter } from './testKit';
+import { gameState } from '../state';
+import { beginNewRun, loadTerrain } from '../terrain/load';
+import { getHumanPlayers, INVENTORY_SLOTS } from '../util';
+import { getTrain } from '../train';
+import { findItemByType } from '../items';
 import { Unit } from 'w3ts';
-import { PEASANT_ID, WOOD_ID, STONE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID } from './constants';
+import { PEASANT_ID, WOOD_ID, STONE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID } from '../constants';
 
 /** Muscle Milk™: one more of any stack, two with the Greater.
  *

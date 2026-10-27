@@ -1,11 +1,11 @@
 import { Item, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
-import { registerTest, startRunInLobby, TestReporter } from './testkit';
-import { gameState } from './state';
-import { TRAIN_INITIAL_MAX_HP, FLAME_RESISTANCE_HP, SHELF } from './sharedData';
+import { registerTest, startRunInLobby, TestReporter } from './testKit';
+import { gameState } from '../state';
+import { TRAIN_INITIAL_MAX_HP, FLAME_RESISTANCE_HP, SHELF } from '../sharedData';
 import { Items } from '@objectdata/items';
-import { RESTORE_HP_ID, FLAME_RESISTANCE_ID, PEASANT_ID } from './constants';
-import { getWorldBounds } from './util';
+import { RESTORE_HP_ID, FLAME_RESISTANCE_ID, PEASANT_ID } from '../constants';
+import { getWorldBounds } from '../util';
 
 /** Verify the Repair Train purchase.
  *

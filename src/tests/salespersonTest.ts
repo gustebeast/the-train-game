@@ -1,15 +1,15 @@
-import { registerTest, TestReporter } from './testkit';
+import { registerTest, TestReporter } from './testKit';
 import { Units } from '@objectdata/units';
-import { gameState, syncState } from './state';
-import { beginNewRun, loadInterRoundLobby, loadTerrain } from './terrain/load';
-import { setCampForTest } from './creeps';
-import { CREEP_CAMPS } from './creepCamps';
-import { forEachUnitInWorld, forEachUnitOfPlayer, getHumanPlayers, INVENTORY_SLOTS } from './util';
-import { stockSalesperson, getOfferedAbilityItem } from './salesperson';
+import { gameState, syncState } from '../state';
+import { beginNewRun, loadInterRoundLobby, loadTerrain } from '../terrain/load';
+import { setCampForTest } from '../creeps';
+import { CREEP_CAMPS } from '../creepCamps';
+import { forEachUnitInWorld, forEachUnitOfPlayer, getHumanPlayers, INVENTORY_SLOTS } from '../util';
+import { stockSalesperson, getOfferedAbilityItem } from '../salesperson';
 import {
   AXE_ID, PEASANT_ID, SALESPERSON_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID,
   UNHOLY_BONE_ID, HORSE_ESSENCE_ID, MUSCLE_MILK_ID,
-} from './constants';
+} from '../constants';
 
 const LAST = INVENTORY_SLOTS - 1;
 

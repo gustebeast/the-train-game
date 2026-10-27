@@ -1,21 +1,21 @@
 import { Abilities } from '@objectdata/abilities';
 import { Units } from '@objectdata/units';
-import { registerTest, TestReporter } from './testkit';
-import { beginNewRun, loadInterRoundLobby, loadTerrain, loadBossBattlefield, loadStartLobby } from './terrain/load';
-import { HeroData, setRosterForTest, getSpawnedHeroes } from './heroes';
-import { startBossFight, setBossArenaCallbacks, getBossArenaCallbacks } from './bossArena';
-import { setMercsForTest, spawnMercFromData, spawnMercWithHeroes, getSpawnedMercUnits, removeSpawnedMercUnits } from './mercenary';
-import { CREEP_CAMPS } from './creepCamps';
+import { registerTest, TestReporter } from './testKit';
+import { beginNewRun, loadInterRoundLobby, loadTerrain, loadBossBattlefield, loadStartLobby } from '../terrain/load';
+import { HeroData, setRosterForTest, getSpawnedHeroes } from '../heroes';
+import { startBossFight, setBossArenaCallbacks, getBossArenaCallbacks } from '../bossArena';
+import { setMercsForTest, spawnMercFromData, spawnMercWithHeroes, getSpawnedMercUnits, removeSpawnedMercUnits } from '../mercenary';
+import { CREEP_CAMPS } from '../creepCamps';
 import {
   setCampForTest, getCampOrigin, getSparringStatus, getDPSMeasured, getDPSSampleBreakdown,
   SPARRING_DURATION,
-} from './creeps';
-import { getDPSCheckPlayer } from './teams';
-import { purchaseSummonUpgrade } from './summonUpgrade';
-import { CAGE_RAW } from './sharedData';
-import { PEASANT_ID, SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, BOSS_ID, BOSS_ADD_ID, BOSS_KEY_ITEM_ID } from './constants';
-import { gameState, isInGameplay } from './state';
-import { getHumanPlayers, forEachUnitOfPlayer } from './util';
+} from '../creeps';
+import { getDPSCheckPlayer } from '../teams';
+import { purchaseSummonUpgrade } from '../summonUpgrade';
+import { CAGE_RAW } from '../sharedData';
+import { PEASANT_ID, SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, BOSS_ID, BOSS_ADD_ID, BOSS_KEY_ITEM_ID } from '../constants';
+import { gameState, isInGameplay } from '../state';
+import { getHumanPlayers, forEachUnitOfPlayer } from '../util';
 
 /**
  * Charm and Transmute against a creep camp.

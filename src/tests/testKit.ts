@@ -1,6 +1,6 @@
 import { Timer } from 'w3ts';
-import { beginNewRun, loadInterRoundLobby } from './terrain/load';
-import { onChatCommand } from './util';
+import { beginNewRun, loadInterRoundLobby } from '../terrain/load';
+import { onChatCommand } from '../util';
 
 /** In-map half of the automated test harness.
  *
@@ -10,15 +10,15 @@ import { onChatCommand } from './util';
  *
  *  Writing a new test is two steps:
  *
- *    // src/mytest.ts
- *    import { registerTest } from './testkit';
+ *    // src/tests/myTest.ts
+ *    import { registerTest } from './testKit';
  *    registerTest('mystuff', t => {
  *      t.report('someValue', 42);
  *      t.done();                       // <- always finish, even on failure
  *    });
  *
- *    // src/main.ts, before initTestKit()
- *    import './mytest';
+ *    // src/tests/index.ts
+ *    import './myTest';
  *
  *  Then from the host:  Invoke-MapTest -Test mystuff
  *

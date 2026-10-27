@@ -32,7 +32,7 @@ import { startTutorialBoard, stopTutorialBoard, getTutorialBoardLines } from '..
 import { applyChallengeEffects, clearChallengeEffects } from '../challengeEffects';
 import {
   DAY_TIME, startDayNightForRound, stopDayNight,
-} from '../daynight';
+} from '../dayNight';
 import { refreshInterRoundLobbyRoster, resetInterRoundLobbyRoster } from '../interRoundLobbyRoster';
 import { saveMercInterRoundLobbySnapshot, getInterRoundLobbyMercUnits } from '../mercenary';
 import { deriveSeed, STREAMS } from '../rng';

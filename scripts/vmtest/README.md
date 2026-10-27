@@ -64,11 +64,11 @@ believe the single run and fix the test's setup.
 
 ## Writing a test
 
-A test lives in `src/`, measures something, and reports `key=value` lines.
+A test lives in `src/tests/`, measures something, and reports `key=value` lines.
 
 ```ts
-// src/mytest.ts
-import { registerTest } from './testkit';
+// src/tests/myTest.ts
+import { registerTest } from './testKit';
 
 registerTest('mystuff', t => {
   const peasant = Unit.create(Players[0], PEASANT_ID, 0, 0, 0)!;
@@ -83,10 +83,10 @@ registerTest('mystuff', t => {
 });
 ```
 
-Register the module in `src/main.ts` so it loads:
+List the module in `src/tests/index.ts` so it loads:
 
 ```ts
-import './mytest';   // next to the existing import './damagetest'
+import './myTest';   // next to the existing import './damageTest'
 ```
 
 Then run it:
@@ -122,7 +122,7 @@ and `t.guard` turn it into a reported `error=FAIL ...` line.
 **Put `this: void` on any callback type you store and call later.**
 typescript-to-lua compiles `obj.fn(arg)` into the method call `obj:fn(arg)`
 unless the type says otherwise, which silently shifts every argument by one.
-This cost an hour; see the comment on `RegisteredTest` in `testkit.ts`.
+This cost an hour; see the comment on `RegisteredTest` in `testKit.ts`.
 
 ---
 

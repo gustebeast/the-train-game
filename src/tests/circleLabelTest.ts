@@ -1,8 +1,8 @@
-import { registerTest, startRunInLobby, TestReporter } from './testkit';
+import { registerTest, startRunInLobby, TestReporter } from './testKit';
 import { Units } from '@objectdata/units';
-import { getUnitLabelStats } from './unitLabels';
-import { loadInterRoundLobby } from './terrain/load';
-import { forEachUnitInWorld } from './util';
+import { getUnitLabelStats } from '../unitLabels';
+import { loadInterRoundLobby } from '../terrain/load';
+import { forEachUnitInWorld } from '../util';
 
 function circlesOnMap(): unit[] {
   const id = FourCC(Units.CircleOfPower);

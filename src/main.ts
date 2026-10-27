@@ -9,9 +9,9 @@ import { initTrackBuildTrigger } from './track/build';
 import { initTrackDestroyTrigger } from './track/destroy';
 import { initHarvest } from './harvest';
 import { initItems } from './items';
-import { initGiveTake } from './givetake';
+import { initGiveTake } from './giveTake';
 import { initCheat } from './cheat';
-import { initDayNight } from './daynight';
+import { initDayNight } from './dayNight';
 import { initBridge } from './bridge';
 import { initBossKey } from './bossKey';
 import { initFill } from './fill';
@@ -37,27 +37,8 @@ import { syncGold } from './state';
 import { log } from './debug';
 import { DEV_TOOLS } from './buildFlags';
 
-import { initTestKit } from './testkit';
-import './damagetest'; // registers the 'damage' test; add further test modules here
-import './burntest'; // burning train: production lock and wrecked end state
-import './shoptest'; // Repair Train purchase effect
-import './challengetest'; // challenge sequencing and payouts
-import './fogtest'; // blackout must give the map back at dawn
-import './bossBalance'; // final boss balance harness
-import './dpstest'; // watch the lobby DPS sparring match
-import './lobbyvisiontest'; // lobby scenery must not hand out vision
-import './readytest'; // how long a ready countdown actually runs
-import './charmtest'; // Charm and Transmute against a creep camp
-import './circlelabeltest'; // a circle's label lives exactly as long as the circle
-import './eventdriventest'; // board, dealer, boss ending and Union Rules react on events
-import './inventorytest'; // peasant inventory: swaps, purchases, slot moves
-import './abilityitemtest'; // Resource Vacuum: holding, vacuuming, keeping
-import './salespersontest'; // Secret Salesperson: buying, upgrading, selling back
-import './abilityspelltest'; // Unholy Frenzy and Imbue With Horse, cast for real
-import './musclemilktest'; // Muscle Milk: bigger stacks, storage limits kept
-import './camptest'; // camp rotation: even levels, one lap per level
-import './daynighttest'; // the clock must stay frozen, lobbies included
-import './savetest'; // a save round trip, as the chooser and -load read it
+import { initTestKit } from './tests/testKit';
+import './tests'; // registers every test module (tests/index.ts)
 import { initBoardFlow, loadStartLobby } from './terrain/load';
 import { rollCreepCamp } from './creeps';
 
@@ -70,7 +51,7 @@ function tsMain() {
     rollCreepCamp();
 
     // Before anything can show a sky: outside a round the map is permanently
-    // day, and the clock only moves when daynight.ts moves it.
+    // day, and the clock only moves when dayNight.ts moves it.
     initDayNight();
 
     // Boot into the start lobby rather than straight into round 1: the host

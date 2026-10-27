@@ -2,13 +2,13 @@ import { Timer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { Items } from '@objectdata/items';
 import { Units } from '@objectdata/units';
-import { BOSS_ADD_ID, BOSS_ID } from './constants';
-import { spawnBoss, stopBoss } from './boss';
-import { getDPSCheckPlayer } from './teams';
-import { registerTest, TestReporter } from './testkit';
-import { loadBossBattlefield } from './terrain/load';
-import { PATH_BLOCKER_RAW } from './terrain/constants';
-import { forEachUnitOfPlayer, isAlive } from './util';
+import { BOSS_ADD_ID, BOSS_ID } from '../constants';
+import { spawnBoss, stopBoss } from '../boss';
+import { getDPSCheckPlayer } from '../teams';
+import { registerTest, TestReporter } from './testKit';
+import { loadBossBattlefield } from '../terrain/load';
+import { PATH_BLOCKER_RAW } from '../terrain/constants';
+import { forEachUnitOfPlayer, isAlive } from '../util';
 
 /**
  * Balance harness for the final boss.

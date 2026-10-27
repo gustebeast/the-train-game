@@ -1,7 +1,7 @@
-import { registerTest, TestReporter } from './testkit';
-import { gameState } from './state';
-import { getTrain, isBurning, isWrecked, extinguish } from './train';
-import { beginNewRun, loadTerrain } from './terrain/load';
+import { registerTest, TestReporter } from './testKit';
+import { gameState } from '../state';
+import { getTrain, isBurning, isWrecked, extinguish } from '../train';
+import { beginNewRun, loadTerrain } from '../terrain/load';
 
 /** Verify the burning train's production lock and the wrecked end state.
  *

@@ -1,15 +1,15 @@
-import { registerTest, TestReporter } from './testkit';
+import { registerTest, TestReporter } from './testKit';
 import { Unit } from 'w3ts';
-import { getNeutralExtra, getNeutralPassive, getTrainPlayer } from './teams';
-import { getHumanPlayers } from './util';
-import { beginNewRun, loadInterRoundLobby } from './terrain/load';
-import { purchaseSummonUpgrade } from './summonUpgrade';
-import { refreshInterRoundLobbyRoster, getRosterSpots } from './interRoundLobbyRoster';
-import { getInterRoundLobbyHeroUnits } from './heroes';
-import { getInterRoundLobbyMercUnits, buyMercContract, buySecondContract } from './mercenary';
-import { getTrain, getTrackWagon } from './train';
-import { placedTracks } from './track/state';
-import { worldToTile } from './terrain/constants';
+import { getNeutralExtra, getNeutralPassive, getTrainPlayer } from '../teams';
+import { getHumanPlayers } from '../util';
+import { beginNewRun, loadInterRoundLobby } from '../terrain/load';
+import { purchaseSummonUpgrade } from '../summonUpgrade';
+import { refreshInterRoundLobbyRoster, getRosterSpots } from '../interRoundLobbyRoster';
+import { getInterRoundLobbyHeroUnits } from '../heroes';
+import { getInterRoundLobbyMercUnits, buyMercContract, buySecondContract } from '../mercenary';
+import { getTrain, getTrackWagon } from '../train';
+import { placedTracks } from '../track/state';
+import { worldToTile } from '../terrain/constants';
 
 /**
  * Nothing standing in the inter-round lobby may hand the players vision.

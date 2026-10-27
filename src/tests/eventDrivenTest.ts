@@ -1,21 +1,21 @@
-import { registerTest, startRunInLobby, TestReporter } from './testkit';
-import { gameState } from './state';
+import { registerTest, startRunInLobby, TestReporter } from './testKit';
+import { gameState } from '../state';
 import { Units } from '@objectdata/units';
-import { beginNewRun, loadTerrain, loadBossBattlefield } from './terrain/load';
-import { armChallenge, clearChallenges, isChallengeArmed, getArmedChallenge } from './challenges';
-import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
-import { getChallengeUIState, initChallengeUI } from './challengeUI';
-import { isBossFightWatched, startBossFight } from './bossArena';
-import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer, isAlive } from './util';
+import { beginNewRun, loadTerrain, loadBossBattlefield } from '../terrain/load';
+import { armChallenge, clearChallenges, isChallengeArmed, getArmedChallenge } from '../challenges';
+import { CH_DASH, CH_SOLO_TOOLS, noteDash } from '../challengeList';
+import { getChallengeUIState, initChallengeUI } from '../challengeUI';
+import { isBossFightWatched, startBossFight } from '../bossArena';
+import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer, isAlive } from '../util';
 import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID,
-  TRAIN_ID, TRACK_WAGON_ID } from './constants';
+  TRAIN_ID, TRACK_WAGON_ID } from '../constants';
 import { Item, Unit } from 'w3ts';
-import { getCargoShowing } from './cargoVisuals';
-import { spawnStrangeRock } from './bossRock';
-import { placedTracks } from './track/state';
-import { auditMinimapIcons, getMinimapIconCount } from './minimapIcons';
-import { getTrain, getTrackWagon } from './train';
-import { setStorageItem, giveToStorage, findItemByType } from './items';
+import { getCargoShowing } from '../cargoVisuals';
+import { spawnStrangeRock } from '../bossRock';
+import { placedTracks } from '../track/state';
+import { auditMinimapIcons, getMinimapIconCount } from '../minimapIcons';
+import { getTrain, getTrackWagon } from '../train';
+import { setStorageItem, giveToStorage, findItemByType } from '../items';
 
 /**
  * Five systems that used to poll on the global tick now run on events. What

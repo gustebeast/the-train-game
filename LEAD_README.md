@@ -114,7 +114,7 @@ resolve against the real `main`).
 ### VM test infrastructure (yours since 2026-08-18)
 
 You own the test VMs and their code: `scripts/vmtest/*` (module, `run-test.ps1`,
-`mint-vm.ps1`, `prewarm.ps1`, `vms.json`) and `src/testkit.ts`. Sub-agents only
+`mint-vm.ps1`, `prewarm.ps1`, `vms.json`) and `src/tests/testKit.ts`. Sub-agents only
 write and run tests against it; when it breaks they report to you. It is shared
 plumbing with a shared failure mode, so it needs one owner.
 

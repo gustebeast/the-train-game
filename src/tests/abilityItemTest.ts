@@ -1,15 +1,15 @@
-import { registerTest, TestReporter } from './testkit';
-import { beginNewRun, loadInterRoundLobby } from './terrain/load';
-import { forEachUnitOfPlayer, getHumanPlayers, INVENTORY_SLOTS } from './util';
-import { saveToFile, listSaves, loadFromSlot, resetToNewRun } from './save';
-import { getHeldAbilityItem } from './abilityItems';
-import { getTrain } from './train';
-import { TRACK_SIZE } from './track/constants';
-import { worldToTile } from './terrain/constants';
+import { registerTest, TestReporter } from './testKit';
+import { beginNewRun, loadInterRoundLobby } from '../terrain/load';
+import { forEachUnitOfPlayer, getHumanPlayers, INVENTORY_SLOTS } from '../util';
+import { saveToFile, listSaves, loadFromSlot, resetToNewRun } from '../save';
+import { getHeldAbilityItem } from '../abilityItems';
+import { getTrain } from '../train';
+import { TRACK_SIZE } from '../track/constants';
+import { worldToTile } from '../terrain/constants';
 import {
   AXE_ID, PEASANT_ID, CRATE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID,
   RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID,
-} from './constants';
+} from '../constants';
 
 /** Peasant ability items (the Resource Vacuum) and Vacuum Resources.
  *
