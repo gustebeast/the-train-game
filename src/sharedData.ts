@@ -42,7 +42,18 @@ export const BOSS_ADD_UNIT = 'uinl';
 export const BOSS_INFERNO_ABILITY = 'A010';
 /** The lesser infernal's Thunder Clap, a copy so the Mountain King's is untouched. */
 export const ADD_THUNDER_CLAP_ABILITY = 'A011';
-
+/** The Secret Salesperson, who sells peasant ability items on snow rounds. */
+export const SALESPERSON_UNIT = 'sgob';
+/** The peasant ability items' spells. Vacuum Resources serves both vacuums;
+ *  the others are one ability per item, the Greater one differing in its
+ *  numbers. */
+export const VACUUM_ABILITY = 'A013';
+export const UNHOLY_FRENZY_ABILITY = 'A014';
+export const GREATER_UNHOLY_FRENZY_ABILITY = 'A015';
+export const IMBUE_HORSE_ABILITY = 'A016';
+export const GREATER_IMBUE_HORSE_ABILITY = 'A017';
+/** Every ability item spell's cooldown, in seconds (all of them on Q). */
+export const ABILITY_ITEM_COOLDOWN = 60;
 // --- Pools ----------------------------------------------------------------------
 
 /** Every hero a run can roll: the standard heroes, tavern included. The build

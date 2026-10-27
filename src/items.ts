@@ -1,11 +1,15 @@
 import { Item, Trigger, Unit } from 'w3ts';
 import { updateCarryingVisual } from './carrying';
 import { gameState } from './state';
-import { canHold, isResourceItem } from './itemRules';
+import { canHold, isPeasantAbilityItem, isResourceItem, isShopUpgrade } from './itemRules';
 import { INVENTORY_SLOTS, giveItems, nextFrame } from './util';
 import {
   WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
-  PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, REROLL_ITEM_ID,
+  PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
+  RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID,
+  UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, UNHOLY_FRENZY_ABILITY_ID, GREATER_UNHOLY_FRENZY_ABILITY_ID,
+  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, IMBUE_HORSE_ABILITY_ID, GREATER_IMBUE_HORSE_ABILITY_ID,
+  MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
   BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID, FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID,
 } from './constants';
 
@@ -92,17 +96,49 @@ const ITEM_GATED_ABILITIES: ReadonlyArray<readonly [number, number]> = [
   [WOOD_ID, BRIDGE_ABILITY_ID],
   [BUCKET_ID, FILL_ABILITY_ID],
   [BUCKET_FULL_ID, WATER_TRAIN_ABILITY_ID],
+  [RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID],
+  [GREATER_RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID],
+  [UNHOLY_BONE_ID, UNHOLY_FRENZY_ABILITY_ID],
+  [GREATER_UNHOLY_BONE_ID, GREATER_UNHOLY_FRENZY_ABILITY_ID],
+  [HORSE_ESSENCE_ID, IMBUE_HORSE_ABILITY_ID],
+  [GREATER_HORSE_ESSENCE_ID, GREATER_IMBUE_HORSE_ABILITY_ID],
 ];
 
-/** Grant or revoke item-gated abilities (build track, bridge, fill, water train). */
+/** Grant or revoke item-gated abilities (build track, bridge, fill, water
+ *  train, and the ability items' spells). An ability two items grant is kept while either is held. */
 export function updateBuildAbility(u: Unit): void {
   if (u.typeId !== PEASANT_ID) return;
+  const granted = new Set<number>();
   for (const [itemId, abilityId] of ITEM_GATED_ABILITIES) {
-    if (findItemByType(u, itemId) != null) {
+    if (findItemByType(u, itemId) != null) granted.add(abilityId);
+  }
+  for (const [, abilityId] of ITEM_GATED_ABILITIES) {
+    if (granted.has(abilityId)) {
       UnitAddAbility(u.handle, abilityId);
     } else {
       UnitRemoveAbility(u.handle, abilityId);
     }
+  }
+}
+
+/** Extra a peasant carries per stack for the Muscle Milk™ it holds. */
+function carryBonus(u: Unit): number {
+  if (findItemByType(u, GREATER_MUSCLE_MILK_ID) != null) return 2;
+  if (findItemByType(u, MUSCLE_MILK_ID) != null) return 1;
+  return 0;
+}
+
+/** A peasant carrying more than it now may -- its Muscle Milk™ just left --
+ *  drops the excess at its feet. */
+function dropExcessStack(u: Unit): void {
+  if (u.typeId !== PEASANT_ID) return;
+  const maxStack = getMaxStack(u);
+  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
+    const it = u.getItemInSlot(slot);
+    if (it == null || !isResourceItem(it.typeId) || it.charges <= maxStack) continue;
+    const rest = CreateItem(it.typeId, u.x, u.y);
+    if (rest != null) SetItemCharges(rest, it.charges - maxStack);
+    it.charges = maxStack;
   }
 }
 
@@ -114,6 +150,7 @@ export function updateBuildAbility(u: Unit): void {
  *  peasant ends up still shouldering a log it has already spent, which is
  *  exactly what building a bridge with your last wood used to do. */
 export function refreshCarrier(u: Unit): void {
+  dropExcessStack(u);
   updateBuildAbility(u);
   updateCarryingVisual(u);
 }
@@ -187,7 +224,7 @@ export function registerPeasantTargetCheck(
 }
 
 /** Show a floating text message above a unit. */
-function showFloatingText(unitHandle: unit, msg: string): void {
+export function showFloatingText(unitHandle: unit, msg: string): void {
   const tt = CreateTextTag();
   if (tt != null) {
     SetTextTagText(tt, msg, 0.024);
@@ -218,7 +255,7 @@ export function getMaxStack(u: Unit): number {
   if (isTrain(u)) return gameState.trainCargoMaxStack;
   if (isTrackWagon(u)) return gameState.trainTrackMaxStack;
   if (u.typeId === CRATE_ID) return gameState.crateMaxStack;
-  return gameState.peasantMaxStack;
+  return gameState.peasantMaxStack + carryBonus(u);
 }
 
 /** Use up one charge of a carried item, removing it at zero. Returns false if
@@ -259,11 +296,12 @@ export function findItemByType(u: Unit, itemTypeId: number): Item | null {
   return null;
 }
 
-/** Find any item in a unit's inventory. */
+/** Find the item a unit is carrying -- anything but a peasant ability item,
+ *  which rides in its own slot and never counts against the one-item rule. */
 function findAnyItem(u: Unit): Item | null {
   for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
     const it = u.getItemInSlot(slot);
-    if (it != null) return it;
+    if (it != null && !isPeasantAbilityItem(it.typeId)) return it;
   }
   return null;
 }
@@ -496,9 +534,10 @@ export function initItems(): void {
       return;
     }
 
-    // Allowed, but carried alongside tools without the tool swap/merge logic
-    // below (it is neither resource nor tool). Nothing else to do on pickup.
-    if (pickedType === REROLL_ITEM_ID) return;
+    // A purchase arrives here like any pickup at the buyer's feet. An upgrade is
+    // used up the moment it is acquired (shop.ts), so like a powerup it never
+    // displaces what the buyer is holding -- buying one used to drop the axe.
+    if (isShopUpgrade(pickedType)) return;
 
     if (giver != null) {
       const refused = refuseHandOff(unit);
@@ -508,12 +547,35 @@ export function initItems(): void {
       }
     }
 
-    // Scan inventory for existing items (excluding the one just picked up)
+    // A peasant ability item lives in the last slot, one at a time, by the
+    // same rule as the carried item: picking one up swaps out the one held,
+    // being handed one while holding one is refused. The carried item is
+    // untouched either way.
+    if (isPeasantAbilityItem(pickedType)) {
+      let held: Item | undefined;
+      for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
+        const it = unit.getItemInSlot(slot);
+        if (it != null && it.handle !== picked.handle && isPeasantAbilityItem(it.typeId)) held = it;
+      }
+      if (held != null) {
+        if (giver != null) {
+          rejectPickup("Can't mix items!");
+          return;
+        }
+        unit.removeItem(held);
+      }
+      UnitDropItemSlot(unit.handle, picked.handle, ABILITY_SLOT);
+      refreshCarrier(unit);
+      return;
+    }
+
+    // Scan inventory for existing items (excluding the one just picked up, and
+    // any ability item, which keeps its own slot)
     let otherItem: Item | undefined;
     let matchingResource: Item | undefined;
     for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
       const it = unit.getItemInSlot(slot);
-      if (it == null || it.handle === picked.handle) continue;
+      if (it == null || it.handle === picked.handle || isPeasantAbilityItem(it.typeId)) continue;
       if (pickedIsResource && it.typeId === pickedType) {
         matchingResource = it;
       } else {
@@ -550,8 +612,32 @@ export function initItems(): void {
         UnitDropItemSlot(unit.handle, picked.handle, 0);
       }
     } else if (isStorage(unit) && pickedIsResource) {
+      // A storage's own limit holds however big the stack handed over: a
+      // peasant with Muscle Milk™ carries more than some storage takes. The
+      // rest goes back to the giver.
+      const maxStack = getMaxStack(unit);
+      if (picked.charges > maxStack) {
+        const rest = picked.charges - maxStack;
+        const back = CreateItem(pickedType, unit.x, unit.y);
+        picked.charges = maxStack;
+        if (back != null) {
+          SetItemCharges(back, rest);
+          if (giver != null) UnitAddItem(giver, back);
+        }
+      }
       // Move to the correct fixed slot for this resource type
       UnitDropItemSlot(unit.handle, picked.handle, getStorageSlot(unit, pickedType));
+    }
+
+    // A pile off the ground (Vacuum Resources makes them) can hold more than a
+    // peasant carries: take a full stack and leave the rest where it lay.
+    if (unit.typeId === PEASANT_ID && pickedIsResource && UnitHasItem(unit.handle, picked.handle)) {
+      const maxStack = getMaxStack(unit);
+      if (picked.charges > maxStack) {
+        const rest = CreateItem(pickedType, unit.x, unit.y);
+        if (rest != null) SetItemCharges(rest, picked.charges - maxStack);
+        picked.charges = maxStack;
+      }
     }
 
     // Update train production when the engine's or track wagon's inventory changes
@@ -561,4 +647,51 @@ export function initItems(): void {
 
     refreshCarrier(unit);
   });
+
+  // A peasant's slots mean something: slot 0 holds the one carried item (what
+  // Give/Take hands over and what the peasant is seen carrying), and the last
+  // slot holds an ability item. Dragging an item between slots can't be
+  // refused, but the game announces it -- the drag is a target order on the
+  // item, 852002 + destination slot -- and the move lands right after this
+  // handler. So a frame later the inventory is checked against that layout and
+  // anything out of place is put back. Putting it back is itself a drag, which
+  // brings us here again; by then the layout is valid and the check does
+  // nothing. Right-click give and drop are other orders and are left alone.
+  const moveTrigger = Trigger.create();
+  moveTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER);
+  moveTrigger.addAction(() => {
+    const order = GetIssuedOrderId();
+    if (order < MOVE_SLOT_ORDER_FIRST || order >= MOVE_SLOT_ORDER_FIRST + INVENTORY_SLOTS) return;
+    const unitHandle = GetTriggerUnit();
+    if (unitHandle == null || GetUnitTypeId(unitHandle) !== PEASANT_ID) return;
+    nextFrame(() => arrangePeasantSlots(unitHandle));
+  });
+}
+
+/** Order id of "move the target item to slot 0"; slots 1-5 follow it. */
+const MOVE_SLOT_ORDER_FIRST = 852002;
+const CARRIED_SLOT = 0;
+const ABILITY_SLOT = INVENTORY_SLOTS - 1;
+
+function homeSlot(itemTypeId: number): number {
+  return isPeasantAbilityItem(itemTypeId) ? ABILITY_SLOT : CARRIED_SLOT;
+}
+
+/** Move every item that is out of place into its home slot. Each home holds
+ *  one item, so one that finds its home already taken by something that
+ *  belongs there is dropped at the peasant's feet -- a stone and a log never
+ *  share an inventory, whichever of them got there first keeps the slot. */
+function arrangePeasantSlots(u: unit): void {
+  for (let slot = 0; slot < INVENTORY_SLOTS; slot++) {
+    const it = UnitItemInSlot(u, slot);
+    if (it == null) continue;
+    const home = homeSlot(GetItemTypeId(it));
+    if (slot === home) continue;
+    const occupant = UnitItemInSlot(u, home);
+    if (occupant != null && homeSlot(GetItemTypeId(occupant)) === home) {
+      UnitRemoveItem(u, it);
+    } else {
+      UnitDropItemSlot(u, it, home);
+    }
+  }
 }

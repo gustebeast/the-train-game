@@ -19,8 +19,10 @@ import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, cleanupCage, cancelSparringMatch } from '../creeps';
 import { resetHeroState } from '../heroes';
 import { stockShop, registerDealer } from '../shop';
+import { stockSalesperson } from '../salesperson';
+import { restoreAbilityItem } from '../abilityItems';
 import { destroyAllTimers } from '../timers';
-import { AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID, CRITTER_TYPE_IDS } from '../constants';
+import { SALESPERSON_ID, AXE_ID, PICKAXE_ID, BUCKET_ID, PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID, WATER_ID, CRITTER_TYPE_IDS } from '../constants';
 import { getHumanPlayers, getWorldBounds, forEachUnitInWorld } from '../util';
 
 // --- Terrain tile FourCCs ---
@@ -318,7 +320,8 @@ export function spawnTerrain(grid: Grid): SpawnedTrain {
         case Entity.PLAYER_4: {
           const playerIdx = PLAYER_ENTITIES.indexOf(cell.entity);
           if (playerIdx < humanPlayers.length) {
-            Unit.create(humanPlayers[playerIdx], PEASANT_ID, world.x, world.y, 0);
+            const peasant = Unit.create(humanPlayers[playerIdx], PEASANT_ID, world.x, world.y, 0);
+            if (peasant != null) restoreAbilityItem(peasant.handle);
             PanCameraToTimedForPlayer(humanPlayers[playerIdx].handle, world.x, world.y, 0);
           }
           break;
@@ -335,6 +338,13 @@ export function spawnTerrain(grid: Grid): SpawnedTrain {
         case Entity.BOSS_SPOT:
           bossSpot = { x: world.x, y: world.y };
           break;
+
+        case Entity.SALESPERSON: {
+          const salesperson = Unit.create(getNeutralPassive(), SALESPERSON_ID, world.x, world.y, 270)!;
+          salesperson.invulnerable = true;
+          stockSalesperson(salesperson.handle);
+          break;
+        }
 
         case Entity.SHOP: {
           const shop = Unit.create(getNeutralPassive(), FourCC(Units.Marketplace), world.x, world.y, 270)!;

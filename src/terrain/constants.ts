@@ -126,6 +126,8 @@ export enum Entity {
   HERO_SPOT = 34,
   MERC_SPOT = 35,
   BOSS_SPOT = 36,
+  /** Snow rounds only: the Secret Salesperson. */
+  SALESPERSON = 37,
 }
 
 export interface Cell {

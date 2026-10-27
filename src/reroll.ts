@@ -6,6 +6,7 @@ import { rerollInterRoundLobbyMerc } from './mercenary';
 import { restartSparringMatch } from './creeps';
 import { nextFrame, forEachUnitInWorld, unitExists, giveItems } from './util';
 import { REROLL_COST } from './sharedData';
+import { isSalespersonPawn } from './salesperson';
 
 
 /** Classic tome-consume burst: the tome item model's death animation. */
@@ -40,6 +41,8 @@ export function initReroll(): void {
   pawnTrigger.addAction(() => {
     const item = GetSoldItem();
     if (item == null || GetItemTypeId(item) !== REROLL_ITEM_ID) return;
+    // The Secret Salesperson buys nothing but ability items (salesperson.ts).
+    if (isSalespersonPawn()) return;
     RemoveItem(item); // don't leave it in the shop's pawn inventory
     gameState.gold += REROLL_COST;
     syncState();

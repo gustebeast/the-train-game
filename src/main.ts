@@ -18,6 +18,9 @@ import { initFill } from './fill';
 import { initWaterTrain } from './water';
 import { initShop, initDealerOffer } from './shop';
 import { initReroll } from './reroll';
+import { initVacuum } from './vacuum';
+import { initSalesperson, initSalespersonBuyback } from './salesperson';
+import { initAbilityItems } from './abilityItems';
 import { initHeroes } from './heroes';
 import { initMinimapIcons } from './minimapIcons';
 import { initPlayerLeave } from './playerLeave';
@@ -47,6 +50,11 @@ import './readytest'; // how long a ready countdown actually runs
 import './charmtest'; // Charm and Transmute against a creep camp
 import './circlelabeltest'; // a circle's label lives exactly as long as the circle
 import './eventdriventest'; // board, dealer, boss ending and Union Rules react on events
+import './inventorytest'; // peasant inventory: swaps, purchases, slot moves
+import './abilityitemtest'; // Resource Vacuum: holding, vacuuming, keeping
+import './salespersontest'; // Secret Salesperson: buying, upgrading, selling back
+import './abilityspelltest'; // Unholy Frenzy and Imbue With Horse, cast for real
+import './musclemilktest'; // Muscle Milk: bigger stacks, storage limits kept
 import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included
 import './savetest'; // a save round trip, as the chooser and -load read it
@@ -85,6 +93,10 @@ function tsMain() {
     initShop();
     initDealerOffer();
     initReroll();
+    initVacuum();
+    initSalesperson();
+    initSalespersonBuyback();
+    initAbilityItems();
     initHeroes();
     initGlobalTick();
     initChallengeWatch();

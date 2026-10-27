@@ -4,7 +4,8 @@ import { Units } from '@objectdata/units';
 import { Upgrades } from '@objectdata/upgrades';
 import {
   UNKNOWN_UNIT, STRANGE_ROCK, DASH_ABILITY, KEY_THROW_ABILITY, BOSS_UNIT, BOSS_ADD_UNIT,
-  BOSS_INFERNO_ABILITY, CRITTER_TYPES,
+  BOSS_INFERNO_ABILITY, CRITTER_TYPES, SALESPERSON_UNIT, VACUUM_ABILITY, UNHOLY_FRENZY_ABILITY,
+  GREATER_UNHOLY_FRENZY_ABILITY, IMBUE_HORSE_ABILITY, GREATER_IMBUE_HORSE_ABILITY,
 } from './sharedData';
 
 // Units
@@ -99,10 +100,34 @@ export const CHALLENGE_ITEM_ID = FourCC(Items.Shimmerweed);
 /** Shop item: makes the next creep camp a level 3 one. */
 export const STRANGE_MEAT_ID = FourCC(Items.BloodfeathersHeart);
 
+/** The Secret Salesperson, a shop that turns up on snow rounds. */
+export const SALESPERSON_ID = FourCC(SALESPERSON_UNIT);
+/** Peasant ability items, sold by the Secret Salesperson. Each grants its
+ *  holder an ability and lives in the last inventory slot. */
+export const RESOURCE_VACUUM_ID = FourCC(Items.GlyphOfPurification);
+export const GREATER_RESOURCE_VACUUM_ID = FourCC(Items.EnchantedGemstone);
+/** Salesperson item: turns the buyer's ability item into its Greater version. */
+export const UPGRADE_PEASANT_ABILITY_ID = FourCC(Items.Mooncrystal);
+export const UNHOLY_BONE_ID = FourCC(Items.BloodKey);
+export const GREATER_UNHOLY_BONE_ID = FourCC(Items.GhostKey);
+export const HORSE_ESSENCE_ID = FourCC(Items.MoonKey);
+export const GREATER_HORSE_ESSENCE_ID = FourCC(Items.SunKey);
+/** No spell: a peasant holding it carries 1 more of any stack (2 Greater). */
+export const MUSCLE_MILK_ID = FourCC(Items.TheHeartOfSearinox);
+export const GREATER_MUSCLE_MILK_ID = FourCC(Items.UrnOfKingTerenas);
+/** The spells they grant, all on Q. Vacuum Resources serves both vacuums (the
+ *  reach is read off the item); the others are one ability per item, since
+ *  the Greater version differs in its numbers. */
+export const VACUUM_ABILITY_ID = FourCC(VACUUM_ABILITY);
+export const UNHOLY_FRENZY_ABILITY_ID = FourCC(UNHOLY_FRENZY_ABILITY);
+export const GREATER_UNHOLY_FRENZY_ABILITY_ID = FourCC(GREATER_UNHOLY_FRENZY_ABILITY);
+export const IMBUE_HORSE_ABILITY_ID = FourCC(IMBUE_HORSE_ABILITY);
+export const GREATER_IMBUE_HORSE_ABILITY_ID = FourCC(GREATER_IMBUE_HORSE_ABILITY);
+
 /** Everything the shop sells that is consumed on acquisition. */
 export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = [
   FLAME_RESISTANCE_ID, TRACK_MANUFACTURING_ID, RESOURCE_CAPACITY_ID,
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, SUMMON_UPGRADE_ITEM_ID,
   MERC_CONTRACT_ID, MERC_CONTRACT_2_ID, CHALLENGE_ITEM_ID, RESTORE_HP_ID,
-  STRANGE_MEAT_ID,
+  STRANGE_MEAT_ID, UPGRADE_PEASANT_ABILITY_ID,
 ];

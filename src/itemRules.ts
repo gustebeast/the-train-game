@@ -3,7 +3,9 @@ import {
   AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID,
   BUCKET_ID, BUCKET_FULL_ID, REROLL_ITEM_ID, BOSS_KEY_ITEM_ID,
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
-  SHOP_UPGRADE_ITEM_IDS, UNKNOWN_UNIT_ID,
+  SHOP_UPGRADE_ITEM_IDS, UNKNOWN_UNIT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID,
+  UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
+  MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
 } from './constants';
 
 /**
@@ -36,7 +38,7 @@ function isToolItem(itemTypeId: number): boolean {
 /** Consumed the moment it is acquired (shop.ts turns the pickup into the
  *  upgrade), so it is never really carried and everyone may accept one --
  *  otherwise buying an upgrade would be rejected before it could apply. */
-function isShopUpgrade(itemTypeId: number): boolean {
+export function isShopUpgrade(itemTypeId: number): boolean {
   for (const id of SHOP_UPGRADE_ITEM_IDS) {
     if (id === itemTypeId) return true;
   }
@@ -53,13 +55,25 @@ function isPeasantUtility(itemTypeId: number): boolean {
   return itemTypeId === REROLL_ITEM_ID || itemTypeId === BOSS_KEY_ITEM_ID;
 }
 
+/** Bought from the Secret Salesperson: grants its peasant a special ability
+ *  and lives in the last inventory slot, out of the way of the carried item. */
+const PEASANT_ABILITY_ITEM_IDS: number[] = [
+  RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
+  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID,
+];
+
+export function isPeasantAbilityItem(itemTypeId: number): boolean {
+  return PEASANT_ABILITY_ITEM_IDS.indexOf(itemTypeId) !== -1;
+}
+
 /** Anything the train game does not define is treated as hero loot (claws,
  *  rings, tomes — the creep-camp drop pools). Defaulting this way means a new
  *  drop is automatically hero-only rather than silently becoming carryable by
  *  a peasant. */
 function isHeroItem(itemTypeId: number): boolean {
   return !isResourceItem(itemTypeId) && !isToolItem(itemTypeId)
-    && !isShopUpgrade(itemTypeId) && !isPeasantUtility(itemTypeId);
+    && !isShopUpgrade(itemTypeId) && !isPeasantUtility(itemTypeId)
+    && !isPeasantAbilityItem(itemTypeId);
 }
 
 // --- carriers -------------------------------------------------------------
@@ -102,7 +116,8 @@ export function canHold(holder: Unit, itemTypeId: number): string | null {
     return isHeroItem(itemTypeId) ? null : "They can't carry that!";
   }
   if (isPeasantUnit(holder)) {
-    return (isResourceItem(itemTypeId) || isToolItem(itemTypeId) || isPeasantUtility(itemTypeId))
+    return (isResourceItem(itemTypeId) || isToolItem(itemTypeId) || isPeasantUtility(itemTypeId)
+      || isPeasantAbilityItem(itemTypeId))
       ? null : "Peasants can't carry hero items!";
   }
   // Everything else fights alongside the heroes -- the mercenaries above all --
