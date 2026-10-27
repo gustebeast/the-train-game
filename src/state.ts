@@ -1,5 +1,5 @@
 import { getHumanPlayers } from './util';
-import { TRAIN_INITIAL_MAX_HP } from './sharedData';
+import { TRAIN_INITIAL_MAX_HP, TRAIN_INITIAL_MAX_MANA } from './sharedData';
 
 export interface GameState {
   round: number;
@@ -34,7 +34,7 @@ export const DEFAULT_STATE: GameState = {
   peasantMaxStack: 3,
   crateMaxStack: 10,
   trainMaxHP: TRAIN_INITIAL_MAX_HP,
-  trainMaxMana: 100,
+  trainMaxMana: TRAIN_INITIAL_MAX_MANA,
   trainSpeed: 6,
   crateTrackCount: 0,
   crateStoneCount: 0,

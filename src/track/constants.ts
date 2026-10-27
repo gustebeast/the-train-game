@@ -14,6 +14,10 @@ export const OMNI_TRACK = Units.Farm;
  *  shape is only a skin (see TRACK_PIECES). */
 export const DEFAULT_TRACK = Units.ScoutTower;
 export const OMNI_TRACK_MODEL = 'OmniTrack';
+/** How far north-east of a track piece's position the train runs: where the
+ *  engine and wagon are stood on their starting pieces, and the point on every
+ *  piece the train is driven through. */
+export const TRACK_CENTER_OFFSET = 16;
 
 /** One orientation of track: the unit type worn as its skin, and the model
  *  that unit carries (war3mapImported/<model>.mdx), each pre-rotated. */

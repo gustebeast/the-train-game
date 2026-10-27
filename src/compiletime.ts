@@ -139,9 +139,9 @@ compiletime(({ objectData, constants }) => {
   // train is told to stand still (0) and to creep (1) while it waits on track.
   train.speedMinimum = 1;
   train.hitPointsMaximumBase = shared.TRAIN_INITIAL_MAX_HP;
-  train.hitPointsRegenerationRate = -1;
+  train.hitPointsRegenerationRate = shared.TRAIN_HP_REGEN;
   train.hitPointsRegenerationType = 'always';
-  train.manaMaximum = 100;
+  train.manaMaximum = shared.TRAIN_INITIAL_MAX_MANA;
   train.manaInitialAmount = 0;
   train.manaRegeneration = 0;
   // Not Mechanical: the engine auto-attaches tiered damage fire (and its

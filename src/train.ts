@@ -1,4 +1,6 @@
 import { Unit, Timer, Trigger, Rectangle, Region } from 'w3ts';
+import { TRACK_CENTER_OFFSET } from './track/constants';
+import { TRAIN_HP_REGEN } from './sharedData';
 import { createTimer, destroyTimer, startOneShot } from './timers';
 import { gameSeconds } from './globalTick';
 import { placedTracks, isVictoryTriggered } from './track/state';
@@ -13,8 +15,6 @@ import { initProduction, setMoveOrderCallback, pauseProduction, resumeProduction
 const OVERSHOOT = 16;
 const REGION_HALF = 2; // 4x4 region → half-size = 2
 const STUCK_TIMEOUT = 35;
-const CENTER_OFFSET = 16;
-const TRAIN_HP_REGEN = -1; // HP per second; negative = decay
 let arrivalRect: Rectangle | null = null;
 let arrivalRegion: Region | null = null;
 let lastMoveTime: number = 0;
@@ -119,7 +119,7 @@ export function extinguish(): void {
 }
 
 function trackCenter(track: Unit): GridPos {
-  return { x: track.x + CENTER_OFFSET, y: track.y + CENTER_OFFSET };
+  return { x: track.x + TRACK_CENTER_OFFSET, y: track.y + TRACK_CENTER_OFFSET };
 }
 
 /** Compute the overshoot offset direction from current track to next. */

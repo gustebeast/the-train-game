@@ -7,7 +7,7 @@ import {
   idx, gridToWorld,
 } from './constants';
 import { ROCK_RAW, GRANITE_RAW, CAGE_RAW } from '../sharedData';
-import { DEFAULT_TRACK, TRACK_SIZE, skinFor } from '../track/constants';
+import { DEFAULT_TRACK, TRACK_SIZE, TRACK_CENTER_OFFSET, skinFor } from '../track/constants';
 
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
@@ -41,7 +41,6 @@ const TERRAIN_FOURCC: Record<Exclude<Terrain, Terrain.GRASS | Terrain.GRASSY_DIR
 // PLAYER_1..PLAYER_4 entity types mapped to player slot indices
 const PLAYER_ENTITIES = [Entity.PLAYER_1, Entity.PLAYER_2, Entity.PLAYER_3, Entity.PLAYER_4];
 
-const CENTER_OFFSET = 16;
 
 function tileFor(terrain: Terrain, biome: Biome): string {
   if (terrain === Terrain.GRASS) return BIOMES[biome].grass;
@@ -294,12 +293,12 @@ export function spawnTerrain(grid: Grid): SpawnedTrain {
 
         case Entity.TRACK_WITH_ENGINE:
           spawnStartingTrack(world.x, world.y);
-          engineUnit = Unit.create(getNeutralPassive(), TRAIN_ID, world.x + CENTER_OFFSET, world.y + CENTER_OFFSET, 0)!;
+          engineUnit = Unit.create(getNeutralPassive(), TRAIN_ID, world.x + TRACK_CENTER_OFFSET, world.y + TRACK_CENTER_OFFSET, 0)!;
           break;
 
         case Entity.TRACK_WITH_WAGON:
           spawnStartingTrack(world.x, world.y);
-          wagonUnit = Unit.create(getNeutralPassive(), TRACK_WAGON_ID, world.x + CENTER_OFFSET, world.y + CENTER_OFFSET, 0)!;
+          wagonUnit = Unit.create(getNeutralPassive(), TRACK_WAGON_ID, world.x + TRACK_CENTER_OFFSET, world.y + TRACK_CENTER_OFFSET, 0)!;
           break;
 
         case Entity.AXE:

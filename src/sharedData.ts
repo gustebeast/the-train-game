@@ -157,6 +157,12 @@ export const READY_ORB: Attachment = {
 /** The train's max HP at the start of a run. Repair Train resets to exactly
  *  this, so Flame Resistance upgrades bought earlier are not refunded. */
 export const TRAIN_INITIAL_MAX_HP = 100;
+/** The train's mana at the start of a run: one track piece's worth of
+ *  production. Track Manufacturing lowers it (shop.ts). */
+export const TRAIN_INITIAL_MAX_MANA = 100;
+/** Hit points a second the train loses while running -- it is always burning
+ *  down slowly, and water puts back what it lost. */
+export const TRAIN_HP_REGEN = -1;
 
 // --- The shop ---------------------------------------------------------------------
 
