@@ -1,14 +1,64 @@
 compiletime(({ objectData, constants }) => {
+  // --- Shared data -------------------------------------------------------------
+  //
+  // Values the game reads as well -- rawcodes, pools, prices, tables -- live in
+  // plain-data modules (sharedData.ts, track/constants.ts) and
+  // are written exactly once. This closure cannot import them: war3-transformer
+  // evaluates its TEXT on its own, so module scope and imports do not exist in
+  // here. It loads them the way Node would instead, through the TypeScript
+  // compiler that is already a dependency of the build.
+  //
+  // What makes that work is the rule those modules keep (see sharedData.ts):
+  // data only, importing nothing but @objectdata constants. WC3 globals a data
+  // table names -- ITEM_TYPE_PERMANENT in a creep's drops -- do not exist at
+  // build time, so each one is stood in by its own name when first missed.
+  function loadShared(file: string): any {
+    const ts = require('typescript');
+    const fs = require('fs');
+    const js: string = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2017 },
+    }).outputText;
+    const libraries: { [spec: string]: object } = {
+      '@objectdata/units': { Units: constants.units },
+      '@objectdata/items': { Items: constants.items },
+      '@objectdata/abilities': { Abilities: constants.abilities },
+      '@objectdata/upgrades': { Upgrades: constants.upgrades },
+      '@objectdata/destructables': { Destructables: constants.destructables },
+    };
+    const shimRequire = (spec: string): object => {
+      const lib = libraries[spec];
+      if (lib == null) {
+        throw new Error(file + ' imports ' + spec + ': shared data may import only @objectdata constants');
+      }
+      return lib;
+    };
+    const globalNames: string[] = [];
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const mod = { exports: {} as any };
+      try {
+        // apply, not spread: argument spread emits a helper that breaks this
+        // block's eval, exactly as object spread does.
+        const params = ['exports', 'module', 'require'].concat(globalNames);
+        const run = Function.apply(null, params.concat([js]));
+        run.apply(null, [mod.exports, mod, shimRequire].concat(globalNames as any[]));
+        return mod.exports;
+      } catch (e) {
+        const missing = /^(\w+) is not defined$/.exec((e as Error).message);
+        if (!(e instanceof ReferenceError) || missing == null) throw e;
+        globalNames.push(missing[1]);
+      }
+    }
+    throw new Error(file + ' names more than 50 globals; is it really a data module?');
+  }
+
+  // Typed by the modules themselves: `typeof import` is a type, so it is gone
+  // before the transformer evaluates this block.
+  const shared = loadShared('src/sharedData.ts') as typeof import('./sharedData');
+  const trackData = loadShared('src/track/constants.ts') as typeof import('./track/constants');
+
   /** Everything visible is drawn at peasant scale. Shared by the blanket
    *  loop below and the hero block near the end of this file. */
   const UNIT_SCALE = 0.6;
-
-  /** Rawcode of the "?" placeholder unit. Must match UNKNOWN_UNIT_ID in
-   *  constants.ts -- this side authors the unit, that side spawns it. */
-  const UNKNOWN_UNIT_RAWCODE = 'qmrk';
-
-  /** Keep in step with STRANGE_ROCK_ID in constants.ts. */
-  const STRANGE_ROCK_UNIT = 'srok';
 
   // Everything in the world is peasant-sized unless we say otherwise.
   //
@@ -32,12 +82,8 @@ compiletime(({ objectData, constants }) => {
   // is matched against; the ambient critters, already small; and the circle of
   // power, whose footprint has to keep reading as the ready zone that the
   // trigger radius actually covers.
-  const KEEP: string[] = [
-    constants.units.Peasant,
-    constants.units.Rabbit, constants.units.Stag, constants.units.Sheep,
-    constants.units.Pig, constants.units.Chicken, constants.units.Raccoon,
-    constants.units.CircleOfPower,
-  ];
+  const KEEP: string[] = (shared.CRITTER_TYPES as string[])
+    .concat([constants.units.Peasant, constants.units.CircleOfPower]);
   const alreadyScaled: Record<string, boolean> = {};
   for (const unitId of Object.values(constants.units) as string[]) {
     // constants.units aliases several names onto one rawcode; visit each once.
@@ -49,53 +95,50 @@ compiletime(({ objectData, constants }) => {
     anyUnit.scalingValueundefined = UNIT_SCALE;
   }
 
-  // The dash: a Channel copy authored in the world editor, so it has no entry
-  // in the generated constants and is referenced by rawcode. Keep in step with
-  // DASH_ABILITY_ID in constants.ts.
-  const DASH_ABILITY = 'A000';
+  // Every orientation's unit wears its own pre-rotated model (the pairs are in
+  // track/constants.ts); the omni piece is the one being placed.
+  const trackModels: { [unitId: string]: string } = {};
+  trackModels[trackData.OMNI_TRACK] = trackData.OMNI_TRACK_MODEL;
+  for (const orientation of Object.keys(trackData.TRACK_PIECES)) {
+    const piece = trackData.TRACK_PIECES[orientation];
+    trackModels[piece.unit] = piece.model;
+  }
 
-  const trackTypes: { [key: string]: string } = {
-    EN: constants.units.ArcaneTower,
-    ES: constants.units.CannonTower,
-    EW: constants.units.GuardTower,
-    NS: constants.units.ScoutTower,
-    NW: constants.units.WatchTower,
-    Omni: constants.units.Farm,
-    SW: constants.units.BoulderTower,
-  };
-
-  for (const [orientation, unitName] of Object.entries(trackTypes)) {
-    const track = objectData.units.get(unitName)!;
+  for (const unitId of Object.keys(trackModels)) {
+    const isOmni = unitId === trackData.OMNI_TRACK;
+    const track = objectData.units.get(unitId)!;
     track.buildTime = 0;
     track.defenseBase = 1;
     track.defenseType = 'none';
     track.description = 'A section of railway track.';
     track.hitPointsMaximumBase = 5;
     track.name = 'Railway Track';
-    track.modelFile = `war3mapImported\\${orientation}Track.mdx`;
+    track.modelFile = 'war3mapImported\\' + trackModels[unitId] + '.mdx';
     track.scalingValueundefined = 1;
     track.shadowTextureBuilding = 'NONE';
     track.groundTexture = 'NONE';
     track.sightRadiusDay = 400;
     track.sightRadiusNight = 400;
-    track.pathingMap = `PathTextures\\${
-      orientation == 'Omni' ? '4x4simplesolid' : '4x4unbuildable'
-    }.tga`;
+    // Solid while being placed, so it pushes its builder off the tile; walkable
+    // once placed, so the train can drive over it.
+    track.pathingMap = isOmni ? 'PathTextures\\4x4simplesolid.tga' : 'PathTextures\\4x4unbuildable.tga';
   }
 
   const train = objectData.units.get(constants.units.WarWagon)!;
-  train.name = "Train";
-  train.tooltipBasic = "Train";
+  train.name = 'Train';
+  train.tooltipBasic = 'Train';
   train.collisionSize = 16;
   train.modelFile = 'war3mapImported\\WarWagon.mdx';
   train.normal = constants.abilities.InventoryHero;
-  train.scalingValueundefined = 0.6;
+  train.scalingValueundefined = UNIT_SCALE;
   train.selectionScale = 1;
   train.sightRadiusDay = 400;
   train.sightRadiusNight = 400;
-  train.speedMaximum = 522;
+  train.speedMaximum = shared.MAX_MOVE_SPEED;
+  // The engine clamps a unit's speed to at least this, and stock is 150: the
+  // train is told to stand still (0) and to creep (1) while it waits on track.
   train.speedMinimum = 1;
-  train.hitPointsMaximumBase = 100;
+  train.hitPointsMaximumBase = shared.TRAIN_INITIAL_MAX_HP;
   train.hitPointsRegenerationRate = -1;
   train.hitPointsRegenerationType = 'always';
   train.manaMaximum = 100;
@@ -117,7 +160,7 @@ compiletime(({ objectData, constants }) => {
   trackWagon.collisionSize = 16;
   trackWagon.modelFile = 'war3mapImported\\TrackWagon.mdx';
   trackWagon.normal = constants.abilities.InventoryHero;
-  trackWagon.scalingValueundefined = 0.6;
+  trackWagon.scalingValueundefined = UNIT_SCALE;
   // Negative selection scale hides the health bar (invulnerability doesn't);
   // the unit stays selectable and give/take targetable
   trackWagon.selectionScale = -1;
@@ -127,7 +170,7 @@ compiletime(({ objectData, constants }) => {
   trackWagon.shadowImageCenterY = 50;
   trackWagon.sightRadiusDay = 400;
   trackWagon.sightRadiusNight = 400;
-  trackWagon.speedMaximum = 522;
+  trackWagon.speedMaximum = shared.MAX_MOVE_SPEED;
   trackWagon.speedMinimum = 1;
   // Match the engine's turn rate (its hbew default is 0.6) so both cars lose
   // the same speed rounding corners and the coupling gap stays constant
@@ -142,7 +185,7 @@ compiletime(({ objectData, constants }) => {
   // and couldn't path empty tile corridors at all.
   peasant.collisionSize = 32;
   peasant.structuresBuilt = '';
-  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral, DASH_ABILITY].join(',');
+  peasant.normal = [constants.abilities.InventoryHero, constants.abilities.Channel, constants.abilities.InvulnerableNeutral, shared.DASH_ABILITY].join(',');
   // Normalize damage to exactly 5 so trees/rocks always take exactly 3 hits
   peasant.attack1CooldownTime = 1;
   peasant.attack1DamageBase = 4; // base + 1 = 5 (WC3 adds 1 to base)
@@ -153,8 +196,8 @@ compiletime(({ objectData, constants }) => {
   // the queue to advance immediately, so both are zeroed.
   // SetUnitMoveSpeed is clamped to the unit's own maximum, which defaults to
   // 400 — the dash was only reaching 2.1x base, which barely reads on screen.
-  // 522 is WC3's gameplay-constant ceiling.
-  peasant.speedMaximum = 522;
+  // MAX_MOVE_SPEED is WC3's gameplay-constant ceiling.
+  peasant.speedMaximum = shared.MAX_MOVE_SPEED;
   // The engine clamps SetUnitMoveSpeed to this, and the stock minimum is 150 --
   // so asking for 0 left the start-lobby dancers walking around at 150
   // (measured in game). 1 is the same trick the train already uses.
@@ -194,7 +237,7 @@ compiletime(({ objectData, constants }) => {
   //
   // Its base order is 'flare' (set in the editor), which is why the trigger
   // code still watches that order id.
-  const dash = objectData.abilities.get(DASH_ABILITY)! as ChannelAbility;
+  const dash = objectData.abilities.get(shared.DASH_ABILITY)! as ChannelAbility;
   dash.heroAbility = false;
   dash.levels = 1;
   dash.targetType = 2; // point target
@@ -289,7 +332,7 @@ compiletime(({ objectData, constants }) => {
             // Ability-specific fields (e.g. Ncl1-6): digit suffix is the dataPointer
             // Exclude attachment point fields like ata0-ata5 which use digits but aren't per-level
             const match = mod.id.match(/^[A-Za-z]{3}(\d)$/);
-            if (match && !mod.id.startsWith('ata')) {
+            if (match != null && !mod.id.startsWith('ata')) {
               mod.levelOrVariation = 1;
               mod.dataPointer = parseInt(match[1]);
             }
@@ -316,6 +359,12 @@ compiletime(({ objectData, constants }) => {
     { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
     { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
   ];
+  const zeroedTransmutePayout = [
+    { id: 'Ntm1', variableType: 2, dataPointer: 1, value: 0 }, // goldCostFactor
+    { id: 'Ntm2', variableType: 2, dataPointer: 2, value: 0 }, // lumberCostFactor
+  ];
+  /** A forced field. levelOrVariation defaults to 1; a field that is not per
+   *  level (requirements) names 0. */
   type ForcedMod = { id: string; variableType: number; dataPointer: number; value: number | string; levelOrVariation?: number };
   const noMana: ForcedMod = { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 };
   const noRequirement: ForcedMod = { id: 'areq', variableType: 3, dataPointer: 0, value: '', levelOrVariation: 0 };
@@ -337,10 +386,7 @@ compiletime(({ objectData, constants }) => {
     // honour it. Zeroed rather than left to the next sync to wipe. Forced
     // because 0 is what the library THINKS the default is, so assigning
     // goldCostFactor = 0 would write nothing at all.
-    ANtm: [
-      { id: 'Ntm1', variableType: 2, dataPointer: 1, value: 0 }, // goldCostFactor
-      { id: 'Ntm2', variableType: 2, dataPointer: 2, value: 0 }, // lumberCostFactor
-    ],
+    ANtm: zeroedTransmutePayout,
     // The Strange Key's throw, a COPY of Transmute (see the keyThrow block).
     // A copy starts from the stock Transmute, not from the ANtm fix above, so
     // it needs its own: no gold, and free for a peasant with no mana.
@@ -350,35 +396,31 @@ compiletime(({ objectData, constants }) => {
     // or duration it sets itself. No mana: a peasant has none.
     // Vacuum Resources, a copy of Channel: no target, and it must not disable
     // the peasant's other abilities while it runs.
-    A013: [
-      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
+    [shared.VACUUM_ABILITY]: [noMana,
       { id: 'Ncl2', variableType: 0, dataPointer: 2, value: 0 }, // targetType: none
       { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
       { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
     ],
     // Unholy Frenzy and Bloodlust both wait on an upgrade in melee (Necromancer
     // and Shaman training); with it the cast is simply refused. Not per level.
-    A014: [noMana, noRequirement], // Unholy Frenzy
-    A015: [noMana, noRequirement],
+    [shared.UNHOLY_FRENZY_ABILITY]: [noMana, noRequirement],
+    [shared.GREATER_UNHOLY_FRENZY_ABILITY]: [noMana, noRequirement],
     // Imbue With Horse, a copy of Bloodlust: speed only -- no attack rate and
     // no growing the target.
-    A016: [noMana, noRequirement,
+    [shared.IMBUE_HORSE_ABILITY]: [noMana, noRequirement,
       { id: 'Blo1', variableType: 2, dataPointer: 1, value: 0 }, // attack speed
       { id: 'Blo3', variableType: 2, dataPointer: 3, value: 0 }, // scaling
     ],
-    A017: [noMana, noRequirement,
+    [shared.GREATER_IMBUE_HORSE_ABILITY]: [noMana, noRequirement,
       { id: 'Blo1', variableType: 2, dataPointer: 1, value: 0 },
       { id: 'Blo3', variableType: 2, dataPointer: 3, value: 0 },
     ],
-    A012: zeroedSpellCost.concat([
-      { id: 'Ntm1', variableType: 2, dataPointer: 1, value: 0 }, // goldCostFactor
-      { id: 'Ntm2', variableType: 2, dataPointer: 2, value: 0 }, // lumberCostFactor
-    ]),
+    [shared.KEY_THROW_ABILITY]: zeroedSpellCost.concat(zeroedTransmutePayout),
     // NOTE: there was an Aihn (UnitInventoryHuman) block here configuring
     // "mercenary inventory, no drop on death". It was dead: no unit anywhere
     // carries Aihn. The mercenary is given AInv (InventoryHero) instead -- see
-    // the mercCreepTypes loop below and MERC_INVENTORY_ABILITY_ID in
-    // mercenary.ts -- so none of that config ever reached the game.
+    // MERC_INVENTORY_ABILITY_ID in mercenary.ts -- so none of that config ever
+    // reached the game.
     //
     // Consequence, which is why this note is here rather than a silent
     // deletion: the merc carries STOCK AInv, and stock hero inventory DOES drop
@@ -387,6 +429,23 @@ compiletime(({ objectData, constants }) => {
     // mercenary.ts's death trigger, so that code is load-bearing, not a
     // belt-and-braces backstop.
   };
+  /** Add each forced modification the object does not already carry. */
+  /** Add each forced field the object lacks. A copy also inherits whatever
+   *  this file did to its base -- the vacuum, a copy of Channel, came out with
+   *  give/take's "unit or point" target type -- so for a copy (`replace`) a
+   *  forced value overwrites an inherited one instead of only filling a gap. */
+  function pushForced(obj: any, mods: ForcedMod[], replace = false): void {
+    for (const forced of mods) {
+      const existing = obj.modifications.find((m: any) => m.id === forced.id);
+      if (existing != null) {
+        if (replace) existing.value = forced.value;
+        continue;
+      }
+      const mod = new Modification();
+      Object.assign(mod, { levelOrVariation: 1, u1: 0 }, forced);
+      obj.modifications.push(mod);
+    }
+  }
   const originalSave = objectData.save.bind(objectData);
   objectData.save = () => {
     const result = originalSave();
@@ -396,48 +455,24 @@ compiletime(({ objectData, constants }) => {
       // Custom copies first, matched by their NEW id. Without this a forced
       // entry for a copy (A012) found nothing in the original table, and the
       // fallback below then wrote it there as if it were a stock ability.
-      // A copy also inherits whatever this file did to its base: the vacuum, a
-      // copy of Channel, came out with give/take's "unit or point" target type
-      // and no way to cast it with no target. So for copies the forced value
-      // replaces an inherited one instead of only filling a gap.
       for (const obj of result.w3a.customTable.objects) {
         const mods = forcedMods[obj.newId];
         if (mods == null) continue;
         seen.add(obj.newId);
-        for (const forced of mods) {
-          const inherited = obj.modifications.find((m: any) => m.id === forced.id);
-          if (inherited != null) {
-            inherited.value = forced.value;
-          } else {
-            const mod = new Modification();
-            Object.assign(mod, { levelOrVariation: 1, u1: 0 }, forced);
-            obj.modifications.push(mod);
-          }
-        }
+        pushForced(obj, mods, true);
       }
       for (const obj of result.w3a.originalTable.objects) {
         const mods = forcedMods[obj.oldId];
-        if (mods != null) {
-          seen.add(obj.oldId);
-          for (const forced of mods) {
-            if (!obj.modifications.some((m: any) => m.id === forced.id)) {
-              const mod = new Modification();
-              Object.assign(mod, { levelOrVariation: 1, u1: 0 }, forced);
-              obj.modifications.push(mod);
-            }
-          }
-        }
+        if (mods == null) continue;
+        seen.add(obj.oldId);
+        pushForced(obj, mods);
       }
       // Create w3a entries for abilities that only ended up in w3aSkin
       for (const [rawcode, mods] of Object.entries(forcedMods)) {
         if (seen.has(rawcode)) continue;
         const obj = new ModifiedObject();
         obj.oldId = rawcode;
-        for (const forced of mods) {
-          const mod = new Modification();
-          Object.assign(mod, { levelOrVariation: 1, u1: 0 }, forced);
-          obj.modifications.push(mod);
-        }
+        pushForced(obj, mods);
         result.w3a.originalTable.objects.push(obj);
       }
     }
@@ -524,14 +559,9 @@ compiletime(({ objectData, constants }) => {
   // so a plain `attackBonus = 0` never reaches war3map.w3a and the in-game
   // bonus stays live. The dataset objects are frozen; swap in unfrozen copies
   // with a sentinel default so the 0 actually serializes as an Iatt mod.
-  const attachmentAbilityIds = [
-    constants.abilities.ItemDamageBonusPlus7,
-    constants.abilities.ItemDamageBonusPlus8,
-    constants.abilities.ItemDamageBonusPlus10,
-    constants.abilities.ItemDamageBonusPlus2,
-    constants.abilities.ItemDamageBonusPlus4,
-    constants.abilities.ItemDamageBonusPlus6,
-  ];
+  const attachments: { ability: string; model: string; point: string }[] =
+    Object.keys(shared.CARRIED_TOOLS).map(item => shared.CARRIED_TOOLS[item]).concat([shared.READY_ORB]);
+  const attachmentAbilityIds = attachments.map(a => a.ability);
   // NOTE: no object spread here — the transformer transpiles this block with
   // ts.transpile() and evals it wrapped in parens; spread emits a `var __assign`
   // helper above the function expression, which is a SyntaxError in that eval.
@@ -542,51 +572,18 @@ compiletime(({ objectData, constants }) => {
   }
   abilityGameData.game = pokedGame;
 
-  // Axe attachment ability (passive, shows axe model on caster's left hand)
-  const axeAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus7)! as StatBonusAbility;
-  axeAttach.target = 'war3mapImported\\Axe.mdx';
-  axeAttach.targetAttachments = 1;
-  axeAttach.targetAttachmentPoint1 = 'left,hand';
-  axeAttach.attackBonus = 0;
-
-  // Pickaxe attachment ability (passive, shows pickaxe model on caster's left hand)
-  // (Pickaxe.mdx's handle texture was swapped from a singleplayer glue-screen
-  // asset to AshenTree.blp — the glue texture was suspected in a multiplayer
-  // framerate bug)
-  const pickAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus8)! as StatBonusAbility;
-  pickAttach.target = 'war3mapImported\\Pickaxe.mdx';
-  pickAttach.targetAttachments = 1;
-  pickAttach.targetAttachmentPoint1 = 'left,hand';
-  pickAttach.attackBonus = 0;
-
-  // Track piece attachment ability (passive, shows track model in left hand)
-  const trackAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus10)! as StatBonusAbility;
-  trackAttach.target = 'war3mapImported\\OmniTrackSmall.mdx';
-  trackAttach.targetAttachments = 1;
-  trackAttach.targetAttachmentPoint1 = 'left,hand';
-  trackAttach.attackBonus = 0;
-
-  // Empty bucket attachment ability
-  const bucketAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus2)! as StatBonusAbility;
-  bucketAttach.target = 'war3mapImported\\Bucket.mdx';
-  bucketAttach.targetAttachments = 1;
-  bucketAttach.targetAttachmentPoint1 = 'left,hand';
-  bucketAttach.attackBonus = 0;
-
-  // Full bucket attachment ability
-  const bucketFullAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus4)! as StatBonusAbility;
-  bucketFullAttach.target = 'war3mapImported\\BucketFull.mdx';
-  bucketFullAttach.targetAttachments = 1;
-  bucketFullAttach.targetAttachmentPoint1 = 'left,hand';
-  bucketFullAttach.attackBonus = 0;
-
-  // Ready orb attachment ability (passive, shows orb model on caster's head)
-  const readyOrbAttach = objectData.abilities.get(constants.abilities.ItemDamageBonusPlus6)! as StatBonusAbility;
-  readyOrbAttach.target = 'war3mapImported\\ReadyOrb.mdx';
-  readyOrbAttach.targetAttachments = 1;
-  readyOrbAttach.targetAttachmentPoint1 = 'head';
-  readyOrbAttach.attackBonus = 0;
-
+  // Each carried tool, and the ready orb, shown through its own ability (the
+  // table is sharedData's CARRIED_TOOLS and READY_ORB, which the game reads to
+  // pick the ability). (Pickaxe.mdx's handle texture was swapped from a
+  // singleplayer glue-screen asset to AshenTree.blp -- the glue texture was
+  // suspected in a multiplayer framerate bug.)
+  for (const attachment of attachments) {
+    const art = objectData.abilities.get(attachment.ability)! as StatBonusAbility;
+    art.target = attachment.model;
+    art.targetAttachments = 1;
+    art.targetAttachmentPoint1 = attachment.point;
+    art.attackBonus = 0;
+  }
 
   // Axe item
   const axe = objectData.items.get(constants.items.SturdyWarAxe)!;
@@ -606,39 +603,21 @@ compiletime(({ objectData, constants }) => {
   // the boss. A peasant item, so it lives by the peasant's one-item rule and
   // cannot be handed to the engine, the wagon or the crate -- see itemRules.ts.
   const bossKey = objectData.items.get(constants.items.KeyOfThreeMoons)!;
-  const KEY_THROW = 'A012';
   bossKey.name = 'Strange Key';
   bossKey.description = 'Taken from something that should not have been carrying it.';
   bossKey.tooltipExtended = 'Whatever this opens is not on any map. Use it on the Strange Rock at the far edge of the line.';
   bossKey.goldCost = 0;
   bossKey.canBeDropped = true;
   bossKey.droppedWhenCarrierDies = true;
-  bossKey.perishable = false;
   bossKey.canBeSoldToMerchants = false;
   // Used, not just carried: the key throws itself at the Strange Rock (A012,
   // a copy of Transmute). One charge, perishable, so the key is spent by the
   // throw that breaks the rock -- and only that throw, because the engine
   // refuses any other target before a charge is touched.
-  bossKey.abilities = KEY_THROW;
+  bossKey.abilities = shared.KEY_THROW_ABILITY;
   bossKey.activelyUsed = true;
   bossKey.numberOfCharges = 1;
   bossKey.perishable = true;
-
-  // Strange Meat: bait. Buying it makes the next camp a level 3 one, which is
-  // the only camp that can drop the Strange Key.
-  const strangeMeat = objectData.items.get(constants.items.BloodfeathersHeart)!;
-  strangeMeat.name = 'Strange Meat';
-  // The BASIC tooltip is what the shop button and command card show, and
-  // without it the item kept advertising the stock name it was built from --
-  // "Bloodfeather's Heart" -- while calling itself Strange Meat everywhere else.
-  strangeMeat.tooltipBasic = strangeMeat.name;
-  strangeMeat.description = 'Something out there wants this badly enough to bring friends.';
-  strangeMeat.tooltipExtended = 'Guarantees the next camp will be level 3.';
-  strangeMeat.goldCost = 1;
-  strangeMeat.canBeDropped = true;
-  strangeMeat.perishable = false;
-  strangeMeat.canBeSoldToMerchants = false;
-  strangeMeat.abilities = '';
 
   // Pickaxe item
   const pickaxe = objectData.items.get(constants.items.RustyMiningPick)!;
@@ -776,7 +755,7 @@ compiletime(({ objectData, constants }) => {
   wood.abilities = '';
   wood.numberOfCharges = 1;
   wood.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNBundleOfLumber.blp';
-  wood.modelUsed = 'Doodads\\Felwood\\Props\\FelwoodLogStraight\\FelwoodLogStraight.mdx';
+  wood.modelUsed = shared.WOOD_MODEL;
   wood.scalingValue = 0.4;
 
   // Stone resource item (GemFragment — normal holdable item)
@@ -794,7 +773,7 @@ compiletime(({ objectData, constants }) => {
   stone.abilities = '';
   stone.numberOfCharges = 1;
   stone.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGolemStormBolt.blp';
-  stone.modelUsed = 'Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_Rock6.mdx';
+  stone.modelUsed = shared.STONE_MODEL;
   stone.scalingValue = 0.4;
 
   // Tree destructables: one tree wall per biome (see BIOMES in terrain/constants)
@@ -853,8 +832,9 @@ compiletime(({ objectData, constants }) => {
   // whose runtime stock (AddItemToStock) displays -- see the shop below -- and
   // standing still is all he does anyway. Model: "Mr. Goblin, the Goblin
   // Adventurer" by Deolrin (Hive Workshop), which uses only stock textures.
-  const salesGoblin = objectData.units.copy(constants.units.Marketplace, 'sgob');
-  if (salesGoblin != null) {
+  // Like every copy it starts from the Marketplace as this file has left it.
+  const salesGoblin = objectData.units.copy(constants.units.Marketplace, shared.SALESPERSON_UNIT)!;
+  {
     salesGoblin.name = 'Secret Salesperson';
     salesGoblin.nameEditorSuffix = '';
     salesGoblin.modelFile = 'war3mapImported\\MrGoblin.mdx';
@@ -872,8 +852,10 @@ compiletime(({ objectData, constants }) => {
     // Secret: finding him is the point, so he is not on the minimap.
     salesGoblin.hideMinimapDisplay = true;
   }
-  const sealRock = objectData.units.copy(constants.units.Barracks, STRANGE_ROCK_UNIT);
-  if (sealRock != null) {
+  // Note what a copy inherits: it starts from the object as THIS file has left
+  // it so far, so the rock already carries the blanket scale from the top.
+  const sealRock = objectData.units.copy(constants.units.Barracks, shared.STRANGE_ROCK)!;
+  {
     sealRock.name = 'Strange Rock';
     sealRock.nameEditorSuffix = '';
     // RockChunks1's model, variation 0 -- the one the destructable used. Read
@@ -911,23 +893,12 @@ compiletime(({ objectData, constants }) => {
   water.pathingMap = 'PathTextures\\4x4simplesolid.tga';
   water.scalingValueundefined = 1;
   water.shadowTextureBuilding = 'NONE';
-  // 320 saw straight past the water and onto the grass beyond it. The border
-  // tiles exist to give the lobby an even ring of vision, not to reveal what
-  // is outside it, so one tile is enough.
-  //
-  // Day and night carry the same number here, but they do NOT come out the same
-  // in game: WC3 shrinks sight at night on top of these fields, which is why
-  // the border behaved at night and overreached during the day. So this is one
-  // value tuned for the day, with the engine's night reduction still applying
-  // under it.
-  // Night is the look worth keeping, so night stays at 320. Day does not: WC3
-  // shrinks sight at night on top of this field, so the same number that looks
-  // right after dark reaches much further before it. Day is therefore set
-  // LOWER than night on purpose -- an odd-looking pair, but it is what makes
-  // the two match on screen.
-  //
-  // 180 is a starting guess at the engine's night reduction, not a measured
-  // figure. Tune this one number if the border still overreaches by day.
+  // The border tiles exist to give the lobby an even ring of vision, not to
+  // reveal what is outside it. WC3 shrinks sight at night on top of these
+  // fields, so day is set LOWER than night on purpose -- an odd-looking pair,
+  // but it is what makes the two match on screen. The game then shrinks the
+  // water's sight further when it spawns one (shrinkWaterSight in
+  // terrain/spawn.ts), which is the number to tune now.
   water.sightRadiusDay = 180;
   water.sightRadiusNight = 320;
 
@@ -1028,13 +999,8 @@ compiletime(({ objectData, constants }) => {
   unsummonHeroes.buffs = '';
   unsummonHeroes.effect = '';
 
-  // NOTE on item rawcodes: everything the map repurposes must be an item creeps
-  // never drop. Camps roll drops with ChooseRandomItemEx, whose pool is every
-  // item flagged "Include As Random Choice" -- and the map matches its items by
-  // rawcode alone, so a rolled one becomes a free shop upgrade or a free tool
-  // off a corpse (measured: 90 of 1080 rolls, before these four moved).
-  // Miscellaneous, Campaign and Purchasable items carry that flag false and are
-  // safe; Permanent ones generally do not. Pick from the safe classes.
+  // Every item the map repurposes must be one creeps never drop; the build
+  // guard in the patched save above enforces it.
   //
   // Shop: based on the melee MARKETPLACE (nmrk), the one unit whose
   // dynamically added stock (AddItemToStock) natively displays — Blizzard's
@@ -1062,8 +1028,9 @@ compiletime(({ objectData, constants }) => {
   // path in reroll.ts) is already one of those defaults, so leaving the list
   // alone gets it for free.
 
-  // Hero Reroll cast — Wand of Negation repurposed as a unit-target spell.
-  // Its native purge doesn't matter: reroll.ts replaces the target on cast.
+  // Hero Reroll cast — the Wand of Illusion's ability repurposed as a
+  // unit-target spell. Its native illusion doesn't matter: reroll.ts replaces
+  // the target on cast.
   const rerollCast = objectData.abilities.get(constants.abilities.ItemIllusions)!;
   // A peasant (non-hero) carries and casts the reroll item, so the item's
   // ability must not be hero-only or the peasant can't activate it.
@@ -1105,221 +1072,93 @@ compiletime(({ objectData, constants }) => {
   shadyDealer.itemsSold = constants.items.Shimmerweed;
   shadyDealer.itemsMade = '';
 
-  // The Shady Deal (Shimmerweed — the Shady Dealer's one slot).
+  // --- The shelf ---------------------------------------------------------------
   //
+  // Everything the shop and the dealer sell is consumed the instant it is
+  // bought: shop.ts turns the pickup into the upgrade. Price and shelf size come
+  // from sharedData's SHELF, which shop.ts charges from too, and the amounts in
+  // the text are the ones the purchase applies.
+  function authorShelfItem(rawcode: string, name: string, description: string, icon: string | null) {
+    const item = objectData.items.get(rawcode)!;
+    const shelf = shared.SHELF[rawcode];
+    if (shelf == null) throw new Error(name + ' (' + rawcode + ') is authored as a shelf item but has no SHELF entry');
+    item.name = name;
+    item.tooltipBasic = name;
+    item.description = description;
+    item.tooltipExtended = description;
+    item.goldCost = shelf.cost;
+    item.stockMaximum = shelf.stock;
+    item.stockReplenishInterval = 3600;
+    item.stockInitialAfterStartDelay = 10;
+    item.useAutomaticallyWhenAcquired = true;
+    item.activelyUsed = false;
+    item.canBeDropped = false;
+    item.perishable = true;
+    item.abilities = '';
+    item.classification = 'PowerUp';
+    // Only ever a path read off real object data: a guessed BTN name that does
+    // not exist draws as a '?' or a green box. Null keeps the stock icon.
+    if (icon != null) item.interfaceIcon = icon;
+    return item;
+  }
+
   // Deliberately generic: WHICH challenge this sells is decided at runtime from
   // the seeded sequence in challenges.ts, and object-data text is fixed at
   // build time, so the specific challenge is announced on purchase instead.
-  const critterpocalypse = objectData.items.get(constants.items.Shimmerweed)!;
-  critterpocalypse.name = 'Shady Deal';
-  critterpocalypse.tooltipBasic = critterpocalypse.name;
-  critterpocalypse.description = "Take the dealer's challenge for this round. Complete it to earn 2 gold.";
-  critterpocalypse.tooltipExtended = critterpocalypse.description;
-  critterpocalypse.goldCost = 1;
-  critterpocalypse.stockMaximum = 1;
-  critterpocalypse.stockReplenishInterval = 3600;
-  critterpocalypse.stockInitialAfterStartDelay = 10;
-  critterpocalypse.useAutomaticallyWhenAcquired = true;
-  critterpocalypse.activelyUsed = false;
-  critterpocalypse.canBeDropped = false;
-  critterpocalypse.perishable = true;
-  critterpocalypse.abilities = '';
-  critterpocalypse.classification = 'PowerUp';
-  critterpocalypse.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSheep.blp';
+  authorShelfItem(constants.items.Shimmerweed, 'Shady Deal',
+    "Take the dealer's challenge for this round. Complete it to earn " + shared.CHALLENGE_BONUS + ' gold.',
+    'ReplaceableTextures\\CommandButtons\\BTNSheep.blp');
 
-  // Retired: the Shady Dealer now has a single slot (see Shady Deal above) and
-  // Tough Creep Camp is one of the challenges it can sell. Object data kept so
-  // the item id still resolves.
-  // Tough Creep Camp challenge (SkeletalArtifact)
-  const toughCamp = objectData.items.get(constants.items.SkeletalArtifact)!;
-  toughCamp.name = 'Tough Creep Camp';
-  toughCamp.tooltipBasic = toughCamp.name;
-  toughCamp.description = "Next round's creep camp hits far harder. Defeat it to earn 2 bonus gold.";
-  toughCamp.tooltipExtended = toughCamp.description;
-  toughCamp.goldCost = 1;
-  toughCamp.stockMaximum = 1;
-  toughCamp.stockReplenishInterval = 3600;
-  toughCamp.stockInitialAfterStartDelay = 10;
-  toughCamp.useAutomaticallyWhenAcquired = true;
-  toughCamp.activelyUsed = false;
-  toughCamp.canBeDropped = false;
-  toughCamp.perishable = true;
-  toughCamp.abilities = '';
-  toughCamp.classification = 'PowerUp';
-  toughCamp.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGrunt.blp';
+  // Replaces Flame Resistance on the shelf whenever the train is below its
+  // starting max HP.
+  authorShelfItem(constants.items.HeartOfAszune, 'Repair Train',
+    'Repairs the fire damage, restoring the train to ' + shared.TRAIN_INITIAL_MAX_HP
+      + ' health. Health upgrades bought before the fire are not restored.',
+    'ReplaceableTextures\\CommandButtons\\BTNHealingSalve.blp');
 
-  // Restore Lost HP (HeartOfAszune — purchased from shop). Replaces Flame
-  // Resistance on the shelf whenever the train is below its starting max HP.
-  const restoreHp = objectData.items.get(constants.items.HeartOfAszune)!;
-  restoreHp.name = 'Repair Train';
-  restoreHp.tooltipBasic = restoreHp.name;
-  restoreHp.description = 'Repairs the fire damage, restoring the train to 100 health. Health upgrades bought before the fire are not restored.';
-  restoreHp.tooltipExtended = restoreHp.description;
-  restoreHp.goldCost = 1;
-  restoreHp.stockMaximum = 1;
-  restoreHp.stockReplenishInterval = 3600;
-  restoreHp.stockInitialAfterStartDelay = 10;
-  restoreHp.useAutomaticallyWhenAcquired = true;
-  restoreHp.activelyUsed = false;
-  restoreHp.canBeDropped = false;
-  restoreHp.perishable = true;
-  restoreHp.abilities = '';
-  restoreHp.classification = 'PowerUp';
-  // Double backslashes matter here: with single ones the path collapses to
-  // ReplaceableTexturesCommandButtons... because \C and \B are not escape
-  // sequences, and the icon silently fails to load.
-  restoreHp.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHealingSalve.blp';
+  authorShelfItem(constants.items.AncientFigurine, 'Flame Resistance',
+    'Increases train health by ' + shared.FLAME_RESISTANCE_HP + ', making it take longer to catch fire.',
+    'ReplaceableTextures\\CommandButtons\\BTNOrbOfFire.blp');
 
-  // Flame Resistance upgrade (AncientFigurine — purchased from shop)
-  const flameResistance = objectData.items.get(constants.items.AncientFigurine)!;
-  flameResistance.name = 'Flame Resistance';
-  flameResistance.tooltipBasic = flameResistance.name;
-  flameResistance.description = 'Increases train health by 10, making it take longer to catch fire.';
-  flameResistance.tooltipExtended = flameResistance.description;
-  flameResistance.goldCost = 1;
-  flameResistance.stockMaximum = 10;
-  flameResistance.stockReplenishInterval = 3600;
-  flameResistance.stockInitialAfterStartDelay = 10;
-  flameResistance.useAutomaticallyWhenAcquired = true;
-  flameResistance.activelyUsed = false;
-  flameResistance.canBeDropped = false;
-  flameResistance.perishable = true;
-  flameResistance.abilities = '';
-  flameResistance.classification = 'PowerUp';
-  flameResistance.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNOrbOfFire.blp';
+  authorShelfItem(constants.items.BracerOfAgility, 'Track Manufacturing',
+    'Reduces train mana by ' + shared.TRACK_MANUFACTURING_MANA
+      + ' (to no less than ' + shared.TRACK_MANUFACTURING_MIN_MANA
+      + '), allowing it to convert wood and stone to tracks more quickly.',
+    'ReplaceableTextures\\CommandButtons\\BTNStaffOfTeleportation.blp');
 
-  // Track Manufacturing upgrade (BracerOfAgility — purchased from shop)
-  const trackManufacturing = objectData.items.get(constants.items.BracerOfAgility)!;
-  trackManufacturing.name = 'Track Manufacturing';
-  trackManufacturing.tooltipBasic = trackManufacturing.name;
-  trackManufacturing.description = 'Reduces train mana by 10, allowing it to convert wood and stone to tracks more quickly.';
-  trackManufacturing.tooltipExtended = trackManufacturing.description;
-  trackManufacturing.goldCost = 1;
-  trackManufacturing.stockMaximum = 10;
-  trackManufacturing.stockReplenishInterval = 3600;
-  trackManufacturing.stockInitialAfterStartDelay = 10;
-  trackManufacturing.useAutomaticallyWhenAcquired = true;
-  trackManufacturing.activelyUsed = false;
-  trackManufacturing.canBeDropped = false;
-  trackManufacturing.perishable = true;
-  trackManufacturing.abilities = '';
-  trackManufacturing.classification = 'PowerUp';
-  trackManufacturing.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNStaffOfTeleportation.blp';
+  authorShelfItem(constants.items.DruidPouch, 'Train Resource Capacity',
+    'Increases the amount of wood and stone the train can carry by ' + shared.RESOURCE_CAPACITY_STEP + '.',
+    'ReplaceableTextures\\CommandButtons\\BTNPackBeast.blp');
 
-  // Train Resource Capacity upgrade (DruidPouch — purchased from shop)
-  const resourceCapacity = objectData.items.get(constants.items.DruidPouch)!;
-  resourceCapacity.name = 'Train Resource Capacity';
-  resourceCapacity.tooltipBasic = resourceCapacity.name;
-  resourceCapacity.description = 'Increases the amount of wood and stone the train can carry by 2.';
-  resourceCapacity.tooltipExtended = resourceCapacity.description;
-  resourceCapacity.goldCost = 1;
-  resourceCapacity.stockMaximum = 10;
-  resourceCapacity.stockReplenishInterval = 3600;
-  resourceCapacity.stockInitialAfterStartDelay = 10;
-  resourceCapacity.useAutomaticallyWhenAcquired = true;
-  resourceCapacity.activelyUsed = false;
-  resourceCapacity.canBeDropped = false;
-  resourceCapacity.perishable = true;
-  resourceCapacity.abilities = '';
-  resourceCapacity.classification = 'PowerUp';
-  resourceCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNPackBeast.blp';
+  authorShelfItem(constants.items.JadeRing, 'Train Track Capacity',
+    'Increases the amount of tracks the train can carry by ' + shared.TRACK_CAPACITY_STEP + '.',
+    'ReplaceableTextures\\CommandButtons\\BTNSpiritLink.blp');
 
-  // Train Track Capacity upgrade (JadeRing — purchased from shop)
-  const trackCapacity = objectData.items.get(constants.items.JadeRing)!;
-  trackCapacity.name = 'Train Track Capacity';
-  trackCapacity.tooltipBasic = trackCapacity.name;
-  trackCapacity.description = 'Increases the amount of tracks the train can carry by 2.';
-  trackCapacity.tooltipExtended = trackCapacity.description;
-  trackCapacity.goldCost = 1;
-  trackCapacity.stockMaximum = 10;
-  trackCapacity.stockReplenishInterval = 3600;
-  trackCapacity.stockInitialAfterStartDelay = 10;
-  trackCapacity.useAutomaticallyWhenAcquired = true;
-  trackCapacity.activelyUsed = false;
-  trackCapacity.canBeDropped = false;
-  trackCapacity.perishable = true;
-  trackCapacity.abilities = '';
-  trackCapacity.classification = 'PowerUp';
-  trackCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNSpiritLink.blp';
+  authorShelfItem(constants.items.LionsRing, 'Crate Capacity',
+    'Increases the amount of tracks, wood and stone the crate can carry by ' + shared.CRATE_CAPACITY_STEP + '.',
+    'ReplaceableTextures\\CommandButtons\\BTNMonsterLure.blp');
 
-  // Crate Capacity upgrade (LionsRing — purchased from shop)
-  const crateCapacity = objectData.items.get(constants.items.LionsRing)!;
-  crateCapacity.name = 'Crate Capacity';
-  crateCapacity.tooltipBasic = crateCapacity.name;
-  crateCapacity.description = 'Increases the amount of tracks, wood and stone the crate can carry by 4.';
-  crateCapacity.tooltipExtended = crateCapacity.description;
-  crateCapacity.goldCost = 1;
-  crateCapacity.stockMaximum = 10;
-  crateCapacity.stockReplenishInterval = 3600;
-  crateCapacity.stockInitialAfterStartDelay = 10;
-  crateCapacity.useAutomaticallyWhenAcquired = true;
-  crateCapacity.activelyUsed = false;
-  crateCapacity.canBeDropped = false;
-  crateCapacity.perishable = true;
-  crateCapacity.abilities = '';
-  crateCapacity.classification = 'PowerUp';
-  crateCapacity.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMonsterLure.blp';
+  // Back on sale whenever no mercenary is alive, so it doubles as the
+  // replacement hire.
+  authorShelfItem(constants.items.MogrinsReport, 'Mercenary Contract',
+    'Unlocks level 2 creep camps and recruits a random mercenary creep that joins your heroes whenever they are summoned. If it dies you lose the level 2 camps and this goes back on the shelf: buying again hires a fresh mercenary, carrying the gear the last one held.',
+    'ReplaceableTextures\\CommandButtons\\BTNMedalionOfCourage.blp');
 
-  // Mercenary Contract (MogrinsReport — purchased from shop; back on sale whenever
-  // no mercenary is alive, so it doubles as the replacement hire)
-  const mercContract = objectData.items.get(constants.items.MogrinsReport)!;
-  mercContract.name = 'Mercenary Contract';
-  mercContract.tooltipBasic = mercContract.name;
-  mercContract.description = 'Unlocks level 2 creep camps and recruits a random mercenary creep that joins your heroes whenever they are summoned. If it dies you lose the level 2 camps and this goes back on the shelf: buying again hires a fresh mercenary, carrying the gear the last one held.';
-  mercContract.tooltipExtended = mercContract.description;
-  mercContract.goldCost = 1;
-  mercContract.stockMaximum = 1;
-  mercContract.stockReplenishInterval = 3600;
-  mercContract.stockInitialAfterStartDelay = 10;
-  mercContract.useAutomaticallyWhenAcquired = true;
-  mercContract.activelyUsed = false;
-  mercContract.canBeDropped = false;
-  mercContract.perishable = true;
-  mercContract.abilities = '';
-  mercContract.classification = 'PowerUp';
-  mercContract.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNMedalionOfCourage.blp';
+  // One-time; keeps the stock BTNHornOfCenarius.blp icon.
+  authorShelfItem(constants.items.HornOfCenarius, 'Summon Heroes Upgrade',
+    'Unlocks the Summon Heroes ability, allowing heroes to be summoned at creep camps. One-time purchase, kept across rounds.',
+    null);
 
-  // Summon Heroes upgrade (HornOfCenarius — purchased from shop, one-time)
-  const summonUpgrade = objectData.items.get(constants.items.HornOfCenarius)!;
-  summonUpgrade.name = 'Summon Heroes Upgrade';
-  summonUpgrade.tooltipBasic = summonUpgrade.name;
-  summonUpgrade.description = 'Unlocks the Summon Heroes ability, allowing heroes to be summoned at creep camps. One-time purchase, kept across rounds.';
-  summonUpgrade.tooltipExtended = summonUpgrade.description;
-  summonUpgrade.goldCost = 1;
-  summonUpgrade.stockMaximum = 1;
-  summonUpgrade.stockReplenishInterval = 3600;
-  summonUpgrade.stockInitialAfterStartDelay = 10;
-  summonUpgrade.useAutomaticallyWhenAcquired = true;
-  summonUpgrade.activelyUsed = false;
-  summonUpgrade.canBeDropped = false;
-  summonUpgrade.perishable = true;
-  summonUpgrade.abilities = '';
-  summonUpgrade.classification = 'PowerUp';
-  // Left at the stock item's own icon (BTNHornOfCenarius.blp): the previous
-  // BTNSelectHeroOn.blp is not a real file, which the shop draws as a '?'.
+  // One per living pair. Keeps the stock BTNGuldanSkull.blp icon.
+  authorShelfItem(constants.items.SkullOfGuldan, 'Second Contract',
+    'Hires a SECOND mercenary and unlocks level 3 (red) creep camps. Only on sale while exactly one mercenary is alive. If either dies you lose the level 3 camps and this goes back on the shelf.',
+    null);
 
-  // Second Contract (SkullOfGuldan — purchased from shop, one per living pair).
-  // A Campaign-class rawcode, like every other item the map repurposes, so
-  // creeps can never drop it (the build guard above enforces that).
-  const secondContract = objectData.items.get(constants.items.SkullOfGuldan)!;
-  secondContract.name = 'Second Contract';
-  secondContract.tooltipBasic = secondContract.name;
-  secondContract.description = 'Hires a SECOND mercenary and unlocks level 3 (red) creep camps. Only on sale while exactly one mercenary is alive. If either dies you lose the level 3 camps and this goes back on the shelf.';
-  secondContract.tooltipExtended = secondContract.description;
-  secondContract.goldCost = 1;
-  secondContract.stockMaximum = 1;
-  secondContract.stockReplenishInterval = 3600;
-  secondContract.stockInitialAfterStartDelay = 10;
-  secondContract.useAutomaticallyWhenAcquired = true;
-  secondContract.activelyUsed = false;
-  secondContract.canBeDropped = false;
-  secondContract.perishable = true;
-  secondContract.abilities = '';
-  secondContract.classification = 'PowerUp';
-  // Icon deliberately NOT set: the stock item already has a valid one
-  // (BTNGuldanSkull.blp), and a BTN name guessed from the item's name --
-  // BTNSkullOfGuldan.blp -- does not exist, which the game draws as a green
-  // box. Only override this with a path read off real object data.
+  // Bait: buying it makes the next camp a level 3 one, which is the only camp
+  // that can drop the Strange Key. Keeps the stock icon.
+  const strangeMeat = authorShelfItem(constants.items.BloodfeathersHeart, 'Strange Meat',
+    'Guarantees the next camp will be level 3.', null);
+  strangeMeat.description = 'Something out there wants this badly enough to bring friends.';
 
   // Hero Reroll (VoodooDoll — purchased from shop, kept in inventory, not a
   // powerup: the buyer carries it, can pawn it back for a refund, and casts
@@ -1329,8 +1168,8 @@ compiletime(({ objectData, constants }) => {
   heroReroll.tooltipBasic = heroReroll.name;
   heroReroll.description = 'Use on a hero or mercenary in the inter-round lobby to replace it with a random new one. XP and items carry over. Sell back to the shop for a full refund.';
   heroReroll.tooltipExtended = heroReroll.description;
-  heroReroll.goldCost = 1;
-  heroReroll.stockMaximum = 10;
+  heroReroll.goldCost = shared.SHELF[constants.items.VoodooDoll].cost;
+  heroReroll.stockMaximum = shared.SHELF[constants.items.VoodooDoll].stock;
   heroReroll.stockReplenishInterval = 3600;
   heroReroll.stockInitialAfterStartDelay = 10;
   heroReroll.useAutomaticallyWhenAcquired = false;
@@ -1344,53 +1183,10 @@ compiletime(({ objectData, constants }) => {
   heroReroll.classification = 'Charged';
   heroReroll.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNReincarnation.blp';
 
-  // Mercenary inventory: a rolled mercenary is a plain creep type, and WC3 only
-  // grants working inventory slots for an inventory ability present on the unit
-  // at CREATION time — UnitAddAbility at runtime shows the ability but yields 0
-  // slots (verified in-game). So bake InventoryHero (the same ability the
-  // peasant carries tools with) onto every Lordaeron Summer creep type, the pool
-  // rollMercType draws mercenaries from. Enemy camp copies get an (unused) empty
-  // inventory too — harmless. Keep this list in sync with
-  // CREEP_CAMPS['Lordaeron Summer'].
-  //
-  // Death-drop is NOT prevented in object data: this is stock AInv, which drops
-  // items on death. mercenary.ts strips them in the death trigger instead, so
-  // that strip is the only thing preventing a dead merc's items from hitting
-  // the ground. Giving the merc an inventory ability with dropItemsOnDeath=0
-  // would make it robust rather than order-dependent, but AInv is shared with
-  // the train, peasant and crate, so it cannot simply be reconfigured here.
-  const mercCreepTypes = [
-    'nfsh', 'nftb', 'nftk', 'nftr', 'nftt', 'ngna', 'ngnb', 'ngno', 'ngns',
-    'ngnv', 'ngnw', 'ngrk', 'ngst', 'nkob', 'nkog', 'nkot', 'nmfs', 'nmrl',
-    'nmrm', 'nmrr', 'nogl', 'nogm', 'nogr', 'nomg', 'nrdr', 'nsc2', 'nsc3',
-    'nscb', 'ntrg', 'ntrh', 'ntrs', 'ntrt', 'nwzg',
-  ];
-  for (const creepId of mercCreepTypes) {
-    const creep = objectData.units.get(creepId);
-    if (creep == null) continue;
-    const existing = (creep.normal as unknown as string) ?? '';
-    if (existing.indexOf(constants.abilities.InventoryHero) !== -1) continue;
-    creep.normal = (existing !== '' ? existing + ',' : '') + constants.abilities.InventoryHero;
-  }
-
-  // Scale down all hero types to match peasant size
-  const heroTypes: string[] = [
-    // Human
-    constants.units.Paladin, constants.units.Archmage, constants.units.MountainKing, constants.units.BloodMage,
-    // Orc
-    constants.units.Blademaster, constants.units.FarSeer, constants.units.TaurenChieftain, constants.units.ShadowHunter,
-    // Undead
-    constants.units.DeathKnight, constants.units.Lich, constants.units.Dreadlord, constants.units.CryptLord,
-    // Night Elf
-    constants.units.DemonHunter, constants.units.KeeperOfTheGrove, constants.units.PriestessOfTheMoon, constants.units.Warden,
-    // Tavern
-    constants.units.Beastmaster, constants.units.DarkRanger, constants.units.PitLord, constants.units.Tinker,
-    constants.units.Firelord, constants.units.Alchemist, constants.units.Brewmaster, constants.units.SeaWitch,
-  ];
-
-  for (const heroType of heroTypes) {
+  // Every hero the pool can roll, sized and pathed like the peasant. (The
+  // blanket loop at the top already scaled them.)
+  for (const heroType of shared.HERO_POOL) {
     const hero = objectData.units.get(heroType)!;
-    hero.scalingValueundefined = UNIT_SCALE;
     hero.selectionScale = 1;
     hero.collisionSize = 32; // match peasants: one unit blocks a 1-tile corridor
     hero.pathingMap = '';
@@ -1412,7 +1208,9 @@ compiletime(({ objectData, constants }) => {
   //
   // The model path is real, not guessed: an invalid path renders NOTHING, so it
   // was confirmed in game before being written down here.
-  const unknown = objectData.units.copy(constants.units.Peasant, UNKNOWN_UNIT_RAWCODE)!;
+  // A copy starts from the peasant as this file has already edited it, so it
+  // has to stay below the peasant block.
+  const unknown = objectData.units.copy(constants.units.Peasant, shared.UNKNOWN_UNIT)!;
   unknown.name = 'Unknown';
   unknown.description = 'Rolled, but not yet revealed. You will meet them when the round starts.';
   // The World Editor's "Question Mark" model preset, read out of a map saved by
@@ -1450,34 +1248,23 @@ compiletime(({ objectData, constants }) => {
   //
   // Copying rather than editing ANin in place, for the same reason the dash is
   // a Channel copy: a fresh rawcode cannot collide with anything.
-  const BOSS_UNIT = 'ubos';
-  const BOSS_ADD_UNIT = 'uinl';
-  const BOSS_INFERNO = 'A010';
-  const ADD_THUNDER_CLAP = 'A011';
-  const VACUUM_ABILITY = 'A013';
-  /** Every ability item spell shares one cooldown and one key (Q). */
-  const ABILITY_ITEM_COOLDOWN = 60;
-
   /** Thunder Clap's mana cost, the same at all three levels. Stamped onto the
    *  copy below rather than inherited, so the add's mana pool can be defined as
    *  "exactly two casts" and stay true if the cost is ever retuned. */
   const THUNDER_CLAP_MANA = 75;
 
-  type InfernoAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>
-    & { summonedUnit: string; duration: number };
-
   const inferno = objectData.abilities.copy(
-    constants.abilities.InfernoNeutralHostile, BOSS_INFERNO) as InfernoAbility | undefined;
-  if (inferno != null) {
+    constants.abilities.InfernoNeutralHostile, shared.BOSS_INFERNO_ABILITY)!;
+  {
     inferno.levels = 1;
     inferno.heroAbility = false;
     inferno.cooldown = 20;
     inferno.manaCost = 200;
-    // NOT set here. "Data - Summoned Unit Type" is an INTEGER field holding a
-    // rawcode (ABILITY_ILF_SUMMONED_UNIT_UIN), but the object-data library
-    // writes summonedUnit as a string -- which serialises cleanly, is ignored
-    // by the engine, and drops a STOCK infernal instead (seen in game). It is
-    // stamped at runtime in boss.ts, where the field's real type is available.
+    // The summoned unit is NOT set here. "Data - Summoned Unit Type" is an
+    // INTEGER field holding a rawcode, but the object-data library writes it as
+    // a string -- which serialises cleanly, is ignored by the engine, and drops
+    // a STOCK infernal instead (seen in game). boss.ts swaps the stock infernal
+    // for the lesser one as it lands instead.
     inferno.name = 'Inferno';
     inferno.tooltipNormal = 'Inferno';
     inferno.tooltipNormalExtended =
@@ -1488,16 +1275,13 @@ compiletime(({ objectData, constants }) => {
   // Transmute -- which can turn up on a hero in play -- is left exactly as it
   // is. The copy is what the key casts: the peasant throws, the missile flies,
   // and the Strange Rock breaks when it lands.
-  type TransmuteAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>
-    & { goldCostFactor: number; lumberCostFactor: number };
-  const keyThrow = objectData.abilities.copy(
-    constants.abilities.Transmute, KEY_THROW) as TransmuteAbility | undefined;
-  if (keyThrow != null) {
+  const keyThrow = objectData.abilities.copy(constants.abilities.Transmute, shared.KEY_THROW_ABILITY)!;
+  {
     keyThrow.levels = 1;
     keyThrow.heroAbility = false;
     keyThrow.castRange = 300;
     // Mana, cooldown and Transmute's gold payout are zeroed in forcedMods under
-    // A012: assigning 0 here writes nothing, because 0 is what the library
+    // KEY_THROW_ABILITY: assigning 0 here writes nothing, because 0 is what the library
     // thinks the default is -- and the real defaults are 150 mana (a peasant
     // has none, so the key was simply refused) and a gold payout (56-64 per
     // throw, measured on the copy before it was zeroed).
@@ -1518,7 +1302,7 @@ compiletime(({ objectData, constants }) => {
   // Vacuum Resources (Q): a third Channel, granted by holding either Resource
   // Vacuum. No target -- it works around the caster (vacuum.ts). Every ability
   // item's spell goes on Q, so a peasant only ever has one there.
-  const vacuum = objectData.abilities.copy(constants.abilities.Channel, VACUUM_ABILITY) as ChannelAbility | undefined;
+  const vacuum = objectData.abilities.copy(constants.abilities.Channel, shared.VACUUM_ABILITY) as ChannelAbility | undefined;
   if (vacuum != null) {
     vacuum.heroAbility = false;
     vacuum.levels = 1;
@@ -1528,7 +1312,7 @@ compiletime(({ objectData, constants }) => {
     // Not 0: Channel reads 0 as "channel until interrupted" (see the dash).
     vacuum.followThroughTime = 0.01;
     vacuum.castingTime = 0;
-    vacuum.cooldown = ABILITY_ITEM_COOLDOWN;
+    vacuum.cooldown = shared.ABILITY_ITEM_COOLDOWN;
     // Its own order string: give/take is 'channel' and the dash 'flare', and
     // two abilities on one unit sharing an order is one of them never firing.
     vacuum.baseOrderIDundefined = 'whirlwind';
@@ -1552,8 +1336,8 @@ compiletime(({ objectData, constants }) => {
   type FrenzyAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>
     & { attackSpeedBonusPercent: number; damagePerSecondundefined: number };
   const frenzies: [string, number, number, string][] = [
-    ['A014', 0.5, 2, 'Unholy Frenzy'],
-    ['A015', 0.75, 4, 'Unholy Frenzy'],
+    [shared.UNHOLY_FRENZY_ABILITY, 0.5, 2, 'Unholy Frenzy'],
+    [shared.GREATER_UNHOLY_FRENZY_ABILITY, 0.75, 4, 'Unholy Frenzy'],
   ];
   for (const [rawcode, attackRate, drain, name] of frenzies) {
     const frenzy = objectData.abilities.copy(constants.abilities.UnholyFrenzy, rawcode) as FrenzyAbility | undefined;
@@ -1564,7 +1348,7 @@ compiletime(({ objectData, constants }) => {
     frenzy.damagePerSecondundefined = drain;
     frenzy.durationNormal = 45;
     frenzy.durationHero = 45;
-    frenzy.cooldown = ABILITY_ITEM_COOLDOWN;
+    frenzy.cooldown = shared.ABILITY_ITEM_COOLDOWN;
     frenzy.castRange = 500;
     // invulnerable: peasants are, and casting it on a peasant is the point.
     frenzy.targetsAllowed = 'air,ground,friend,self,vulnerable,invulnerable,organic';
@@ -1583,7 +1367,7 @@ compiletime(({ objectData, constants }) => {
   // taken out (forced above).
   type BloodlustAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>
     & { movementSpeedIncreasePercentundefined: number };
-  const imbues: [string, number][] = [['A016', 10], ['A017', 20]];
+  const imbues: [string, number][] = [[shared.IMBUE_HORSE_ABILITY, 10], [shared.GREATER_IMBUE_HORSE_ABILITY, 20]];
   for (const [rawcode, seconds] of imbues) {
     const imbue = objectData.abilities.copy(constants.abilities.Bloodlust, rawcode) as BloodlustAbility | undefined;
     if (imbue == null) continue;
@@ -1592,7 +1376,7 @@ compiletime(({ objectData, constants }) => {
     imbue.movementSpeedIncreasePercentundefined = 0.7;
     imbue.durationNormal = seconds;
     imbue.durationHero = seconds;
-    imbue.cooldown = ABILITY_ITEM_COOLDOWN;
+    imbue.cooldown = shared.ABILITY_ITEM_COOLDOWN;
     imbue.castRange = 500;
     // Self, other peasants (invulnerable), heroes and mercenaries.
     imbue.targetsAllowed = 'air,ground,friend,self,vulnerable,invulnerable,organic';
@@ -1606,8 +1390,8 @@ compiletime(({ objectData, constants }) => {
     imbue.buttonPositionNormalY = 2;
   }
 
-  const clap = objectData.abilities.copy(constants.abilities.ThunderClap, ADD_THUNDER_CLAP);
-  if (clap != null) {
+  const clap = objectData.abilities.copy(constants.abilities.ThunderClap, shared.ADD_THUNDER_CLAP_ABILITY)!;
+  {
     // One level, on a unit that is not a hero -- both have to be said, or the
     // button is drawn but the ability never fires.
     clap.levels = 1;
@@ -1619,8 +1403,8 @@ compiletime(({ objectData, constants }) => {
   // health of a stock one, and a mana pool of exactly two Thunder Claps. Mana
   // regeneration is zeroed so "two casts" is the whole of it rather than the
   // opening pair.
-  const bossAdd = objectData.units.copy(constants.units.Infernal, BOSS_ADD_UNIT);
-  if (bossAdd != null) {
+  const bossAdd = objectData.units.copy(constants.units.Infernal, shared.BOSS_ADD_UNIT)!;
+  {
     bossAdd.name = 'Lesser Infernal';
     // A quarter of the stock 1500, then a fifth again on top: the adds were
     // dying too fast to matter in the balance runs.
@@ -1636,11 +1420,11 @@ compiletime(({ objectData, constants }) => {
     // Permanent immolation and the clap. Spell immunity and resistant skin are
     // deliberately gone: with spell immunity no hero AoE could touch the adds
     // at all, so clearing them meant attacking each one down by hand.
-    bossAdd.normal = 'ANpi,' + ADD_THUNDER_CLAP;
+    bossAdd.normal = [constants.abilities.PermanentImmolationNeutralHostile1, shared.ADD_THUNDER_CLAP_ABILITY].join(',');
   }
 
-  const boss = objectData.units.copy(constants.units.Infernal, BOSS_UNIT);
-  if (boss != null) {
+  const boss = objectData.units.copy(constants.units.Infernal, shared.BOSS_UNIT)!;
+  {
     boss.name = 'Infernal Colossus';
     boss.scalingValueundefined = UNIT_SCALE * 2;
     // Twice the peasant's 32, which is what makes a peasant fill a 128 tile --
@@ -1660,7 +1444,11 @@ compiletime(({ objectData, constants }) => {
     // shorter HERO durations on the boss -- but spell immunity would make every
     // stun, slow and nuke in the game simply miss, and a fight nobody can cast
     // into is not the fight this boss is meant to be.
-    boss.normal = 'ANpi,ACrk,' + BOSS_INFERNO;
+    boss.normal = [
+      constants.abilities.PermanentImmolationNeutralHostile1,
+      constants.abilities.ResistantSkinNeutralHostile1,
+      shared.BOSS_INFERNO_ABILITY,
+    ].join(',');
     // Set by balance testing, not guessed. At 15000 HP and 120+1d20 the boss
     // lost to nine of ten AI-run hero compositions -- the best of them killed
     // it in 63 seconds without losing anybody -- so both numbers went up.

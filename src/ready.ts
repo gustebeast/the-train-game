@@ -1,9 +1,10 @@
 import { MapPlayer, Rectangle, Region, Timer, Trigger, Unit } from 'w3ts';
-import { Abilities } from '@objectdata/abilities';
+import { READY_ORB } from './sharedData';
 import { PEASANT_ID } from './constants';
-import { getHumanPlayers } from './util';
+import { getHumanPlayers, isAlive } from './util';
+import { onPlayerLeave } from './playerLeave';
 
-const READY_ORB_ABILITY_ID = FourCC(Abilities.ItemDamageBonusPlus6);
+const READY_ORB_ABILITY_ID = FourCC(READY_ORB.ability);
 const REGION_HALF = 128; // 2x2 grid cells = 256 world units, half = 128
 
 interface ZoneConfig {
@@ -49,13 +50,23 @@ function isMember(zone: ActiveZone, u: unit): boolean {
 }
 
 function membersReady(zone: ActiveZone): boolean {
-  const living = zone.members!.filter(u => GetWidgetLife(u) > 0.405);
+  const living = zone.members!.filter(u => isAlive(u));
   return living.length > 0 && living.every(u => zone.membersInside.has(u));
 }
 
 const zoneConfigs = new Map<string, ZoneConfig>();
 const activeZones = new Map<string, ActiveZone>();
-let playerLeaveTrigger: Trigger | null = null;
+/** Whether the leave listener is in. Once is enough: it reads whatever zones
+ *  are active when someone leaves. */
+let listeningForLeavers = false;
+
+/** A player who leaves can no longer be ready, so every zone recounts. */
+function forgetLeaver(leaving: MapPlayer): void {
+  for (const [, z] of activeZones) {
+    z.readyPlayers.delete(leaving.id);
+    checkAllReady(z);
+  }
+}
 
 function checkAllReady(zone: ActiveZone): void {
   const activeIds = getHumanPlayers().map(p => p.id);
@@ -131,8 +142,17 @@ export function registerReadyZone(
 export function initReadyZone(
   cx: number, cy: number, id: string, marker: Unit | null = null, members: unit[] | null = null,
 ): void {
+  if (!listeningForLeavers) {
+    listeningForLeavers = true;
+    onPlayerLeave(forgetLeaver);
+  }
   const config = zoneConfigs.get(id);
-  if (config == null) return;
+  if (config == null) {
+    // Loud rather than a circle that silently does nothing: an unregistered id
+    // is a typo or a board loaded before initBoardFlow.
+    print('|cffff4040ready: no zone registered as "' + id + '"|r');
+    return;
+  }
 
   const rect = Rectangle.create(
     cx - REGION_HALF, cy - REGION_HALF,
@@ -192,28 +212,12 @@ export function initReadyZone(
   // only fires on the way in -- so count whoever is on the spot now.
   if (members != null) {
     for (const u of members) {
-      if (GetWidgetLife(u) > 0.405 && IsUnitInRegion(region.handle, u)) {
+      if (isAlive(u) && IsUnitInRegion(region.handle, u)) {
         zone.membersInside.add(u);
         UnitAddAbility(u, READY_ORB_ABILITY_ID);
       }
     }
     checkAllReady(zone);
-  }
-
-  // Set up shared player-leave trigger once
-  if (playerLeaveTrigger == null) {
-    playerLeaveTrigger = Trigger.create();
-    for (const p of getHumanPlayers()) {
-      playerLeaveTrigger.registerPlayerEvent(p, EVENT_PLAYER_LEAVE);
-    }
-    playerLeaveTrigger.addAction(() => {
-      const leavingPlayer = MapPlayer.fromEvent();
-      if (leavingPlayer == null) return;
-      for (const [, z] of activeZones) {
-        z.readyPlayers.delete(leavingPlayer.id);
-        checkAllReady(z);
-      }
-    });
   }
 }
 
@@ -227,8 +231,4 @@ export function cleanupReady(): void {
     zone.rect.destroy();
   }
   activeZones.clear();
-  if (playerLeaveTrigger != null) {
-    playerLeaveTrigger.destroy();
-    playerLeaveTrigger = null;
-  }
 }

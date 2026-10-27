@@ -8,7 +8,7 @@ import { getDPSCheckPlayer } from './teams';
 import { registerTest, TestReporter } from './testkit';
 import { loadBossBattlefield } from './terrain/load';
 import { PATH_BLOCKER_RAW } from './terrain/constants';
-import { forEachUnitOfPlayer } from './util';
+import { forEachUnitOfPlayer, isAlive } from './util';
 
 /**
  * Balance harness for the final boss.
@@ -310,14 +310,14 @@ function runFight(comp: Comp, t: TestReporter): void {
   const tick = Timer.create();
   tick.start(1.0, true, () => {
     elapsed += 1;
-    const bossDead = GetUnitTypeId(boss.handle) === 0 || IsUnitType(boss.handle, UNIT_TYPE_DEAD);
+    const bossDead = !isAlive(boss.handle);
     let alive = 0;
     for (const hero of heroes) {
-      if (GetUnitTypeId(hero.handle) !== 0 && !IsUnitType(hero.handle, UNIT_TYPE_DEAD)) alive += 1;
+      if (isAlive(hero.handle)) alive += 1;
     }
     let mercsAlive = 0;
     for (const merc of mercs) {
-      if (GetUnitTypeId(merc.handle) !== 0 && !IsUnitType(merc.handle, UNIT_TYPE_DEAD)) mercsAlive += 1;
+      if (isAlive(merc.handle)) mercsAlive += 1;
     }
     // Count the adds standing right now, so "how many were on the field" is
     // visible even when none of them died.
@@ -516,7 +516,7 @@ function runArenaFights(comp: Comp, t: TestReporter,
   }
 
   const alive = (u: Unit): boolean =>
-    GetUnitTypeId(u.handle) !== 0 && !IsUnitType(u.handle, UNIT_TYPE_DEAD);
+    isAlive(u.handle);
 
   let elapsed = 0;
   const tick = Timer.create();

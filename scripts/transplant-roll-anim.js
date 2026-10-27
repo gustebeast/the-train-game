@@ -59,11 +59,12 @@ if (peasant.sequences.some((s) => s.name === NEW_NAME)) {
   throw new Error('peasant already has a Roll sequence — transplant already done?');
 }
 
-// New sequence entry (nonLooping), bounds copied from the peasant's Stand
+// New sequence entry, bounds copied from the peasant's Stand. It loops: the
+// parser has no `flags` field (the line that set one did nothing), and
+// roll-anim-to-alternate-walk.js relies on the roll looping.
 const seq = new Sequence();
 seq.name = NEW_NAME;
 seq.interval = new Uint32Array([NEW_START, NEW_END]);
-seq.flags = 1; // NonLooping
 const stand = peasant.sequences[0];
 seq.extent.boundsRadius = stand.extent.boundsRadius;
 seq.extent.min = Float32Array.from(stand.extent.min);

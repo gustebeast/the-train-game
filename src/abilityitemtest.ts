@@ -75,7 +75,7 @@ function clearArea(cx: number, cy: number, keep: unit): void {
   GroupEnumUnitsInRect(g, r, undefined);
   ForGroup(g, () => {
     const u = GetEnumUnit()!;
-    if (u !== keep && u !== getTrain().handle) RemoveUnit(u);
+    if (u !== keep && u !== getTrain()?.handle) RemoveUnit(u);
   });
   DestroyGroup(g);
   RemoveRect(r);
@@ -121,7 +121,7 @@ function refusals(t: TestReporter, p: unit): void {
     ['hero', CreateUnit(me, FourCC('Hpal'), cx + 200, cy, 0)!],
     ['merc', CreateUnit(me, FourCC('nftr'), cx + 200, cy + 150, 0)!],
     ['crate', CreateUnit(Player(PLAYER_NEUTRAL_PASSIVE)!, CRATE_ID, cx - 300, cy, 0)!],
-    ['train', getTrain().handle],
+    ['train', getTrain()!.handle],
   ];
   for (const [name, target] of targets) {
     const it = CreateItem(RESOURCE_VACUUM_ID, GetUnitX(target), GetUnitY(target))!;

@@ -21,8 +21,10 @@ export function triggerVictory(lastTrack: Unit): void {
   lastTrack.invulnerable = true;
   extinguish();
   const train = getTrain();
-  BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
-  train.moveSpeed = 200;
+  if (train != null) {
+    BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
+    train.moveSpeed = 200;
+  }
   const wagon = getTrackWagon();
   if (wagon != null) wagon.moveSpeed = 200;
 }

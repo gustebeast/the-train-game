@@ -1,17 +1,21 @@
 import { MapPlayer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { registerSaveSegment, parseFields, MERC_SAVE_KEY } from './save';
-import { forEachInventoryItem, getHumanPlayers, getInventoryItemIds, giveItems } from './util';
+import { forEachInventoryItem, getHumanPlayers, getInventoryItemIds, giveItems, unitExists } from './util';
 import { getNeutralExtra } from './teams';
 import { seededInt } from './rng';
 import { CREEP_CAMPS } from './creepCamps';
-import { UNKNOWN_UNIT_ID, MAX_MERCS } from './constants';
+import { UNKNOWN_UNIT_ID, MAX_MERCS, MAX_PLAYERS } from './constants';
 
-/** Hero-style inventory (the same ability the peasant carries tools with). It
- *  is BAKED onto every merc-able creep type in object data (see compiletime.ts):
- *  WC3 only creates working inventory slots for an inventory ability the unit
- *  has at creation time, so adding one at runtime yields 0 slots. This runtime
- *  add is therefore a harmless no-op backstop.
+/** Hero-style inventory (the same ability the peasant carries tools with),
+ *  added to each mercenary as it spawns -- and only there.
+ *
+ *  Added at runtime it gives the full six working slots: measured in game for
+ *  a type that never had it in object data (mercinventory). It used to be baked
+ *  into object data as well, on the belief that a runtime add yields no slots,
+ *  for 33 Lordaeron Summer types; the pool long since outgrew that list, and
+ *  baking it onto a TYPE handed the inventory to every camp creep of the type,
+ *  so a charmed one came over able to carry anything.
  *
  *  This is STOCK AInv, which drops its items on death — no object-data change
  *  suppresses that (an Aihn block that claimed to was dead config; see
@@ -20,7 +24,6 @@ import { UNKNOWN_UNIT_ID, MAX_MERCS } from './constants';
  *  the engine's drop. */
 const MERC_INVENTORY_ABILITY_ID = FourCC(Abilities.InventoryHero);
 
-/** Must match the tileset used by rollCreepCamp in creeps.ts. */
 
 // ---------------------------------------------------------------------------
 // Persistent state (saved via the 'mm' segment)
@@ -95,7 +98,7 @@ let currentHeroOwnerIds: number[] = [];
  *  trigger destroyed only in its own action would leak one per spawn. */
 function clearMercDeathTrigger(sl: MercSlot): void {
   if (sl.deathTrig == null) return;
-  DestroyTrigger(sl.deathTrig.handle);
+  sl.deathTrig.destroy();
   sl.deathTrig = null;
 }
 
@@ -105,7 +108,8 @@ function clearMercDeathTrigger(sl: MercSlot): void {
 
 let controlSeq = 0;
 /** Last control-assignment sequence number per player index (hero or merc). */
-const lastControlled: number[] = [0, 0, 0, 0];
+const lastControlled: number[] = [];
+for (let i = 0; i < MAX_PLAYERS; i++) lastControlled.push(0);
 
 // Save segment. One group of fields per slot, numbered: t1/d1/i1, t2/d2/i2.
 registerSaveSegment(MERC_SAVE_KEY,
@@ -143,13 +147,13 @@ registerSaveSegment(MERC_SAVE_KEY,
     slots = emptySlots();
     currentHeroOwnerIds = [];
     controlSeq = 0;
-    for (let i = 0; i < 4; i++) lastControlled[i] = 0;
+    for (let i = 0; i < MAX_PLAYERS; i++) lastControlled[i] = 0;
   },
 );
 
 function stampControl(playerId: number): void {
   controlSeq++;
-  if (playerId >= 0 && playerId < 4) {
+  if (playerId >= 0 && playerId < MAX_PLAYERS) {
     lastControlled[playerId] = controlSeq;
   }
 }
@@ -166,7 +170,7 @@ function pickMercController(): MapPlayer | null {
     for (const id of currentHeroOwnerIds) {
       if (id === p.id) heroes++;
     }
-    const seq = p.id >= 0 && p.id < 4 ? lastControlled[p.id] : 0;
+    const seq = p.id >= 0 && p.id < MAX_PLAYERS ? lastControlled[p.id] : 0;
     if (best == null || heroes < bestHeroes || (heroes === bestHeroes && seq < bestSeq)) {
       best = p;
       bestHeroes = heroes;
@@ -321,7 +325,7 @@ function spawnMercUnit(sl: MercSlot, owner: MapPlayer, x: number, y: number): vo
   clearMercDeathTrigger(sl);
   const deathTrig = Trigger.create();
   sl.deathTrig = deathTrig;
-  TriggerRegisterUnitEvent(deathTrig.handle, u.handle, EVENT_UNIT_DEATH);
+  deathTrig.registerUnitEvent(u, EVENT_UNIT_DEATH);
   deathTrig.addAction(() => {
     if (sl.unit != null && sl.unit.handle === GetTriggerUnit()) {
       sl.items = getInventoryItemIds(sl.unit.handle);
@@ -330,7 +334,7 @@ function spawnMercUnit(sl: MercSlot, owner: MapPlayer, x: number, y: number): vo
       sl.unit = null;
     }
     if (sl.deathTrig === deathTrig) { sl.deathTrig = null; }
-    DestroyTrigger(deathTrig.handle);
+    deathTrig.destroy();
   });
 }
 
@@ -385,31 +389,31 @@ export function spawnMercWithHeroes(x: number, y: number, heroOwnerIds: number[]
 export function getSpawnedMercUnits(): Unit[] {
   const live: Unit[] = [];
   for (const sl of slots) {
-    if (sl.unit != null && GetUnitTypeId(sl.unit.handle) !== 0) live.push(sl.unit);
+    if (sl.unit != null && unitExists(sl.unit.handle)) live.push(sl.unit);
   }
   return live;
 }
 
 /** Take the mercenaries off the field, keeping their kit.
  *
- *  releaseMercUnit snapshots and forgets them but leaves the units standing,
+ *  releaseMercUnits snapshots and forgets them but leaves the units standing,
  *  because the callers it was written for (the unsummon sweep, the round reset)
  *  remove the units themselves straight afterwards. The sparring match has no such
  *  sweep -- its combatants belong to a non-human player nothing else touches --
  *  so it needs the units gone as well. */
 export function removeSpawnedMercUnits(): void {
   const live = getSpawnedMercUnits();
-  releaseMercUnit();   // snapshots kit first, then drops the references
+  releaseMercUnits();   // snapshots kit first, then drops the references
   for (const u of live) {
-    if (GetUnitTypeId(u.handle) !== 0) RemoveUnit(u.handle);
+    if (unitExists(u.handle)) RemoveUnit(u.handle);
   }
 }
 
 /** Snapshot every mercenary's kit and drop the live-unit references. Called
  *  before the unsummon sweep / round reset removes the units themselves. */
-export function releaseMercUnit(): void {
+export function releaseMercUnits(): void {
   for (const sl of slots) {
-    if (sl.unit != null && GetUnitTypeId(sl.unit.handle) !== 0) {
+    if (sl.unit != null && unitExists(sl.unit.handle)) {
       sl.items = getInventoryItemIds(sl.unit.handle);
     }
     clearMercDeathTrigger(sl);
@@ -472,23 +476,29 @@ export function syncInterRoundLobbyMercs(positions: Array<{ x: number; y: number
     if (sl.typeId === 0 || sl.dead) continue;
     if (lobbyMercs.some(e => e.slotIndex === i)) continue;
     const pos = positions[math.min(i, positions.length - 1)];
-    // A mercenary rolled this visit -- hired or rerolled -- stands as a question
-    // mark until the round starts.
-    const typeId = mercConcealed(i) ? UNKNOWN_UNIT_ID : sl.typeId;
-    // Same routine as the fighting mercenary, so the display carries the kit
-    // the way it will carry it in the round -- in an inventory, not on the
-    // floor. The concealed case shows the question mark instead, holding the
-    // same items, so the lobby still says what a reroll would keep.
-    // Neutral extra owns the display roster so it grants no vision -- see
-    // createRosterHeroUnit in heroes.ts.
-    const u = spawnMercFromData({ typeId, items: sl.items }, getNeutralExtra(), pos.x, pos.y);
+    const u = createRosterMercUnit(i, pos.x, pos.y);
     if (u == null) continue;
-    u.invulnerable = true;
     lobbyMercs.push({ unit: u, slotIndex: i });
   }
 }
 
-/** The mercenary display units standing in the inter-round lobby. For tests. */
+/** Stand slot `slotIndex`'s mercenary in the inter-round lobby roster.
+ *
+ *  Same routine as the fighting mercenary, so the display carries the kit the
+ *  way it will carry it in the round -- in an inventory, not on the floor. A
+ *  mercenary rolled this visit (hired or rerolled) stands as a question mark
+ *  until the round starts, holding the same items, so the lobby still says
+ *  what a reroll would keep. Neutral extra owns the display roster so it
+ *  grants no vision -- see createRosterHeroUnit in heroes.ts. */
+function createRosterMercUnit(slotIndex: number, x: number, y: number): Unit | null {
+  const sl = slots[slotIndex];
+  const typeId = mercConcealed(slotIndex) ? UNKNOWN_UNIT_ID : sl.typeId;
+  const u = spawnMercFromData({ typeId, items: sl.items }, getNeutralExtra(), x, y);
+  if (u != null) u.invulnerable = true;
+  return u;
+}
+
+/** The mercenary display units standing in the inter-round lobby. */
 export function getInterRoundLobbyMercUnits(): Unit[] {
   return lobbyMercs.map(e => e.unit);
 }
@@ -512,12 +522,7 @@ export function rerollInterRoundLobbyMerc(unitHandle: unit): boolean {
   RemoveUnit(entry.unit.handle);
 
   // Concealed by construction: the type just changed.
-  const replacementType = mercConcealed(entry.slotIndex) ? UNKNOWN_UNIT_ID : slot.typeId;
-  const replacement = Unit.create(getNeutralExtra(), replacementType, x, y, 270);
-  if (replacement != null) {
-    replacement.invulnerable = true;
-    giveItems(replacement, slot.items);
-    entry.unit = replacement;
-  }
+  const replacement = createRosterMercUnit(entry.slotIndex, x, y);
+  if (replacement != null) entry.unit = replacement;
   return true;
 }

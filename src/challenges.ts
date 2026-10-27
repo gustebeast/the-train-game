@@ -1,7 +1,8 @@
 import { gameState, syncGold } from './state';
 import { boardChanged } from './boardSignal';
 import { registerSaveSegment, parseFields } from './save';
-import { deriveSeed } from './rng';
+import { deriveSeed, shuffleSeeded, STREAMS } from './rng';
+import { CHALLENGE_BONUS } from './sharedData';
 
 /**
  * Shady Dealer challenges — optional wagers bought in the inter-round lobby for 1 gold
@@ -22,8 +23,6 @@ import { deriveSeed } from './rng';
  * history clears and the sequence starts again.
  */
 
-const CHALLENGE_BONUS = 2;
-export const CHALLENGE_COST = 1;
 
 export interface ChallengeDef {
   /** Stable short key. Persisted, so never renumber or reuse. */
@@ -33,6 +32,9 @@ export interface ChallengeDef {
   /** Progress line for the overlay ("7 / 15", "0:08"). Omit for a challenge
    *  with nothing meaningful to count. */
   progress?: () => string;
+  /** Won simply by reaching the end of the line with it armed: nothing to
+   *  count, so it pays out when the last track is laid. */
+  completesOnFinalTrack?: boolean;
 }
 
 const defs: ChallengeDef[] = [];
@@ -89,8 +91,8 @@ export function armChallenge(id: string): void {
   boardChanged();
 }
 
-/** Disarm without paying. Segment reset, and how a lost wager is spent at the
- *  end of a round so it never reaches the save. */
+/** Disarm without paying: how a lost wager is spent at the end of a round, so
+ *  it never reaches the save. */
 export function clearChallenges(): void {
   armedId = null;
   boardChanged();
@@ -109,36 +111,19 @@ export function completeChallenge(id: string): void {
     + '! +' + I2S(CHALLENGE_BONUS) + ' bonus gold.');
 }
 
-/** Stream id for the challenge order (see rng.deriveSeed). */
-const CHALLENGE_STREAM = 1;
-
 // --- seeded offer ---------------------------------------------------------
 
-/** Deterministic order over the registered ids.
- *
- *  A Fisher-Yates shuffle driven by a small LCG rather than GetRandomInt: the
- *  order has to be identical every time a given save is loaded, and the game's
- *  RNG is neither seedable from here nor safe to disturb (other systems draw
- *  from it, and doing so would desync a multiplayer game).
+/** Deterministic order over the registered ids: the same for a given save
+ *  every time it is loaded, and different on every lap (the cycle count is
+ *  folded into the seed, by a large odd multiplier so that adjacent laps do
+ *  not open alike).
  *
  *  Challenges do NOT repeat within a lap -- `seen` is the history that
  *  enforces that -- which is the opposite of the hero reroll, where repeats are
  *  fine as long as it is not a hero you already have. */
 function shuffledIds(): string[] {
   const ids = defs.map(d => d.id);
-  // A large odd multiplier rather than a bare +1: adjacent seeds fed straight
-  // into an LCG can open with similar values, and "the next lap looks a lot
-  // like the last" is the thing this is meant to avoid.
-  let state = (seed !== 0 ? seed : 1) + cycles * 2654435761;
-  state = state % 4294967296;
-  for (let i = ids.length - 1; i > 0; i--) {
-    // Numerical Recipes LCG constants, kept inside 32 bits.
-    state = (1664525 * state + 1013904223) % 4294967296;
-    const j = state % (i + 1);
-    const tmp = ids[i];
-    ids[i] = ids[j];
-    ids[j] = tmp;
-  }
+  shuffleSeeded(ids, (seed !== 0 ? seed : 1) + cycles * 2654435761);
   return ids;
 }
 
@@ -151,7 +136,7 @@ function shuffledIds(): string[] {
  *  never replays the same sequence. */
 export function advanceChallengeOffer(): void {
   if (defs.length === 0) { offeredId = null; return; }
-  if (seed === 0) seed = deriveSeed(CHALLENGE_STREAM);
+  if (seed === 0) seed = deriveSeed(STREAMS.challenge);
 
   let order = shuffledIds();
   let next = order.find(id => !seen.includes(id));
@@ -175,7 +160,8 @@ export function getOfferedChallenge(): ChallengeDef | null {
 
 // --- save -----------------------------------------------------------------
 
-/** "s=<seed>;a=<armedId>;p=<id,id,...>" */
+/** "s=<seed>;n=<cycles>;a=<armedId>;o=<offeredId>;p=<id,id,...>" -- n, a, o
+ *  and p only when set. */
 function encodeChallenges(): string {
   const parts: string[] = ['s=' + tostring(seed)];
   if (cycles > 0) parts.push('n=' + tostring(cycles));

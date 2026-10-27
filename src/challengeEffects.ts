@@ -3,7 +3,7 @@ import { onGlobalTick, TICK_INTERVAL } from './globalTick';
 import { isInGameplay } from './state';
 import { isChallengeArmed } from './challenges';
 import { CH_NO_UI, CH_SHOULDER_CAM } from './challengeList';
-import { forEachUnitOfPlayer, getHumanPlayers } from './util';
+import { forEachUnitOfPlayer, getHumanPlayers, isAlive } from './util';
 import { PEASANT_ID } from './constants';
 
 /**
@@ -77,7 +77,7 @@ function chaseTargetFor(playerHandle: player): Unit | null {
   forEachUnitOfPlayer(playerHandle, u => {
     if (found != null) return;
     if (GetUnitTypeId(u) !== PEASANT_ID) return;
-    if (GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
+    if (!isAlive(u)) return;
     found = Unit.fromHandle(u) ?? null;
   });
   return found;
@@ -120,6 +120,11 @@ export function isShoulderCamActive(): boolean {
   return otsActive;
 }
 
+/** The sky the chase camera looks into. The path once lost its backslashes
+ *  (single ones in a JS string are swallowed), and an invalid sky path renders
+ *  nothing, so the view showed black above the horizon. */
+const SHOULDER_CAM_SKY = 'Environment\\Sky\\LordaeronSummerSky\\LordaeronSummerSky.mdl';
+
 /** Turn the chase camera on or off.
  *
  *  Also the entry point for the -thirdperson cheat, so the view can be tried
@@ -127,11 +132,6 @@ export function isShoulderCamActive(): boolean {
  *  distance, angle and position are re-applied on every global tick, so wheeling
  *  out or scrolling away snaps back within half a second rather than letting a
  *  player escape the handicap. */
-/** The sky the chase camera looks into. The path once lost its backslashes
- *  (single ones in a JS string are swallowed), and an invalid sky path renders
- *  nothing, so the view showed black above the horizon. */
-const SHOULDER_CAM_SKY = 'Environment\\Sky\\LordaeronSummerSky\\LordaeronSummerSky.mdl';
-
 function setShoulderCam(active: boolean): void {
   if (otsActive === active) return;
   otsActive = active;

@@ -22,8 +22,8 @@ export interface CreepUnit {
  *  creep levels in the camp: 1-9 = green (1), 10-19 = orange (2), 20+ =
  *  red (3). Precomputed from the standard game data; if camp compositions
  *  change, recompute (sum each creep's unit level and apply the thresholds).
- *  Level 2 camps enter the random selection once the Mercenary Contract is
- *  purchased; level 3 never rolls. */
+ *  Which levels can roll follows the living mercenaries (getMercCampLevel:
+ *  one level per mercenary above 1), and Strange Meat forces a level 3. */
 export interface CreepCamp {
   level: number;
   /** The ladder-map tileset this camp was taken from. Reference only -- nothing

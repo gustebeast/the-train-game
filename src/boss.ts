@@ -1,6 +1,8 @@
-import { Timer, Trigger, Unit } from 'w3ts';
+import { MapPlayer, Timer, Trigger, Unit } from 'w3ts';
+import { Units } from '@objectdata/units';
 import { BOSS_ADD_ID, BOSS_ID, BOSS_INFERNO_ABILITY_ID } from './constants';
 import { getNeutralAggressive } from './teams';
+import { isAlive, forEachUnitInRange } from './util';
 
 /**
  * The final boss: an oversized Infernal that calls down lesser infernals.
@@ -34,7 +36,7 @@ export function spawnBoss(x: number, y: number): Unit | null {
 }
 
 /** The stock Infernal the meteor drops, which we swap out for ours. */
-const STOCK_INFERNAL_ID = FourCC('ninf');
+const STOCK_INFERNAL_ID = FourCC(Units.Infernal);
 /** How long a summoned infernal lives, matching the ability's own duration. */
 const ADD_LIFETIME = 180;
 /** Buff id every timed-life summon uses. */
@@ -43,6 +45,14 @@ const TIMED_LIFE_BUFF = FourCC('BTLF');
 const DEFAULT_IMPACT_DELAY = 1.0;
 
 let swapInstalled = false;
+
+/** The meteor's flight time, from the ability itself. */
+function impactDelay(caster: unit): number {
+  const ab = BlzGetUnitAbility(caster, BOSS_INFERNO_ABILITY_ID);
+  if (ab == null) return DEFAULT_IMPACT_DELAY;
+  const d = BlzGetAbilityRealLevelField(ab, ABILITY_RLF_IMPACT_DELAY, 0);
+  return d > 0 ? d : DEFAULT_IMPACT_DELAY;
+}
 
 /** Replace the stock infernal the meteor summons with our lesser one.
  *
@@ -54,22 +64,14 @@ let swapInstalled = false;
  *  the library's metadata for the neutral hostile Inferno altogether. Each time
  *  the meteor dropped a full-strength stock Infernal.
  *
- *  Catching the summon is the one route that does not depend on that field. The
- *  event is registered for the boss's own player rather than through
- *  registerAnyUnitEvent, which covers the playing slots and not neutral. */
-/** The meteor's flight time, from the ability itself. */
-function impactDelay(caster: unit): number {
-  const ab = BlzGetUnitAbility(caster, BOSS_INFERNO_ABILITY_ID);
-  if (ab == null) return DEFAULT_IMPACT_DELAY;
-  const d = BlzGetAbilityRealLevelField(ab, ABILITY_RLF_IMPACT_DELAY, 0);
-  return d > 0 ? d : DEFAULT_IMPACT_DELAY;
-}
-
+ *  Catching the summon is the one route that does not depend on that field.
+ *  Registered for the boss's own player only: a stock infernal anyone else
+ *  summons (a hero's Inferno) is not ours to swap. */
 function installAddSwap(owner: player): void {
   if (swapInstalled) return;
   swapInstalled = true;
   const t = Trigger.create();
-  TriggerRegisterPlayerUnitEvent(t.handle, owner, EVENT_PLAYER_UNIT_SUMMON, undefined);
+  t.registerPlayerUnitEvent(MapPlayer.fromHandle(owner)!, EVENT_PLAYER_UNIT_SUMMON, undefined);
   t.addAction(() => {
     const summoned = GetSummonedUnit();
     if (summoned == null || GetUnitTypeId(summoned) !== STOCK_INFERNAL_ID) return;
@@ -103,7 +105,7 @@ function driveInferno(boss: Unit): void {
   castLoops.push(timer);
   timer.start(CAST_CHECK_SECONDS, true, () => {
     const h = boss.handle;
-    if (GetUnitTypeId(h) === 0 || IsUnitType(h, UNIT_TYPE_DEAD)) {
+    if (!isAlive(h)) {
       // This boss's loop only: another may still be fighting.
       castLoops = castLoops.filter(l => l !== timer);
       timer.destroy();
@@ -127,20 +129,15 @@ function nearestEnemy(boss: Unit): { x: number; y: number } {
   let bestX = boss.x;
   let bestY = boss.y;
   let bestDist = -1;
-  const g = CreateGroup()!;
-  GroupEnumUnitsInRange(g, boss.x, boss.y, HUNT_RANGE, undefined);
-  ForGroup(g, () => {
-    const e = GetEnumUnit();
-    if (e == null) return;
+  forEachUnitInRange(boss.x, boss.y, HUNT_RANGE, e => {
     if (!IsUnitEnemy(e, owner)) return;
-    if (IsUnitType(e, UNIT_TYPE_DEAD) || GetUnitTypeId(e) === 0) return;
+    if (!isAlive(e)) return;
     if (IsUnitType(e, UNIT_TYPE_STRUCTURE)) return;
     const dx = GetUnitX(e) - boss.x;
     const dy = GetUnitY(e) - boss.y;
     const dist = dx * dx + dy * dy;
     if (bestDist < 0 || dist < bestDist) { bestDist = dist; bestX = GetUnitX(e); bestY = GetUnitY(e); }
   });
-  DestroyGroup(g);
   return { x: bestX, y: bestY };
 }
 

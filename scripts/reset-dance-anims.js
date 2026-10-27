@@ -11,8 +11,7 @@
 //   node scripts/reset-dance-anims.js
 //   node scripts/transplant-dance-anims.js
 //   node scripts/fix-dance-anims.js
-const fs = require('fs');
-const { Model, TARGET, load, save } = require('./peasant-model');
+const { load, save } = require('./peasant-model');
 
 const m = load();
 const doomed = m.sequences.filter((s) => s.name.indexOf('Dance ') === 0);

@@ -1,33 +1,30 @@
-import { Grid, GRID_MAX_X, biomeForCampLevel, gridToWorld } from './constants';
-import { stopPregameMusic } from '../lobbyMusic';
+import { Grid, LOBBY_BACK_CENTRE, biomeForCampLevel, gridToWorld } from './constants';
+import { MusicTrack, setMusic } from '../music';
 import { generateTerrain, generateCheatTerrain, generateInterRoundLobby, generateBossBattlefield, generateDefeatLobby, generateVictoryLobby, generateStartLobby, generateChooseSaveLobby, generateTutorial } from './generate';
 import { spawnTerrain, spawnReadyCircle, addBoardEffect, SpawnedTrain } from './spawn';
 import { initTrain, initInterRoundLobbyTrain, setVictoryCallback, setAwardVictoryCallback, setDefeatCallback } from '../train';
 import { registerReadyZone } from '../ready';
-import { Unit } from 'w3ts';
-import { PEASANT_ID, TROPHY_MODEL, TROPHY_SCALE } from '../constants';
+import { TROPHY_MODEL, TROPHY_SCALE } from '../constants';
 import { markUnit } from '../unitLabels';
-import { forEachUnitOfPlayer, getHumanPlayers } from '../util';
+import { forEachPeasantOf, getHumanPlayers } from '../util';
 import { makeDancer, startDanceClock } from '../dance';
 import {
   closeChooseSaveLobby, getSelectedSlot, openChooseSaveLobby,
   selectNewerSave, selectOlderSave,
   getOfferedSaveCount, isSelectedSaveVictorious,
 } from '../chooseSaveLobby';
-import { TRACK_SIZE } from '../track/constants';
 import { awardVictory } from '../victory';
 import { resetBossKey } from '../bossKey';
 import { isBossVictory, placedTracks } from '../track/state';
 import { getNeutralExtra } from '../teams';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';
-import { getCampData, sparringSecondsToMinimum } from '../creeps';
+import { getCampData, sparringSecondsToMinimum, startSparringMatch } from '../creeps';
 import { gameState } from '../state';
 import { loadFromSlot, listSaves, markCurrentSaveDefeated, markCurrentSaveVictorious, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
   hasHeroes, initRandomHeroes, chooseHeroes, getInterRoundLobbyHeroUnits,
   saveHeroInterRoundLobbySnapshot, revertHeroesToInterRoundLobbySnapshot,
 } from '../heroes';
-import { startSparringMatch } from '../creeps';
 import { loadCrateForRound, loadCrateForInterRoundLobby } from '../items';
 import { resetChallengeProgress } from '../challengeList';
 import { hideChallengeUI, hidePanel, showPanel } from '../challengeUI';
@@ -38,13 +35,9 @@ import {
 } from '../daynight';
 import { refreshInterRoundLobbyRoster, resetInterRoundLobbyRoster } from '../interRoundLobbyRoster';
 import { saveMercInterRoundLobbySnapshot, getInterRoundLobbyMercUnits } from '../mercenary';
-import { deriveSeed } from '../rng';
+import { deriveSeed, STREAMS } from '../rng';
 import { advanceChallengeOffer } from '../challenges';
 
-// Finishing a round is what counts as a new visit to the dealer, so that is
-// where the shelf rotates. NOT inside loadInterRoundLobby: Reset Purchases goes back
-// through there too, and rewinding a purchase must leave the same wager on
-// sale rather than letting a player shop for a different one.
 /** True while the tutorial is being played.
  *
  *  The tutorial must leave no trace: it never claims a save slot, never calls
@@ -78,228 +71,135 @@ export function beginNewRun(): void {
   initRandomHeroes();
 }
 
+/** A round is over and the run goes on: into the inter-round lobby.
+ *
+ *  Finishing a round is what counts as a new visit to the dealer, so that is
+ *  where the shelf rotates. NOT inside loadInterRoundLobby: Reset Purchases goes
+ *  back through there too, and rewinding a purchase must leave the same wager
+ *  on sale rather than letting a player shop for a different one. */
+export function finishRoundToLobby(): void {
+  advanceChallengeOffer();
+  loadInterRoundLobby();
+}
+
 /** Adopt a run that came off disk. The save carries its own roster, so this
  *  only covers a save written before there was one to carry. */
 export function ensureRosterForLoadedRun(): void {
   if (!hasHeroes()) initRandomHeroes();
 }
 
-setVictoryCallback(() => {
-  // Reaching the target track finishes the tutorial rather than opening the
-  // inter-round lobby: there is no run to continue.
-  if (inTutorial) { endTutorial(); return; }
-  // The line ran to the boss exit rather than the usual one, so the train
-  // pulls into the arena instead of the lobby. The round itself was already
-  // won and paid out on arrival -- this is what the round bought.
-  if (isBossVictory()) {
-    loadBossBattlefield();
-    startBossFight();
-    return;
-  }
-  advanceChallengeOffer();
-  loadInterRoundLobby();
-});
-
-// How the boss fight ends. Losing costs the attempt, not the run: it lands
-// exactly where an ordinary victory would, because the round was already won.
-// Winning goes quiet and leaves one unmarked circle in the middle of the
-// arena. Everyone who survived the fight has to stand on it -- every hero and
-// mercenary still alive, not one unit per player -- and that is what takes the
-// party to the victory lobby.
-setBossArenaCallbacks(
-  () => {
-    advanceChallengeOffer();
-    loadInterRoundLobby();
-  },
-  survivors => {
-    // On disk the moment the boss falls, not when the party walks out: the
-    // run is won whether or not anyone ever reaches the circle.
-    markCurrentSaveVictorious();
-    setMusic('silence');
-    spawnReadyCircle(0, 0, { label: '', zone: 'bossexit' }, survivors);
-  },
-);
-registerReadyZone('bossexit', '', () => loadVictoryLobby());
-setDefeatCallback(() => {
-  if (inTutorial) { endTutorial(); return; }
-  loadDefeatLobby();
-});
-// Reaching the target track ends the tutorial instead of paying it out:
-// awardVictory is what writes a save, and the tutorial must not write one.
-setAwardVictoryCallback(() => {
-  if (inTutorial) return;
-  awardVictory();
-});
-// The countdown waits out the sparring match's minimum: starting the round
-// ends the match, and one cut short measures the opening seconds -- ranged
-// heroes and summons hitting creeps still walking in -- which reads the party
-// as several times stronger than it is and scales the next camp to match.
-registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round),
-  undefined, sparringSecondsToMinimum);
-registerReadyZone('newgame', 'Starting a new game', () => {
-  beginNewRun();
-  loadTerrain(0);
-});
-registerReadyZone('tutorial', 'Starting the tutorial', () => {
-  beginNewRun();
-  inTutorial = true;
-  loadGameplay(generateTutorial());
-  // After the load: loadGameplay hides the overlay on its way through, so the
-  // board has to be put up once the round is standing.
-  startTutorialBoard();
-  showPanel('Tutorial', getTutorialBoardLines);
-});
-registerReadyZone('loadsave', 'Opening saved games', () => loadChooseSaveLobby(),
-  () => (listSaves().length === 0 ? 'There are no saved games to load.' : null));
-registerReadyZone('saveback', 'Going back', () => {
-  closeChooseSaveLobby();
-  loadStartLobby();
-});
-// Paging does NOT reload the lobby: only the displayed heroes and the label
-// change, so the circles the player is standing among stay put.
-const nothingToPage = (): string | null => {
-  const count = getOfferedSaveCount();
-  if (count === 0) return 'There are no saved games.';
-  return count === 1 ? 'This is the only saved game.' : null;
-};
-registerReadyZone('saveprev', 'Showing the newer save', () => selectNewerSave(), nothingToPage);
-registerReadyZone('savenext', 'Showing the older save', () => selectOlderSave(), nothingToPage);
-registerReadyZone('saveconfirm', 'Loading the selected save', () => {
-  const slot = getSelectedSlot();
-  if (slot === 0) {
-    print('No save selected.');
-    return;
-  }
-  closeChooseSaveLobby();
-  if (!loadFromSlot(slot)) {
-    print('That save could not be read.');
-    loadStartLobby();
-    return;
-  }
-  ensureRosterForLoadedRun();
-  // Into the LOBBY, not into a round. A save is written on the way into the
-  // inter-round lobby, so resuming there puts you exactly where the save was
-  // taken -- shop, roster and all. Dropping straight into gameplay skipped the
-  // half of the round the save was standing in.
-  loadInterRoundLobby();
-}, () => (isSelectedSaveVictorious() ? 'This save is already victorious and cannot be loaded' : null));
-registerReadyZone('restart', 'Returning to the start lobby', () => {
-  // The run is already marked finished -- defeated by loadDefeatLobby, or
-  // victorious when the boss fell -- so this only has to put the session back
-  // to how it boots.
-  beginNewRun();
-  loadStartLobby();
-});
-registerReadyZone('revert', 'Resetting purchases', () => {
-  revertToInterRoundLobbySnapshot();
-  revertHeroesToInterRoundLobbySnapshot(); // undoes rerolls bought this inter-round lobby
-  loadInterRoundLobby();
-});
-
-// Every track: IMA ADPCM in a WAV container, on a sound handle.
-// WC3 decodes ADPCM fine (verified in game). Chosen over PCM because MPQ was
-// measured to recover only ~5% on PCM, so a 24-bit master would cost its full
-// size in the archive.
-//
-// The masters live outside the repo with the other bounces, in
-// Documents/Music/Bounces/TheTrainGame. Re-encode from there rather than from
-// these files -- the difference between one lossy generation and two.
-/** Warcraft's own playlist, named the way war3map.lua's main() names it when
- *  it calls SetMapMusic("Music", true, 0). Asking for it again is what gives
- *  ordinary gameplay its default music back after a lobby has taken the
- *  channel. Keep this in step with that call. */
-const DEFAULT_MUSIC = 'Music';
-
-const TRACK_FILES = {
-  startLobby: 'war3mapImported\\StartLobby.wav',
-  interRound: 'war3mapImported\\InterRoundLobby.wav',
-  defeat: 'war3mapImported\\Purgatory.wav',
-  boss: 'war3mapImported\\BossBattle.wav',
-  victory: 'war3mapImported\\VictoryLobby.wav',
-};
-
-type MusicTrack = keyof typeof TRACK_FILES;
-
-/** Which track SHOULD be playing: one of ours, 'silence' for nothing at all,
- *  or null for Warcraft's own playlist. */
-let currentTrack: MusicTrack | 'silence' | null = null;
-/** Built on first play and kept, so a track that stops can start again
- *  without re-reading the file. Keyed off TRACK_FILES, so adding a track is
- *  one line up there and nothing else. */
-const trackHandles: { [K in MusicTrack]?: sound } = {};
-
-/**
- * Say which track should be playing. Declarative on purpose.
- *
- * Callers state the desired end state rather than issuing stop/start pairs, so
- * asking for the track that is ALREADY playing does nothing at all. That is
- * what makes a whole class of bug impossible: "Resetting purchases" re-enters
- * the inter-round lobby while the inter-round lobby track is already running, and the previous
- * stop-then-start version left it silent, because it tore down a playing sound
- * and could not reliably restart it in the same frame. Nothing here can produce
- * silence unless silence was asked for.
- *
- * Three conditions make the loops seamless, and each is easy to undo:
- *
- *  1. The FILE must not carry padding. ADPCM pads to whole blocks, so each loop
- *     length is an exact multiple of 1017 samples. Re-encode off that multiple
- *     and a click comes straight back.
- *  2. The CHANNEL must be 7. A sound's volume group is derived from its
- *     channel, and 7 is music -- without it a track ignores the music slider
- *     and answers to sound effects instead.
- *  3. Only ONE track plays at a time, which is this function's job.
- *
- * Asking for null does NOT mean silence -- it means "this is not one of our
- * scenes", and Warcraft's own playlist takes the channel back. That playlist is
- * the one war3map.lua sets up in main(), so restoring it is a matter of asking
- * for it again by the same name. Real silence is asked for by name: 'silence'.
- *
- * Why sound handles and not PlayMusic: the music channel loops by restarting
- * the file and cannot do it seamlessly. A sound handle loops internally.
- */
-function setMusic(track: MusicTrack | 'silence' | null): void {
-  if (track === currentTrack) return;   // already in the requested state
-
-  // Our own handles first. StopMusic does not touch them, and whichever way
-  // this call goes none of them should still be playing afterwards. The lobby
-  // track counts as one of ours even though it belongs to a screen this map
-  // never sees again -- it outlives the lobby, so it has to be stopped here
-  // too rather than trusted to have ended.
-  stopPregameMusic();
-  for (const key in TRACK_FILES) {
-    const h = trackHandles[key as MusicTrack];
-    if (h != null) StopSound(h, false, false);
-  }
-  currentTrack = track;
-
-  if (track == null) {
-    // Hand the channel back rather than leaving it empty. ClearMapMusic with
-    // nothing to follow is what made ordinary rounds silent: the map's own
-    // playlist was thrown away when the first lobby track started and never
-    // put back, so the engine had nothing to play for the rest of the session.
-    SetMapMusic(DEFAULT_MUSIC, true, 0);
-    ResumeMusic();
-    return;
-  }
-
-  // One of ours is taking over, or nothing is, so silence the engine's
-  // playlist. Without this the two stack: StartSound does not stop what the
-  // music channel is doing.
-  StopMusic(false);
-  ClearMapMusic();
-  if (track === 'silence') return;
-
-  let handle = trackHandles[track] ?? null;
-  if (handle == null) {
-    // looping = true; is3D = false so it plays at full volume everywhere.
-    handle = CreateSound(TRACK_FILES[track], true, false, false, 10, 10, '') ?? null;
-    if (handle != null) {
-      SetSoundChannel(handle, 7);   // must be set before StartSound
-      SetSoundVolume(handle, 127);
+/** Wire up how boards lead to one another: the round's endings, the boss
+ *  fight's, and every ready circle's destination. Called once from main, before
+ *  the first board is loaded -- a circle whose zone is not registered yet is a
+ *  dead circle. */
+export function initBoardFlow(): void {
+  setVictoryCallback(() => {
+    // Reaching the target track finishes the tutorial rather than opening the
+    // inter-round lobby: there is no run to continue.
+    if (inTutorial) { endTutorial(); return; }
+    // The line ran to the boss exit rather than the usual one, so the train
+    // pulls into the arena instead of the lobby. The round itself was already
+    // won and paid out on arrival -- this is what the round bought.
+    if (isBossVictory()) {
+      loadBossBattlefield();
+      startBossFight();
+      return;
     }
-    trackHandles[track] = handle ?? undefined;
-  }
-  if (handle != null) StartSound(handle);
+    finishRoundToLobby();
+  });
+
+  // How the boss fight ends. Losing costs the attempt, not the run: it lands
+  // exactly where an ordinary victory would, because the round was already won.
+  // Winning goes quiet and leaves one unmarked circle in the middle of the
+  // arena. Everyone who survived the fight has to stand on it -- every hero and
+  // mercenary still alive, not one unit per player -- and that is what takes the
+  // party to the victory lobby.
+  setBossArenaCallbacks(
+    () => finishRoundToLobby(),
+    survivors => {
+      // On disk the moment the boss falls, not when the party walks out: the
+      // run is won whether or not anyone ever reaches the circle.
+      markCurrentSaveVictorious();
+      setMusic('silence');
+      spawnReadyCircle(0, 0, { label: '', zone: 'bossexit' }, survivors);
+    },
+  );
+  registerReadyZone('bossexit', '', () => loadVictoryLobby());
+  setDefeatCallback(() => {
+    if (inTutorial) { endTutorial(); return; }
+    loadDefeatLobby();
+  });
+  // Reaching the target track ends the tutorial instead of paying it out:
+  // awardVictory is what writes a save, and the tutorial must not write one.
+  setAwardVictoryCallback(() => {
+    if (inTutorial) return;
+    awardVictory();
+  });
+  // The countdown waits out the sparring match's minimum: starting the round
+  // ends the match, and one cut short measures the opening seconds -- ranged
+  // heroes and summons hitting creeps still walking in -- which reads the party
+  // as several times stronger than it is and scales the next camp to match.
+  registerReadyZone('start', 'Starting next round', () => loadTerrain(gameState.round),
+    undefined, sparringSecondsToMinimum);
+  registerReadyZone('newgame', 'Starting a new game', () => {
+    beginNewRun();
+    loadTerrain(0);
+  });
+  registerReadyZone('tutorial', 'Starting the tutorial', () => {
+    beginNewRun();
+    inTutorial = true;
+    loadGameplay(generateTutorial());
+    // After the load: loadGameplay hides the overlay on its way through, so the
+    // board has to be put up once the round is standing.
+    startTutorialBoard();
+    showPanel('Tutorial', getTutorialBoardLines);
+  });
+  registerReadyZone('loadsave', 'Opening saved games', () => loadChooseSaveLobby(),
+    () => (listSaves().length === 0 ? 'There are no saved games to load.' : null));
+  registerReadyZone('saveback', 'Going back', () => {
+    closeChooseSaveLobby();
+    loadStartLobby();
+  });
+  // Paging does NOT reload the lobby: only the displayed heroes and the label
+  // change, so the circles the player is standing among stay put.
+  const nothingToPage = (): string | null => {
+    const count = getOfferedSaveCount();
+    if (count === 0) return 'There are no saved games.';
+    return count === 1 ? 'This is the only saved game.' : null;
+  };
+  registerReadyZone('saveprev', 'Showing the newer save', () => selectNewerSave(), nothingToPage);
+  registerReadyZone('savenext', 'Showing the older save', () => selectOlderSave(), nothingToPage);
+  registerReadyZone('saveconfirm', 'Loading the selected save', () => {
+    const slot = getSelectedSlot();
+    if (slot === 0) {
+      print('No save selected.');
+      return;
+    }
+    closeChooseSaveLobby();
+    if (!loadFromSlot(slot)) {
+      print('That save could not be read.');
+      loadStartLobby();
+      return;
+    }
+    ensureRosterForLoadedRun();
+    // Into the LOBBY, not into a round. A save is written on the way into the
+    // inter-round lobby, so resuming there puts you exactly where the save was
+    // taken -- shop, roster and all. Dropping straight into gameplay skipped the
+    // half of the round the save was standing in.
+    loadInterRoundLobby();
+  }, () => (isSelectedSaveVictorious() ? 'This save is already victorious and cannot be loaded' : null));
+  registerReadyZone('restart', 'Returning to the start lobby', () => {
+    // The run is already marked finished -- defeated by loadDefeatLobby, or
+    // victorious when the boss fell -- so this only has to put the session back
+    // to how it boots.
+    beginNewRun();
+    loadStartLobby();
+  });
+  registerReadyZone('revert', 'Resetting purchases', () => {
+    revertToInterRoundLobbySnapshot();
+    revertHeroesToInterRoundLobbySnapshot(); // undoes rerolls bought this inter-round lobby
+    loadInterRoundLobby();
+  });
 }
 
 /** Stand up a board that is NOT a round in progress: the five lobbies and the
@@ -320,7 +220,7 @@ function enterBoard(track: MusicTrack | null, grid: Grid): SpawnedTrain {
 }
 
 /** Shared gameplay load: reset hero state, spawn grid, init train. */
-function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
+function loadGameplay(grid: Grid): SpawnedTrain {
   setMusic(null);
   // The Strange Key is a round's prize, not a run's: it is earned and spent
   // inside one round, so a round starts without one. Here rather than in
@@ -335,21 +235,18 @@ function loadGameplay(grid: Grid, skipCleanup = false): SpawnedTrain {
   chooseHeroes();
   applyChallengeEffects();
   startDayNightForRound();
-  const spawned = spawnTerrain(grid, skipCleanup);
+  const spawned = spawnTerrain(grid);
   // Counters are per round, so a challenge bought now starts from zero rather
   // than inheriting whatever last round left behind. After the spawn, not
   // before: the track challenges measure the line, so they need this round's
   // starting track already down to know where the players' own work begins.
   resetChallengeProgress();
-  if (spawned.engine != null && spawned.wagon != null && !skipCleanup) {
+  if (spawned.engine != null && spawned.wagon != null) {
     initTrain(spawned.engine, spawned.wagon);
     loadCrateForRound();
   }
   return spawned;
 }
-
-/** Stream id for map generation (see rng.deriveSeed). */
-const TERRAIN_STREAM = 2;
 
 /** The round, counted from 1, at which the map reaches full difficulty. */
 const MAX_DIFFICULTY_ROUND = 25;
@@ -367,7 +264,7 @@ export function difficultyForRound(round: number): number {
 }
 
 /** Lay out and enter round `round`'s map (gameState.round: 0 is the first). */
-export function loadTerrain(round: number, skipCleanup = false, exitX = GRID_MAX_X): SpawnedTrain {
+export function loadTerrain(round: number): SpawnedTrain {
   // Map generation is hundreds of draws deep (corridors, blobs, tree and rock
   // scatter, camp placement), so rather than thread a seeded RNG through all of
   // generate.ts, point WC3's own generator at a reproducible starting point
@@ -377,30 +274,22 @@ export function loadTerrain(round: number, skipCleanup = false, exitX = GRID_MAX
   // Keyed on the ROUND as well as the seed, so consecutive rounds differ. Not
   // on the difficulty: that stops rising at round 25, and every round after it
   // would otherwise lay out the very same map.
-  SetRandomSeed(deriveSeed(TERRAIN_STREAM) + round);
+  SetRandomSeed(deriveSeed(STREAMS.terrain) + round);
   // A level 3 camp is the only one that can drop the key, so it is also the
   // only round that gets a second exit -- the two arrive together or not at all.
   const camp = getCampData();
   const bossRound = camp != null && camp.level >= 3;
   const biome = biomeForCampLevel(camp != null ? camp.level : null);
-  return loadGameplay(generateTerrain(difficultyForRound(round), exitX, bossRound, biome), skipCleanup);
+  return loadGameplay(generateTerrain(difficultyForRound(round), bossRound, biome));
 }
 
 /** -cheatmode drops straight into gameplay without passing a start lobby, so
  *  it has to answer for the roster itself. */
-export function loadCheatTerrain(exitX = GRID_MAX_X, exitY = 0): void {
+export function loadCheatTerrain(): void {
   ensureRosterForLoadedRun();
-  loadGameplay(generateCheatTerrain(exitX, exitY));
+  loadGameplay(generateCheatTerrain());
 }
 
-/** Load the defeat lobby: the inter-round lobby tileset, empty.
- *
- *  Intentionally spawns nothing else -- no train, shop, crate, heroes, merc or
- *  ready circles. There is no way to start another round from here, which is
- *  the point: the run is over. It also does NOT snapshot or save, so a defeat
- *  cannot overwrite the inter-round lobby state a later session would load.
- *
- *  Contrast loadInterRoundLobby(), which is the victory path and rebuilds everything. */
 /** The run is over and won: the defeat lobby's floor, with the whole party
  *  standing on it -- peasants, and the heroes and mercenaries in the
  *  inter-round lobby's roster column -- every one of them under a trophy.
@@ -418,15 +307,21 @@ function loadVictoryLobby(): void {
   for (const h of getInterRoundLobbyHeroUnits()) winners.push(h.handle);
   for (const m of getInterRoundLobbyMercUnits()) winners.push(m.handle);
   for (const p of getHumanPlayers()) {
-    forEachUnitOfPlayer(p.handle, u => { if (GetUnitTypeId(u) === PEASANT_ID) winners.push(u); });
+    forEachPeasantOf(p.handle, u => winners.push(u.handle));
   }
   for (const u of winners) markUnit(u, TROPHY_MODEL, 'overhead', TROPHY_SCALE);
-  // And the trophy itself, life-size on the top middle grass tile -- the
+  // And the trophy itself, life-size in the middle of the back row -- the
   // square the inter-round lobby gives to the shop.
-  const top = gridToWorld({ x: 0, y: 3 });
+  const top = gridToWorld(LOBBY_BACK_CENTRE);
   addBoardEffect(TROPHY_MODEL, top.x, top.y, 1.6);
 }
 
+/** Load the defeat lobby: the inter-round lobby tileset, empty but for the
+ *  circle back to the start lobby.
+ *
+ *  No train, shop, crate, heroes or mercenaries, and no way to start another
+ *  round: the run is over. It does NOT snapshot or save, so a defeat cannot
+ *  overwrite the inter-round lobby state a later session would load. */
 function loadDefeatLobby(): void {
   // The run is over: mark its save so the chooser stops offering it. Marked,
   // not deleted -- see markCurrentSaveDefeated. A session that never claimed a
@@ -448,15 +343,11 @@ const START_LOBBY_BPM = 0;
 export function loadStartLobby(): void {
   enterBoard('startLobby', generateStartLobby());
   // Everyone but the host becomes a dancer: immobile, with the dance spells on
-  // the command card. 0 BPM until there is a lobby song to sync to, which makes
-  // each dance fire on the keypress instead of on the beat.
+  // the command card.
   startDanceClock(START_LOBBY_BPM);
   for (const player of getHumanPlayers()) {
     if (player.id === 0) continue;
-    forEachUnitOfPlayer(player.handle, handle => {
-      const u = Unit.fromHandle(handle);
-      if (u != null && u.typeId === PEASANT_ID) makeDancer(u);
-    });
+    forEachPeasantOf(player.handle, makeDancer);
   }
 }
 
@@ -466,16 +357,13 @@ function loadChooseSaveLobby(): void {
   enterBoard('startLobby', generateChooseSaveLobby());
   // The party stands at the back, clear of the dancers: the guests now line up
   // one tile north of centre, which is where this row used to be.
-  openChooseSaveLobby(0, 3 * TRACK_SIZE);
+  const back = gridToWorld(LOBBY_BACK_CENTRE);
+  openChooseSaveLobby(back.x, back.y);
 }
 
 /** Load the boss battlefield: the arena floor and its lava surround, and
- *  nothing else. No train, no shop, no ready circles -- Brenner's boss and
- *  whatever fights it are placed on top of this.
- *
- *  Reveals the arena outright. Every other map relies on units for vision, and
- *  the lava has none by design (its blockers are invisible destructables), so
- *  without this the surround would sit unexplored and render black. */
+ *  nothing else. No train, no shop, no ready circles -- the boss and whoever
+ *  fights it are placed on top of this (bossArena.ts). */
 export function loadBossBattlefield(): void {
   enterBoard('boss', generateBossBattlefield());
 }

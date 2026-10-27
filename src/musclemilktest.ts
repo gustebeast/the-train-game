@@ -53,6 +53,7 @@ function addWood(p: unit, times: number): void {
 
 function stacking(t: TestReporter): void {
   const train = getTrain();
+  if (train == null) { t.fail('train', 'none on the board'); t.done(); return; }
   const x = train.x - 300;
   const y = train.y + 300;
   const p = CreateUnit(getHumanPlayers()[0].handle, PEASANT_ID, x, y, 0)!;

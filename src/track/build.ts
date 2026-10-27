@@ -1,14 +1,14 @@
 import { Unit, Trigger } from 'w3ts';
-import { nextFrame } from '../util';
+import { nextFrame, onSpellEffect } from '../util';
 import {
-  SKINS, OPPOSITE, TRACK_UNIT_TYPES, DIRECTIONS, TRACK_SIZE,
+  skinFor, OPPOSITE, TRACK_UNIT_TYPES, DIRECTIONS, TRACK_SIZE,
   Direction, toOrientationKey,
 } from './constants';
 import { reskinTrack, replaceTrack } from './helpers';
 import {
   placedTracks, isVictoryTriggered, getVictoryTile, getBossVictoryTile, markBossVictory,
 } from './state';
-import { findItemByType, updateBuildAbility } from '../items';
+import { spendCharge, updateBuildAbility } from '../items';
 import { TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID } from '../constants';
 import { onTrackPlaced } from '../train';
 import { triggerVictory } from '../victory';
@@ -65,13 +65,13 @@ function onTrackBuilt() {
 
     // Update track1's skin now that we know both its neighbors
     const orientationKey1 = toOrientationKey(dirFromTrack1ToTrack0, dirToTrack2);
-    const type1 = SKINS[orientationKey1] ?? SKINS.EW;
+    const type1 = skinFor(orientationKey1);
     reskinTrack(track1, type1);
     track1.invulnerable = true;
 
     // Replace track0 (Farm/solid) with a ScoutTower (walkable) at the snap position
     const orientationKey0 = toOrientationKey(dirToTrack1, OPPOSITE[dirToTrack1]);
-    const type0 = SKINS[orientationKey0] ?? SKINS.EW;
+    const type0 = skinFor(orientationKey0);
     const newTrack = replaceTrack(track0, type0, snapX, snapY);
     placedTracks.push(newTrack);
     // The line has changed shape: the piece before this one has just gained its
@@ -103,24 +103,10 @@ export function initTrackBuildTrigger() {
   const trackFourCCs = TRACK_UNIT_TYPES.map(t => FourCC(t));
 
   // SPELL_EFFECT fires right before CONSTRUCT_START and gives us the peasant
-  const spellTrigger = Trigger.create();
-  spellTrigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_SPELL_EFFECT);
-  spellTrigger.addAction(() => {
-    if (GetSpellAbilityId() !== BUILD_TRACK_ABILITY_ID) return;
-    const u = Unit.fromHandle(GetTriggerUnit());
-    if (u == null) return;
-
+  onSpellEffect(BUILD_TRACK_ABILITY_ID, u => {
     // Only consume a track piece if the placement is valid
     if (!isValidPlacement(GetSpellTargetX(), GetSpellTargetY())) return;
-
-    const trackItem = findItemByType(u, TRACK_PIECE_ID);
-    if (trackItem != null) {
-      trackItem.charges -= 1;
-      if (trackItem.charges <= 0) {
-        RemoveItem(trackItem.handle);
-      }
-      updateBuildAbility(u);
-    }
+    if (spendCharge(u, TRACK_PIECE_ID)) updateBuildAbility(u);
   });
 
   const trigger = Trigger.create();

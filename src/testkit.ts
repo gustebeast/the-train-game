@@ -1,6 +1,5 @@
 import { Timer } from 'w3ts';
-import { loadInterRoundLobby } from './terrain/load';
-import { stopGameplay } from './train';
+import { beginNewRun, loadInterRoundLobby } from './terrain/load';
 import { onChatCommand } from './util';
 
 /** In-map half of the automated test harness.
@@ -44,14 +43,12 @@ function writeFile(path: string, lines: string[]): void {
   PreloadGenEnd(path);
 }
 
-/** Put the map in the LOBBY, the way the -load cheat does but without needing a
- *  save file. Features that exist only in the inter-round lobby (the shop, hero display, the Hero Reroll)
- *  cannot be exercised from the gameplay area, and every test that needs them
- *  would otherwise hand-roll the same two calls. Call it first in such a test;
- *  the inter-round lobby finishes building on the following frames, so do your setup from
- *  `t.after(...)` rather than inline. */
-export function enterInterRoundLobby(): void {
-  stopGameplay();
+/** A fresh run, standing in the inter-round lobby. Features that exist only
+ *  there (the shop, the dealer, the roster, the Hero Reroll) cannot be
+ *  exercised from a round. The lobby finishes building on the following
+ *  frames, so do setup that needs it from `t.after(...)`. */
+export function startRunInLobby(): void {
+  beginNewRun();
   loadInterRoundLobby();
 }
 
@@ -69,6 +66,8 @@ export interface TestReporter {
    *  pass forever -- the way `fog` and `night` did, and the way dpsprobe's
    *  bought path did before it was asserted. */
   expect(key: string, actual: number | string, expected: number | string): void;
+  /** expect() for a yes/no: reported as 1 or 0, and must be 1. */
+  expectTrue(key: string, condition: boolean): void;
   /** Mark the run complete. The runner waits for this before reading results,
    *  and the map's own watchdog fails the test if it never arrives -- see
    *  DEFAULT_TEST_BUDGET. Always finish, including on the failure paths. */
@@ -116,6 +115,7 @@ function createReporter(name: string): TestReporter {
       }
       reporter.fail(key, 'expected ' + asText(expected) + ', got ' + asText(actual));
     },
+    expectTrue: (key, condition) => reporter.expect(key, condition ? 1 : 0, 1),
     done: () => {
       if (finished) return;
       lines.push('done');

@@ -2,7 +2,7 @@ import { Destructable, Item, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import {
   loadCheatTerrain, loadInterRoundLobby, loadBossBattlefield,
-  ensureRosterForLoadedRun,
+  ensureRosterForLoadedRun, finishRoundToLobby,
 } from './terrain/load';
 import { TRACK_PIECE_ID, WOOD_ID, STONE_ID, PEASANT_ID, WATER_ID, TRAIN_ID } from './constants';
 import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants';
@@ -11,7 +11,7 @@ import { loadFromFile } from './save';
 import { stopGameplay, triggerDefeat } from './train';
 import { applyChallengeEffects, toggleShoulderCam } from './challengeEffects';
 import {
-  getChallengeDefs, armChallenge, clearChallenges, advanceChallengeOffer,
+  getChallengeDefs, armChallenge, clearChallenges,
 } from './challenges';
 import { applyTrackShapes } from './challengeList';
 import { beginNight, endNight, isNight } from './daynight';
@@ -20,7 +20,7 @@ import { getDpsMeasurementReport } from './creeps';
 import { makeDancer } from './dance';
 import { checkUnionRules } from './challengeWatch';
 import { spawnBoss } from './boss';
-import { forEachUnitOfPlayer, onChatCommand, onChatCommandWithArg } from './util';
+import { forEachPeasantOf, onChatCommand, onChatCommandWithArg } from './util';
 
 export function initCheat(): void {
   onChatCommand('-cheatmode', () => {
@@ -31,7 +31,7 @@ export function initCheat(): void {
       print('-cheatmode only works during a round.');
       return;
     }
-    loadCheatTerrain(GRID_MIN_X + 11);
+    loadCheatTerrain();
     const trackPos = gridToWorld({ x: GRID_MIN_X + 4, y: -3 });
     const tracks = Item.create(TRACK_PIECE_ID, trackPos.x, trackPos.y)!;
     tracks.charges = 99;
@@ -69,15 +69,15 @@ export function initCheat(): void {
   // Make your first peasant dash east on command — handy for eyeballing the
   // dash and for checking a queued follow-up order still runs.
   onChatCommand('-dashnow', () => {
-    let pe: unit | undefined;
-    forEachUnitOfPlayer(Players[0].handle, u => {
-      if (pe == null && GetUnitTypeId(u) === PEASANT_ID) pe = u;
+    let pe: Unit | null = null;
+    forEachPeasantOf(Players[0].handle, u => {
+      if (pe == null) pe = u;
     });
     if (pe == null) { print('dashnow: no peasant'); return; }
-    const p = pe;
-    PanCameraToTimed(GetUnitX(p), GetUnitY(p), 0);
+    const p: Unit = pe;
+    PanCameraToTimed(p.x, p.y, 0);
     SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 1100, 0);
-    IssuePointOrderById(p, OrderId('flare')!, GetUnitX(p) + 400, GetUnitY(p));
+    p.issueOrderAt('flare', p.x + 400, p.y);
     print('dashnow: dashing east');
   });
 
@@ -211,8 +211,7 @@ export function initCheat(): void {
   // without playing a round to get there.
   onChatCommand('-lobby', () => {
     stopGameplay();
-    advanceChallengeOffer();
-    loadInterRoundLobby();
+    finishRoundToLobby();
   });
 
   onChatCommand('-load', () => {

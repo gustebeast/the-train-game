@@ -8,15 +8,26 @@ export const GRID_MAX_Y = 10;
 export const GRID_W = GRID_MAX_X - GRID_MIN_X + 1; // 41
 export const GRID_H = GRID_MAX_Y - GRID_MIN_Y + 1; // 21
 
-// Reserved areas (must remain empty)
-export const SPAWN = { minX: GRID_MIN_X, maxX: GRID_MIN_X + 5, minY: -4, maxY: 0 };
-// VICTORY bounds are updated dynamically after path generation: minY = exitY-4, maxY = exitY
-export const VICTORY = { minX: GRID_MAX_X - 5, maxX: GRID_MAX_X, minY: -4, maxY: 0 };
-/** The second exit, the one that leads to the boss. Only on the board in rounds
- *  with a level 3 camp, so it carries its own on/off rather than being sized to
- *  nothing -- an inactive area of zero width would still reserve a column.
- *  Bounds are filled in by the generator, like VICTORY's. */
-export const BOSS_EXIT = { active: false, minX: 0, maxX: 0, minY: 0, maxY: 0 };
+/** A rectangle of tiles, bounds inclusive. */
+export interface Area { minX: number; maxX: number; minY: number; maxY: number; }
+
+/** The cleared ground the players, tools and train start on. Kept empty. */
+export const SPAWN: Area = { minX: GRID_MIN_X, maxX: GRID_MIN_X + 5, minY: -4, maxY: 0 };
+
+/** How far the cleared ground around an exit reaches: this many columns west
+ *  of it and rows south of it, so 6 x 5 tiles with the exit at the north-east
+ *  corner. Kept empty, like SPAWN, so the last stretch of line is buildable. */
+export const EXIT_AREA_WEST = 5;
+export const EXIT_AREA_SOUTH = 4;
+
+/** The middle of the back row in the 9x9 lobbies: the shop's square in the
+ *  inter-round lobby (LOBBY_GRID), the trophy's in the victory lobby, and where
+ *  the save chooser stands the party it is showing. */
+export const LOBBY_BACK_CENTRE: GridPos = { x: 0, y: 3 };
+
+/** Where the line ends on the cheat map and the tutorial: a short, straight
+ *  run from the start, on row 0. */
+export const CHEAT_EXIT_X = GRID_MIN_X + 11;
 
 export enum Terrain {
   GRASS = 0,
@@ -137,6 +148,18 @@ export interface Grid {
   biome: Biome;
 }
 
+/** The cleared ground around an exit (see EXIT_AREA_WEST). */
+export function exitArea(exit: GridPos): Area {
+  return {
+    minX: exit.x - EXIT_AREA_WEST, maxX: exit.x,
+    minY: exit.y - EXIT_AREA_SOUTH, maxY: exit.y,
+  };
+}
+
+export function inArea(area: Area, gx: number, gy: number): boolean {
+  return gx >= area.minX && gx <= area.maxX && gy >= area.minY && gy <= area.maxY;
+}
+
 // --- Grid coordinate helpers ---
 
 export function idx(gx: number, gy: number): number {
@@ -153,13 +176,17 @@ export function inBounds(gx: number, gy: number): boolean {
   return gx >= GRID_MIN_X && gx <= GRID_MAX_X && gy >= GRID_MIN_Y && gy <= GRID_MAX_Y;
 }
 
-export function isReserved(gx: number, gy: number): boolean {
-  if (gx >= SPAWN.minX && gx <= SPAWN.maxX && gy >= SPAWN.minY && gy <= SPAWN.maxY) return true;
-  if (gx >= VICTORY.minX && gx <= VICTORY.maxX && gy >= VICTORY.minY && gy <= VICTORY.maxY) return true;
-  if (BOSS_EXIT.active
-    && gx >= BOSS_EXIT.minX && gx <= BOSS_EXIT.maxX
-    && gy >= BOSS_EXIT.minY && gy <= BOSS_EXIT.maxY) return true;
-  return false;
+/** Whether a tile must stay clear on this grid: the spawn, and the ground
+ *  around each of its exits.
+ *
+ *  Read off the grid's own exits. These used to be module-level areas the round
+ *  generator rewrote, so a board that placed its exit some other way -- the cheat
+ *  map, the tutorial -- kept clearing ground around wherever the LAST round's
+ *  exits had been. */
+export function isReserved(grid: Grid, gx: number, gy: number): boolean {
+  if (inArea(SPAWN, gx, gy)) return true;
+  if (inArea(exitArea(grid.exit), gx, gy)) return true;
+  return grid.bossExit != null && inArea(exitArea(grid.bossExit), gx, gy);
 }
 
 export function gridToWorld(pos: GridPos): GridPos {

@@ -1,12 +1,12 @@
-import { registerTest, TestReporter } from './testkit';
+import { registerTest, startRunInLobby, TestReporter } from './testkit';
 import { gameState } from './state';
 import { Units } from '@objectdata/units';
-import { beginNewRun, loadTerrain, loadInterRoundLobby, loadBossBattlefield } from './terrain/load';
+import { beginNewRun, loadTerrain, loadBossBattlefield } from './terrain/load';
 import { armChallenge, clearChallenges, isChallengeArmed, getArmedChallenge } from './challenges';
 import { CH_DASH, CH_SOLO_TOOLS, noteDash } from './challengeList';
 import { challengeUIState, initChallengeUI } from './challengeUI';
 import { isBossFightWatched, startBossFight } from './bossArena';
-import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer } from './util';
+import { getHumanPlayers, forEachUnitInWorld, forEachUnitOfPlayer, isAlive } from './util';
 import { AXE_ID, PICKAXE_ID, PEASANT_ID, BOSS_ID, BOSS_ADD_ID, WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_FULL_ID, BUCKET_ID, BOSS_KEY_ITEM_ID,
   TRAIN_ID, TRACK_WAGON_ID } from './constants';
 import { Item, Unit } from 'w3ts';
@@ -24,11 +24,6 @@ import { setStorageItem, giveToStorage, findItemByType } from './items';
  * waits a frame -- never after a wait long enough for a poll to have caught up.
  */
 
-function expect(t: TestReporter, key: string, actual: number, want: number): void {
-  t.report(key, actual);
-  if (actual !== want) t.fail(key, 'expected ' + I2S(want) + ', got ' + I2S(actual));
-}
-
 /** A frame, give or take: long enough for nextFrame, far shorter than the
  *  half-second tick these systems used to ride. */
 const ONE_FRAME = 0.05;
@@ -41,16 +36,16 @@ function runBoardEvents(t: TestReporter): void {
   initChallengeUI();
   armChallenge(CH_DASH);
   // Same frame: armed means shown.
-  expect(t, 'shownOnArm', challengeUIState().title === 'Challenge' ? 1 : 0, 1);
+  t.expectTrue('shownOnArm', challengeUIState().title === 'Challenge');
   const before = challengeUIState().progress;
   noteDash();
   const after = challengeUIState().progress;
   t.report('progressBefore', before);
   t.report('progressAfter', after);
   // Same frame: the counter moving IS the redraw.
-  expect(t, 'redrawnOnCount', before !== after ? 1 : 0, 1);
+  t.expectTrue('redrawnOnCount', before !== after);
   clearChallenges();
-  expect(t, 'hiddenOnClear', challengeUIState().title === '' ? 1 : 0, 1);
+  t.expectTrue('hiddenOnClear', challengeUIState().title === '');
   t.done();
 }
 registerTest('boardevents', runBoardEvents);
@@ -63,29 +58,33 @@ function firstUnitOfType(typeId: number): unit | null {
   return found;
 }
 
+/** How long a synced selection event may take to arrive. */
+const SELECTION_LIMIT = 3;
+
 function runDealerSelect(t: TestReporter): void {
-  beginNewRun();
-  loadInterRoundLobby();
+  startRunInLobby();
   const dealer = firstUnitOfType(FourCC(Units.TombOfRelics));
   const me = getHumanPlayers()[0].handle;
   let peasant: unit | null = null;
   forEachUnitOfPlayer(me, u => { if (peasant == null && GetUnitTypeId(u) === PEASANT_ID) peasant = u; });
-  expect(t, 'dealerFound', dealer != null ? 1 : 0, 1);
-  expect(t, 'peasantFound', peasant != null ? 1 : 0, 1);
+  t.expectTrue('dealerFound', dealer != null);
+  t.expectTrue('peasantFound', peasant != null);
   if (dealer == null || peasant == null) { t.done(); return; }
 
   // Selection events are synced like any player input, so they land a little
   // after the call that caused them. The test waits for each reaction, frame by
   // frame, and reports how long it took -- that is latency, not polling in the
-  // game: the game itself only acts when the event arrives.
+  // game: the game itself only acts when the event arrives. The first selection
+  // of a session has been measured at just over a second (1.05s, against 0.4-0.75s
+  // later), so the limit leaves room for that; a missing reaction still fails.
   SelectUnitForPlayerSingle(dealer, me);
-  waitFor(t, () => challengeUIState().previewing, 1.0, (ok, waited) => {
+  waitFor(t, () => challengeUIState().previewing, SELECTION_LIMIT, (ok, waited) => {
     t.report('selectLatency', waited);
-    expect(t, 'previewOnSelect', ok ? 1 : 0, 1);
+    t.expectTrue('previewOnSelect', ok);
     SelectUnitForPlayerSingle(peasant!, me);
-    waitFor(t, () => !challengeUIState().previewing, 1.0, (ok2, waited2) => {
+    waitFor(t, () => !challengeUIState().previewing, SELECTION_LIMIT, (ok2, waited2) => {
       t.report('deselectLatency', waited2);
-      expect(t, 'previewClearedOnDeselect', ok2 ? 1 : 0, 1);
+      t.expectTrue('previewClearedOnDeselect', ok2);
       t.done();
     });
   });
@@ -111,7 +110,7 @@ registerTest('dealerselect', runDealerSelect);
 
 function killAll(filter: (u: unit) => boolean): number {
   const doomed: unit[] = [];
-  forEachUnitInWorld(u => { if (filter(u) && GetWidgetLife(u) > 0.405) doomed.push(u); });
+  forEachUnitInWorld(u => { if (filter(u) && isAlive(u)) doomed.push(u); });
   for (const u of doomed) {
     SetUnitInvulnerable(u, false);
     KillUnit(u);
@@ -135,26 +134,26 @@ function runBossEnding(t: TestReporter): void {
   // starting the fight stands the boss and party up and begins watching.
   loadBossBattlefield();
   startBossFight();
-  expect(t, 'watchingAtStart', isBossFightWatched() ? 1 : 0, 1);
+  t.expectTrue('watchingAtStart', isBossFightWatched());
 
   // Nothing dies: the fight must stay on. The old version needed a three-second
   // grace to survive this; an event version has nothing to react to.
   t.after(3, () => {
-    expect(t, 'stillOnWithNoDeaths', isBossFightWatched() ? 1 : 0, 1);
+    t.expectTrue('stillOnWithNoDeaths', isBossFightWatched());
 
     // Victory: everything hostile dies.
     t.report('enemiesKilled', killAll(isEnemy));
     t.after(ONE_FRAME * 4, () => {
-      expect(t, 'endedOnVictory', isBossFightWatched() ? 1 : 0, 0);
+      t.expect('endedOnVictory', isBossFightWatched() ? 1 : 0, 0);
 
       // Defeat: a fresh fight, and the party dies instead.
       beginNewRun();
       loadBossBattlefield();
       startBossFight();
-      expect(t, 'watchingSecondFight', isBossFightWatched() ? 1 : 0, 1);
+      t.expectTrue('watchingSecondFight', isBossFightWatched());
       t.report('partyKilled', killAll(isParty));
       t.after(ONE_FRAME * 4, () => {
-        expect(t, 'endedOnDefeat', isBossFightWatched() ? 1 : 0, 0);
+        t.expect('endedOnDefeat', isBossFightWatched() ? 1 : 0, 0);
         t.done();
       });
     });
@@ -178,7 +177,7 @@ function runUnionRules(t: TestReporter): void {
   t.after(ONE_FRAME, () => {
     const allowed = getArmedChallenge();
     t.report('progressAfterDifferentTools', allowed != null && allowed.progress != null ? allowed.progress() : '-');
-    expect(t, 'differentToolsAllowed', isChallengeArmed(CH_SOLO_TOOLS)
+    t.expect('differentToolsAllowed', isChallengeArmed(CH_SOLO_TOOLS)
       && allowed != null && allowed.progress != null && allowed.progress() === 'No tool shared yet' ? 1 : 0, 1);
 
     // The same tool in two hands, arriving by script UnitAddItem -- the path
@@ -188,7 +187,7 @@ function runUnionRules(t: TestReporter): void {
       const def = getArmedChallenge();
       const text = def != null && def.progress != null ? def.progress() : '-';
       t.report('progressAfterSharing', text);
-      expect(t, 'sharingCaughtOnPickup', text === 'Tool shared - failed' ? 1 : 0, 1);
+      t.expectTrue('sharingCaughtOnPickup', text === 'Tool shared - failed');
       t.done();
     });
   });
@@ -204,6 +203,11 @@ function runCargoEvents(t: TestReporter): void {
   loadTerrain(0);
   const train = getTrain();
   const wagon = getTrackWagon();
+  if (train == null || wagon == null) {
+    t.fail('train', 'loadTerrain stood up no train');
+    t.done();
+    return;
+  }
   const me = getHumanPlayers()[0];
   const wait = ONE_FRAME * 2;
 
@@ -213,7 +217,7 @@ function runCargoEvents(t: TestReporter): void {
   setStorageItem(wagon, TRACK_PIECE_ID, 0);
   t.after(wait, () => {
     const c0 = cargoShowing();
-    expect(t, 'emptyShowsNothing', (c0.wood || c0.stone || c0.tracks) ? 1 : 0, 0);
+    t.expect('emptyShowsNothing', (c0.wood || c0.stone || c0.tracks) ? 1 : 0, 0);
 
     // In: setStorageItem adding a new stack (production's path to the wagon).
     setStorageItem(wagon, TRACK_PIECE_ID, 2);
@@ -222,14 +226,14 @@ function runCargoEvents(t: TestReporter): void {
     const stone = Item.create(STONE_ID, peasant.x, peasant.y)!;
     stone.charges = 2;
     UnitAddItem(peasant.handle, stone.handle);
-    expect(t, 'giveAccepted', giveToStorage(stone, train) ? 1 : 0, 1);
+    t.expectTrue('giveAccepted', giveToStorage(stone, train));
     // In: setStorageItem on the engine.
     setStorageItem(train, WOOD_ID, 1);
     t.after(wait, () => {
       const c1 = cargoShowing();
-      expect(t, 'tracksOnAfterStore', c1.tracks ? 1 : 0, 1);
-      expect(t, 'stoneOnAfterGive', c1.stone ? 1 : 0, 1);
-      expect(t, 'woodOnAfterStore', c1.wood ? 1 : 0, 1);
+      t.expectTrue('tracksOnAfterStore', c1.tracks);
+      t.expectTrue('stoneOnAfterGive', c1.stone);
+      t.expectTrue('woodOnAfterStore', c1.wood);
 
       // A charge changing in place must not take the model off.
       const s = findItemByType(train, STONE_ID);
@@ -241,16 +245,17 @@ function runCargoEvents(t: TestReporter): void {
       setStorageItem(wagon, TRACK_PIECE_ID, 0);
       t.after(wait, () => {
         const c2 = cargoShowing();
-        expect(t, 'woodOffWhenUsedUp', c2.wood ? 1 : 0, 0);
-        expect(t, 'tracksOffAtZero', c2.tracks ? 1 : 0, 0);
-        expect(t, 'stoneStaysOnChargeChange', c2.stone ? 1 : 0, 1);
+        t.expect('woodOffWhenUsedUp', c2.wood ? 1 : 0, 0);
+        t.expect('tracksOffAtZero', c2.tracks ? 1 : 0, 0);
+        t.expectTrue('stoneStaysOnChargeChange', c2.stone);
 
         // A new round replaces both cars. Cargo that arrives on the NEW engine
         // must show there.
         loadTerrain(0);
-        setStorageItem(getTrain(), WOOD_ID, 1);
+        const newTrain = getTrain();
+        if (newTrain != null) setStorageItem(newTrain, WOOD_ID, 1);
         t.after(wait, () => {
-          expect(t, 'woodOnNewTrain', cargoShowing().wood ? 1 : 0, 1);
+          t.expectTrue('woodOnNewTrain', cargoShowing().wood);
           t.done();
         });
       });
@@ -284,7 +289,7 @@ function runMinimapEvents(t: TestReporter): void {
   t.after(wait, () => {
     t.report('iconsAfterLoad', minimapIconCount());
     if (minimapIconCount() === 0) t.fail('iconsAfterLoad', 'no tools on the ground, nothing tested');
-    expect(t, 'auditAfterLoad', auditMinimapIcons(), 0);
+    t.expect('auditAfterLoad', auditMinimapIcons(), 0);
 
     const axe = groundAxe();
     if (axe == null) { t.fail('axe', 'no ground axe'); t.done(); return; }
@@ -294,48 +299,48 @@ function runMinimapEvents(t: TestReporter): void {
     // Picked up.
     UnitAddItem(carrier, axe);
     t.after(wait, () => {
-      expect(t, 'pickupRemovesIcon', icons0 - minimapIconCount(), 1);
-      expect(t, 'auditAfterPickup', auditMinimapIcons(), 0);
+      t.expect('pickupRemovesIcon', icons0 - minimapIconCount(), 1);
+      t.expect('auditAfterPickup', auditMinimapIcons(), 0);
 
       // Dropped somewhere else.
       SetUnitPosition(carrier, GetUnitX(carrier) + 256, GetUnitY(carrier));
       UnitRemoveItem(carrier, axe);
       t.after(wait, () => {
-        expect(t, 'dropRestoresIcon', minimapIconCount(), icons0);
-        expect(t, 'auditAfterDrop', auditMinimapIcons(), 0);
+        t.expect('dropRestoresIcon', minimapIconCount(), icons0);
+        t.expect('auditAfterDrop', auditMinimapIcons(), 0);
 
         // Carried, and the carrier dies.
         UnitAddItem(carrier, axe);
         t.after(wait, () => {
           KillUnit(carrier);
           t.after(wait, () => {
-            expect(t, 'carrierDeathRestoresIcon', minimapIconCount(), icons0);
-            expect(t, 'auditAfterCarrierDeath', auditMinimapIcons(), 0);
+            t.expect('carrierDeathRestoresIcon', minimapIconCount(), icons0);
+            t.expect('auditAfterCarrierDeath', auditMinimapIcons(), 0);
 
             // Moved on the ground, hidden, shown, then created and removed.
             SetItemPosition(axe, GetItemX(axe) - 384, GetItemY(axe));
             t.after(wait, () => {
-              expect(t, 'auditAfterMove', auditMinimapIcons(), 0);
+              t.expect('auditAfterMove', auditMinimapIcons(), 0);
               SetItemVisible(axe, false);
               t.after(wait, () => {
-                expect(t, 'hideRemovesIcon', icons0 - minimapIconCount(), 1);
+                t.expect('hideRemovesIcon', icons0 - minimapIconCount(), 1);
                 SetItemVisible(axe, true);
                 const spare = CreateItem(PICKAXE_ID, 0, 0)!;
                 t.after(wait, () => {
-                  expect(t, 'createAddsIcon', minimapIconCount(), icons0 + 1);
+                  t.expect('createAddsIcon', minimapIconCount(), icons0 + 1);
                   RemoveItem(spare);
                   // Same frame: removal is handled inside the call.
-                  expect(t, 'removeDropsIconSameFrame', minimapIconCount(), icons0);
+                  t.expect('removeDropsIconSameFrame', minimapIconCount(), icons0);
                   t.after(wait, () => {
-                    expect(t, 'auditAfterCreateRemove', auditMinimapIcons(), 0);
+                    t.expect('auditAfterCreateRemove', auditMinimapIcons(), 0);
 
                     // Created and picked up in one frame -- how filling or
                     // emptying a bucket swaps the item. Must leave no icon.
                     const swap = Unit.create(me, PEASANT_ID, 0, 0, 0)!;
                     UnitAddItem(swap.handle, CreateItem(BUCKET_FULL_ID, 0, 0)!);
                     t.after(wait, () => {
-                      expect(t, 'createThenCarryNoIcon', minimapIconCount(), icons0);
-                      expect(t, 'auditAfterSwap', auditMinimapIcons(), 0);
+                      t.expect('createThenCarryNoIcon', minimapIconCount(), icons0);
+                      t.expect('auditAfterSwap', auditMinimapIcons(), 0);
 
                       // Destroyed on the ground, the way it happens in play:
                       // damage. (SetWidgetLife to 0 does NOT fire an item's
@@ -347,12 +352,12 @@ function runMinimapEvents(t: TestReporter): void {
                         ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
                       t.after(wait, () => {
                         t.report('axeLifeAfterDamage', GetWidgetLife(axe));
-                        expect(t, 'auditAfterDestroy', auditMinimapIcons(), 0);
+                        t.expect('auditAfterDestroy', auditMinimapIcons(), 0);
 
                         // A new board: everything wiped and respawned.
                         loadTerrain(0);
                         t.after(wait, () => {
-                          expect(t, 'auditAfterRegen', auditMinimapIcons(), 0);
+                          t.expect('auditAfterRegen', auditMinimapIcons(), 0);
                           t.report('iconsAfterRegen', minimapIconCount());
                           t.done();
                         });
@@ -390,7 +395,7 @@ function runToolHealth(t: TestReporter): void {
     // A far harder hit than any A-click, which must leave it standing.
     UnitDamageTarget(hitter, it, 5000, true, false,
       ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
-    expect(t, name + 'SurvivesHeavyHit', GetWidgetLife(it) > 0 ? 1 : 0, 1);
+    t.expect(name + 'SurvivesHeavyHit', GetWidgetLife(it) > 0 ? 1 : 0, 1);
     RemoveItem(it);
   }
   const wood = CreateItem(WOOD_ID, 0, 0)!;
@@ -418,12 +423,12 @@ function runTransmuteGold(t: TestReporter): void {
   const nativeBefore = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD);
   const stateBefore = gameState.gold;
   const ordered = IssueTargetOrder(alchemist, 'transmute', creep);
-  expect(t, 'orderAccepted', ordered ? 1 : 0, 1);
+  t.expectTrue('orderAccepted', ordered);
   t.after(4, () => {
-    expect(t, 'creepTransmuted', GetWidgetLife(creep) <= 0.405 ? 1 : 0, 1);
+    t.expectTrue('creepTransmuted', !isAlive(creep));
     const nativeGain = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - nativeBefore;
     t.report('stateGoldGain', gameState.gold - stateBefore);
-    expect(t, 'nativeGoldGain', nativeGain, 0);
+    t.expect('nativeGoldGain', nativeGain, 0);
     t.done();
   });
 }
@@ -442,8 +447,8 @@ function runKillBounty(t: TestReporter): void {
   UnitDamageTarget(killer, creep, 100000, true, false,
     ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
   t.after(1, () => {
-    expect(t, 'creepKilled', GetWidgetLife(creep) <= 0.405 ? 1 : 0, 1);
-    expect(t, 'nativeGoldFromPlainKill', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - before, 0);
+    t.expectTrue('creepKilled', !isAlive(creep));
+    t.expect('nativeGoldFromPlainKill', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - before, 0);
     t.done();
   });
 }
@@ -479,7 +484,7 @@ function runStrangeKey(t: TestReporter): void {
   DestroyGroup(clear);
   RemoveRect(area);
   const rock = spawnStrangeRock(400, 0);
-  expect(t, 'rockSpawned', rock != null ? 1 : 0, 1);
+  t.expectTrue('rockSpawned', rock != null);
   if (rock == null) { t.done(); return; }
   const p = CreateUnit(me.handle, PEASANT_ID, 150, 0, 0)!;
   const key = CreateItem(BOSS_KEY_ITEM_ID, 150, 0)!;
@@ -489,38 +494,38 @@ function runStrangeKey(t: TestReporter): void {
   // ancient flag is what excludes it), and the peasant's own side.
   const kobold = CreateUnit(Player(PLAYER_NEUTRAL_AGGRESSIVE)!, FourCC('nkob'), 150, 200, 0)!;
   const track = placedTracks[0];
-  expect(t, 'refusedOnCreep', UnitUseItemTarget(p, key, kobold) ? 1 : 0, 0);
-  expect(t, 'refusedOnTrack', track != null && UnitUseItemTarget(p, key, track.handle) ? 1 : 0, 0);
-  expect(t, 'refusedOnSelf', UnitUseItemTarget(p, key, p) ? 1 : 0, 0);
-  expect(t, 'keyKeptAfterRefusals', holdsKey(p) ? 1 : 0, 1);
+  t.expect('refusedOnCreep', UnitUseItemTarget(p, key, kobold) ? 1 : 0, 0);
+  t.expect('refusedOnTrack', track != null && UnitUseItemTarget(p, key, track.handle) ? 1 : 0, 0);
+  t.expect('refusedOnSelf', UnitUseItemTarget(p, key, p) ? 1 : 0, 0);
+  t.expectTrue('keyKeptAfterRefusals', holdsKey(p));
 
   // Invulnerable, as water is: no health bar, and a player's attack on it is
   // refused when clicked. (A SCRIPT order skips that click-time check, so it
   // cannot be asserted here -- checked with real clicks instead.)
-  expect(t, 'invulnerable', BlzIsUnitInvulnerable(rock) ? 1 : 0, 1);
+  t.expectTrue('invulnerable', BlzIsUnitInvulnerable(rock));
 
   // Damage does nothing to it either.
   UnitDamageTarget(p, rock, 5000, true, false,
     ATTACK_TYPE_CHAOS, DAMAGE_TYPE_UNIVERSAL, WEAPON_TYPE_WHOKNOWS);
-  expect(t, 'survivesHeavyHit', GetWidgetLife(rock) > 0.405 ? 1 : 0, 1);
+  t.expectTrue('survivesHeavyHit', isAlive(rock));
 
   const gold0 = GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD);
   t.after(ONE_FRAME * 4, () => {
-  expect(t, 'throwAccepted', UnitUseItemTarget(p, key, rock) ? 1 : 0, 1);
+  t.expectTrue('throwAccepted', UnitUseItemTarget(p, key, rock));
   t.after(0.1, () => {
     // The missile is still in the air: thrown, not instant.
-    t.report('rockAliveWhileInFlight', GetWidgetLife(rock) > 0.405 ? 1 : 0);
+    t.report('rockAliveWhileInFlight', isAlive(rock) ? 1 : 0);
     t.after(3, () => {
-      expect(t, 'rockBrokenOnImpact', GetWidgetLife(rock) > 0.405 ? 1 : 0, 0);
-      expect(t, 'keySpent', holdsKey(p) ? 1 : 0, 0);
+      t.expect('rockBrokenOnImpact', isAlive(rock) ? 1 : 0, 0);
+      t.expect('keySpent', holdsKey(p) ? 1 : 0, 0);
       let keysOnGround = 0;
       EnumItemsInRect(GetWorldBounds()!, null!, () => {
         const it = GetEnumItem();
         if (it != null && GetItemTypeId(it) === BOSS_KEY_ITEM_ID) keysOnGround += 1;
       });
-      expect(t, 'keyNotLeftOnGround', keysOnGround, 0);
-      expect(t, 'noGoldFromThrow', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - gold0, 0);
-      expect(t, 'creepUntouched', GetWidgetLife(kobold) > 0.405 ? 1 : 0, 1);
+      t.expect('keyNotLeftOnGround', keysOnGround, 0);
+      t.expect('noGoldFromThrow', GetPlayerState(me.handle, PLAYER_STATE_RESOURCE_GOLD) - gold0, 0);
+      t.expectTrue('creepUntouched', isAlive(kobold));
       t.done();
     });
   });

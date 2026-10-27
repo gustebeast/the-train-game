@@ -20,8 +20,7 @@
 // changing one here and re-running is all it takes to retune.
 // Run from the project root:  node scripts/roll-anim-to-alternate-walk.js
 
-const fs = require('fs');
-const { Model, TARGET, load, save } = require('./peasant-model');
+const { load, save } = require('./peasant-model');
 
 const OLD_NAME = 'Roll';
 const NEW_NAME = 'Walk Alternate';

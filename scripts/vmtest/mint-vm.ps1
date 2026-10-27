@@ -309,9 +309,9 @@ try {
   & $vmrun @guest CopyFileFromHostToGuest $vmx $mapSrc "$dl\ZZMINT.w3x" | Out-Null
   Start-Sleep -Seconds 3
 
-  # Enter it, and CONFIRM rather than assume: inside Download the list holds two
-  # rows and is empty beneath them (~6 mean brightness), at the top level it is
-  # full of stock maps (~27). Threshold 15, measured on both.
+  # Enter it, and CONFIRM rather than assume: inside Download the list holds a
+  # couple of rows and is empty beneath them, at the top level it is full of
+  # stock map names (Test-BrowserShowsMapList).
   $inside = $false
   foreach ($attempt in 1..6) {
     Vnc-DblClick $c $ui.downloadFolder[0] $ui.downloadFolder[1]
@@ -319,9 +319,9 @@ try {
     $probeShot = Join-Path $OutDir "enter-download-$attempt.png"
     $pc = Vnc-Connect $port
     try { Vnc-Shot $pc $probeShot } finally { $pc.cli.Close() }
-    $lit = Get-ImageRegionBrightness $probeShot 590 430 390 560
-    Write-Host ("  attempt {0}: list region {1}" -f $attempt, $lit)
-    if ($lit -le 15) { $inside = $true; break }
+    $full = Test-BrowserShowsMapList $probeShot
+    Write-Host ("  attempt {0}: full map list showing: {1}" -f $attempt, $full)
+    if (-not $full) { $inside = $true; break }
   }
   if (-not $inside) {
     throw ("Could not enter the Download folder after 6 attempts, so this VM would " +

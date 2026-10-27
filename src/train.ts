@@ -14,12 +14,14 @@ const REGION_HALF = 2; // 4x4 region → half-size = 2
 const STUCK_TIMEOUT = 35;
 const CENTER_OFFSET = 16;
 const TRAIN_HP_REGEN = -1; // HP per second; negative = decay
-let arrivalRect: Rectangle;
-let arrivalRegion: Region;
+let arrivalRect: Rectangle | null = null;
+let arrivalRegion: Region | null = null;
 let lastMoveTime: number = 0;
 let targetIdx: number = 0;
-let train: Unit;
-let trackWagon: Unit;
+/** The engine and its wagon. Null until the first round or lobby stands one
+ *  up -- the map boots into the start lobby, which has no train. */
+let train: Unit | null = null;
+let trackWagon: Unit | null = null;
 let crashDeadline: number = 0;
 let gameOver: boolean = false;
 let burning: boolean = false;
@@ -34,10 +36,10 @@ let wrecked: boolean = false;
 /** Attach the full burning look to the engine. The automatic damage fire is
  *  disabled (the train is no longer classified Mechanical, see compiletime.ts)
  *  so fire only ever appears here, at the 1HP burning state. */
-function igniteBurnVisuals(): void {
+function igniteBurnVisuals(engine: Unit): void {
   if (burnEffects.length > 0) return;
   for (const point of ['sprite first', 'sprite second', 'sprite third']) {
-    const e = AddSpecialEffectTarget('Environment\\LargeBuildingFire\\LargeBuildingFire1.mdl', train.handle, point);
+    const e = AddSpecialEffectTarget('Environment\\LargeBuildingFire\\LargeBuildingFire1.mdl', engine.handle, point);
     if (e != null) burnEffects.push(e);
   }
 }
@@ -102,7 +104,7 @@ export function stopGameplay(): void {
 }
 
 export function extinguish(): void {
-  if (!burning) return;
+  if (!burning || train == null) return;
   // A wrecked train cannot be put out. Its max HP is spent, so there is nothing
   // for water to restore and production stays dead for the rest of the round.
   if (wrecked) return;
@@ -136,7 +138,7 @@ let wagonPoint: GridPos | null = null;
 
 /** Re-issue both cars' current move orders from the stored points. */
 function issueCarOrders(): void {
-  if (enginePoint != null) train.issueOrderAt('move', enginePoint.x, enginePoint.y);
+  if (enginePoint != null && train != null) train.issueOrderAt('move', enginePoint.x, enginePoint.y);
   if (wagonPoint != null && trackWagon != null) {
     trackWagon.issueOrderAt('move', wagonPoint.x, wagonPoint.y);
   }
@@ -146,7 +148,7 @@ function issueCarOrders(): void {
 function moveToNext() {
   const current = placedTracks[targetIdx];
   const next = placedTracks[targetIdx + 1];
-  if (next == null || current == null) return;
+  if (next == null || current == null || arrivalRegion == null || arrivalRect == null) return;
   targetIdx++;
   const cur = trackCenter(current);
   const nxt = trackCenter(next);
@@ -208,31 +210,31 @@ function reissueMoveOrder(): void {
   issueCarOrders();
 }
 
-export function getTrain(): Unit {
+export function getTrain(): Unit | null {
   return train;
 }
 
-export function getTrackWagon(): Unit {
+export function getTrackWagon(): Unit | null {
   return trackWagon;
 }
 
 /** Shared train unit setup: owner, pathing, HP/mana from state. */
-function setupTrainUnit(unit: Unit): void {
-  train = unit;
-  train.owner = getTrainPlayer();
-  SetUnitPathing(train.handle, false);
-  BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
-  SetUnitState(train.handle, UNIT_STATE_LIFE, gameState.trainMaxHP);
-  BlzSetUnitMaxMana(train.handle, gameState.trainMaxMana);
+function setupTrainUnit(engine: Unit): void {
+  train = engine;
+  engine.owner = getTrainPlayer();
+  SetUnitPathing(engine.handle, false);
+  BlzSetUnitMaxHP(engine.handle, gameState.trainMaxHP);
+  SetUnitState(engine.handle, UNIT_STATE_LIFE, gameState.trainMaxHP);
+  BlzSetUnitMaxMana(engine.handle, gameState.trainMaxMana);
 }
 
 /** Shared track wagon setup: owner, pathing off (so it clips through the
  *  engine instead of colliding with it), invulnerable. */
-function setupWagonUnit(unit: Unit): void {
-  trackWagon = unit;
-  trackWagon.owner = getTrainPlayer();
-  SetUnitPathing(trackWagon.handle, false);
-  trackWagon.invulnerable = true;
+function setupWagonUnit(wagon: Unit): void {
+  trackWagon = wagon;
+  wagon.owner = getTrainPlayer();
+  SetUnitPathing(wagon.handle, false);
+  wagon.invulnerable = true;
 }
 
 /** Sync the active train's stats to match current gameState. */
@@ -254,15 +256,15 @@ export function syncTrainStats(): void {
 
 registerSyncCallback(syncTrainStats);
 
-export function initInterRoundLobbyTrain(unit: Unit, wagon: Unit): void {
+export function initInterRoundLobbyTrain(engine: Unit, wagon: Unit): void {
   setInGameplay(false);
-  setupTrainUnit(unit);
+  setupTrainUnit(engine);
   setupWagonUnit(wagon);
-  train.mana = 0;
-  BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
-  BlzSetUnitRealField(train.handle, UNIT_RF_MANA_REGENERATION, 0);
-  train.moveSpeed = 0;
-  trackWagon.moveSpeed = 0;
+  engine.mana = 0;
+  BlzSetUnitRealField(engine.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
+  BlzSetUnitRealField(engine.handle, UNIT_RF_MANA_REGENERATION, 0);
+  engine.moveSpeed = 0;
+  wagon.moveSpeed = 0;
   syncState();
 }
 
@@ -304,22 +306,22 @@ function enterInterRoundLobby(): void {
   if (onVictory != null) onVictory();
 }
 
-let lowHpTrigger: Trigger;
+let lowHpTrigger: Trigger | null = null;
 
-function initTrainUnit(unit: Unit): void {
-  setupTrainUnit(unit);
-  initProduction(train, trackWagon);
+function initTrainUnit(engine: Unit, wagon: Unit): void {
+  setupTrainUnit(engine);
+  initProduction(engine, wagon);
 
   // Re-register HP trigger for the new unit handle
   if (lowHpTrigger != null) lowHpTrigger.destroy();
   lowHpTrigger = Trigger.create();
-  TriggerRegisterUnitStateEvent(lowHpTrigger.handle, train.handle, UNIT_STATE_LIFE, LESS_THAN, 2.0);
+  TriggerRegisterUnitStateEvent(lowHpTrigger.handle, engine.handle, UNIT_STATE_LIFE, LESS_THAN, 2.0);
   lowHpTrigger.addAction(() => {
     if (burning || !isInGameplay()) return;
     burning = true;
-    igniteBurnVisuals();
-    SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
-    BlzSetUnitRealField(train.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
+    igniteBurnVisuals(engine);
+    SetUnitState(engine.handle, UNIT_STATE_LIFE, 1);
+    BlzSetUnitRealField(engine.handle, UNIT_RF_HIT_POINTS_REGENERATION_RATE, 0);
     pauseProduction();
     print('The train is on fire and is losing max HP!');
     burnTimer = createTimer();
@@ -329,16 +331,16 @@ function initTrainUnit(unit: Unit): void {
         return;
       }
       gameState.trainMaxHP -= 1;
-      BlzSetUnitMaxHP(train.handle, gameState.trainMaxHP);
-      SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
+      BlzSetUnitMaxHP(engine.handle, gameState.trainMaxHP);
+      SetUnitState(engine.handle, UNIT_STATE_LIFE, 1);
       if (gameState.trainMaxHP <= TRAIN_WRECKED_MAX_HP) wreckTrain();
     });
   });
 }
 
-let arrivalTrigger: Trigger;
+let arrivalTrigger: Trigger | null = null;
 
-export function initTrain(unit: Unit, wagon: Unit) {
+export function initTrain(engine: Unit, wagon: Unit): void {
   // Reset state from previous train. The engine spawns on the second track
   // (index 1) with the wagon behind it on the first (index 0); the runway
   // track (index 2) gives it an initial move target.
@@ -354,25 +356,27 @@ export function initTrain(unit: Unit, wagon: Unit) {
 
   setInGameplay(true);
   setupWagonUnit(wagon);
-  initTrainUnit(unit);
+  initTrainUnit(engine, wagon);
   // Seed the order history: the engine's spawn point acts as its "previous
   // order", so the wagon's first order sends it to the engine's start tile.
-  enginePoint = { x: unit.x, y: unit.y };
+  enginePoint = { x: engine.x, y: engine.y };
   wagonPoint = null;
   syncState();
   setMoveOrderCallback(() => reissueMoveOrder());
 
   // Create the arrival region (initially at origin, will be repositioned by moveToNext)
-  arrivalRect = Rectangle.create(0, 0, 0, 0);
-  arrivalRegion = Region.create();
-  arrivalRegion.addRect(arrivalRect);
+  const rect = Rectangle.create(0, 0, 0, 0);
+  const region = Region.create();
+  region.addRect(rect);
+  arrivalRect = rect;
+  arrivalRegion = region;
 
   // Trigger fires when the train enters the arrival region
   arrivalTrigger = Trigger.create();
-  arrivalTrigger.registerEnterRegion(arrivalRegion, undefined);
+  arrivalTrigger.registerEnterRegion(region, undefined);
   arrivalTrigger.addAction(() => {
     const entering = Unit.fromEvent();
-    if (entering == null || entering.handle !== train.handle) {
+    if (entering == null || entering.handle !== engine.handle) {
       return;
     }
     if (placedTracks[targetIdx + 1] != null) {
@@ -380,7 +384,7 @@ export function initTrain(unit: Unit, wagon: Unit) {
       return;
     }
     if (isVictoryTriggered()) {
-      const victoryDelay = (REGION_HALF + OVERSHOOT) / train.moveSpeed;
+      const victoryDelay = (REGION_HALF + OVERSHOOT) / engine.moveSpeed;
       startOneShot(victoryDelay, () => {
         print('Victory!');
         if (onAwardVictory != null) onAwardVictory();
@@ -399,12 +403,12 @@ export function initTrain(unit: Unit, wagon: Unit) {
   });
 
   // Start slow, ramp up to full speed after 30 seconds
-  train.moveSpeed = 1;
-  trackWagon.moveSpeed = 1;
+  engine.moveSpeed = 1;
+  wagon.moveSpeed = 1;
   startOneShot(30, () => {
-    if (train.moveSpeed === 1) {
-      train.moveSpeed = gameState.trainSpeed;
-      trackWagon.moveSpeed = gameState.trainSpeed;
+    if (engine.moveSpeed === 1) {
+      engine.moveSpeed = gameState.trainSpeed;
+      wagon.moveSpeed = gameState.trainSpeed;
     }
   });
 

@@ -1,7 +1,12 @@
 import { Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { Units } from '@objectdata/units';
-import { gameState, syncState, TRAIN_INITIAL_MAX_HP } from './state';
+import { gameState, syncState } from './state';
+import {
+  SHELF, ShelfItem, TRAIN_INITIAL_MAX_HP, FLAME_RESISTANCE_HP, TRACK_MANUFACTURING_MANA,
+  TRACK_MANUFACTURING_MIN_MANA, RESOURCE_CAPACITY_STEP, TRACK_CAPACITY_STEP, CRATE_CAPACITY_STEP,
+  CHALLENGE_BONUS,
+} from './sharedData';
 import { getTrain, getTrackWagon } from './train';
 import { getCrateStart, loadCrateForInterRoundLobby } from './items';
 import {
@@ -10,30 +15,21 @@ import {
   TRACK_CAPACITY_ID, CRATE_CAPACITY_ID, MERC_CONTRACT_ID, MERC_CONTRACT_2_ID,
   CHALLENGE_ITEM_ID, RESTORE_HP_ID, STRANGE_MEAT_ID,
 } from './constants';
-import { isSummonUpgradePurchased, purchaseSummonUpgrade, registerSummonShop } from './summonUpgrade';
+import { isSummonUpgradePurchased, purchaseSummonUpgrade } from './summonUpgrade';
 import {
   isMercDead, buyMercContract, buySecondContract,
   canBuyMercContract, canBuySecondContract, getLivingMercCount,
 } from './mercenary';
 import { forceLevel3Camp } from './creeps';
-import { forEachUnitInWorld, nextFrame, getHumanPlayers } from './util';
-import { armChallenge, getOfferedChallenge, CHALLENGE_COST } from './challenges';
+import { forEachUnitInWorld, nextFrame, getHumanPlayers, unitExists } from './util';
+import { armChallenge, getOfferedChallenge } from './challenges';
 import { showChallengePreview, clearChallengePreview } from './challengeUI';
 import { refreshInterRoundLobbyRoster, hasInterRoundLobbyRerollTargets } from './interRoundLobbyRoster';
 
-const ITEM_COSTS: Map<number, number> = new Map([
-  [FLAME_RESISTANCE_ID, 1],
-  [TRACK_MANUFACTURING_ID, 1],
-  [RESOURCE_CAPACITY_ID, 1],
-  [TRACK_CAPACITY_ID, 1],
-  [CRATE_CAPACITY_ID, 1],
-  [SUMMON_UPGRADE_ITEM_ID, 1],
-  [MERC_CONTRACT_ID, 1],
-  [MERC_CONTRACT_2_ID, 1],
-  [CHALLENGE_ITEM_ID, CHALLENGE_COST],
-  [RESTORE_HP_ID, 1],
-  [STRANGE_MEAT_ID, 1],
-]);
+/** The shelf, by item type id: price and shelf size, from sharedData's SHELF
+ *  -- the same table the build sets each item's gold cost and stock from. */
+const SHELF_BY_ID = new Map<number, ShelfItem>();
+for (const [rawcode, item] of Object.entries(SHELF)) SHELF_BY_ID.set(FourCC(rawcode), item);
 
 /** Repeatable upgrades every shop sells. Flame Resistance is NOT here: it is
  *  stocked conditionally, because Repair Train replaces it while the train is
@@ -47,6 +43,26 @@ const REPEATABLE_STOCK = [
 
 /** The current shop unit, so purchases can adjust its stock. */
 let currentShop: Unit | null = null;
+
+/** The current shop, if it is still standing. */
+function liveShop(): Unit | null {
+  if (currentShop == null || !unitExists(currentShop.handle)) return null;
+  return currentShop;
+}
+
+/** Put an item on the current shop's shelf, as many as SHELF says it holds. */
+function stock(itemTypeId: number): void {
+  const shop = liveShop();
+  const shelf = SHELF_BY_ID.get(itemTypeId);
+  if (shop == null || shelf == null) return;
+  AddItemToStock(shop.handle, itemTypeId, shelf.stock, shelf.stock);
+}
+
+/** Take an item off the current shop's shelf. */
+function unstock(itemTypeId: number): void {
+  const shop = liveShop();
+  if (shop != null) RemoveItemFromStock(shop.handle, itemTypeId);
+}
 
 /** Whether a mercenary contract is worth anything yet.
  *
@@ -65,47 +81,34 @@ function mercContractsUseful(): boolean {
  *  the shelf whenever no living merc is under contract). Deferred a frame so
  *  the adds land after the unit fully exists. */
 export function stockShop(shop: Unit): void {
-  registerSummonShop(shop);
   currentShop = shop;
   nextFrame(() => {
-    if (GetUnitTypeId(shop.handle) === 0) return; // shop died/removed
-    for (const itemId of REPEATABLE_STOCK) {
-      AddItemToStock(shop.handle, itemId, 10, 10);
-    }
+    if (liveShop() !== shop) return; // shop died/removed, or replaced
+    for (const itemId of REPEATABLE_STOCK) stock(itemId);
     // Repair Train and Flame Resistance are alternatives, never both. Below the
     // starting max HP the only sensible purchase is getting that HP back, and
     // offering "+10 max HP" at the same time invites players to buy an upgrade
     // that the repair would then throw away.
-    if (gameState.trainMaxHP < TRAIN_INITIAL_MAX_HP) {
-      AddItemToStock(shop.handle, RESTORE_HP_ID, 1, 1);
-    } else {
-      AddItemToStock(shop.handle, FLAME_RESISTANCE_ID, 10, 10);
-    }
-    if (!isSummonUpgradePurchased()) {
-      AddItemToStock(shop.handle, SUMMON_UPGRADE_ITEM_ID, 1, 1);
-    }
+    stock(gameState.trainMaxHP < TRAIN_INITIAL_MAX_HP ? RESTORE_HP_ID : FLAME_RESISTANCE_ID);
+    if (!isSummonUpgradePurchased()) stock(SUMMON_UPGRADE_ITEM_ID);
     // The two contracts are steps on a ladder, so exactly one is ever on the
     // shelf: none alive offers the first, one alive offers the second, two
     // alive offers neither. A death drops you a rung and puts that rung's
     // contract back up.
     if (mercContractsUseful()) {
       if (canBuyMercContract()) {
-        AddItemToStock(shop.handle, MERC_CONTRACT_ID, 1, 1);
+        stock(MERC_CONTRACT_ID);
       } else if (canBuySecondContract()) {
-        AddItemToStock(shop.handle, MERC_CONTRACT_2_ID, 1, 1);
+        stock(MERC_CONTRACT_2_ID);
       }
     }
     // Strange Meat is on the shelf only with both mercenaries alive -- which is
     // the same thing as "the second contract is bought and neither has been
     // lost", and also exactly the condition under which a level 3 camp can
     // appear at all. Buying bait for a camp that cannot spawn would be a trap.
-    if (getLivingMercCount() >= 2) {
-      AddItemToStock(shop.handle, STRANGE_MEAT_ID, 10, 10);
-    }
+    if (getLivingMercCount() >= 2) stock(STRANGE_MEAT_ID);
     // Rerolls only make sense when there is someone standing here to reroll
-    if (hasInterRoundLobbyRerollTargets()) {
-      AddItemToStock(shop.handle, REROLL_ITEM_ID, 10, 10);
-    }
+    if (hasInterRoundLobbyRerollTargets()) stock(REROLL_ITEM_ID);
   });
 }
 
@@ -117,14 +120,13 @@ function addRosterToInterRoundLobby(): void {
   refreshInterRoundLobbyRoster();
   // Summon Heroes is what makes a contract worth buying, so the contract goes
   // up the moment it is owned rather than waiting for the next lobby.
-  if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0
-      && mercContractsUseful() && canBuyMercContract()) {
-    AddItemToStock(currentShop.handle, MERC_CONTRACT_ID, 1, 1);
-  }
-  if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0
-      && hasInterRoundLobbyRerollTargets()) {
-    AddItemToStock(currentShop.handle, REROLL_ITEM_ID, 10, 10);
-  }
+  if (mercContractsUseful() && canBuyMercContract()) stock(MERC_CONTRACT_ID);
+  if (hasInterRoundLobbyRerollTargets()) stock(REROLL_ITEM_ID);
+}
+
+/** The units that are actually there, for the upgrade effect. */
+function present(...units: Array<Unit | null>): Unit[] {
+  return units.filter((u): u is Unit => u != null);
 }
 
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
@@ -155,8 +157,13 @@ export function initShop(): void {
     if (item == null) return;
     const itemTypeId = GetItemTypeId(item);
 
-    const cost = ITEM_COSTS.get(itemTypeId);
-    if (cost == null) return;
+    // The Reroll is the one shelf item that is KEPT rather than consumed: it
+    // is carried, cast, and can be sold back, all handled in reroll.ts.
+    if (itemTypeId === REROLL_ITEM_ID) return;
+    const shelf = SHELF_BY_ID.get(itemTypeId);
+    if (shelf == null) return;
+    const cost = shelf.cost;
+    const buyer = Unit.fromEvent();
 
     // One-time upgrades already owned — swallow the item without charging
     if (itemTypeId === SUMMON_UPGRADE_ITEM_ID && isSummonUpgradePurchased()) {
@@ -181,31 +188,29 @@ export function initShop(): void {
     let effectTargets: Unit[] = [];
 
     if (itemTypeId === FLAME_RESISTANCE_ID) {
-      gameState.trainMaxHP += 10;
-      effectTargets = [getTrain()];
+      gameState.trainMaxHP += FLAME_RESISTANCE_HP;
+      effectTargets = present(getTrain());
     } else if (itemTypeId === RESTORE_HP_ID) {
       // Back to the starting value, not to whatever it was before the fire:
       // Flame Resistance upgrades bought earlier really are lost.
       gameState.trainMaxHP = TRAIN_INITIAL_MAX_HP;
-      effectTargets = [getTrain()];
+      effectTargets = present(getTrain());
       // The train is whole again, so the pair swaps back without waiting for
       // the next inter-round lobby -- otherwise repairing would cost you the chance to
       // upgrade this visit.
-      if (currentShop != null) {
-        AddItemToStock(currentShop.handle, FLAME_RESISTANCE_ID, 10, 10);
-      }
+      stock(FLAME_RESISTANCE_ID);
     } else if (itemTypeId === TRACK_MANUFACTURING_ID) {
-      gameState.trainMaxMana -= 10;
-      if (gameState.trainMaxMana < 10) gameState.trainMaxMana = 10;
-      effectTargets = [getTrain()];
+      gameState.trainMaxMana = math.max(TRACK_MANUFACTURING_MIN_MANA,
+        gameState.trainMaxMana - TRACK_MANUFACTURING_MANA);
+      effectTargets = present(getTrain());
     } else if (itemTypeId === RESOURCE_CAPACITY_ID) {
-      gameState.trainCargoMaxStack += 2;
-      effectTargets = [getTrain()];
+      gameState.trainCargoMaxStack += RESOURCE_CAPACITY_STEP;
+      effectTargets = present(getTrain());
     } else if (itemTypeId === TRACK_CAPACITY_ID) {
-      gameState.trainTrackMaxStack += 2;
-      effectTargets = [getTrackWagon()];
+      gameState.trainTrackMaxStack += TRACK_CAPACITY_STEP;
+      effectTargets = present(getTrackWagon());
     } else if (itemTypeId === CRATE_CAPACITY_ID) {
-      gameState.crateMaxStack += 4;
+      gameState.crateMaxStack += CRATE_CAPACITY_STEP;
       // The shop is in the inter-round lobby, where the START crate displays capacity as
       // item charges — refresh it and play the effect there (the target
       // crate only exists during gameplay rounds)
@@ -214,6 +219,7 @@ export function initShop(): void {
       if (crateStart != null) effectTargets = [crateStart];
     } else if (itemTypeId === SUMMON_UPGRADE_ITEM_ID) {
       purchaseSummonUpgrade();
+      unstock(SUMMON_UPGRADE_ITEM_ID);
       // The unlock applies to everyone — play the effect on every peasant
       const targets: Unit[] = [];
       forEachUnitInWorld(u => {
@@ -231,32 +237,25 @@ export function initShop(): void {
       const wasRevive = isMercDead();
       buyMercContract();
       // Sold out until this one dies, at which point stockShop offers it again.
-      if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
-        RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_ID);
-      }
+      unstock(MERC_CONTRACT_ID);
       addRosterToInterRoundLobby();
       print(wasRevive
         ? 'Mercenary Contract renewed: a fresh mercenary takes the job, carrying the gear the last one was holding. Level 2 creep camps are back.'
         : 'Mercenary Contract purchased: level 2 creep camps unlocked; a mercenary will join your next hero summon.');
-      const contractBuyer = Unit.fromHandle(GetTriggerUnit());
-      if (contractBuyer != null) effectTargets = [contractBuyer];
+      if (buyer != null) effectTargets = [buyer];
     } else if (itemTypeId === MERC_CONTRACT_2_ID) {
       buySecondContract();
-      if (currentShop != null && GetUnitTypeId(currentShop.handle) !== 0) {
-        RemoveItemFromStock(currentShop.handle, MERC_CONTRACT_2_ID);
-      }
+      unstock(MERC_CONTRACT_2_ID);
       addRosterToInterRoundLobby();
       print('Second Contract signed: a second mercenary joins you, and level 3 creep camps open up.');
-      const secondBuyer = Unit.fromHandle(GetTriggerUnit());
-      if (secondBuyer != null) effectTargets = [secondBuyer];
+      if (buyer != null) effectTargets = [buyer];
     } else if (itemTypeId === STRANGE_MEAT_ID) {
       if (forceLevel3Camp()) {
         print('The meat is out. Something big is coming for it -- a level 3 camp awaits.');
       } else {
         print('Nothing came for the meat.');
       }
-      const meatBuyer = Unit.fromHandle(GetTriggerUnit());
-      if (meatBuyer != null) effectTargets = [meatBuyer];
+      if (buyer != null) effectTargets = [buyer];
     } else if (itemTypeId === CHALLENGE_ITEM_ID) {
       // One item sells whatever the dealer is currently offering; which one
       // that is comes from the seeded sequence, not from the shelf.
@@ -264,9 +263,8 @@ export function initShop(): void {
       if (offered != null) {
         armChallenge(offered.id);
         print('|cffffcc00' + offered.name + '|r armed! ' + offered.description
-          + ' Pays 2 gold.');
+          + ' Pays ' + I2S(CHALLENGE_BONUS) + ' gold.');
       }
-      const buyer = Unit.fromEvent();
       if (buyer != null) effectTargets = [buyer];
     }
 
@@ -290,7 +288,7 @@ export function registerDealer(dealer: Unit): void {
 /** True while any player has the dealer selected. */
 function dealerIsSelected(): boolean {
   const d = dealerUnit;
-  if (d == null || GetUnitTypeId(d.handle) === 0) return false;
+  if (d == null || !unitExists(d.handle)) return false;
   for (const p of getHumanPlayers()) {
     if (IsUnitSelected(d.handle, p.handle)) return true;
   }
@@ -334,8 +332,8 @@ export function initDealerOffer(): void {
   const selected = Trigger.create();
   const deselected = Trigger.create();
   Players.forEach(p => {
-    TriggerRegisterPlayerUnitEvent(selected.handle, p.handle, EVENT_PLAYER_UNIT_SELECTED, undefined);
-    TriggerRegisterPlayerUnitEvent(deselected.handle, p.handle, EVENT_PLAYER_UNIT_DESELECTED, undefined);
+    selected.registerPlayerUnitEvent(p, EVENT_PLAYER_UNIT_SELECTED, undefined);
+    deselected.registerPlayerUnitEvent(p, EVENT_PLAYER_UNIT_DESELECTED, undefined);
   });
   selected.addAction(() => {
     const u = GetTriggerUnit();

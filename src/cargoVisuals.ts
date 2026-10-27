@@ -1,7 +1,8 @@
-import { Unit } from 'w3ts';
+import { Trigger, Unit } from 'w3ts';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
+import { STONE_MODEL, WOOD_MODEL, SMALL_TRACK_MODEL } from './sharedData';
 import { findItemByType } from './items';
-import { nextFrame } from './util';
+import { nextFrame, unitExists } from './util';
 import { getTrain, getTrackWagon } from './train';
 
 /**
@@ -25,7 +26,7 @@ interface CargoVisual {
 const engineVisuals: CargoVisual[] = [
   {
     itemTypeId: STONE_ID,
-    model: 'Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_Rock6.mdx',
+    model: STONE_MODEL,
     attachPoint: 'sprite first',
     scale: 0.275,
     effect: null,
@@ -33,7 +34,7 @@ const engineVisuals: CargoVisual[] = [
   },
   {
     itemTypeId: WOOD_ID,
-    model: 'Doodads\\Felwood\\Props\\FelwoodLogStraight\\FelwoodLogStraight.mdx',
+    model: WOOD_MODEL,
     attachPoint: 'sprite second',
     scale: 0.275,
     effect: null,
@@ -44,7 +45,7 @@ const engineVisuals: CargoVisual[] = [
 const wagonVisuals: CargoVisual[] = [
   {
     itemTypeId: TRACK_PIECE_ID,
-    model: 'war3mapImported\\OmniTrackSmall.mdx',
+    model: SMALL_TRACK_MODEL,
     // TrackWagon.mdx's chest ref was repurposed as the cargo anchor: its
     // pivot is patched to the wagon's rear center at bed height (-85, 0, 75)
     // via scripts/patch-attachment-pivot.js. (The stock chest position sat
@@ -62,11 +63,11 @@ function hasCargo(u: Unit, itemTypeId: number): boolean {
 }
 
 /** Create/destroy the visual's effect to match the unit's current cargo. */
-function syncVisual(v: CargoVisual, u: Unit): void {
-  const alive = u != null && GetUnitTypeId(u.handle) !== 0;
-  const show = alive && hasCargo(u, v.itemTypeId);
+function syncVisual(v: CargoVisual, u: Unit | null): void {
+  const show = u != null && unitExists(u.handle) && hasCargo(u, v.itemTypeId);
+  const attachedHere = u != null && v.attachedTo === u.handle;
 
-  if (v.effect != null && (!show || v.attachedTo !== u.handle)) {
+  if (v.effect != null && (!show || !attachedHere)) {
     // Scale to 0 before destroying so the model vanishes instantly instead
     // of lingering through its death animation
     BlzSetSpecialEffectScale(v.effect, 0);
@@ -74,7 +75,7 @@ function syncVisual(v: CargoVisual, u: Unit): void {
     v.effect = null;
     v.attachedTo = null;
   }
-  if (show && v.effect == null) {
+  if (show && u != null && v.effect == null) {
     const e = AddSpecialEffectTarget(v.model, u.handle, v.attachPoint);
     if (e != null) {
       BlzSetSpecialEffectScale(e, v.scale);
@@ -113,12 +114,10 @@ function syncAll(): void {
  * an effect off a car that is no longer the current one.
  */
 export function initCargoVisuals(): void {
-  const items = CreateTrigger();
-  for (let i = 0; i < bj_MAX_PLAYER_SLOTS; i++) {
-    TriggerRegisterPlayerUnitEvent(items, Player(i)!, EVENT_PLAYER_UNIT_PICKUP_ITEM, null!);
-    TriggerRegisterPlayerUnitEvent(items, Player(i)!, EVENT_PLAYER_UNIT_DROP_ITEM, null!);
-  }
-  TriggerAddAction(items, () => {
+  const items = Trigger.create();
+  items.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
+  items.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DROP_ITEM);
+  items.addAction(() => {
     const u = GetTriggerUnit();
     const train = getTrain();
     const wagon = getTrackWagon();

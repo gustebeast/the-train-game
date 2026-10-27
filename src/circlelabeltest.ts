@@ -1,13 +1,8 @@
-import { registerTest, TestReporter } from './testkit';
+import { registerTest, startRunInLobby, TestReporter } from './testkit';
 import { Units } from '@objectdata/units';
 import { unitLabelStats } from './unitLabels';
-import { loadInterRoundLobby, beginNewRun } from './terrain/load';
+import { loadInterRoundLobby } from './terrain/load';
 import { forEachUnitInWorld } from './util';
-
-function expect(t: TestReporter, key: string, actual: number, want: number): void {
-  t.report(key, actual);
-  if (actual !== want) t.fail(key, 'expected ' + I2S(want) + ', got ' + I2S(actual));
-}
 
 function circlesOnMap(): unit[] {
   const id = FourCC(Units.CircleOfPower);
@@ -32,29 +27,28 @@ function circlesOnMap(): unit[] {
  *    since nothing polls.
  */
 function runCircleLabelTest(t: TestReporter): void {
-  beginNewRun();
-  loadInterRoundLobby();
+  startRunInLobby();
   const first = circlesOnMap().length;
   t.report('circlesInLobby', first);
   if (first === 0) t.fail('circlesInLobby', 'no circles, so nothing is being tested');
-  expect(t, 'labelsMatchCircles', unitLabelStats().total, first);
+  t.expect('labelsMatchCircles', unitLabelStats().total, first);
 
   // Regenerate, and look in the same frame.
   loadInterRoundLobby();
   const second = circlesOnMap().length;
   const now = unitLabelStats();
-  expect(t, 'orphansSameFrameAfterRegen', now.orphaned, 0);
-  expect(t, 'labelsMatchCirclesAfterRegen', now.total, second);
+  t.expect('orphansSameFrameAfterRegen', now.orphaned, 0);
+  t.expect('labelsMatchCirclesAfterRegen', now.total, second);
 
   loadInterRoundLobby();
-  expect(t, 'noPileUpAfterSecondRegen', unitLabelStats().total, circlesOnMap().length);
+  t.expect('noPileUpAfterSecondRegen', unitLabelStats().total, circlesOnMap().length);
 
   // Remove one circle outside any cleanup path, and look in the same frame:
   // the RemoveUnit hook has to have dropped its label already.
   const victim = circlesOnMap()[0];
   const before = unitLabelStats().total;
   RemoveUnit(victim);
-  expect(t, 'removalDroppedLabelSameFrame', before - unitLabelStats().total, 1);
+  t.expect('removalDroppedLabelSameFrame', before - unitLabelStats().total, 1);
 
   // And a circle that dies rather than being removed.
   const dying = circlesOnMap()[0];
@@ -63,8 +57,8 @@ function runCircleLabelTest(t: TestReporter): void {
   KillUnit(dying);
   t.after(0.5, () => {
     const after = unitLabelStats();
-    expect(t, 'deathDroppedLabel', beforeDeath - after.total, 1);
-    expect(t, 'orphansAtEnd', after.orphaned, 0);
+    t.expect('deathDroppedLabel', beforeDeath - after.total, 1);
+    t.expect('orphansAtEnd', after.orphaned, 0);
     t.done();
   });
 }

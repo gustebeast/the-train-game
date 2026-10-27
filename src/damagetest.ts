@@ -18,6 +18,8 @@ interface Phase {
  *  All tools should read exactly the peasant's base damage — any extra is a
  *  leaked stat bonus from the attachment abilities. */
 function runDamageTest(t: TestReporter): void {
+  /** The peasant's own hit, which every tool must match. */
+  let emptyDamage = 0;
   const phases: Phase[] = [
     { label: 'empty', itemId: null, abilityId: null },
     { label: 'axe', itemId: AXE_ID, abilityId: FourCC(Abilities.ItemDamageBonusPlus7) },
@@ -147,7 +149,14 @@ function runDamageTest(t: TestReporter): void {
     const source = GetEventDamageSource();
     if (source !== attacker.handle) return;
     awaitingHit = false;
-    t.report(phases[phaseIdx].label, GetEventDamage());
+    // Empty-handed is the baseline; every tool must hit for exactly that.
+    const damage = GetEventDamage();
+    if (phaseIdx === 0) {
+      emptyDamage = damage;
+      t.report(phases[phaseIdx].label, damage);
+    } else {
+      t.expect(phases[phaseIdx].label, damage, emptyDamage);
+    }
     IssueImmediateOrder(attacker.handle, 'stop');
     nextPhase();
   }));

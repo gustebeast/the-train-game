@@ -1,6 +1,7 @@
-import { getArmedChallenge, ChallengeDef, CHALLENGE_COST } from './challenges';
+import { getArmedChallenge, ChallengeDef } from './challenges';
+import { onPlayerLeave } from './playerLeave';
+import { CHALLENGE_COST } from './sharedData';
 import { onBoardChanged } from './boardSignal';
-import { getHumanPlayers } from './util';
 
 /**
  * The armed challenge's overlay.
@@ -81,10 +82,12 @@ function setRow(row: number, label: string, width: number): void {
  *  a column too narrow for its text does not wrap -- it spills out of the
  *  panel. Sized to the content instead, both rows together so they stay a
  *  rectangle. */
-function widthFor(name: string, progress: string): number {
-  let longest = visibleLen(name);
-  const p = visibleLen(progress);
-  if (p > longest) longest = p;
+function widthFor(texts: ReadonlyArray<string>): number {
+  let longest = 0;
+  for (const text of texts) {
+    const len = visibleLen(text);
+    if (len > longest) longest = len;
+  }
   const wanted = longest * CHAR_WIDTH;
   return wanted > MIN_WIDTH ? wanted : MIN_WIDTH;
 }
@@ -159,13 +162,7 @@ function drawPanel(): void {
   const b = ready.board;
   MultiboardSetRowCount(b, lines.length);
   MultiboardSetTitleText(b, panel.title);
-  let longest = visibleLen(panel.title);
-  for (const text of lines) {
-    const len = visibleLen(text);
-    if (len > longest) longest = len;
-  }
-  const wanted = longest * CHAR_WIDTH;
-  const width = wanted > MIN_WIDTH ? wanted : MIN_WIDTH;
+  const width = widthFor([panel.title].concat(lines));
   for (let i = 0; i < lines.length; i++) setRow(i, lines[i], width);
   MultiboardDisplay(b, true);
   if (ready.fresh) MultiboardMinimize(b, false);
@@ -200,7 +197,7 @@ function draw(): void {
   const b = ready.board;
   MultiboardSetRowCount(b, rows);
   MultiboardSetTitleText(b, title);
-  const width = widthFor(def.name, progress);
+  const width = widthFor([def.name, progress]);
   setRow(0, '|cffffcc00' + def.name + '|r', width);
   if (progress !== '') setRow(1, progress, width);
 
@@ -224,9 +221,7 @@ export function initChallengeUI(): void {
   if (!listening) {
     listening = true;
     onBoardChanged(() => draw());
-    const leave = CreateTrigger();
-    for (const p of getHumanPlayers()) TriggerRegisterPlayerEvent(leave, p.handle, EVENT_PLAYER_LEAVE);
-    TriggerAddAction(leave, () => draw());
+    onPlayerLeave(() => draw());
   }
   draw();
 }

@@ -1,13 +1,11 @@
 import { Item, Unit, Trigger } from 'w3ts';
 import { TRACK_UNIT_TYPES } from './constants';
-import { placedTracks, removeTrack } from './state';
+import { placedTracks } from './state';
 import { getTrainTarget } from '../train';
 import { recountTrackShapes } from '../challengeList';
 import { TRACK_PIECE_ID } from '../constants';
 
-function onTrackDestroyed() {
-  const dying = Unit.fromHandle(GetTriggerUnit())!;
-
+function onTrackDestroyed(dying: Unit): void {
   const idx = placedTracks.findIndex(t => t.handle === dying.handle);
   if (idx > 0) {
     const prev = placedTracks[idx - 1];
@@ -19,7 +17,7 @@ function onTrackDestroyed() {
 
   const x = dying.x;
   const y = dying.y;
-  removeTrack(dying);
+  if (idx !== -1) placedTracks.splice(idx, 1);
   // The line just got shorter, so any wager measured against it has to be
   // re-measured: a destroyed piece must not keep paying for its own shape.
   recountTrackShapes();
@@ -28,7 +26,7 @@ function onTrackDestroyed() {
   if (dropped != null) dropped.charges = 1;
 }
 
-export function initTrackDestroyTrigger() {
+export function initTrackDestroyTrigger(): void {
   const trackFourCCs = TRACK_UNIT_TYPES.map(t => FourCC(t));
   const trigger = Trigger.create();
   trigger.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DEATH);
@@ -36,6 +34,6 @@ export function initTrackDestroyTrigger() {
     const dying = Unit.fromHandle(GetTriggerUnit());
     if (dying == null) return;
     if (!trackFourCCs.includes(dying.typeId)) return;
-    onTrackDestroyed();
+    onTrackDestroyed(dying);
   });
 }

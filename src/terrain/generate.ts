@@ -1,7 +1,7 @@
 import {
-  Terrain, Entity, Biome, Cell, Grid, GridPos, DIRS, SPAWN, VICTORY, BOSS_EXIT,
-  GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, GRID_W, GRID_H,
-  idx, idxToCoords, inBounds, isReserved,
+  Terrain, Entity, Biome, Cell, Grid, GridPos, DIRS, SPAWN, EXIT_AREA_WEST, EXIT_AREA_SOUTH,
+  CHEAT_EXIT_X, GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, GRID_W, GRID_H,
+  idx, idxToCoords, inBounds, isReserved, exitArea, inArea,
 } from './constants';
 import { isChallengeArmed } from '../challenges';
 import { CH_CRITTERPOCALYPSE } from '../challengeList';
@@ -45,7 +45,7 @@ function findEmpty(
   for (let gy = minY; gy <= maxY; gy++) {
     for (let gx = minX; gx <= maxX; gx++) {
       const i = idx(gx, gy);
-      if (grid.cells[i].entity === Entity.NONE && !isReserved(gx, gy)) {
+      if (grid.cells[i].entity === Entity.NONE && !isReserved(grid, gx, gy)) {
         candidates.push({ x: gx, y: gy });
       }
     }
@@ -75,7 +75,7 @@ function growBlob(
     for (const [dx, dy] of DIRS) {
       const nx = gx + dx;
       const ny = gy + dy;
-      if (!inBounds(nx, ny) || isReserved(nx, ny)) continue;
+      if (!inBounds(nx, ny) || isReserved(grid, nx, ny)) continue;
       const ni = idx(nx, ny);
       if (grid.cells[ni].entity !== Entity.NONE) continue;
       frontier.push(ni);
@@ -106,91 +106,74 @@ function growBlob(
 // Step 1: Generate guaranteed path from start to end
 // ============================================================
 
-function generatePath(grid: Grid, exitX: number, exitY?: number): void {
+function generatePath(grid: Grid, exitX: number): void {
   let x = GRID_MIN_X;
   let y = 0;
   grid.path[idx(x, y)] = true;
 
-  // Update VICTORY area X bounds around the target exit
-  VICTORY.minX = exitX - 5;
-  VICTORY.maxX = exitX;
-
-  if (exitY != null) {
-    // Fixed exit: straight path to the target
-    while (x < exitX) {
+  // The exit's cleared ground starts this far west; the path has to have
+  // settled its row by then.
+  const victoryMinX = exitX - EXIT_AREA_WEST;
+  // Lowest exit row whose cleared ground still fits on the map.
+  const MIN_EXIT_Y = GRID_MIN_Y + EXIT_AREA_SOUTH;
+  while (x < exitX) {
+    // Take 2-4 eastward steps
+    const eastSteps = GetRandomInt(2, 4);
+    for (let i = 0; i < eastSteps && x < exitX; i++) {
       x++;
       grid.path[idx(x, y)] = true;
     }
-    y = exitY;
-  } else {
-    // Minimum exit Y so the victory area (exitY-4 to exitY) fits in bounds
-    const MIN_EXIT_Y = GRID_MIN_Y + 4;
+    if (x >= exitX) break;
 
-    while (x < exitX) {
-      // Take 2-4 eastward steps
-      const eastSteps = GetRandomInt(2, 4);
-      for (let i = 0; i < eastSteps && x < exitX; i++) {
-        x++;
+    // How many columns remain to the victory area
+    const colsToVictory = victoryMinX - x;
+
+    // If we're too low and running out of room, force northward
+    if (y < MIN_EXIT_Y && colsToVictory <= (MIN_EXIT_Y - y) * 2) {
+      const stepsNeeded = MIN_EXIT_Y - y;
+      for (let i = 0; i < stepsNeeded; i++) {
+        y++;
         grid.path[idx(x, y)] = true;
       }
-      if (x >= exitX) break;
+      continue;
+    }
 
-      // How many columns remain to the victory area
-      const colsToVictory = VICTORY.minX - x;
-
-      // If we're too low and running out of room, force northward
-      if (y < MIN_EXIT_Y && colsToVictory <= (MIN_EXIT_Y - y) * 2) {
-        const stepsNeeded = MIN_EXIT_Y - y;
-        for (let i = 0; i < stepsNeeded; i++) {
-          y++;
-          grid.path[idx(x, y)] = true;
-        }
-        continue;
-      }
-
-      // Take 1-4 N/S steps in one consistent direction
-      const nsSteps = GetRandomInt(1, 4);
-      let dir: number;
-      if (y < MIN_EXIT_Y && colsToVictory <= 10) {
-        // Bias northward when low and getting close
-        dir = 1;
-      } else {
-        dir = GetRandomInt(0, 1) === 0 ? 1 : -1;
-      }
-      for (let i = 0; i < nsSteps; i++) {
-        const newY = y + dir;
-        if (newY >= GRID_MIN_Y + 1 && newY <= GRID_MAX_Y - 1) {
-          y = newY;
-          grid.path[idx(x, y)] = true;
-        }
+    // Take 1-4 N/S steps in one consistent direction
+    const nsSteps = GetRandomInt(1, 4);
+    let dir: number;
+    if (y < MIN_EXIT_Y && colsToVictory <= 10) {
+      // Bias northward when low and getting close
+      dir = 1;
+    } else {
+      dir = GetRandomInt(0, 1) === 0 ? 1 : -1;
+    }
+    for (let i = 0; i < nsSteps; i++) {
+      const newY = y + dir;
+      if (newY >= GRID_MIN_Y + 1 && newY <= GRID_MAX_Y - 1) {
+        y = newY;
+        grid.path[idx(x, y)] = true;
       }
     }
   }
 
   // If the path ended too low for the victory area, walk it up one column west of the exit
   // so the path always connects to the victory tile from the west
-  if (y < GRID_MIN_Y + 4) {
+  if (y < MIN_EXIT_Y) {
     const correctionX = exitX - 1;
     grid.path[idx(correctionX, y)] = true;
-    while (y < GRID_MIN_Y + 4) {
+    while (y < MIN_EXIT_Y) {
       y++;
       grid.path[idx(correctionX, y)] = true;
     }
     grid.path[idx(exitX, y)] = true;
   }
 
-  // Store exit point and update VICTORY area Y bounds around it
   grid.exit = { x: exitX, y };
-  VICTORY.minY = y - 4;
-  VICTORY.maxY = y;
 }
 
 /** How far the boss exit must sit from the ordinary one, in tiles. Enough that
- *  the two reserved areas cannot touch: each is 5 tall. */
+ *  the two exits' cleared ground cannot touch: each is EXIT_AREA_SOUTH + 1 tall. */
 const BOSS_EXIT_GAP = 7;
-/** The boss exit's reserved area, matching VICTORY's 6x5. */
-const BOSS_EXIT_W = 5;
-const BOSS_EXIT_H = 4;
 
 /**
  * A second exit on the right edge, leading to the boss.
@@ -210,7 +193,7 @@ function generateBossExit(grid: Grid, exitX: number): void {
   const mainY = grid.exit.y;
   // Both directions are tried and the roomier one wins, so the boss exit lands
   // on whichever side of the main exit actually has space.
-  const low = GRID_MIN_Y + BOSS_EXIT_H;
+  const low = GRID_MIN_Y + EXIT_AREA_SOUTH;
   const high = GRID_MAX_Y;
   const below = mainY - BOSS_EXIT_GAP;
   const above = mainY + BOSS_EXIT_GAP;
@@ -228,11 +211,6 @@ function generateBossExit(grid: Grid, exitX: number): void {
   }
 
   grid.bossExit = { x: exitX, y: bossY };
-  BOSS_EXIT.active = true;
-  BOSS_EXIT.minX = exitX - BOSS_EXIT_W;
-  BOSS_EXIT.maxX = exitX;
-  BOSS_EXIT.minY = bossY - BOSS_EXIT_H;
-  BOSS_EXIT.maxY = bossY;
 
   // The L: up or down the column just west of the edge, then one step east
   // onto the tile itself.
@@ -257,7 +235,7 @@ function placeGranite(grid: Grid, difficulty: number): void {
   const candidates: number[] = [];
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
-      if (!isReserved(gx, gy) && !grid.path[idx(gx, gy)]) {
+      if (!isReserved(grid, gx, gy) && !grid.path[idx(gx, gy)]) {
         candidates.push(idx(gx, gy));
       }
     }
@@ -279,7 +257,7 @@ function placeGranite(grid: Grid, difficulty: number): void {
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
       const i = idx(gx, gy);
-      if (grid.path[i] || isReserved(gx, gy)) {
+      if (grid.path[i] || isReserved(grid, gx, gy)) {
         open[i] = true;
       }
     }
@@ -365,7 +343,7 @@ function placeWater(grid: Grid, difficulty: number): void {
   let nonGranite = 0;
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
-      if (grid.cells[idx(gx, gy)].entity !== Entity.GRANITE && !isReserved(gx, gy)) {
+      if (grid.cells[idx(gx, gy)].entity !== Entity.GRANITE && !isReserved(grid, gx, gy)) {
         nonGranite++;
       }
     }
@@ -489,8 +467,8 @@ function placeSalesperson(grid: Grid): void {
   const reachable = reachableFromStart(grid);
   const candidates: GridPos[] = [];
   for (let gy = GRID_MIN_Y + 1; gy <= GRID_MAX_Y - 1; gy++) {
-    for (let gx = SPAWN.maxX + 2; gx <= VICTORY.minX - 2; gx++) {
-      if (isReserved(gx, gy) || !reachable[idx(gx, gy)]) continue;
+    for (let gx = SPAWN.maxX + 2; gx <= exitArea(grid.exit).minX - 2; gx++) {
+      if (isReserved(grid, gx, gy) || !reachable[idx(gx, gy)]) continue;
       if (grid.cells[idx(gx, gy)].entity !== Entity.NONE) continue;
       if (nearEntity(grid, gx, gy, Entity.CREEP_CAMP, 2)) continue;
       candidates.push({ x: gx, y: gy });
@@ -513,7 +491,7 @@ function nearEntity(grid: Grid, gx: number, gy: number, entity: Entity, radius: 
 function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
   // Valid X range: at least 1 tile gap from start and victory areas
   const minX = SPAWN.maxX + 2;
-  const maxX = VICTORY.minX - 2;
+  const maxX = exitArea(grid.exit).minX - 2;
   // Valid Y range: at least 1 tile from top/bottom edges
   const minY = GRID_MIN_Y + 1;
   const maxY = GRID_MAX_Y - 1;
@@ -533,7 +511,7 @@ function placeCreepCamp(grid: Grid, fixedX?: number, fixedY?: number): void {
     const candidates: GridPos[] = [];
     for (let gy = minY; gy <= maxY; gy++) {
       for (let gx = minX; gx <= maxX; gx++) {
-        if (isReserved(gx, gy)) continue;
+        if (isReserved(grid, gx, gy)) continue;
         if (!reachable[idx(gx, gy)]) continue;
         candidates.push({ x: gx, y: gy });
       }
@@ -664,15 +642,6 @@ function bossFloorTerrain(gx: number, gy: number): Terrain {
   return BOSS_FLOOR[wrap(-gy)][wrap(gx)];
 }
 
-/**
- * The boss arena: a square of dungeon floor patterned with diamonds, ringed by
- * lava that cannot be walked onto.
- *
- * Built through the same Grid the rounds and lobbies use, so it spawns, paints
- * and cleans up through exactly one code path -- the lava's pathing blockers
- * included, since they are destructables and the terrain sweep already removes
- * every destructable on load.
- */
 /** Hero places, north to south along the west wall. */
 const BOSS_HERO_SPOTS: ReadonlyArray<GridPos> = [
   { x: -3, y: 2 }, { x: -3, y: 1 }, { x: -3, y: -1 }, { x: -3, y: -2 },
@@ -684,6 +653,15 @@ const BOSS_MERC_SPOTS: ReadonlyArray<GridPos> = [
 /** Where the boss waits. */
 const BOSS_SPOT: GridPos = { x: 3, y: 0 };
 
+/**
+ * The boss arena: a square of dungeon floor patterned with diamonds, ringed by
+ * lava that cannot be walked onto.
+ *
+ * Built through the same Grid the rounds and lobbies use, so it spawns, paints
+ * and cleans up through exactly one code path -- the lava's pathing blockers
+ * included, since they are destructables and the terrain sweep already removes
+ * every destructable on load.
+ */
 export function generateBossBattlefield(): Grid {
   const grid = createGrid();
 
@@ -847,10 +825,10 @@ export function generateDefeatLobby(): Grid {
 
 /** The lobby the map boots into, and the one a defeated run restarts to.
  *
- *  Only player 1 stands here: the choices on offer -- new run, tutorial, load a
- *  save -- belong to the host, and the other players have nothing to decide
- *  until a game is actually running. Built from the empty defeat-lobby shell so
- *  the three lobbies cannot drift apart in floor or boundary. */
+ *  The choices on offer -- new run, tutorial, load a save -- belong to the host;
+ *  everyone else stands here as a dancer (loadStartLobby) until a game is
+ *  actually running. Built from the empty defeat-lobby shell so the three
+ *  lobbies cannot drift apart in floor or boundary. */
 export function generateStartLobby(): Grid {
   const grid = generateEmptyLobby();
   arrangeLobbyPlayers(grid);
@@ -865,7 +843,7 @@ export function generateStartLobby(): Grid {
  *  few steps of the spawn. Everything a first-timer needs to try is in sight
  *  rather than somewhere out on a procedural map. */
 export function generateTutorial(): Grid {
-  const grid = generateCheatTerrain(GRID_MIN_X + 11);
+  const grid = generateCheatTerrain();
   // SPAWN is the generator's reserved box -- the cleared ground the players,
   // tools and train start on. Props go OUTSIDE it, just beyond its eastern
   // edge and just south of it, so they are a couple of steps away without
@@ -893,9 +871,7 @@ export function generateTutorial(): Grid {
     if (!inBounds(gx, gy)) continue;
     // Honour the generator's reserved box by rule rather than by choosing
     // coordinates carefully, so a later nudge cannot wander back into it.
-    const inReserve = gx >= SPAWN.minX && gx <= SPAWN.maxX
-      && gy >= SPAWN.minY && gy <= SPAWN.maxY;
-    if (inReserve) continue;
+    if (inArea(SPAWN, gx, gy)) continue;
     const cell = grid.cells[idx(gx, gy)];
     // Anything already placed wins -- the track corridor, the creep camp and
     // the crate all matter more than a prop.
@@ -905,9 +881,9 @@ export function generateTutorial(): Grid {
   return grid;
 }
 
-/** Picking which save to resume. Player 1 only, like the start lobby it comes
- *  from: the four circles are back, older, newer and confirm, and the selected
- *  save's heroes are displayed above them by chooseSaveLobby.ts. */
+/** Picking which save to resume, laid out like the start lobby it comes from:
+ *  the four circles are back, older, newer and confirm, and the selected save's
+ *  heroes are displayed above them by chooseSaveLobby.ts. */
 export function generateChooseSaveLobby(): Grid {
   // Built from the empty shell, not from the start lobby: a lobby places what
   // it wants rather than inheriting another's furniture and unpicking it.
@@ -933,8 +909,9 @@ function placeEntities(grid: Grid): void {
       grid.cells[idx(gx, gy)].terrain = Terrain.GRASSY_DIRT;
     }
   }
-  for (let gy = VICTORY.minY; gy <= VICTORY.maxY; gy++) {
-    for (let gx = VICTORY.minX; gx <= VICTORY.maxX; gx++) {
+  const victory = exitArea(grid.exit);
+  for (let gy = victory.minY; gy <= victory.maxY; gy++) {
+    for (let gx = victory.minX; gx <= victory.maxX; gx++) {
       grid.cells[idx(gx, gy)].terrain = Terrain.GRASSY_DIRT;
     }
   }
@@ -949,8 +926,9 @@ function placeEntities(grid: Grid): void {
   // be walked onto and built on.
   const bossExit = grid.bossExit;
   if (bossExit != null) {
-    for (let gy = BOSS_EXIT.minY; gy <= BOSS_EXIT.maxY; gy++) {
-      for (let gx = BOSS_EXIT.minX; gx <= BOSS_EXIT.maxX; gx++) {
+    const area = exitArea(bossExit);
+    for (let gy = area.minY; gy <= area.maxY; gy++) {
+      for (let gx = area.minX; gx <= area.maxX; gx++) {
         grid.cells[idx(gx, gy)].terrain = Terrain.GRASSY_DIRT;
         grid.cells[idx(gx, gy)].entity = Entity.NONE;
       }
@@ -977,9 +955,11 @@ function placeEntities(grid: Grid): void {
 
 const CRITTER_COUNT = 15;
 
-/** Mark `count` random empty grass tiles as critter spawns. Runs last so no
- *  later step overwrites them. */
-function placeCritters(grid: Grid, count: number): void {
+/** Mark random empty grass tiles as critter spawns: CRITTER_COUNT of them, or
+ *  every one under Critterpocalypse. Runs last so no later step overwrites
+ *  them. */
+function placeCritters(grid: Grid): void {
+  const count = isChallengeArmed(CH_CRITTERPOCALYPSE) ? GRID_W * GRID_H : CRITTER_COUNT;
   const candidates: number[] = [];
   for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
     for (let gx = GRID_MIN_X; gx <= GRID_MAX_X; gx++) {
@@ -987,7 +967,7 @@ function placeCritters(grid: Grid, count: number): void {
       if (
         grid.cells[i].terrain === Terrain.GRASS &&
         grid.cells[i].entity === Entity.NONE &&
-        !isReserved(gx, gy)
+        !isReserved(grid, gx, gy)
       ) {
         candidates.push(i);
       }
@@ -1001,14 +981,11 @@ function placeCritters(grid: Grid, count: number): void {
   }
 }
 
-export function generateTerrain(
-  difficulty: number, exitX = GRID_MAX_X, withBossExit = false, biome = Biome.SUMMER,
-): Grid {
+export function generateTerrain(difficulty: number, withBossExit: boolean, biome: Biome): Grid {
   const grid = createGrid();
   grid.biome = biome;
-  BOSS_EXIT.active = false;
-  generatePath(grid, exitX);
-  if (withBossExit) generateBossExit(grid, exitX);
+  generatePath(grid, GRID_MAX_X);
+  if (withBossExit) generateBossExit(grid, GRID_MAX_X);
   placeGranite(grid, difficulty);
   placeWater(grid, difficulty);
   for (const cell of grid.cells) {
@@ -1018,8 +995,7 @@ export function generateTerrain(
   placeEntities(grid);
   placeCreepCamp(grid);
   if (biome === Biome.WINTER) placeSalesperson(grid);
-  // Critterpocalypse: every eligible grass tile instead of the default count
-  placeCritters(grid, isChallengeArmed(CH_CRITTERPOCALYPSE) ? GRID_W * GRID_H : CRITTER_COUNT);
+  placeCritters(grid);
   return grid;
 }
 
@@ -1028,34 +1004,29 @@ export function generateTerrain(
  *  on. */
 const CHEAT_SEED = 20260827;
 
-/** Lay the cheat map's corridor: dead straight east, then a step to the exit
- *  row if it is off-centre.
+/** Lay the cheat map's corridor: dead straight east along row 0 to
+ *  CHEAT_EXIT_X.
  *
  *  generatePath wanders on purpose -- that is what makes a real round a puzzle.
  *  The cheat map is not a puzzle, it is a bench: the line should be trivially
  *  layable so whatever is actually being tested is the only variable. */
-function layCheatPath(grid: Grid, exitX: number, exitY: number): void {
-  for (let x = GRID_MIN_X; x <= exitX; x++) {
+function layCheatPath(grid: Grid): void {
+  for (let x = GRID_MIN_X; x <= CHEAT_EXIT_X; x++) {
     grid.path[idx(x, 0)] = true;
   }
-  const step = exitY > 0 ? 1 : -1;
-  for (let y = 0; y !== exitY; y += step) {
-    grid.path[idx(exitX, y)] = true;
-  }
-  grid.path[idx(exitX, exitY)] = true;
-  grid.exit = { x: exitX, y: exitY };
+  grid.exit = { x: CHEAT_EXIT_X, y: 0 };
 }
 
 /** The cheat map: the same clean-and-build every other map goes through, over a
  *  fixed layout rather than a generated one. placeEntities lays the spawn, the
  *  train start, the tools, the players and the target crate exactly as a real
  *  round does, so what is being tested sits in its normal surroundings. */
-export function generateCheatTerrain(exitX = GRID_MAX_X, exitY = 0): Grid {
+export function generateCheatTerrain(): Grid {
   SetRandomSeed(CHEAT_SEED);
   const grid = createGrid();
-  layCheatPath(grid, exitX, exitY);
+  layCheatPath(grid);
   placeEntities(grid);
   placeCreepCamp(grid, GRID_MIN_X + 4, SPAWN.minY - 2);
-  placeCritters(grid, isChallengeArmed(CH_CRITTERPOCALYPSE) ? GRID_W * GRID_H : CRITTER_COUNT);
+  placeCritters(grid);
   return grid;
 }

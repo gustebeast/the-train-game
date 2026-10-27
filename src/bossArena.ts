@@ -1,11 +1,11 @@
 import { MapPlayer, Trigger } from 'w3ts';
 import { BOSS_ADD_ID, BOSS_ID } from './constants';
 import { spawnBoss, stopBoss } from './boss';
-import { dealPartyForHumans } from './bossParty';
+import { dealHeroesForHumans } from './bossParty';
 import { spawnHeroes, getSpawnedHeroes, endHeroState, chooseAllHeroes } from './heroes';
-import { spawnMercWithHeroes, getLivingMercCount } from './mercenary';
+import { spawnMercWithHeroes, getSpawnedMercUnits } from './mercenary';
 import { getBossHeroSpots, getBossMercSpots, getBossSpot } from './terrain/spawn';
-import { forEachUnitOfPlayer, getHumanPlayers, nextFrame } from './util';
+import { forEachUnitOfPlayer, getHumanPlayers, nextFrame, isAlive, forEachUnitInWorld } from './util';
 
 /**
  * The boss fight itself: who stands where, and how it ends.
@@ -55,11 +55,31 @@ export function setBossArenaCallbacks(
   onVictory = victory;
 }
 
+/** The endings currently installed, so a test can swap in its own to see which
+ *  fired and then put these back. */
+export function getBossArenaCallbacks(): {
+  defeat: (() => void) | null; victory: ((this: void, survivors: unit[]) => void) | null;
+} {
+  return { defeat: onDefeat, victory: onVictory };
+}
+
 /** Stop watching. Safe to call repeatedly, and called on the way out however
  *  the fight ended. */
 function stopBossArena(): void {
   if (watcher != null) { watcher.destroy(); watcher = null; }
   stopBoss();
+}
+
+/** A boss or lesser infernal the party has taken over with Charm.
+ *
+ *  It belongs to a player now, but it is not one of the party: it must not keep
+ *  a wiped party "standing", walk out of the arena with the winners, or count
+ *  as an enemy still to beat. Every check below leaves it out. */
+function isCharmedBossUnit(u: unit): boolean {
+  const id = GetUnitTypeId(u);
+  if (id !== BOSS_ID && id !== BOSS_ADD_ID) return false;
+  const owner = GetOwningPlayer(u);
+  return getHumanPlayers().some(p => p.handle === owner);
 }
 
 /** Is anything the party owns still standing? */
@@ -68,8 +88,9 @@ function partyStanding(): boolean {
   for (const player of getHumanPlayers()) {
     forEachUnitOfPlayer(player.handle, u => {
       if (standing) return;
+      if (isCharmedBossUnit(u)) return;
       if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
-      if (GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
+      if (!isAlive(u)) return;
       standing = true;
     });
     if (standing) return true;
@@ -80,18 +101,17 @@ function partyStanding(): boolean {
 /** Is the boss, or anything it called down, still on the board? */
 function enemiesRemain(): boolean {
   let remain = false;
-  const g = CreateGroup()!;
-  GroupEnumUnitsInRect(g, GetPlayableMapRect()!, undefined);
-  ForGroup(g, () => {
-    const u = GetEnumUnit();
-    if (remain || u == null) return;
+  forEachUnitInWorld(u => {
+    if (remain) return;
     const id = GetUnitTypeId(u);
     if (id !== BOSS_ID && id !== BOSS_ADD_ID) return;
-    if (IsUnitType(u, UNIT_TYPE_DEAD)) return;
-    if (GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
+    // Matched by type, so one the party has charmed has to be left out by
+    // owner: it is theirs now, and waiting for it to die stalled the win for
+    // up to its three-minute life.
+    if (isCharmedBossUnit(u)) return;
+    if (!isAlive(u)) return;
     remain = true;
   });
-  DestroyGroup(g);
   return remain;
 }
 
@@ -112,12 +132,12 @@ export function startBossFight(): void {
   const mercSpots = getBossMercSpots();
   // Everybody comes to this one, not the usual two.
   chooseAllHeroes();
-  const deal = dealPartyForHumans(heroSpots.length, getLivingMercCount());
+  const heroOwners = dealHeroesForHumans(heroSpots.length);
 
   // spawnHeroes takes one owner per hero in roster order, which is exactly the
   // shape the deal produces.
   const owners: MapPlayer[] = [];
-  for (const id of deal.heroOwners) {
+  for (const id of heroOwners) {
     const p = MapPlayer.fromIndex(id);
     if (p != null) owners.push(p);
   }
@@ -134,25 +154,16 @@ export function startBossFight(): void {
     }
   }
 
-  // The mercenaries are handed out by the mercenary system rather than by the
-  // deal above: it already places each one with whoever holds the fewest
-  // heroes, breaking ties by who has controlled least recently, which is the
-  // rule this fight wants and is one implementation instead of two. It is told
+  // The mercenaries are handed out by the mercenary system: it already places
+  // each one with whoever holds the fewest heroes, breaking ties by who has
+  // controlled least recently, which is the rule this fight wants. It is told
   // who holds which hero; it works out the rest.
   if (mercSpots.length > 0) {
-    spawnMercWithHeroes(mercSpots[0].x, mercSpots[0].y, deal.heroOwners);
-    // Onto their own marks. Derived from the board rather than handed back,
-    // since the mercenary system owns those units: whatever the players hold
-    // that is not one of the heroes is a mercenary.
-    const heroHandles = getSpawnedHeroes().map(h => h.handle);
-    let placed = 0;
-    for (const player of getHumanPlayers()) {
-      forEachUnitOfPlayer(player.handle, u => {
-        if (placed >= mercSpots.length) return;
-        if (heroHandles.indexOf(u) >= 0) return;
-        SetUnitPosition(u, mercSpots[placed].x, mercSpots[placed].y);
-        placed += 1;
-      });
+    spawnMercWithHeroes(mercSpots[0].x, mercSpots[0].y, heroOwners);
+    // Then onto their own marks.
+    const mercs = getSpawnedMercUnits();
+    for (let i = 0; i < mercs.length && i < mercSpots.length; i++) {
+      SetUnitPosition(mercs[i].handle, mercSpots[i].x, mercSpots[i].y);
     }
   }
 
@@ -164,6 +175,11 @@ export function startBossFight(): void {
   const trig = Trigger.create();
   watcher = trig;
   trig.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DEATH);
+  // Charm ends a fight as surely as a death -- the last hostile infernal
+  // changing hands leaves nothing to beat -- but it is no death, so it needs
+  // its own event. "Any unit" covers every slot up to bj_MAX_PLAYER_SLOTS,
+  // neutral aggressive included, so the boss's side needs nothing extra.
+  trig.registerAnyUnitEvent(EVENT_PLAYER_UNIT_CHANGE_OWNER);
   for (const p of getHumanPlayers()) trig.registerPlayerEvent(p, EVENT_PLAYER_LEAVE);
   // A frame later: inside the death event the dying unit can still read as
   // alive to the checks below, and judging it standing would miss the ending.
@@ -199,7 +215,8 @@ function survivors(): unit[] {
   const all: unit[] = [];
   for (const player of getHumanPlayers()) {
     forEachUnitOfPlayer(player.handle, u => {
-      if (IsUnitType(u, UNIT_TYPE_DEAD) || GetUnitState(u, UNIT_STATE_LIFE) <= 0) return;
+      if (!isAlive(u)) return;
+      if (isCharmedBossUnit(u)) return;
       all.push(u);
     });
   }

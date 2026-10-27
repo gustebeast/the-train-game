@@ -31,8 +31,7 @@
 // what is missing.
 // Run from the project root:  node scripts/transplant-dance-anims.js
 
-const fs = require('fs');
-const { Model, TARGET, load, save } = require('./peasant-model');
+const { load, save } = require('./peasant-model');
 const Sequence = require(base + '/parsers/mdlx/sequence').default;
 
 const SOURCE = 'C:/Users/gus/Downloads/Villager 255 Animations/Villager255.MDX';

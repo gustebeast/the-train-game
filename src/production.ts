@@ -107,9 +107,9 @@ function updateProduction(): void {
   // If shouldProduce && already producing, keep going (don't reset progress)
 }
 
-/** Initialize the production system. Must be called after the train is created. */
 let manaTrigger: Trigger | null = null;
 
+/** Initialize the production system. Must be called after the train is created. */
 export function initProduction(trainUnit: Unit, trackWagonUnit: Unit): void {
   train = trainUnit;
   trackWagon = trackWagonUnit;

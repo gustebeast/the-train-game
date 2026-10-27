@@ -2,7 +2,7 @@ import { Item, Trigger, Unit } from 'w3ts';
 import { updateCarryingVisual } from './carrying';
 import { gameState } from './state';
 import { canHold, isPeasantAbilityItem, isResourceItem, isShopUpgrade } from './itemRules';
-import { INVENTORY_SLOTS, nextFrame } from './util';
+import { INVENTORY_SLOTS, giveItems, nextFrame } from './util';
 import {
   WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
@@ -256,6 +256,30 @@ export function getMaxStack(u: Unit): number {
   if (isTrackWagon(u)) return gameState.trainTrackMaxStack;
   if (u.typeId === CRATE_ID) return gameState.crateMaxStack;
   return gameState.peasantMaxStack + carryBonus(u);
+}
+
+/** Use up one charge of a carried item, removing it at zero. Returns false if
+ *  the unit carries none. */
+export function spendCharge(u: Unit, itemTypeId: number): boolean {
+  const it = findItemByType(u, itemTypeId);
+  if (it == null) return false;
+  it.charges -= 1;
+  if (it.charges <= 0) RemoveItem(it.handle);
+  return true;
+}
+
+/** Exchange a carried item for another -- the bucket filling and emptying.
+ *  Returns false if the unit is not carrying `from`.
+ *
+ *  The carrier refresh is deferred: these swaps happen inside a spell's own
+ *  effect, and revoking the ability that is being cast cancels it. */
+export function swapCarriedItem(u: Unit, from: number, to: number): boolean {
+  const old = findItemByType(u, from);
+  if (old == null) return false;
+  RemoveItem(old.handle);
+  giveItems(u, [to]);
+  refreshCarrierNextFrame(u.handle);
+  return true;
 }
 
 /** Get the item in slot 0 (first inventory slot) for a unit. */
