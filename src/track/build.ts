@@ -8,7 +8,7 @@ import { reskinTrack, replaceTrack } from './helpers';
 import {
   placedTracks, noteLineChanged, isVictoryTriggered, getVictoryTile, getBossVictoryTile, markBossVictory,
 } from './state';
-import { spendCharge, updateBuildAbility } from '../items';
+import { spendCharge, refreshCarrierNextFrame } from '../items';
 import { TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID } from '../constants';
 import { noteTrackPlaced } from '../train';
 import { triggerVictory } from '../victory';
@@ -118,7 +118,10 @@ export function initTrackBuildTrigger() {
   onSpellEffect(BUILD_TRACK_ABILITY_ID, u => {
     // Only consume a track piece if the placement is valid
     if (!isValidPlacement(GetSpellTargetX(), GetSpellTargetY())) return;
-    if (spendCharge(u, TRACK_PIECE_ID)) updateBuildAbility(u);
+    // Deferred: spending the last piece revokes this very ability, and doing
+    // that inside its own spell effect can cancel the build -- the piece gone
+    // and no track laid.
+    if (spendCharge(u, TRACK_PIECE_ID)) refreshCarrierNextFrame(u.handle);
   });
 
   const trigger = Trigger.create();
