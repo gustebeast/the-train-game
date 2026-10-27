@@ -1,6 +1,6 @@
 import { Item, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
-import { registerTest, TestReporter } from './testkit';
+import { registerTest, startRunInLobby, TestReporter } from './testkit';
 import { gameState } from './state';
 import { TRAIN_INITIAL_MAX_HP, FLAME_RESISTANCE_HP, SHELF } from './sharedData';
 import { Items } from '@objectdata/items';
@@ -21,6 +21,10 @@ import { getWorldBounds } from './util';
  *    afterUpgrade   repair-then-upgrade stacks from the starting max HP,
  *                   proving the reset is a floor and not a permanent cap */
 function runRepairTest(t: TestReporter): void {
+  // A board of its own. In a batched run the previous test can leave a round
+  // standing with the train on fire, and the burn tick would keep taking max
+  // HP away while this measures it.
+  startRunInLobby();
   const bounds = getWorldBounds();
   const x = GetRectMaxX(bounds) - 400;
   const y = GetRectMaxY(bounds) - 400;
