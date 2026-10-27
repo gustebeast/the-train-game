@@ -71,10 +71,14 @@ current request:
    npm run publish:download
    ```
    `publish:download` builds the new `main` (the dev build: cheats and `-test`
-   commands included, which the user tests with) and copies it to their
-   `Documents\Warcraft III\Maps\Download\TheTrainGame.w3x`. Do it after
-   EVERY commit to `main` -- merges and your own commits alike -- so that file
-   is never behind.
+   commands included, which the user tests with), copies it to their
+   `Documents\Warcraft III\Maps\Download\TheTrainGame.w3x`, and uploads it
+   to the single GitHub release `beta` as `TheTrainGameBETA.w3x` -- the same
+   release every time, never a new one: the `beta` tag moves to HEAD and the
+   asset is replaced. It refuses to run on uncommitted or unpushed code, and
+   fails loudly if the GitHub CLI is not signed in (`gh auth login`). Do it
+   after EVERY commit to `main` -- merges and your own commits alike -- so
+   neither copy is ever behind.
    The prompt-time hook tells the other sub-agents to sync. They merge
    `main` into their branch **themselves**, with their own context — do
    NOT merge into their worktrees yourself.
