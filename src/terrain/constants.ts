@@ -212,7 +212,9 @@ export const ROCK_MODEL_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
  *  wall off terrain that should look walkable but is not -- the lava around the
  *  boss battlefield -- without the visible unit the lobby's water relies on. */
 export const PATH_BLOCKER_RAW = 'YTpc';
-/** Pathing Blocker (Both) (Large): blocks ground and air across one cell.
+/** Pathing Blocker (Both) (Large), across one cell. Despite the name it stops
+ *  only flyers -- its pathing texture is 4x4Unflyable; measured, a footman
+ *  walked straight through -- so the wall pairs it with PATH_BLOCKER_RAW.
  *  Rings the board; see wallBoard in spawn.ts. */
 export const BOARD_WALL_RAW = 'YTfc';
 /** Line of Sight Blocker (the small one, a quarter of a cell): blocks ground

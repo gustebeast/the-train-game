@@ -6,7 +6,7 @@ import {
   measureFieldedForce, setCampForTest, getCampDamageScale,
 } from '../creeps';
 import { CREEP_CAMPS } from '../creepCamps';
-import { HeroData, setRosterForTest, spawnHeroes, getChosenHeroCount, hasHeroes } from '../heroes';
+import { HeroData, setRosterForTest, spawnHeroes, getChosenHeroCount, hasHeroes, getChosenHeroData } from '../heroes';
 import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from '../mercenary';
 import { getDPSCheckStatus, getDPSStation, startDPSCheck, RIGGED_SECONDS } from '../dpsCheck';
 import { getDPSCheckPlayer, getNeutralAggressive, toggleDPSVision } from '../teams';
@@ -14,6 +14,7 @@ import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem, forEachDestruc
 import { loadInterRoundLobby, beginNewRun, loadTerrain } from '../terrain/load';
 import { gameState } from '../state';
 import { CAGE_RAW } from '../sharedData';
+import { purchaseSummonUpgrade } from '../summonUpgrade';
 
 /**
  * The DPS check (dpsCheck.ts): twelve copies of the party fighting the round's
@@ -43,6 +44,10 @@ function level5(type: string, skills: ReadonlyArray<string>): HeroData {
 
 const FAR_SEER = level5(Units.FarSeer, [Abilities.FeralSpirit, Abilities.ChainLightning, Abilities.FarSight]);
 const PRIESTESS = level5(Units.PriestessOfTheMoon, [Abilities.SearingArrows, Abilities.TrueshotAura, Abilities.Scout]);
+
+/** A roster filler with more XP than the level 5 pair, so a round never
+ *  picks it over them. */
+const VETERAN: HeroData = { ...level5(Units.Paladin, [Abilities.HolyLight, Abilities.DevotionAura, Abilities.DivineShield]), xp: 800 };
 
 /** gnoll assassins x2, overseer, warden: four creeps. */
 const FIELD_CAMP = 217;
@@ -206,10 +211,16 @@ registerTest('dpsvision', runDPSVision);
  */
 function runDPSRound(t: TestReporter): void {
   beginNewRun();
-  setRosterForTest([FAR_SEER, PRIESTESS]);
+  // Without Summon Heroes a round fields no heroes, and there is nothing to
+  // measure.
+  purchaseSummonUpgrade();
+  // All four slots: a round fields the two with least XP, and an empty slot
+  // has none.
+  setRosterForTest([FAR_SEER, PRIESTESS, VETERAN, VETERAN]);
   setMercsForTest([FourCC('nogl')]);
   setCampForTest(FIELD_CAMP);
   loadTerrain(gameState.round);
+  t.report('heroesChosen', getChosenHeroData().length);
   t.waitFor('roundStartsIt', phaseIs('rigged'), START_WAIT, () => t.after(1, () => {
     t.expect('creepsForThisCamp', rowCreeps().length, CREEP_CAMPS[FIELD_CAMP].creeps.length * getDPSCheckStatus().stations);
 
