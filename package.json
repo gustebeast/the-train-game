@@ -9,6 +9,7 @@
     "test": "ts-node --transpile-only scripts/test.ts",
     "build": "ts-node --transpile-only scripts/build.ts",
     "build:release": "ts-node --transpile-only scripts/build.ts -release",
+    "publish:download": "node scripts/publish-download.js",
     "dev": "npm-watch",
     "build:defs": "ts-node scripts/dev"
   },
