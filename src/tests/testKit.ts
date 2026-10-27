@@ -1,6 +1,7 @@
 import { Timer } from 'w3ts';
 import { beginNewRun, loadInterRoundLobby } from '../terrain/load';
 import { onChatCommand } from '../util';
+import { onSaveCatalogReady } from '../saveSync';
 
 /** In-map half of the automated test harness.
  *
@@ -301,7 +302,9 @@ export function initTestKit(autoRun?: string): void {
   if (autoRun != null) {
     names.push('autorun=' + autoRun);
   }
-  Timer.create().start(0.5, false, () => {
+  // And not before the save catalog has arrived (saveSync.ts): a test that
+  // saves or loads would otherwise find no saves at all.
+  Timer.create().start(0.5, false, () => onSaveCatalogReady(() => {
     writeFile(READY_FILE, names);
     // Same reason this marker is on a timer: init runs while the game is still
     // paused, and a test started there would sit in a world where no timer ever
@@ -309,5 +312,5 @@ export function initTestKit(autoRun?: string): void {
     if (autoRun != null) {
       startTest(autoRun);
     }
-  });
+  }));
 }

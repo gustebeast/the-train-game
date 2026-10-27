@@ -1,5 +1,6 @@
 import { DEFAULT_STATE, GameState, gameState, applyState } from './state';
 import { KitItem } from './util';
+import { log } from './debug';
 import { HERO_SLOTS, MAX_MERCS } from './constants';
 
 // One file per save slot, so several runs can be resumed independently: host a
@@ -75,7 +76,7 @@ export const MERC_SAVE_KEY = 'mm';
  * gone. Anything else means old formats live on in code that has to keep being
  * understood, which is the cost this constant exists to avoid.
  */
-const SAVE_VERSION = 0;
+const SAVE_VERSION = 1;
 
 /** Which slot this session is playing, or 0 if it has not claimed one. */
 let currentSlot = 0;
@@ -328,37 +329,112 @@ function decodeLivingMercs(raw: string): SavedMerc[] {
 }
 
 /**
- * Everything written to each slot this session, key to value.
+ * Every slot's contents as this session knows them, key to value: the save
+ * catalog, read off disk once at boot and then kept up to date by every write.
+ * Every read of a save is served from here, never from disk.
  *
- * The preload file on disk is not readable again from inside the same session:
- * WC3 will not re-execute a Preloader file it has already run, so the game
- * cache keeps whatever it was filled with the FIRST time the slot was read.
- * Load a save, play two rounds, save, and reading that slot back hands you the
- * run as it was when you loaded it -- the rounds are on disk, and the session
- * cannot see them. (Measured in game: a slot marked defeated was still offered,
- * and still read as undefeated, immediately afterwards.)
+ * Why not from disk:
  *
- * So what is written is kept here as well, and preferred on every read. Disk is
- * for the next session; this is for this one.
+ * - Disk is not the same on every machine. Each player's saves are their own,
+ *   and anything a save decides -- which parties the chooser stands up, what a
+ *   load restores -- has to be decided identically everywhere or the game
+ *   desyncs. So the catalog is the FIRST player's disk, sent to everyone
+ *   (saveSync.ts), and nobody else's disk is ever consulted.
+ * - A file cannot be read twice. WC3 will not re-execute a Preloader file it
+ *   has already run, so the game cache keeps whatever it was filled with the
+ *   first time. (Measured in game: a slot marked defeated was still offered,
+ *   and still read as undefeated, immediately afterwards.)
+ *
+ * Each write lands here and on every player's own disk, so the next session
+ * finds it whoever turns out to be first then.
  */
-const sessionData = new Map<number, Map<string, string>>();
+const slotData = new Map<number, Map<string, string>>();
+/** Whether slotData holds the catalog yet. No save can be read before it does. */
+let catalogReady = false;
 
 /** A slot's stored values, key to string ('' when absent). */
 type SlotReader = (key: string) => string;
 
-/** Read a slot through `read`, from this session's writes if it has any and
- *  from the file otherwise. Every read of a save goes through here, so the two
- *  sources can never be interpreted differently. Returns null when the slot's
- *  file cannot be opened. */
+/** Read a slot through `read`, from the catalog. Null, and logged, before the
+ *  catalog has arrived: reading a save then would read this machine's disk,
+ *  which is exactly what must not decide anything. */
 function withSlot<T>(slot: number, read: (get: SlotReader) => T): T | null {
-  const session = sessionData.get(slot);
-  if (session != null) return read(key => session.get(key) ?? '');
-  Preloader(slotSaveFile(slot));
-  const gc = InitGameCache(slotCacheFile(slot));
-  if (gc == null) return null;
-  const result = read(key => GetStoredString(gc, CACHE_CAT, key) ?? '');
-  FlushGameCache(gc);
-  return result;
+  if (!catalogReady) {
+    log('save: slot ' + tostring(slot) + ' read before the save catalog arrived');
+    return null;
+  }
+  const data = slotData.get(slot);
+  return read(key => (data != null ? data.get(key) : undefined) ?? '');
+}
+
+/** Whether the save catalog has arrived, so saves can be listed and loaded. */
+export function isSaveCatalogReady(): boolean {
+  return catalogReady;
+}
+
+/** Every key a slot can hold. A save is only ever written with these, so they
+ *  are all a disk read has to ask for. */
+function slotKeys(): string[] {
+  const keys = ['core', KEY_VERSION, KEY_SEQ, KEY_DEFEATED, KEY_VICTORIOUS];
+  for (const { key } of registered) keys.push(key);
+  return keys;
+}
+
+/** Separators for the catalog's wire format: slot records, then the fields
+ *  within one. Neither appears in anything a save writes (records are
+ *  "k=v;k=v" of numbers and ids), and encodeDiskCatalog refuses a value that
+ *  would contain one rather than send a catalog that parses wrong. */
+const RECORD_SEP = '~';
+const FIELD_SEP = '|';
+
+/** Read this machine's saves off disk into the catalog's wire format: one
+ *  "slot|key|value" record per stored value.
+ *
+ *  Every player runs this, the same way, whether or not their disk is the one
+ *  that will be used: the game cache is created before the file runs, on
+ *  every machine, so the engine objects behind the read are made identically
+ *  everywhere and only the strings read back differ. Only the first player's
+ *  result is ever sent. */
+export function encodeDiskCatalog(): string {
+  const records: string[] = [];
+  const keys = slotKeys();
+  for (let slot = 1; slot <= SLOT_COUNT; slot++) {
+    const gc = InitGameCache(slotCacheFile(slot));
+    Preloader(slotSaveFile(slot));
+    if (gc == null) continue;
+    for (const key of keys) {
+      const value = GetStoredString(gc, CACHE_CAT, key) ?? '';
+      if (value === '') continue;
+      if (value.includes(RECORD_SEP) || value.includes(FIELD_SEP)) {
+        log('save: slot ' + tostring(slot) + ' key ' + key + ' holds a catalog separator; left out');
+        continue;
+      }
+      records.push(tostring(slot) + FIELD_SEP + key + FIELD_SEP + value);
+    }
+    FlushGameCache(gc);
+  }
+  return records.join(RECORD_SEP);
+}
+
+/** Take a catalog in encodeDiskCatalog's format as every slot's contents. A
+ *  slot it does not mention is empty. Saves can be read from here on. */
+export function adoptSaveCatalog(raw: string): void {
+  slotData.clear();
+  for (let slot = 1; slot <= SLOT_COUNT; slot++) slotData.set(slot, new Map());
+  if (raw !== '') {
+    for (const record of raw.split(RECORD_SEP)) {
+      const first = record.indexOf(FIELD_SEP);
+      const second = record.indexOf(FIELD_SEP, first + 1);
+      const slot = tonumber(record.substring(0, first));
+      const data = slot != null ? slotData.get(slot) : undefined;
+      if (first < 0 || second < 0 || data == null) {
+        log('save: malformed catalog record ' + record);
+        continue;
+      }
+      data.set(record.substring(first + 1, second), record.substring(second + 1));
+    }
+  }
+  catalogReady = true;
 }
 
 /** Whether a slot holds the save format this build speaks. An unstamped save
@@ -470,7 +546,7 @@ function writeSlot(slot: number, defeated: boolean, victorious = false): void {
     if (info.seq > highestSeq) highestSeq = info.seq;
   }
   // Every value goes two places: into the file for the next session, and into
-  // sessionData for this one.
+  // the catalog for this one.
   const record = new Map<string, string>();
   const put = (key: string, value: string): void => {
     record.set(key, value);
@@ -488,11 +564,18 @@ function writeSlot(slot: number, defeated: boolean, victorious = false): void {
   if (defeated) put(KEY_DEFEATED, DEFEATED_YES);
   if (victorious) put(KEY_VICTORIOUS, VICTORIOUS_YES);
   PreloadGenEnd(slotSaveFile(slot));
-  sessionData.set(slot, record);
+  slotData.set(slot, record);
 }
 
 /** Write current gameState + extra segments to the session's save slot. */
 export function saveToFile(): void {
+  // Without the catalog every slot looks free, and a new run would claim the
+  // first one and write over whatever save is really in it.
+  if (!catalogReady) {
+    log('save: not saved -- the save catalog has not arrived');
+    print('Progress could not be saved.');
+    return;
+  }
   if (currentSlot === 0) claimNewSlot();
   writeSlot(currentSlot, false);
   print('Progress saved.');
@@ -522,7 +605,7 @@ export function markCurrentSaveVictorious(): void {
  *  point, loading a save and immediately starting a new game cannot write over
  *  the save that was loaded. */
 export function resetToNewRun(): void {
-  // Deliberately NOT clearing sessionData: what is on disk is on disk, and a
+  // Deliberately NOT clearing the catalog: what is on disk is on disk, and a
   // new run must still see the saves the session has already written.
   applyStateBundle({ core: DEFAULT_STATE, segments: [] });
   currentSlot = 0;

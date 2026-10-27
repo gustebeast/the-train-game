@@ -37,6 +37,7 @@ import { syncGold } from './state';
 import { log } from './debug';
 import { DEV_TOOLS } from './buildFlags';
 
+import { initSaveSync } from './saveSync';
 import { initTestKit } from './tests/testKit';
 import './tests'; // registers every test module (tests/index.ts)
 import { initBoardFlow, loadStartLobby } from './terrain/load';
@@ -87,6 +88,7 @@ function tsMain() {
     initCameraLock();
     initCargoVisuals();
     initPlayerLeave();
+    initSaveSync();
     initDash();
     initDance();
     // Last: writes the ready marker the VM test runner polls for, so it only

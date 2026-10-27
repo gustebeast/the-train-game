@@ -20,7 +20,7 @@ import { getNeutralExtra } from '../teams';
 import { setBossArenaCallbacks, startBossFight } from '../bossArena';
 import { getCampData, getSparringSecondsToMinimum, startSparringMatch } from '../creeps';
 import { gameState } from '../state';
-import { loadFromSlot, listSaves, markCurrentSaveDefeated, markCurrentSaveVictorious, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
+import { loadFromSlot, listSaves, isSaveCatalogReady, markCurrentSaveDefeated, markCurrentSaveVictorious, resetToNewRun, revertToInterRoundLobbySnapshot, saveInterRoundLobbySnapshot } from '../save';
 import {
   hasHeroes, rollRandomRoster, chooseHeroes, getInterRoundLobbyHeroUnits,
   saveHeroInterRoundLobbySnapshot,
@@ -160,7 +160,10 @@ export function initBoardFlow(): void {
     showPanel('Tutorial', getTutorialBoardLines);
   });
   registerReadyZone('loadsave', 'Opening saved games', () => loadChooseSaveLobby(),
-    () => (listSaves().length === 0 ? 'There are no saved games to load.' : null));
+    () => {
+      if (!isSaveCatalogReady()) return 'Saved games are still being shared with everyone';
+      return listSaves().length === 0 ? 'There are no saved games to load.' : null;
+    });
   registerReadyZone('saveback', 'Going back', () => {
     closeChooseSaveLobby();
     loadStartLobby();
