@@ -663,14 +663,19 @@ compiletime(({ objectData, constants }) => {
     [unholyBone, 'BTNBoneChimes'], [greaterUnholyBone, 'BTNBoneChimes'],
     [horseEssence, 'BTNRiderlessHorse'], [greaterHorseEssence, 'BTNRiderlessHorse'],
   ];
+  /** The salesperson stocks his own shelf (salesperson.ts), so the engine's
+   *  stock rules only have to keep out of the way: plenty, and no restock. */
+  function stockAtSalesperson(item: typeof unholyBone): void {
+    item.stockMaximum = 10;
+    item.stockReplenishInterval = 3600;
+    item.stockInitialAfterStartDelay = 10;
+  }
   for (const [abilityItem, icon] of iconFor) {
     abilityItem.tooltipBasic = abilityItem.name;
     abilityItem.tooltipExtended = abilityItem.description;
     abilityItem.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\' + icon + '.blp';
     abilityItem.goldCost = shared.ABILITY_ITEM_PRICE;
-    abilityItem.stockMaximum = 10;
-    abilityItem.stockReplenishInterval = 3600;
-    abilityItem.stockInitialAfterStartDelay = 10;
+    stockAtSalesperson(abilityItem);
     abilityItem.abilities = '';
     abilityItem.activelyUsed = false;
     abilityItem.useAutomaticallyWhenAcquired = false;
@@ -690,9 +695,7 @@ compiletime(({ objectData, constants }) => {
   upgradeAbility.description = 'Turns the peasant ability item you are holding into its Greater version: a Greater Resource Vacuum reaches two tiles, a Greater Unholy Bone frenzies harder, a Greater Horse Essence lasts twice as long, Greater Muscle Milk™ carries 2 extra. Refunded if you have nothing to upgrade.';
   upgradeAbility.tooltipExtended = upgradeAbility.description;
   upgradeAbility.goldCost = shared.UPGRADE_ABILITY_PRICE;
-  upgradeAbility.stockMaximum = 10;
-  upgradeAbility.stockReplenishInterval = 3600;
-  upgradeAbility.stockInitialAfterStartDelay = 10;
+  stockAtSalesperson(upgradeAbility);
   upgradeAbility.abilities = '';
   upgradeAbility.activelyUsed = false;
   upgradeAbility.useAutomaticallyWhenAcquired = true;
@@ -1233,6 +1236,23 @@ compiletime(({ objectData, constants }) => {
     keyThrow.tooltipNormalExtended = 'Throw the key at the Strange Rock to break it open.';
   }
 
+  /** What every ability item's spell shows: its name, on Q in the bottom-left
+   *  slot -- each item's spell goes there, so a peasant only ever has one --
+   *  and the shared cooldown, stated in the tooltip from the constant that
+   *  sets it. Row 0 is the stock Move/Stop/Hold/Attack row (see the dash). */
+  type SpellAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>;
+  function faceAbilityItemSpell(spell: SpellAbility, name: string, description: string, icon: string | null): void {
+    spell.cooldown = shared.ABILITY_ITEM_COOLDOWN;
+    spell.name = name;
+    spell.tooltipNormal = name;
+    spell.tooltipNormalExtended = description + '|n|cffffcc00Cooldown:|r '
+      + String(shared.ABILITY_ITEM_COOLDOWN) + ' seconds.';
+    if (icon != null) spell.iconNormal = 'ReplaceableTextures\\CommandButtons\\' + icon + '.blp';
+    spell.hotkeyNormal = 'Q';
+    spell.buttonPositionNormalX = 0;
+    spell.buttonPositionNormalY = 2;
+  }
+
   // Vacuum Resources (Q): a third Channel, granted by holding either Resource
   // Vacuum. No target -- it works around the caster (vacuum.ts). Every ability
   // item's spell goes on Q, so a peasant only ever has one there.
@@ -1246,7 +1266,6 @@ compiletime(({ objectData, constants }) => {
     // Not 0: Channel reads 0 as "channel until interrupted" (see the dash).
     vacuum.followThroughTime = 0.01;
     vacuum.castingTime = 0;
-    vacuum.cooldown = shared.ABILITY_ITEM_COOLDOWN;
     // Its own order string: give/take is 'channel' and the dash 'flare', and
     // two abilities on one unit sharing an order is one of them never firing.
     vacuum.baseOrderIDundefined = 'whirlwind';
@@ -1254,13 +1273,9 @@ compiletime(({ objectData, constants }) => {
     vacuum.caster = '';
     vacuum.target = '';
     vacuum.effect = '';
-    vacuum.name = 'Vacuum Resources';
-    vacuum.tooltipNormal = 'Vacuum Resources';
-    vacuum.tooltipNormalExtended = 'Pull the wood and stone lying near you into one pile of each: within one tile with a Resource Vacuum, two with a Greater Resource Vacuum.|n|cffffcc00Cooldown:|r 60 seconds.';
-    vacuum.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNTornado.blp';
-    vacuum.hotkeyNormal = 'Q';
-    vacuum.buttonPositionNormalX = 0;
-    vacuum.buttonPositionNormalY = 2;
+    faceAbilityItemSpell(vacuum, 'Vacuum Resources',
+      'Pull the wood and stone lying near you into one pile of each: within one tile with a Resource Vacuum, two with a Greater Resource Vacuum.',
+      'BTNTornado');
   }
 
   // Unholy Frenzy (Q), from the Unholy Bones: faster attacks -- which for a
@@ -1282,17 +1297,13 @@ compiletime(({ objectData, constants }) => {
     frenzy.damagePerSecondundefined = drain;
     frenzy.durationNormal = shared.UNHOLY_FRENZY_DURATION;
     frenzy.durationHero = shared.UNHOLY_FRENZY_DURATION;
-    frenzy.cooldown = shared.ABILITY_ITEM_COOLDOWN;
     frenzy.castRange = 500;
     // invulnerable: peasants are, and casting it on a peasant is the point.
     frenzy.targetsAllowed = 'air,ground,friend,self,vulnerable,invulnerable,organic';
-    frenzy.name = name;
-    frenzy.tooltipNormal = name;
-    frenzy.tooltipNormalExtended = 'Increases a friendly unit\'s attack rate by ' + String(Math.round(attackRate * 100))
-      + '%, but drains ' + String(drain) + ' hit points per second. A peasant chops and mines faster. Lasts ' + String(shared.UNHOLY_FRENZY_DURATION) + ' seconds.|n|cffffcc00Cooldown:|r 60 seconds.';
-    frenzy.hotkeyNormal = 'Q';
-    frenzy.buttonPositionNormalX = 0;
-    frenzy.buttonPositionNormalY = 2;
+    // The stock Unholy Frenzy icon, kept.
+    faceAbilityItemSpell(frenzy, name, 'Increases a friendly unit\'s attack rate by ' + String(Math.round(attackRate * 100))
+      + '%, but drains ' + String(drain) + ' hit points per second. A peasant chops and mines faster. Lasts '
+      + String(shared.UNHOLY_FRENZY_DURATION) + ' seconds.', null);
   }
 
   // Imbue With Horse (Q), from the Horse Essences: Wind Walk's top speed
@@ -1310,18 +1321,11 @@ compiletime(({ objectData, constants }) => {
     imbue.movementSpeedIncreasePercentundefined = 0.7;
     imbue.durationNormal = seconds;
     imbue.durationHero = seconds;
-    imbue.cooldown = shared.ABILITY_ITEM_COOLDOWN;
     imbue.castRange = 500;
     // Self, other peasants (invulnerable), heroes and mercenaries.
     imbue.targetsAllowed = 'air,ground,friend,self,vulnerable,invulnerable,organic';
-    imbue.name = 'Imbue With Horse';
-    imbue.tooltipNormal = 'Imbue With Horse';
-    imbue.tooltipNormalExtended = 'A friendly unit moves 70% faster for ' + String(seconds)
-      + ' seconds.|n|cffffcc00Cooldown:|r 60 seconds.';
-    imbue.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNRiderlessHorse.blp';
-    imbue.hotkeyNormal = 'Q';
-    imbue.buttonPositionNormalX = 0;
-    imbue.buttonPositionNormalY = 2;
+    faceAbilityItemSpell(imbue, 'Imbue With Horse', 'A friendly unit moves 70% faster for ' + String(seconds)
+      + ' seconds.', 'BTNRiderlessHorse');
   }
 
   const clap = objectData.abilities.copy(constants.abilities.ThunderClap, shared.ADD_THUNDER_CLAP_ABILITY)!;
