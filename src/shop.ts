@@ -1,5 +1,5 @@
+import { onSelectionChanged, isSelectedByAnyone } from './selection';
 import { Trigger, Unit } from 'w3ts';
-import { Players } from 'w3ts/globals';
 import { Units } from '@objectdata/units';
 import { gameState, syncState, syncGold, trySpendGold } from './state';
 import {
@@ -21,7 +21,7 @@ import {
   canBuyMercContract, canBuySecondContract, getLivingMercCount,
 } from './mercenary';
 import { forceLevel3Camp, restartSparringMatch } from './creeps';
-import { nextFrame, getHumanPlayers, unitExists, forEachPeasant } from './util';
+import { nextFrame, unitExists, forEachPeasant } from './util';
 import { armChallenge, getOfferedChallenge } from './challenges';
 import { showChallengePreview, clearChallengePreview } from './challengeUI';
 import { refreshInterRoundLobbyRoster, hasInterRoundLobbyRerollTargets } from './interRoundLobbyRoster';
@@ -276,25 +276,11 @@ export function initShop(): void {
   });
 }
 
-/** The dealer standing in the current inter-round lobby, if there is one. */
-let dealerUnit: Unit | null = null;
-
-/** Remember this inter-round lobby's dealer, so the overlay can tell when he is selected. */
-export function registerDealer(dealer: Unit): void {
-  dealerUnit = dealer;
+/** A new inter-round lobby's dealer has been placed. */
+export function noteDealerPlaced(): void {
   // A new dealer means a new lobby: whatever the old one was showing went with
   // the old one, and nobody can have this one selected yet.
   clearChallengePreview();
-}
-
-/** True while any player has the dealer selected. */
-function dealerIsSelected(): boolean {
-  const d = dealerUnit;
-  if (d == null || !unitExists(d.handle)) return false;
-  for (const p of getHumanPlayers()) {
-    if (IsUnitSelected(d.handle, p.handle)) return true;
-  }
-  return false;
 }
 
 /** Show the dealer's current offer in the challenge overlay while he is
@@ -319,36 +305,25 @@ function dealerIsSelected(): boolean {
  *  Clicking another unit does deselect him, and the event fires; both checked
  *  with real mouse clicks through the VM.
  *
- *  What IS true of DESELECTED is that inside its handler the engine has not
- *  finished updating the selection, so IsUnitSelected can still answer with
- *  the old state. Hence the one-frame wait before asking whether ANY player
- *  still has the dealer selected -- which still has to be asked, because the
- *  board is shared, and one player looking away must not hide it from another
- *  who is still reading. A one-shot timer, not a poll.
+ *  Taking it down still asks whether ANY player has the dealer selected,
+ *  because the board is shared, and one player looking away must not hide it
+ *  from another who is still reading. Asked of selection.ts's record, which
+ *  every machine agrees on and which is already up to date when the
+ *  deselection is heard -- IsUnitSelected is neither (see selection.ts).
  *
  *  The dealer being removed with the lobby needs no case of its own: a new
- *  board starts with the preview cleared (registerDealer). */
+ *  board starts with the preview cleared (noteDealerPlaced). */
 export function initDealerOffer(): void {
   const dealerType = FourCC(Units.TombOfRelics);
 
-  const selected = Trigger.create();
-  const deselected = Trigger.create();
-  Players.forEach(p => {
-    selected.registerPlayerUnitEvent(p, EVENT_PLAYER_UNIT_SELECTED, undefined);
-    deselected.registerPlayerUnitEvent(p, EVENT_PLAYER_UNIT_DESELECTED, undefined);
-  });
-  selected.addAction(() => {
-    const u = GetTriggerUnit();
-    if (u == null || GetUnitTypeId(u) !== dealerType) return;
-    const offered = getOfferedChallenge();
-    if (offered != null) showChallengePreview(offered);
-  });
-  deselected.addAction(() => {
-    const u = GetTriggerUnit();
-    if (u == null || GetUnitTypeId(u) !== dealerType) return;
-    nextFrame(() => {
-      if (!dealerIsSelected()) clearChallengePreview();
-    });
+  onSelectionChanged((_who, u, nowSelected) => {
+    if (GetUnitTypeId(u) !== dealerType) return;
+    if (nowSelected) {
+      const offered = getOfferedChallenge();
+      if (offered != null) showChallengePreview(offered);
+    } else if (!isSelectedByAnyone(u)) {
+      clearChallengePreview();
+    }
   });
 }
 

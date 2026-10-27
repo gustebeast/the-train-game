@@ -2,7 +2,7 @@ import { registerTest, TestReporter } from './testKit';
 import { gameState } from '../state';
 import { beginNewRun, loadTerrain } from '../terrain/load';
 import { getHumanPlayers, INVENTORY_SLOTS } from '../util';
-import { getTrain } from '../train';
+import { getTrain, getTrainTarget } from '../train';
 import { findItemByType } from '../items';
 import { Unit } from 'w3ts';
 import { PEASANT_ID, WOOD_ID, STONE_ID, MUSCLE_MILK_ID, GREATER_MUSCLE_MILK_ID } from '../constants';
@@ -91,16 +91,20 @@ function storage(t: TestReporter, p: unit, train: unit): void {
     if (held != null && GetItemTypeId(held) === STONE_ID) RemoveItem(held);
   }
   gameState.trainCargoMaxStack = 2;
-  // Right beside the train: the give walks over, and a random board can wall
-  // a longer walk off.
-  SetUnitPosition(p, GetUnitX(train), GetUnitY(train) + 130);
+  // On the train's next track piece: the give walks over, and the piece is
+  // always walkable and always beside the train. Anywhere else a random board
+  // can put rock or water in the way, and then the give never happens (this
+  // test failed that way about one run in ten: train 0, peasant still 5).
+  const ahead = getTrainTarget();
+  if (ahead == null) { t.fail('setup', 'the train has no track ahead'); t.done(); return; }
+  SetUnitPosition(p, ahead.x, ahead.y);
   UnitAddItem(p, CreateItem(GREATER_MUSCLE_MILK_ID, GetUnitX(p), GetUnitY(p))!);
   const stone = CreateItem(STONE_ID, GetUnitX(p), GetUnitY(p))!;
   SetItemCharges(stone, 5);
   UnitAddItem(p, stone);
   t.after(0.3, () => {
     t.expect('carries5Stone', carried(p, STONE_ID), 5);
-    UnitDropItemTarget(p, UnitItemInSlot(p, 0)!, train);
+    t.expectTrue('giveOrdered', UnitDropItemTarget(p, UnitItemInSlot(p, 0)!, train));
     t.after(3, () => {
       t.expect('trainHoldsItsLimit', carried(train, STONE_ID), 2);
       t.expect('restBackWithPeasant', carried(p, STONE_ID), 3);

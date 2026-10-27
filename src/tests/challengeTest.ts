@@ -5,14 +5,22 @@ import {
 } from '../challenges';
 import { gameState } from '../state';
 import {
-  computeTrackShapes, applyTrackShapes, TrackPoint, CH_STRAIGHT_15, CH_CURVED_15,
+  computeTrackShapes, applyTrackShapes, TrackPoint, CH_STRAIGHT_15, CH_CURVED_15, CH_BRINK, getBrinkSeconds,
 } from '../challengeList';
 import { TRACK_SIZE } from '../track/constants';
+import { placedTracks, noteLineChanged } from '../track/state';
+import { getTracksRemaining } from '../train';
+import { beginNewRun, loadTerrain } from '../terrain/load';
+import { CHALLENGE_BONUS } from '../sharedData';
 
 /** Exercise the challenge system's rules: the offer never repeats until the
  *  list is exhausted, the sequence is stable for a given seed, completion pays,
  *  and a counter challenge actually completes when its counter fills. */
 function runChallengeTest(t: TestReporter): void {
+  // From a fresh run: the rotation is a run's own, and a batch's earlier tests
+  // may already have walked part of it (any inter-round lobby visit advances
+  // the offer). Starting mid-lap, the walk below wraps and sees a repeat.
+  beginNewRun();
   const total = getChallengeDefs().length;
   t.report('registered', total);
 
@@ -159,5 +167,52 @@ function runTrackShapeTest(t: TestReporter): void {
 }
 
 registerTest('trackshape', runTrackShapeTest);
+
+/** Living Dangerously, judged on line events rather than a tick: the seconds
+ *  count only while the train is within two pieces of the end, leaving the
+ *  window restarts the streak, and ten unbroken seconds pay.
+ *
+ *  The line is edited directly, with noteLineChanged announcing each edit as
+ *  build.ts and destroy.ts do. A fresh round's train crawls (speed 1) for its
+ *  first 30 seconds, so it stays on the piece it starts at throughout. */
+function runBrinkTest(t: TestReporter): void {
+  beginNewRun();
+  loadTerrain(0);
+  gameState.gold = 0;
+  armChallenge(CH_BRINK);
+  const extend = (n: number): void => {
+    for (let i = 0; i < n; i++) placedTracks.push(placedTracks[placedTracks.length - 1]);
+    noteLineChanged();
+  };
+  const shorten = (n: number): void => {
+    for (let i = 0; i < n; i++) placedTracks.pop();
+    noteLineChanged();
+  };
+
+  // Near the end, but on the map's own track: nothing laid, nothing counted.
+  noteLineChanged();
+  t.after(2, () => {
+    t.expect('noCountBeforeLaying', getBrinkSeconds(), 0);
+    extend(1); // the players' first piece: inside the window
+    t.expectTrue('inWindow', getTracksRemaining() <= 2);
+    t.after(4.5, () => {
+      t.expect('counted4', getBrinkSeconds(), 4);
+      extend(3); // out of the window: the streak restarts at once
+      t.expect('resetOnLeaving', getBrinkSeconds(), 0);
+      t.after(2, () => {
+        t.expect('stillZeroOutside', getBrinkSeconds(), 0);
+        shorten(3); // back in
+        t.after(10.5, () => {
+          t.expect('paidAfter10', gameState.gold, CHALLENGE_BONUS);
+          t.expectFalse('disarmed', isChallengeArmed(CH_BRINK));
+          shorten(1);
+          t.done();
+        });
+      });
+    });
+  });
+}
+
+registerTest('brink', runBrinkTest);
 
 registerTest('challenge', runChallengeTest);

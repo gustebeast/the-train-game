@@ -3,7 +3,7 @@ import { TRACK_CENTER_OFFSET } from './track/constants';
 import { TRAIN_HP_REGEN } from './sharedData';
 import { createTimer, destroyTimer, startOneShot } from './timers';
 import { gameSeconds } from './globalTick';
-import { placedTracks, isVictoryTriggered } from './track/state';
+import { placedTracks, isVictoryTriggered, noteLineChanged } from './track/state';
 import { GridPos } from './terrain/constants';
 import { getTrainPlayer } from './teams';
 import { gameState, isInGameplay, setInGameplay, registerSyncCallback, syncState } from './state';
@@ -151,6 +151,7 @@ function moveToNext() {
   const next = placedTracks[targetIdx + 1];
   if (next == null || current == null || arrivalRegion == null || arrivalRect == null) return;
   targetIdx++;
+  noteLineChanged();
   const cur = trackCenter(current);
   const nxt = trackCenter(next);
   const { ox, oy } = overshootOffset(cur, nxt);

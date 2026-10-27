@@ -63,6 +63,7 @@ function startFrom(p: MapPlayer | null): void {
     log('saveSync: no human player to take saves from');
     return;
   }
+  // local: only the source's machine sends; everyone acts when it arrives.
   if (GetLocalPlayer() !== p.handle) return;
   let count = 0;
   for (let at = 0; at < localCatalog.length; at += CHUNK_SIZE) {

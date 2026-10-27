@@ -1119,8 +1119,9 @@ function beginDPSSampling(): void {
   for (const h of fieldedForce()) trackForDPS(trackedOurs, h.handle, false);
   // untracked: the match owns it (stopDPSSampling).
   const t = Timer.create();
-  // periodic: samples HP lost over the match window. Damage events would
-  // count it exactly (a candidate for conversion).
+  // periodic: HP lost is sampled, not summed from damage events, because it is
+  // what the fight cost -- armour off, regeneration back (see sampleDPS) -- and
+  // the same pass leashes the summons to their camp.
   t.start(DPS_SAMPLE_INTERVAL, true, () => sampleDPS());
   dpsSampler = t;
 }

@@ -3,6 +3,19 @@ import { GridPos } from '../terrain/constants';
 
 export const placedTracks: Unit[] = [];
 
+const lineListeners: Array<(this: void) => void> = [];
+
+/** Run cb whenever the line or the train's place on it changes: a piece laid
+ *  or destroyed, the train moving on to its next piece, the board cleared. */
+export function onLineChanged(cb: (this: void) => void): void {
+  lineListeners.push(cb);
+}
+
+/** Call wherever placedTracks or the train's target piece has just changed. */
+export function noteLineChanged(): void {
+  for (const cb of lineListeners) cb();
+}
+
 let victoryTriggered = false;
 let victoryTile: GridPos = { x: 0, y: 0 };
 /** The boss exit, when the round has one. Null in every ordinary round. */

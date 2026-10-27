@@ -1,3 +1,4 @@
+import { isSelectedBy } from './selection';
 import { Timer, Trigger, Unit } from 'w3ts';
 import { Abilities } from '@objectdata/abilities';
 import { DASH_ABILITY_ID } from './constants';
@@ -127,8 +128,9 @@ export function initDance(): void {
         // Only while the player has the dancer selected. These are ten plain
         // letter keys with no modifier, and a key event fires wherever the
         // player's attention is -- so without this, anyone reading the lobby or
-        // clicking around the map sets their peasant off by accident.
-        if (!IsUnitSelected(h, caster)) return;
+        // clicking around the map sets their peasant off by accident. The synced
+        // record, not IsUnitSelected (see selection.ts).
+        if (!isSelectedBy(h, GetPlayerId(caster))) return;
 
         const wait = untilNextBeat();
         if (wait <= 0) { play(h, sequence); return; }

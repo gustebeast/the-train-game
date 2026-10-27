@@ -1,4 +1,4 @@
-import { Destructable, Item, Unit } from 'w3ts';
+import { Destructable, Item, Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import {
   loadCheatTerrain, loadInterRoundLobby, loadBossBattlefield,
@@ -19,11 +19,46 @@ import { beginNight, endNight, isNight } from './dayNight';
 import { getNeutralExtra, getNeutralPassive, toggleDPSVision } from './teams';
 import { getDpsMeasurementReport } from './creeps';
 import { makeDancer } from './dance';
-import { checkUnionRules } from './challengeWatch';
+import { checkWatchedChallenges } from './challengeWatch';
 import { spawnBoss } from './boss';
-import { firstPeasantOf, onChatCommand, onChatCommandWithArg } from './util';
+import { firstPeasantOf, getHumanPlayers, onChatCommand, onChatCommandWithArg } from './util';
+
+const CAMERA_SYNC_PREFIX = 'ttgCamCmd';
+/** Commands that act where the typer's camera is looking, by command. */
+const cameraCommands = new Map<string, (this: void, x: number, y: number) => void>();
+
+/** Run `action` at the point the typing player's camera is looking at.
+ *
+ *  The camera is the one thing a chat handler cannot read directly: it is
+ *  local to each machine, so every player would act at a different spot -- a
+ *  desync. So the typer's machine sends its point (BlzSendSyncData), and every
+ *  machine acts when the point arrives. */
+function onChatCommandAtCamera(command: string, action: (this: void, x: number, y: number) => void): void {
+  cameraCommands.set(command, action);
+  onChatCommand(command, () => {
+    // local: only the typer's machine reads its camera, and sends it.
+    if (GetLocalPlayer() !== GetTriggerPlayer()) return;
+    BlzSendSyncData(CAMERA_SYNC_PREFIX, command + ' ' + tostring(GetCameraTargetPositionX())
+      + ' ' + tostring(GetCameraTargetPositionY()));
+  });
+}
+
+function initCameraCommands(): void {
+  const t = Trigger.create();
+  for (const p of getHumanPlayers()) {
+    BlzTriggerRegisterPlayerSyncEvent(t.handle, p.handle, CAMERA_SYNC_PREFIX, false);
+  }
+  t.addAction(() => {
+    const parts = (BlzGetTriggerSyncData() ?? '').split(' ');
+    const action = cameraCommands.get(parts[0]);
+    const x = tonumber(parts[1]);
+    const y = tonumber(parts[2]);
+    if (action != null && x != null && y != null) action(x, y);
+  });
+}
 
 export function initCheat(): void {
+  initCameraCommands();
   onChatCommand('-cheatmode', () => {
     // Replaces the map you are playing with the cheat map. It is not a way IN
     // to gameplay: from a lobby there is no round to replace, and loading one
@@ -48,9 +83,7 @@ export function initCheat(): void {
   // collision hazard around a fresh peasant so you can dash (E) into each and
   // confirm the dash does not clip through them. rock=E, tree=N, water=W,
   // train=S.
-  onChatCommand('-dashtest', () => {
-    const ax = GetCameraTargetPositionX();
-    const ay = GetCameraTargetPositionY();
+  onChatCommandAtCamera('-dashtest', (ax, ay) => {
     const r = Rect(ax - 700, ay - 700, ax + 700, ay + 700);
     EnumDestructablesInRect(r, undefined, () => RemoveDestructable(GetEnumDestructable()!));
     RemoveRect(r);
@@ -63,7 +96,6 @@ export function initCheat(): void {
     const train = Unit.create(getNeutralPassive(), TRAIN_ID, ax, ay - d, 0);
     if (train != null) train.invulnerable = true;
     Unit.create(Players[0], PEASANT_ID, ax, ay, 90);
-    PanCameraToTimed(ax, ay, 0);
     print('Dash arena: rock=E, tree=N, water=W, train=S. Cast Dash (E) into each.');
   });
 
@@ -72,8 +104,8 @@ export function initCheat(): void {
   onChatCommand('-dashnow', () => {
     const p = firstPeasantOf(Players[0].handle);
     if (p == null) { print('dashnow: no peasant'); return; }
-    PanCameraToTimed(p.x, p.y, 0);
-    SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, 1100, 0);
+    PanCameraToTimedForPlayer(Players[0].handle, p.x, p.y, 0);
+    SetCameraFieldForPlayer(Players[0].handle, CAMERA_FIELD_TARGET_DISTANCE, 1100, 0);
     p.issueOrderAt('flare', p.x + 400, p.y);
     print('dashnow: dashing east');
   });
@@ -124,9 +156,9 @@ export function initCheat(): void {
     clearChallenges();
     armChallenge(def.id);
     applyChallengeEffects();
-    // Armed mid-round, tools may already be in hand; Union Rules otherwise only
-    // looks when someone picks one up.
-    checkUnionRules();
+    // Armed mid-round: the watched challenges otherwise only look when a tool
+    // is picked up or the line changes.
+    checkWatchedChallenges();
     print('Armed ' + I2S(n) + '. |cffffcc00' + def.name + '|r: ' + def.description);
   });
 
@@ -140,14 +172,11 @@ export function initCheat(): void {
 
   // Spawn a dancer wherever the camera is looking, so the start-lobby dance
   // spells can be tried without needing three other players in the game.
-  onChatCommand('-dance', () => {
-    const x = GetCameraTargetPositionX();
-    const y = GetCameraTargetPositionY();
+  onChatCommandAtCamera('-dance', (x, y) => {
     const dancer = Unit.create(Players[0], PEASANT_ID, x, y, 270);
     if (dancer == null) { print('dance: could not spawn a peasant'); return; }
     makeDancer(dancer);
-    ClearSelection();
-    SelectUnit(dancer.handle, true);
+    SelectUnitForPlayerSingle(dancer.handle, Players[0].handle);
     print('Dancer spawned. Q W E R Y U I O V B are the dances.');
   });
 
@@ -165,8 +194,8 @@ export function initCheat(): void {
   });
 
   // Drop the final boss wherever the camera is looking, for balance work.
-  onChatCommand('-boss', () => {
-    const boss = spawnBoss(GetCameraTargetPositionX(), GetCameraTargetPositionY());
+  onChatCommandAtCamera('-boss', (x, y) => {
+    const boss = spawnBoss(x, y);
     if (boss == null) { print('boss: could not spawn'); return; }
     print('Boss spawned: ' + I2S(R2I(boss.maxLife))! + ' HP, ' + I2S(R2I(boss.maxMana))! + ' mana.');
   });

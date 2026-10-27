@@ -38,6 +38,7 @@ import { log } from './debug';
 import { DEV_TOOLS } from './buildFlags';
 
 import { initSaveSync } from './saveSync';
+import { initSelection } from './selection';
 import { initTestKit } from './tests/testKit';
 import './tests'; // registers every test module (tests/index.ts)
 import { initBoardFlow, loadStartLobby } from './terrain/load';
@@ -65,6 +66,8 @@ function tsMain() {
     initTeams();
     initTrackBuildTrigger();
     initTrackDestroyTrigger();
+    // Before anything that reads who has what selected (dance, the dealer).
+    initSelection();
     initItems();
     initGiveTake();
     initBridge();

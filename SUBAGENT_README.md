@@ -135,6 +135,13 @@ went between ticks, and costs every tick for the whole game.
   cannot fire into the next board. A raw `Timer.create()` needs a
   `// untracked: <reason>` comment (something else owns it, or it must fire
   whatever happens), or the build refuses it too.
+- **Nothing local decides anything.** Every player's machine runs the same
+  script; the game desyncs the moment they decide differently.
+  `GetLocalPlayer`, `IsUnitSelected` and the camera answer differently per
+  machine. Selection that decides something goes through `selection.ts`; a
+  camera point or anything else local gets sent with `BlzSendSyncData` first
+  (see `onChatCommandAtCamera` in cheat.ts, saveSync.ts). The build refuses
+  those reads without a `// local: <reason>` comment.
 - **Derive, don't count.** Recompute state from the world when an event says it
   changed; a counter you maintain by hand drifts the moment one path forgets it.
 

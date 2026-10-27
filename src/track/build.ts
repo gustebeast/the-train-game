@@ -6,7 +6,7 @@ import {
 } from './constants';
 import { reskinTrack, replaceTrack } from './helpers';
 import {
-  placedTracks, isVictoryTriggered, getVictoryTile, getBossVictoryTile, markBossVictory,
+  placedTracks, noteLineChanged, isVictoryTriggered, getVictoryTile, getBossVictoryTile, markBossVictory,
 } from './state';
 import { spendCharge, updateBuildAbility } from '../items';
 import { TRACK_PIECE_ID, BUILD_TRACK_ABILITY_ID } from '../constants';
@@ -90,6 +90,7 @@ function onTrackBuilt() {
     // rather than crediting that one piece -- see computeTrackShapes.
     recountTrackShapes();
     noteTrackPlaced();
+    noteLineChanged();
     // Either exit finishes the line. The boss exit is only ever present in a
     // round that can reach the boss, and it is remembered here rather than
     // re-derived on arrival, because the terrain is gone by then.
