@@ -3,14 +3,14 @@ import * as path from "path";
 import War3Map from "mdx-m3-viewer-th/dist/cjs/parsers/w3x/map"
 import { compileMap, getFilesInDirectory, loadJsonFile, logger, toArrayBuffer, IProjectConfig } from "./utils";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { findUnjustifiedPolling } = require("./check-polling.js");
+const { findRuleViolations } = require("./check-rules.js");
 
 function main() {
-  // Polling has to justify itself before anything is built (check-polling.js).
-  const polling: string[] = findUnjustifiedPolling(process.cwd());
-  if (polling.length > 0) {
-    logger.error(`Polling without a reason. Use an event, or say why it must be periodic with a \`// periodic: <reason>\` comment (SUBAGENT_README.md, "Events, not polling"):`);
-    for (const p of polling) logger.error(`  ${p}`);
+  // The source rules hold before anything is built (check-rules.js).
+  const broken: string[] = findRuleViolations(process.cwd());
+  if (broken.length > 0) {
+    logger.error(`Source rules broken (see scripts/check-rules.js and SUBAGENT_README.md, "Events, not polling"):`);
+    for (const p of broken) logger.error(`  ${p}`);
     process.exitCode = 1;
     return;
   }

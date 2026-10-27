@@ -121,7 +121,7 @@ function restoreExplored(): void {
   }
   exploredByPlayer = [];
   if (flashes.length === 0) return;
-  // Untracked: if a board sweep destroyed this before it fired, the VISIBLE
+  // untracked: if a board sweep destroyed this before it fired, the VISIBLE
   // modifiers would never be stopped and would light the next board.
   const t = Timer.create();
   t.start(0.1, false, () => {
@@ -179,6 +179,7 @@ export function beginNight(): void {
   if (isChallengeArmed(CH_NIGHT_BLACKOUT)) startBlackout();
   print('|cff8080ffNight falls.|r You can no longer see through your allies.');
   nightEnd = cancelTimer(nightEnd);
+  // untracked: this module cancels its own timers on every exit (timers.ts).
   const t = Timer.create();
   t.start(NIGHT_DURATION, false, () => endNight());
   nightEnd = t;
@@ -223,6 +224,7 @@ export function startDayNightForRound(): void {
   setAlliedVision(true);
 
   const delay = GetRandomInt(NIGHT_EARLIEST, NIGHT_LATEST);
+  // untracked: this module cancels its own timers on every exit (timers.ts).
   const t = Timer.create();
   t.start(delay, false, () => beginNight());
   nightStart = t;

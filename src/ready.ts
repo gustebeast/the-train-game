@@ -102,6 +102,7 @@ function startCountdown(zone: ActiveZone): void {
   zone.countdownStep = Math.max(MIN_COUNTDOWN, extraWait(zone));
   // An unnamed zone counts down bare: "3...", with no "<message> in".
   print((zone.config.message === '' ? '' : zone.config.message + ' in ') + I2S(zone.countdownStep) + '...');
+  // untracked: the zone owns it (cancelCountdown, clearReadyZones).
   zone.countdownTimer = Timer.create();
   // periodic: a countdown, announced each second.
   zone.countdownTimer.start(1.0, true, () => {

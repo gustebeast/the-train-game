@@ -1,5 +1,6 @@
 import { Trigger } from 'w3ts';
 import { registerSaveSegment } from './save';
+import { gameSeconds } from './globalTick';
 import { isPeasantAbilityItem } from './itemRules';
 import { nextFrame, firstPeasantOf, findInventoryItem, giveItems, onSpellEffect } from './util';
 import { PEASANT_ID, ABILITY_ITEM_IDS, ABILITY_ITEM_FAMILIES } from './constants';
@@ -60,8 +61,6 @@ export function getHeldAbilityItem(playerId: number): number {
  * granted anew.
  */
 const readyAt = new Map<item, number>();
-/** Game time for readyAt: a timer that never fires, read for its elapsed time. */
-const clock = CreateTimer();
 
 /** The ability items that grant each spell (both vacuums grant the one spell). */
 const GRANTED_BY = new Map<number, number[]>();
@@ -83,7 +82,7 @@ export function restoreItemCooldown(u: unit, abilityId: number): void {
   if (it == null) return;
   const ready = readyAt.get(it);
   if (ready == null) return;
-  const remaining = ready - TimerGetElapsed(clock);
+  const remaining = ready - gameSeconds();
   if (remaining > 0) BlzStartUnitAbilityCooldown(u, abilityId, remaining);
   else readyAt.delete(it);
 }
@@ -97,11 +96,10 @@ export function carryItemCooldown(from: item, to: item): void {
 }
 
 export function initAbilityItems(): void {
-  TimerStart(clock, 1000000000, false, () => {});
   GRANTED_BY.forEach((_, abilityId) => {
     onSpellEffect(abilityId, caster => {
       const it = itemGranting(caster.handle, abilityId);
-      if (it != null) readyAt.set(it, TimerGetElapsed(clock) + BlzGetUnitAbilityCooldown(caster.handle, abilityId, 0));
+      if (it != null) readyAt.set(it, gameSeconds() + BlzGetUnitAbilityCooldown(caster.handle, abilityId, 0));
     });
   });
   const t = Trigger.create();

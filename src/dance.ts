@@ -74,6 +74,7 @@ export function startDanceSession(bpm: number): void {
   songClock = null;
   beatPeriod = bpm > 0 ? 60 / bpm : 0;
   if (beatPeriod <= 0) return;
+  // untracked: a stopwatch that never fires; the session replaces it.
   songClock = Timer.create();
   // Long one-shot used only as a stopwatch; nothing runs when it expires.
   songClock.start(3600, false, () => {});
@@ -133,6 +134,7 @@ export function initDance(): void {
         if (wait <= 0) { play(h, sequence); return; }
         // Land on the beat instead of on the keypress, so a room full of
         // dancers moves together however sloppily they hit the key.
+        // untracked: a fraction of a second, and harmless if the unit is gone.
         const beat = Timer.create();
         beat.start(wait, false, () => {
           beat.destroy();

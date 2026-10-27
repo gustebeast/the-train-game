@@ -128,8 +128,13 @@ went between ticks, and costs every tick for the whole game.
   over a window, a camera the engine lets drift with no event) needs a
   `// periodic: <reason>` comment on the line or up to three lines above it.
   `npm run build` refuses any repeating timer, periodic trigger or
-  `onGlobalTick` listener without one (`scripts/check-polling.js`; tests are
+  `onGlobalTick` listener without one (`scripts/check-rules.js`; tests are
   exempt). The reason is for the reviewer: "it was easier" is not one.
+- **Timers die with the board.** Use `createTimer` / `startOneShot`
+  (timers.ts): the board teardown destroys them, so a round's pending work
+  cannot fire into the next board. A raw `Timer.create()` needs a
+  `// untracked: <reason>` comment (something else owns it, or it must fire
+  whatever happens), or the build refuses it too.
 - **Derive, don't count.** Recompute state from the world when an event says it
   changed; a counter you maintain by hand drifts the moment one path forgets it.
 

@@ -114,6 +114,7 @@ export function initSaveSync(): void {
 
   // From a timer: init runs before the game has started, when nothing can be
   // sent yet. Every machine reads its disk here, at the same moment.
+  // untracked: runs once, at game start.
   const start = Timer.create();
   start.start(0, false, () => {
     start.destroy();

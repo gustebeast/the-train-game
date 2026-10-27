@@ -89,6 +89,7 @@ function cooldownLeft(h: unit): number {
 function startCooldown(h: unit): void {
   const previous = cooldowns.get(h);
   if (previous != null) previous.destroy();
+  // untracked: the cooldowns map owns it, per unit.
   const timer = Timer.create();
   cooldowns.set(h, timer);
   timer.start(DASH_COOLDOWN, false, () => {
@@ -124,6 +125,7 @@ function startDash(h: unit): void {
   SetUnitMoveSpeed(h, DASH_SPEED);
   AddUnitAnimationProperties(h, 'alternate', true);
 
+  // untracked: it must fire to put the unit's speed back, board change or not.
   const timer = Timer.create();
   dashing.set(h, { timer, baseSpeed });
   timer.start(DASH_DURATION, false, () => endDash(h));

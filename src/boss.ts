@@ -3,6 +3,7 @@ import { Units } from '@objectdata/units';
 import { BOSS_ADD_ID, BOSS_ID, BOSS_INFERNO_ABILITY_ID } from './constants';
 import { getNeutralAggressive } from './teams';
 import { isAlive, nearestUnitInRange } from './util';
+import { startOneShot } from './timers';
 
 /**
  * The final boss: an oversized Infernal that calls down lesser infernals.
@@ -87,9 +88,9 @@ function installAddSwap(owner: player): void {
     // ability's own impact delay so it arrives with the meteor.
     const caster = GetSummoningUnit();
     const delay = caster != null ? impactDelay(caster) : DEFAULT_IMPACT_DELAY;
-    const drop = Timer.create();
-    drop.start(delay, false, () => {
-      drop.destroy();
+    // Tracked: a fight torn down inside the delay must not drop its add onto
+    // whatever board comes next.
+    startOneShot(delay, () => {
       const add = CreateUnit(at, BOSS_ADD_ID, x, y, facing);
       if (add != null) UnitApplyTimedLife(add, TIMED_LIFE_BUFF, ADD_LIFETIME);
     });
@@ -102,6 +103,7 @@ function installAddSwap(owner: player): void {
  *  data it holds about the STOCK abilities, and this Inferno is a fresh rawcode
  *  it has never heard of. Without this the boss would simply never use it. */
 function driveInferno(boss: Unit): void {
+  // untracked: castLoops owns it, and stopBoss clears every loop.
   const timer = Timer.create();
   castLoops.push(timer);
   // periodic: a cast that fails (no mana, mid-cast) raises no event to retry on.

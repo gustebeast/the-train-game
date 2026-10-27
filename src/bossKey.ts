@@ -113,6 +113,7 @@ export function noteCampCleared(x: number, y: number, campLevel: number): void {
 
   const effect = AddSpecialEffect(DROP_EFFECT, x, y);
   if (effect != null) {
+    // untracked: it has to fire to remove the effect, board change or not.
     const cleanup = Timer.create();
     cleanup.start(EFFECT_SECONDS, false, () => {
       cleanup.destroy();

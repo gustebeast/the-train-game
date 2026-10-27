@@ -1041,6 +1041,7 @@ function sampleDPS(): void {
  *  happened before the first reading. */
 function startMatchSampling(): void {
   beginDPSSampling();
+  // untracked: the sparring match owns it (cancelSparringMatch).
   sparringTimer = Timer.create();
   sparringTimer.start(SPARRING_DURATION, false, () => {
     cancelSparringMatch();   // sweeps the field, summons included
@@ -1057,6 +1058,7 @@ function beginDPSSampling(): void {
   trackedOurs = [];
   for (const c of spawnedCreeps) trackForDPS(trackedCreeps, c.unit.handle, false);
   for (const h of fieldedForce()) trackForDPS(trackedOurs, h.handle, false);
+  // untracked: the match owns it (stopDPSSampling).
   const t = Timer.create();
   // periodic: samples HP lost over the match window. Damage events would
   // count it exactly (a candidate for conversion).
