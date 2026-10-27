@@ -5,8 +5,10 @@ import {
 } from '../challenges';
 import { gameState } from '../state';
 import {
-  computeTrackShapes, applyTrackShapes, TrackPoint, CH_STRAIGHT_15, CH_CURVED_15, CH_BRINK, getBrinkSeconds,
+  computeTrackShapes, applyTrackShapes, TrackPoint, CH_STRAIGHT_15, CH_CURVED_15, CH_BRINK, CH_TOUGH_CAMP,
+  getBrinkSeconds,
 } from '../challengeList';
+import { purchaseSummonUpgrade } from '../summonUpgrade';
 import { TRACK_SIZE } from '../track/constants';
 import { placedTracks, noteLineChanged } from '../track/state';
 import { getTracksRemaining } from '../train';
@@ -23,6 +25,31 @@ function runChallengeTest(t: TestReporter): void {
   beginNewRun();
   const total = getChallengeDefs().length;
   t.report('registered', total);
+
+  // Tough Creep Camp waits for Summon Heroes: a fresh run has not bought it,
+  // so two full laps' worth of offers must never include it.
+  let toughOffered = 0;
+  for (let i = 0; i < total * 2; i++) {
+    advanceChallengeOffer();
+    const offer = getOfferedChallenge();
+    if (offer != null && offer.id === CH_TOUGH_CAMP) toughOffered += 1;
+  }
+  t.expect('toughCampHeldBackWithoutSummon', toughOffered, 0);
+
+  // Bought, it comes up. Fresh run again, so the lap below starts clean.
+  beginNewRun();
+  purchaseSummonUpgrade();
+  let toughAfter = 0;
+  for (let i = 0; i < total; i++) {
+    advanceChallengeOffer();
+    const offer = getOfferedChallenge();
+    if (offer != null && offer.id === CH_TOUGH_CAMP) toughAfter += 1;
+  }
+  t.expect('toughCampOfferedOnceSummonBought', toughAfter, 1);
+
+  // Every challenge available from here on, so the lap is the whole list.
+  beginNewRun();
+  purchaseSummonUpgrade();
 
   // Walk the whole sequence, buying each offer. No id may repeat.
   //

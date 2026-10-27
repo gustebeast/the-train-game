@@ -3,6 +3,7 @@ import { getHumanPlayers } from './util';
 import { placedTracks } from './track/state';
 import { TRACK_SIZE } from './track/constants';
 import { boardChanged } from './boardSignal';
+import { isSummonUpgradePurchased } from './summonUpgrade';
 
 /**
  * The challenge catalogue: definitions plus the counters they display.
@@ -93,6 +94,9 @@ defineChallenge({
   name: 'Tough Creep Camp',
   description: "Next round's creep camp hits far harder. Defeat every creep in it.",
   progress: () => 'Defeat the creep camp',
+  // Without Summon Heroes there are no heroes to fight the camp with, so a
+  // harder one is not a wager anybody can take on yet.
+  available: () => isSummonUpgradePurchased(),
 });
 
 defineChallenge({

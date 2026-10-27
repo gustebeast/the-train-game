@@ -1112,6 +1112,12 @@ compiletime(({ objectData, constants }) => {
     'Guarantees the next camp will be level 3.', null);
   strangeMeat.description = 'Something out there wants this badly enough to bring friends.';
 
+  // Sentry Wards never drop from creeps: taken out of the random pool that
+  // ChooseRandomItemEx draws a camp's charged drops from. A design call, not
+  // the rawcode guard's concern -- unlike the items that guard protects, this
+  // one is simply unwanted as loot.
+  objectData.items.get(constants.items.SentryWards)!.includeAsRandomChoice = false;
+
   // Hero Reroll (VoodooDoll — purchased from shop, kept in inventory, not a
   // powerup: the buyer carries it, can pawn it back for a refund, and casts
   // it on an inter-round lobby hero to reroll them (reroll.ts)
