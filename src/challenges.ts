@@ -35,6 +35,10 @@ export interface ChallengeDef {
   /** Won simply by reaching the end of the line with it armed: nothing to
    *  count, so it pays out when the last track is laid. */
   completesOnFinalTrack?: boolean;
+  /** Whether this challenge can be put on the shelf right now. Omit for one
+   *  that always can. A challenge that cannot is passed over, NOT spent: it
+   *  stays unoffered for the lap and comes up once it can. */
+  available?: (this: void) => boolean;
 }
 
 const defs: ChallengeDef[] = [];
@@ -147,21 +151,30 @@ function shuffledIds(): string[] {
  *  and then -- so declining it still moves the rotation on. When the lap is
  *  done the history clears and the cycle count bumps, which reshuffles the
  *  order for the next pass (see shuffledIds), so the dealer never runs dry and
- *  never replays the same sequence. */
+ *  never replays the same sequence.
+ *
+ *  A challenge that is not available yet (see ChallengeDef.available) is
+ *  skipped over without being marked, so it is still waiting when it becomes
+ *  available. A lap with nothing available left ends there, unoffered ones
+ *  and all. */
 export function advanceChallengeOffer(): void {
   if (defs.length === 0) { offeredId = null; return; }
   if (seed === 0) seed = deriveSeed(STREAMS.challenge);
 
+  const offerable = (id: string): boolean => {
+    const def = findDef(id);
+    return def != null && (def.available == null || def.available());
+  };
   let order = shuffledIds();
-  let next = order.find(id => !seen.includes(id));
+  let next = order.find(id => !seen.includes(id) && offerable(id));
   if (next == null) {
     seen = [];
     cycles += 1;
     order = shuffledIds();
-    next = order[0];
+    next = order.find(id => offerable(id));
   }
-  offeredId = next;
-  seen.push(next);
+  offeredId = next ?? null;
+  if (next != null) seen.push(next);
 }
 
 /** The challenge currently for sale, or null if none are registered. */
