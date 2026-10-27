@@ -3,10 +3,10 @@ import { Units } from '@objectdata/units';
 
 import {
   Terrain, Entity, Grid, Biome, BIOMES,
-  GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y,
-  ROCK_RAW, GRANITE_RAW, CAGE_RAW, PATH_BLOCKER_RAW, ROCK_MODEL_SCALES, GridPos,
+  GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, PATH_BLOCKER_RAW, ROCK_MODEL_SCALES, GridPos,
   idx, gridToWorld,
 } from './constants';
+import { ROCK_RAW, GRANITE_RAW, CAGE_RAW } from '../sharedData';
 import { DEFAULT_TRACK, TRACK_SIZE, skinFor } from '../track/constants';
 
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';

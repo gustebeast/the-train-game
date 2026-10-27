@@ -12,7 +12,7 @@ import {
 } from './creeps';
 import { getDPSCheckPlayer } from './teams';
 import { purchaseSummonUpgrade } from './summonUpgrade';
-import { CAGE_RAW } from './terrain/constants';
+import { CAGE_RAW } from './sharedData';
 import { PEASANT_ID, SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, BOSS_ID, BOSS_ADD_ID, BOSS_KEY_ITEM_ID } from './constants';
 import { gameState, isInGameplay } from './state';
 import { getHumanPlayers, forEachUnitOfPlayer } from './util';

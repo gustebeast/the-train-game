@@ -772,12 +772,8 @@ compiletime(({ objectData, constants }) => {
   stone.modelUsed = shared.STONE_MODEL;
   stone.scalingValue = 0.4;
 
-  // Tree destructables: one tree wall per biome (see BIOMES in terrain/constants)
-  for (const treeId of [
-    constants.destructables.SummerTreeWall,
-    constants.destructables.FallTreeWall,
-    constants.destructables.SnowyTreeWall,
-  ]) {
+  // Tree destructables: one tree wall per biome
+  for (const treeId of [shared.TREE_WALLS.summer, shared.TREE_WALLS.fall, shared.TREE_WALLS.winter]) {
     const tree = objectData.destructables.get(treeId)!;
     tree.hitPoints = 15;
     tree.selectableInGame = false;
@@ -785,20 +781,20 @@ compiletime(({ objectData, constants }) => {
     tree.targetedAs = 'debris';
   }
 
-  // Rock destructables (RockChunks2 / LTrt — 6 variations, same model as granite)
-  const rock = objectData.destructables.get(constants.destructables.RockChunks2)!;
+  // Rock destructables (6 variations, same model as granite)
+  const rock = objectData.destructables.get(shared.ROCK_RAW)!;
   rock.hitPoints = 15;
   rock.selectableInGame = false;
   rock.occlusionHeight = 0;
 
-  // Creep camp destructable (Cage / LOcg)
-  const creepCamp = objectData.destructables.get(constants.destructables.Cage)!;
+  // Creep camp destructable
+  const creepCamp = objectData.destructables.get(shared.CAGE_RAW)!;
   creepCamp.hitPoints = 5;
   creepCamp.selectableInGame = false;
   creepCamp.occlusionHeight = 0;
 
   // Granite rocks: dark tint, unselectable, indestructible
-  const granite = objectData.destructables.get(constants.destructables.RockChunks1)!;
+  const granite = objectData.destructables.get(shared.GRANITE_RAW)!;
   granite.hitPoints = 999999;
   granite.occlusionHeight = 0;
   granite.selectableInGame = false;

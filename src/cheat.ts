@@ -5,7 +5,8 @@ import {
   ensureRosterForLoadedRun, finishRoundToLobby,
 } from './terrain/load';
 import { TRACK_PIECE_ID, WOOD_ID, STONE_ID, PEASANT_ID, WATER_ID, TRAIN_ID } from './constants';
-import { GRID_MIN_X, gridToWorld, ROCK_RAW, TREE_RAW } from './terrain/constants';
+import { GRID_MIN_X, gridToWorld } from './terrain/constants';
+import { ROCK_RAW, TREE_WALLS } from './sharedData';
 import { isInGameplay } from './state';
 import { loadFromFile } from './save';
 import { stopGameplay, triggerDefeat } from './train';
@@ -55,7 +56,7 @@ export function initCheat(): void {
     RemoveRect(r);
     const d = 340;
     Destructable.create(FourCC(ROCK_RAW), ax + d, ay, 0, 1.4, 0);
-    Destructable.create(FourCC(TREE_RAW), ax, ay + d, 0, 1.0, 0);
+    Destructable.create(FourCC(TREE_WALLS.summer), ax, ay + d, 0, 1.0, 0);
     // Owned the way the board's own water is (spawn.ts).
     const water = Unit.create(getNeutralExtra(), WATER_ID, ax - d, ay, 0);
     if (water != null) water.invulnerable = true;

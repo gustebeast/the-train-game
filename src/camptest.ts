@@ -1,6 +1,6 @@
 import { registerTest, TestReporter } from './testkit';
 import { difficultyForRound, loadTerrain } from './terrain/load';
-import { GRANITE_RAW } from './terrain/constants';
+import { GRANITE_RAW } from './sharedData';
 import { getTrain } from './train';
 import { getWorldBounds } from './util';
 import { CREEP_CAMPS } from './creepCamps';

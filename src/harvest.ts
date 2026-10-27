@@ -1,5 +1,6 @@
 import { Destructable, Item, Trigger, Unit } from 'w3ts';
-import { BIOMES, ROCK_RAW, GRANITE_RAW } from './terrain/constants';
+import { BIOMES, } from './terrain/constants';
+import { ROCK_RAW, GRANITE_RAW } from './sharedData';
 import { findItemByType, rejectOrder } from './items';
 import { AXE_ID, PICKAXE_ID, WOOD_ID, STONE_ID } from './constants';
 import { noteChoppedTree, noteMinedStone } from './tutorialBoard';
@@ -55,12 +56,6 @@ function requiredToolForDest(destTypeId: number): number {
   return 0;
 }
 
-function toolName(itemTypeId: number): string {
-  if (itemTypeId === AXE_ID) return 'Axe';
-  if (itemTypeId === PICKAXE_ID) return 'Pickaxe';
-  return '';
-}
-
 function isResourceDest(destTypeId: number): boolean {
   return TREE_DEST_IDS.has(destTypeId) || destTypeId === ROCK_DEST_ID;
 }
@@ -83,7 +78,7 @@ function handleResourceOrder(unit: Unit, dest: destructable): void {
   if (tool === 0) return;
 
   if (findItemByType(unit, tool) == null) {
-    rejectOrder(unit.handle, 'Requires ' + toolName(tool) + '!');
+    rejectOrder(unit.handle, 'Requires ' + (GetObjectName(tool) ?? 'a tool') + '!');
     return;
   }
 

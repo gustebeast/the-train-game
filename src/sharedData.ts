@@ -1,6 +1,7 @@
 import { Units } from '@objectdata/units';
 import { Items } from '@objectdata/items';
 import { Abilities } from '@objectdata/abilities';
+import { Destructables } from '@objectdata/destructables';
 
 /**
  * Values that BOTH sides of the build need: compiletime.ts, which authors the
@@ -92,6 +93,23 @@ export const HERO_POOL: string[] = [
 export const CRITTER_TYPES: string[] = [
   Units.Rabbit, Units.Stag, Units.Sheep, Units.Pig, Units.Chicken, Units.Raccoon,
 ];
+
+// --- The board's destructables --------------------------------------------------
+// The build retunes each (hit points, selection, tint); the game places them
+// and recognises them by these rawcodes.
+
+/** The tree wall each biome grows, chopped for wood. */
+export const TREE_WALLS = {
+  summer: Destructables.SummerTreeWall,
+  fall: Destructables.FallTreeWall,
+  winter: Destructables.SnowyTreeWall,
+};
+/** Mined for stone: Lordaeron rock chunks, six variations. */
+export const ROCK_RAW = Destructables.RockChunks2;
+/** The same rocks darkened and made indestructible. */
+export const GRANITE_RAW = Destructables.RockChunks1;
+/** The cage a creep camp stands in. */
+export const CAGE_RAW = Destructables.Cage;
 
 // --- Movement -------------------------------------------------------------------
 

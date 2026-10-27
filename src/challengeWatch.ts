@@ -7,7 +7,7 @@ import {
   noteBrinkTime, resetBrinkTime, noteToolSharingBroken, playersHaveLaidTrack,
 } from './challengeList';
 import { getTracksRemaining } from './train';
-import { AXE_ID, PICKAXE_ID, BUCKET_ID, BUCKET_FULL_ID } from './constants';
+import { toolKind } from './itemRules';
 import { forEachInventoryItem, forEachUnitInWorld, nextFrame } from './util';
 
 /**
@@ -28,15 +28,6 @@ import { forEachInventoryItem, forEachUnitInWorld, nextFrame } from './util';
  * lobby needs nothing: rounds start with every tool on the ground.
  */
 
-/** A full bucket and an empty one are the same tool for this purpose -- passing
- *  a bucket around by filling it would otherwise dodge the restriction. */
-function toolKey(itemTypeId: number): number | null {
-  if (itemTypeId === AXE_ID) return AXE_ID;
-  if (itemTypeId === PICKAXE_ID) return PICKAXE_ID;
-  if (itemTypeId === BUCKET_ID || itemTypeId === BUCKET_FULL_ID) return BUCKET_ID;
-  return null;
-}
-
 /** Look at the world for two units holding the same tool type. Once broken it
  *  stays broken for the round, so a caller can stop asking. */
 function checkToolSharing(): void {
@@ -46,7 +37,7 @@ function checkToolSharing(): void {
     if (broken) return;
     const held: number[] = [];
     forEachInventoryItem(u, item => {
-      const key = toolKey(GetItemTypeId(item));
+      const key = toolKind(GetItemTypeId(item));
       // Two of the same tool on ONE unit is still one holder, so only count a
       // given tool type once per unit.
       if (key != null && !held.includes(key)) held.push(key);
@@ -87,7 +78,7 @@ export function initChallengeWatch(): void {
   const pickup = Trigger.create();
   pickup.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
   pickup.addAction(() => {
-    if (toolKey(GetItemTypeId(GetManipulatedItem()!)) == null) return;
+    if (toolKind(GetItemTypeId(GetManipulatedItem()!)) == null) return;
     // A frame later, so a give/take that removes from one unit and adds to
     // another has finished both halves before the inventories are read.
     nextFrame(() => checkUnionRules());

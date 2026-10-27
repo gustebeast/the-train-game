@@ -29,10 +29,22 @@ export function isResourceItem(itemTypeId: number): boolean {
   return itemTypeId === WOOD_ID || itemTypeId === STONE_ID || itemTypeId === TRACK_PIECE_ID;
 }
 
-/** Peasant tools (and the bucket in both states). */
+/** The peasant's tools, each mapped to the tool it counts as. A full and an
+ *  empty bucket are the same tool: filling one is not a way to own a second. */
+const TOOL_KINDS = new Map<number, number>([
+  [AXE_ID, AXE_ID],
+  [PICKAXE_ID, PICKAXE_ID],
+  [BUCKET_ID, BUCKET_ID],
+  [BUCKET_FULL_ID, BUCKET_ID],
+]);
+
+/** Which tool an item is, or null for an item that is not one. */
+export function toolKind(itemTypeId: number): number | null {
+  return TOOL_KINDS.get(itemTypeId) ?? null;
+}
+
 function isToolItem(itemTypeId: number): boolean {
-  return itemTypeId === AXE_ID || itemTypeId === PICKAXE_ID
-    || itemTypeId === BUCKET_ID || itemTypeId === BUCKET_FULL_ID;
+  return TOOL_KINDS.has(itemTypeId);
 }
 
 /** Consumed the moment it is acquired (shop.ts turns the pickup into the

@@ -1,4 +1,5 @@
 import { TRACK_SIZE } from '../track/constants';
+import { TREE_WALLS } from '../sharedData';
 
 // Grid dimensions (in tile coordinates)
 export const GRID_MIN_X = -20;
@@ -63,9 +64,9 @@ export interface BiomeArt {
 }
 
 export const BIOMES: Record<Biome, BiomeArt> = {
-  [Biome.SUMMER]: { grass: 'Lgrs', grassyDirt: 'Lgrd', pool: 'Lrok', tree: 'LTlt' },
-  [Biome.FALL]: { grass: 'Fgrs', grassyDirt: 'Fgrd', pool: 'Frok', tree: 'FTtw' },
-  [Biome.WINTER]: { grass: 'Wsnw', grassyDirt: 'Wsng', pool: 'Wrok', tree: 'WTst' },
+  [Biome.SUMMER]: { grass: 'Lgrs', grassyDirt: 'Lgrd', pool: 'Lrok', tree: TREE_WALLS.summer },
+  [Biome.FALL]: { grass: 'Fgrs', grassyDirt: 'Fgrd', pool: 'Frok', tree: TREE_WALLS.fall },
+  [Biome.WINTER]: { grass: 'Wsnw', grassyDirt: 'Wsng', pool: 'Wrok', tree: TREE_WALLS.winter },
 };
 
 /** Camp level 1/2/3 -> summer/fall/winter. No camp (or anything out of range)
@@ -193,14 +194,13 @@ export function gridToWorld(pos: GridPos): GridPos {
   return { x: pos.x * TRACK_SIZE, y: pos.y * TRACK_SIZE };
 }
 
-// --- Destructable rawcodes ---
-export const TREE_RAW = BIOMES[Biome.SUMMER].tree;  // SummerTreeWall (Lordaeron Summer)
-export const ROCK_RAW = 'LTrt';  // RockChunks2 (Lordaeron Summer — 6 variations)
+// --- Destructables ---
+// The ones the build retunes (trees, rocks, granite, the cage) are named in
+// sharedData.ts.
+
 /** Scale for each variation of the rock-chunk model, so every rock -- resource,
  *  granite, and the Strange Rock -- comes out the same size for the same shape. */
 export const ROCK_MODEL_SCALES = [0.610, 0.556, 0.628, 0.621, 0.611, 0.748];
-export const GRANITE_RAW = 'LTrc';  // RockChunks1 (Lordaeron Summer — indestructible)
-export const CAGE_RAW = 'LOcg';  // Cage (creep camp spawner)
 /** Pathing Blocker (Ground) (Large). No model at all, so it is invisible, and
  *  its 4x4Default pathing texture covers exactly one TRACK_SIZE cell. Used to
  *  wall off terrain that should look walkable but is not -- the lava around the
