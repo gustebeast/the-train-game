@@ -3,7 +3,8 @@ import { Units } from '@objectdata/units';
 
 import {
   Terrain, Entity, Grid, Biome, BIOMES,
-  GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, PATH_BLOCKER_RAW, ROCK_MODEL_SCALES, GridPos,
+  GRID_MIN_X, GRID_MAX_X, GRID_MIN_Y, GRID_MAX_Y, PATH_BLOCKER_RAW, BOARD_WALL_RAW, SIGHT_WALL_RAW,
+  ROCK_MODEL_SCALES, GridPos,
   idx, gridToWorld,
 } from './constants';
 import { ROCK_RAW, GRANITE_RAW, CAGE_RAW } from '../sharedData';
@@ -192,11 +193,41 @@ function clearBoard(): void {
   }
 }
 
+/** Ring the board with blockers one cell outside its edge: nothing walks or
+ *  flies off it, and nothing on it sees past it.
+ *
+ *  Built here rather than in the map file because clearBoard removes every
+ *  destructable on the map, the editor's included -- blockers placed in the
+ *  editor were gone after the first board loaded. The old map never showed
+ *  it: its ground beyond the board was unwalkable in the map's own pathing.
+ *  The ground out there is walkable now, for the DPS check's fight rows above
+ *  and below the board, which this wall keeps out of reach and out of sight. */
+function wallBoard(): void {
+  // The small sight blocker is half a cell across, so two per cell, laid
+  // along the wall: (dx, dy) is the wall's direction at this cell.
+  const half = TRACK_SIZE / 4;
+  const wallAt = (gx: number, gy: number, dx: number, dy: number): void => {
+    const w = gridToWorld({ x: gx, y: gy });
+    Destructable.create(FourCC(BOARD_WALL_RAW), w.x, w.y, 0, 1, 0);
+    Destructable.create(FourCC(SIGHT_WALL_RAW), w.x - dx * half, w.y - dy * half, 0, 1, 0);
+    Destructable.create(FourCC(SIGHT_WALL_RAW), w.x + dx * half, w.y + dy * half, 0, 1, 0);
+  };
+  for (let gx = GRID_MIN_X - 1; gx <= GRID_MAX_X + 1; gx++) {
+    wallAt(gx, GRID_MIN_Y - 1, 1, 0);
+    wallAt(gx, GRID_MAX_Y + 1, 1, 0);
+  }
+  for (let gy = GRID_MIN_Y; gy <= GRID_MAX_Y; gy++) {
+    wallAt(GRID_MIN_X - 1, gy, 0, 1);
+    wallAt(GRID_MAX_X + 1, gy, 0, 1);
+  }
+}
+
 /** Replace the board: clear the old one (clearBoard), then paint the grid's
  *  terrain and create everything it places. Returns the train units if the
  *  grid has a train. */
 export function spawnTerrain(grid: Grid): SpawnedTrain {
   clearBoard();
+  wallBoard();
   let engineUnit: Unit | null = null;
   let wagonUnit: Unit | null = null;
 

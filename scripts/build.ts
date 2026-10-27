@@ -69,7 +69,12 @@ export function createMapFromDir(output: string, dir: string) {
     }
   }
 
-  const result = map.save();
+  // The archive itself, not map.save(): that also parses war3map.w3i, only to
+  // decide whether to prepend a pre-1.31 map header, and its parser cannot
+  // read the w3i the current World Editor writes (format 39). This map is
+  // never pre-1.31, so the header is never wanted.
+  map.setImportsFile();
+  const result = map.archive.save();
 
   if (!result) {
     logger.error("Failed to save archive.");
