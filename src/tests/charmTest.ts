@@ -7,7 +7,7 @@ import { startBossFight, setBossArenaCallbacks, getBossArenaCallbacks } from '..
 import { setMercsForTest, spawnMercFromData, spawnMercWithHeroes, getSpawnedMercUnits, removeSpawnedMercUnits } from '../mercenary';
 import { CREEP_CAMPS } from '../creepCamps';
 import { setCampForTest, getCampOrigin } from '../creeps';
-import { getDPSCheckStatus, DPS_CHECK_MIN_SECONDS } from '../dpsCheck';
+import { getDPSCheckStatus, startDPSCheck, RIGGED_SECONDS } from '../dpsCheck';
 import { getDPSCheckPlayer } from '../teams';
 import { purchaseSummonUpgrade } from '../summonUpgrade';
 import { CAGE_RAW } from '../sharedData';
@@ -310,7 +310,9 @@ function runCharmCheck(t: TestReporter): void {
   setRosterForTest([ALCHEMIST, DARK_RANGER]);
   setMercsForTest([]);
   setCampForTest(KOBOLD_CAMP);
+  // A quiet board to run it beside; a round's train would move.
   loadInterRoundLobby();
+  startDPSCheck();
 
   const check = getDPSCheckPlayer().handle;
   const casts = new Map<string, number>();
@@ -321,7 +323,7 @@ function runCharmCheck(t: TestReporter): void {
     casts.set(name, (casts.get(name) ?? 0) + 1);
   });
 
-  t.waitFor('openingEnds', () => getDPSCheckStatus().phase === 'fights', DPS_CHECK_MIN_SECONDS + 5, () => {
+  t.waitFor('openingEnds', () => getDPSCheckStatus().phase === 'fights', RIGGED_SECONDS + 5, () => {
     const s = getDPSCheckStatus();
     t.report('riggedScale', s.riggedScale);
     // Before the fix this party measured -1055 DPS: a charmed creep's rigging

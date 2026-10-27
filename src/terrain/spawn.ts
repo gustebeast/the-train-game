@@ -18,7 +18,7 @@ import { createReadyZone, clearReadyZones } from '../ready';
 import { labelUnit } from '../unitLabels';
 import { setCrate, setCrateStart } from '../items';
 import { setCage, registerCageTrigger, clearCage } from '../creeps';
-import { isDPSCheckUnit } from '../dpsCheck';
+import { stopDPSCheck } from '../dpsCheck';
 import { resetHeroState } from '../heroes';
 import { stockShop, noteDealerPlaced } from '../shop';
 import { stockSalesperson } from '../salesperson';
@@ -169,14 +169,13 @@ export function spawnReadyCircle(
  *  spawnTerrain on the way into a board is set up on the old one. */
 function clearBoard(): void {
   destroyAllTimers();
+  stopDPSCheck();
   resetHeroState();
   clearReadyZones();
   clearCage();
   pauseResourceDrops();
   forEachDestructable(d => RemoveDestructable(d));
-  // Except the DPS check's fights, out beyond the wall: they carry on from the
-  // inter-round lobby into the round (dpsCheck.ts), and stop themselves.
-  forEachUnitInWorld(u => { if (!isDPSCheckUnit(u)) RemoveUnit(u); });
+  forEachUnitInWorld(u => RemoveUnit(u));
   forEachGroundItem(it => RemoveItem(it));
   for (const fx of boardEffects) DestroyEffect(fx);
   boardEffects.length = 0;

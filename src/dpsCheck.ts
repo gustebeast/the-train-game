@@ -1,6 +1,6 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import {
-  getCampData, getCampIndex, getCampDPSAdvantage, setCampDamageScale, getCampDamageScale,
+  getCampData, getCampDPSAdvantage, setCampDamageScale, getCampDamageScale,
   spawnCampCopy, spawnUnscaledCampCopy, onCageBroken,
 } from './creeps';
 import { HeroData, getChosenHeroData, spawnHeroFromData } from './heroes';
@@ -21,16 +21,17 @@ import { forEachUnitOfPlayer, forEachInventoryItem, isAlive, unitExists, removeU
  *
  * It runs out of sight in two rows of fight stations -- one below the board,
  * one above, beyond the wall that rings it (spawn.ts wallBoard) -- from the
- * moment the inter-round lobby opens until the round's cage is broken, so
- * everything the players spend in the lobby and in the round before the camp
- * makes the answer better. Twelve copies of the party fight at once, each
- * against its own copy of the camp:
+ * moment a round loads until its cage is broken, so all the time the players
+ * spend working towards the camp goes into the answer. Nothing it measures
+ * changes in that time: the party and the camp are settled when the round
+ * loads. Twelve copies of the party fight at once, each against its own copy
+ * of the camp:
  *
  *   1. RIGGED OPENING (RIGGED_SECONDS). Every unit is rigged so nothing dies,
  *      and HP lost is counted both ways. The ratio is the party's damage
  *      against the camp's, everything alive and every spell cast -- an upper
- *      bound on the party, and a first guess at the scale, ready seconds after
- *      the lobby opens.
+ *      bound on the party, and a first guess at the scale, ready seconds into
+ *      the round.
  *
  *   2. REAL FIGHTS, for as long as there is time. Real HP, the camp scaled as a
  *      round scales it, each station at its own damage scale spread around the
@@ -40,9 +41,9 @@ import { forEachUnitOfPlayer, forEachInventoryItem, isAlive, unitExists, removeU
  *      fights are spread round that, narrower as the answer firms up, so twelve
  *      fights at a time test twelve scales at a time.
  *
- * It stops when the cage is broken -- banking how the unfinished fights stand
- * -- or once the answer has stopped moving (isConverged). Changing what it
- * measures (another camp, another hero, a mercenary, an item) starts it over.
+ * It stops when the cage is broken -- banking how the long-running unfinished
+ * fights stand -- or once the answer has stopped moving (isConverged). Any
+ * board load ends it (spawn.ts clearBoard).
  *
  * Every unit of ours belongs to the one check player: it is the only slot the
  * map makes a computer, and an AI in any other slot never casts.
@@ -79,13 +80,7 @@ const LEASH = 500;
 // --- Timing ------------------------------------------------------------------
 
 /** How long the rigged opening runs. */
-const RIGGED_SECONDS = 10;
-/**
- * How long the inter-round lobby's ready countdown waits for the check: the
- * rigged opening and about ten seconds of real fights. Measured in real fights
- * cut short, who is ahead 10 seconds in is who wins about four times in five.
- */
-export const DPS_CHECK_MIN_SECONDS = 20;
+export const RIGGED_SECONDS = 10;
 /** How long an unfinished fight must have run for its lead to count when
  *  the cage breaks. Measured: the side ahead at 10 s won 81% of fights, at
  *  20 s 95%. */
@@ -112,8 +107,6 @@ function targetMargin(): number {
 
 type Phase = 'idle' | 'rigged' | 'fights' | 'done';
 let phase: Phase = 'idle';
-/** What is being measured, as text; see describeSubject. */
-let subject = '';
 /** The party being measured, as it was when the check began. */
 let heroes: HeroData[] = [];
 let mercs: MercData[] = [];
@@ -133,58 +126,29 @@ const home = new Map<number, number>();
 /** Handle ids of every creep the check has put down. */
 const ourCreeps = new Set<number>();
 
-/** Whether a unit is one of the check's -- so a board load leaves it alone. */
-export function isDPSCheckUnit(u: unit): boolean {
-  if (phase === 'idle') return false;
-  if (GetOwningPlayer(u) === getDPSCheckPlayer().handle) return true;
-  return ourCreeps.has(GetHandleId(u));
-}
-
-/** Seconds until the check has run long enough for the round to start on its
- *  answer, or 0 when it has, or when there is no check running. */
-export function getDPSCheckSecondsToMinimum(): number {
-  if (phase === 'idle' || phase === 'done') return 0;
-  return Math.max(0, DPS_CHECK_MIN_SECONDS - now());
-}
-
-// --- What is measured ------------------------------------------------------
-
-function describeHero(h: HeroData): string {
-  const parts = [I2S(h.typeId), I2S(h.xp)];
-  // Sorted: pairs() visits keys in no fixed order, and two descriptions of the
-  // same party must match -- on every client, or they would restart apart.
-  const keys: string[] = [];
-  for (const [k] of pairs(h.skills)) keys.push(k);
-  keys.sort();
-  for (const k of keys) parts.push(k + '=' + I2S(h.skills[k]));
-  for (const it of h.items) parts.push(I2S(it.id));
-  parts.push(I2S(h.tomeStr), I2S(h.tomeAgi), I2S(h.tomeInt), I2S(h.tomeHP));
-  return parts.join(',');
-}
-
-/** Everything the answer depends on, as one string: change any of it and the
- *  answer no longer applies. Derived each time rather than kept up to date by
- *  every system that can change it. */
-function describeSubject(): string {
-  const parts = ['c' + I2S(getCampIndex() ?? -1), isChallengeArmed(CH_TOUGH_CAMP) ? 't' : ''];
-  for (const h of getChosenHeroData()) parts.push('h' + describeHero(h));
-  for (const m of getLivingMercData()) {
-    parts.push('m' + I2S(m.typeId) + ',' + m.items.map(it => I2S(it.id)).join(','));
-  }
-  return parts.join('|');
-}
-
 // --- Starting and stopping ---------------------------------------------------
 
-/**
- * Begin measuring the party against the next camp, or carry on if that is
- * already what is being measured. Called whenever the inter-round lobby opens,
- * Reset Purchases included.
- */
+/** Begin measuring this round's party against this round's camp. Called as
+ *  the round loads; anything already running is thrown away. */
 export function startDPSCheck(): void {
-  const s = describeSubject();
-  if (phase !== 'idle' && s === subject) return;
-  restart(s);
+  stopDPSCheck();
+  heroes = getChosenHeroData().map(h => copyHero(h));
+  mercs = getLivingMercData().map(m => ({ typeId: m.typeId, items: m.items.map(it => ({ id: it.id, charges: it.charges })) }));
+  resetEstimate();
+  // Last round's answer is not this round's.
+  setCampDamageScale(0);
+  if (heroes.length === 0 || getCampData() == null) return;
+
+  // untracked: the check's clock; it owns it (stopDPSCheck).
+  clock = Timer.create();
+  clock.start(1e6, false, () => undefined);
+  // untracked: the check owns it (stopDPSCheck).
+  ticker = Timer.create();
+  // A fight's end could come from death events, but the leash and the HP
+  // sampling cannot.
+  // periodic: watches the fights -- who is still standing, HP lost in the opening, and leashing.
+  ticker.start(TICK, true, () => tick());
+  beginRigged();
 }
 
 /** Stop and take everything off the field. The answer found so far stays set
@@ -195,28 +159,6 @@ export function stopDPSCheck(): void {
   if (ticker != null) { ticker.destroy(); ticker = null; }
   if (clock != null) { clock.destroy(); clock = null; }
   phase = 'idle';
-}
-
-function restart(s: string): void {
-  stopDPSCheck();
-  subject = s;
-  heroes = getChosenHeroData().map(h => copyHero(h));
-  mercs = getLivingMercData().map(m => ({ typeId: m.typeId, items: m.items.map(it => ({ id: it.id, charges: it.charges })) }));
-  resetEstimate();
-  // A new subject's old answer is the wrong answer.
-  setCampDamageScale(0);
-  if (heroes.length === 0 || getCampData() == null) return;
-
-  // untracked: the check's clock; it owns it (stopDPSCheck) and it outlives board loads.
-  clock = Timer.create();
-  clock.start(1e6, false, () => undefined);
-  // untracked: the check owns it (stopDPSCheck), and it outlives board loads.
-  ticker = Timer.create();
-  // A fight's end could come from death events, but the leash and the HP
-  // sampling cannot.
-  // periodic: watches the fights -- who is still standing, HP lost in the opening, leashing, and whether what is measured has changed.
-  ticker.start(TICK, true, () => tick());
-  beginRigged();
 }
 
 function copyHero(h: HeroData): HeroData {
@@ -231,7 +173,11 @@ function copyHero(h: HeroData): HeroData {
 /** Bank the unfinished fights as they stand, fix the answer, and stop. The
  *  round's cage has broken: its camp is about to be scaled. */
 function finish(): void {
-  if (phase === 'fights') {
+  if (phase === 'rigged' && riggedWatching && now() - riggedStart >= MIN_BANKED_SECONDS) {
+    // Found before the opening was over: what it has seen is still a better
+    // guess than the units' own stats.
+    endRigged();
+  } else if (phase === 'fights') {
     for (const f of fights) {
       if (f == null || f.creeps.length === 0) continue;
       const t = now() - f.started;
@@ -700,9 +646,6 @@ function isConverged(): boolean {
 // --- The tick ------------------------------------------------------------------
 
 function tick(): void {
-  // A change to what is measured voids the measurement.
-  const s = describeSubject();
-  if (s !== subject) { restart(s); return; }
   leash();
   if (phase === 'rigged') {
     if (!riggedWatching) { rigAndWatch(); return; }

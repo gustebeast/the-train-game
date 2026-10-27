@@ -3,28 +3,27 @@ import { Units } from '@objectdata/units';
 import { Players } from 'w3ts/globals';
 import { registerTest, TestReporter } from './testKit';
 import {
-  forceLevel3Camp, getCampData, measureFieldedForce, setCampForTest, getCampDamageScale,
+  measureFieldedForce, setCampForTest, getCampDamageScale,
 } from '../creeps';
 import { CREEP_CAMPS } from '../creepCamps';
 import { HeroData, setRosterForTest, spawnHeroes, getChosenHeroCount, hasHeroes } from '../heroes';
 import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from '../mercenary';
-import {
-  getDPSCheckStatus, getDPSCheckSecondsToMinimum, getDPSStation, DPS_CHECK_MIN_SECONDS,
-} from '../dpsCheck';
+import { getDPSCheckStatus, getDPSStation, startDPSCheck, RIGGED_SECONDS } from '../dpsCheck';
 import { getDPSCheckPlayer, getNeutralAggressive, toggleDPSVision } from '../teams';
 import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem, forEachDestructable } from '../util';
-import { loadInterRoundLobby, beginNewRun, resetPurchases, loadTerrain, loadStartLobby } from '../terrain/load';
+import { loadInterRoundLobby, beginNewRun, loadTerrain } from '../terrain/load';
 import { gameState } from '../state';
 import { CAGE_RAW } from '../sharedData';
 
 /**
- * The DPS check (dpsCheck.ts): twelve copies of the party fighting the next
+ * The DPS check (dpsCheck.ts): twelve copies of the party fighting the round's
  * camp out beyond the board's wall, first rigged and then for real, until the
- * round's cage is broken. Nothing about it is visible if it goes wrong -- it
- * just scales the camp off a bad number -- so these hold it to what it must do.
+ * cage is broken. Nothing about it is visible if it goes wrong -- it just
+ * scales the camp off a bad number -- so these hold it to what it must do.
  *
- * Waits are on the check itself -- its phase, its fights -- rather than on
- * fixed seconds.
+ * Most run it beside the inter-round lobby, started by hand: a round's train
+ * moves, and a long test would end in a crash. dpsround checks that a round
+ * starts it for real. Waits are on the check itself -- its phase, its fights.
  */
 
 /** Long enough for a lobby to load and the check to field its opening. */
@@ -80,10 +79,9 @@ function phaseIs(p: string): () => boolean {
  * Far Seer and Priestess at level 5 and an Ogre Lord -- against a fixed camp,
  * so the counts are exact.
  *
- * - Starting a run fields the check whether or not Summon Heroes is bought.
  * - The opening fields every station: two heroes and a mercenary each, all the
  *   check player's, and a whole camp each; nothing nearer the board than the
- *   keep-out wall; and the ready countdown waits for it.
+ *   keep-out wall.
  * - The opening ends in a positive scale and an empty field: no rigged unit or
  *   dropped item outlives it.
  * - Real fights then finish -- a result each, the party leashed to its own
@@ -97,6 +95,7 @@ function runDPSFields(t: TestReporter): void {
   setMercsForTest([FourCC('nogl')]);
   setCampForTest(FIELD_CAMP);
   loadInterRoundLobby();
+  startDPSCheck();
   const itemsBefore = countItems();
   const check = getDPSCheckPlayer().handle;
   let casts = 0;
@@ -120,11 +119,8 @@ function runDPSFields(t: TestReporter): void {
     t.expect('creepsFielded', rowCreeps().length, s.stations * camp.creeps.length);
     t.expect('checkUnitsNearBoard', nearBoard, 0);
     t.expect('mercsOwnedByHumans', measureFieldedForce().mercsOwnedByHumans, 0);
-    const wait = getDPSCheckSecondsToMinimum();
-    t.report('waitAtStart', wait);
-    if (wait <= 0 || wait > DPS_CHECK_MIN_SECONDS) t.fail('waitAtStart', 'expected a wait of up to the minimum');
 
-    t.waitFor('openingEnds', phaseIs('fights'), DPS_CHECK_MIN_SECONDS, () => {
+    t.waitFor('openingEnds', phaseIs('fights'), RIGGED_SECONDS + 5, () => {
       const after = getDPSCheckStatus();
       t.report('riggedScale', after.riggedScale);
       t.report('castsInOpening', casts);
@@ -182,6 +178,7 @@ function runDPSVision(t: TestReporter): void {
 
   beginNewRun();
   loadInterRoundLobby();
+  startDPSCheck();
   t.waitFor('fielded', phaseIs('rigged'), START_WAIT, () => t.after(1, () => {
     let fielded = 0;
     let seen = 0;
@@ -199,82 +196,49 @@ function runDPSVision(t: TestReporter): void {
 
 registerTest('dpsvision', runDPSVision);
 
-// --- Starts over, carries on, stops ------------------------------------------
+// --- A round starts it; the cage or any board stops it -----------------------
 
 /**
- * The check measures A SPECIFIC party against A SPECIFIC camp, so changing
- * either starts it over -- and it carries on into the round, stopping when the
- * cage is broken.
- *
- * - The Strange Meat swaps in a level 3 camp: the check starts over, against
- *   it, with the mercenary fielded once per station.
- * - Reset Purchases rewinds that: the old camp, and the check over again.
- * - Into the round: the board load leaves the check's fights standing.
- * - Breaking the round's cage stops it, leaves a scale set, and clears the
- *   field.
- * - Any other board stops it too.
+ * - A round loading starts the check, against that round's camp.
+ * - Any other board stops it and clears the field.
+ * - Breaking the round's cage once the opening is done stops it, leaves a
+ *   scale set, and clears the field.
  */
-function runDPSRestart(t: TestReporter): void {
+function runDPSRound(t: TestReporter): void {
   beginNewRun();
-  t.expectTrue('mercHired', buyMercContract() && hasActiveMerc());
-  loadInterRoundLobby();
+  setRosterForTest([FAR_SEER, PRIESTESS]);
+  setMercsForTest([FourCC('nogl')]);
+  setCampForTest(FIELD_CAMP);
+  loadTerrain(gameState.round);
+  t.waitFor('roundStartsIt', phaseIs('rigged'), START_WAIT, () => t.after(1, () => {
+    t.expect('creepsForThisCamp', rowCreeps().length, CREEP_CAMPS[FIELD_CAMP].creeps.length * getDPSCheckStatus().stations);
 
-  t.waitFor('started', phaseIs('rigged'), START_WAIT, () => t.after(2, () => {
-    const before = getDPSCheckStatus();
-    const campBefore = getCampData();
-    t.expectTrue('meatChangedCamp', forceLevel3Camp());
-    t.waitFor('meatRestarts', () => getDPSCheckStatus().elapsed < before.elapsed, 2, () => t.after(1, () => {
-      const camp = getCampData();
-      t.expect('meatCampLevel', camp != null ? camp.level : 0, 3);
-      const s = getDPSCheckStatus();
-      t.expect('meatCreeps', rowCreeps().length, camp != null ? camp.creeps.length * s.stations : -1);
-      let mercs = 0;
-      for (const u of checkUnits()) if (!IsUnitType(u, UNIT_TYPE_HERO)) mercs += 1;
-      t.expect('meatMercsOncePerStation', mercs, s.stations);
+    loadInterRoundLobby();
+    t.after(1, () => {
+      t.expect('phaseAfterLobby', getDPSCheckStatus().phase, 'idle');
+      t.expect('checkUnitsAfterLobby', checkUnits().length, 0);
+      t.expect('rowCreepsAfterLobby', rowCreeps().length, 0);
 
-      resetPurchases();
-      t.after(1.5, () => {
-        const revert = getCampData();
-        t.expectTrue('revertCamp', revert === campBefore);
-        t.expect('revertCreeps', rowCreeps().length,
-          revert != null ? revert.creeps.length * getDPSCheckStatus().stations : -1);
-
-        t.waitFor('fightsBegin', phaseIs('fights'), DPS_CHECK_MIN_SECONDS, () => t.after(2, () => {
-          const fieldedInLobby = checkUnits().length;
-          loadTerrain(gameState.round);
-          t.after(1, () => {
-            t.report('checkUnitsAfterRoundLoad', checkUnits().length);
-            if (fieldedInLobby > 0 && checkUnits().length === 0) t.fail('roundLoad', 'the board load swept the check');
-            t.expect('phaseInRound', getDPSCheckStatus().phase, 'fights');
-            let cage: destructable | null = null;
-            forEachDestructable(d => { if (GetDestructableTypeId(d) === FourCC(CAGE_RAW)) cage = d; });
-            if (cage == null) { t.fail('cage', 'no cage on the round board'); t.done(); return; }
-            KillDestructable(cage);
-            t.after(1, () => {
-              t.expect('phaseAfterCage', getDPSCheckStatus().phase, 'idle');
-              t.report('scaleAfterCage', getCampDamageScale());
-              if (getCampDamageScale() <= 0) t.fail('scaleAfterCage', 'no scale left set');
-              t.expect('checkUnitsAfterCage', checkUnits().length, 0);
-              t.expect('rowCreepsAfterCage', rowCreeps().length, 0);
-
-              loadInterRoundLobby();
-              t.waitFor('againInLobby', phaseIs('rigged'), START_WAIT, () => {
-                loadStartLobby();
-                t.after(1, () => {
-                  t.expect('phaseAfterOtherBoard', getDPSCheckStatus().phase, 'idle');
-                  t.expect('checkUnitsAfterOtherBoard', checkUnits().length, 0);
-                  t.done();
-                });
-              });
-            });
-          });
-        }));
-      });
-    }));
+      loadTerrain(gameState.round);
+      t.waitFor('fightsBegin', phaseIs('fights'), RIGGED_SECONDS + 5, () => t.after(3, () => {
+        let cage: destructable | null = null;
+        forEachDestructable(d => { if (GetDestructableTypeId(d) === FourCC(CAGE_RAW)) cage = d; });
+        if (cage == null) { t.fail('cage', 'no cage on the round board'); t.done(); return; }
+        KillDestructable(cage);
+        t.after(1, () => {
+          t.expect('phaseAfterCage', getDPSCheckStatus().phase, 'idle');
+          t.report('scaleAfterCage', getCampDamageScale());
+          if (getCampDamageScale() <= 0) t.fail('scaleAfterCage', 'no scale left set');
+          t.expect('checkUnitsAfterCage', checkUnits().length, 0);
+          t.expect('rowCreepsAfterCage', rowCreeps().length, 0);
+          t.done();
+        });
+      }));
+    });
   }));
 }
 
-registerTest('dpsrestart', runDPSRestart, 150);
+registerTest('dpsround', runDPSRound, 90);
 
 // --- What a mercenary does to the scaling ------------------------------------
 
@@ -346,6 +310,7 @@ for (const c of CONVERGE_CASES) {
     setMercsForTest(c.mercs.map(id => FourCC(id)));
     setCampForTest(c.camp);
     loadInterRoundLobby();
+    startDPSCheck();
     const marks: string[] = [];
     let lastMark = 0;
     const watch = (): void => {
