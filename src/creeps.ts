@@ -369,22 +369,28 @@ function placeCamp(cx: number, cy: number, camp: CreepCamp): void {
     const [dx, dy] = GRID_OFFSETS[i];
     const u = Unit.create(owner, FourCC(creeps[i].id), cx + dx, cy + dy, 270);
     if (u == null) continue;
-    u.invulnerable = true;
-    // Strip the abilities the map has repurposed for its own spells. Four
-    // creeps carry RoarNeutralHostile natively, which is our Unsummon Heroes;
-    // its stats are zeroed at compile time so it does nothing for them anyway,
-    // and leaving it on means a selected creep shows an "Unsummon Heroes"
-    // button. The trigger that acts on it also checks the caster, so this is
-    // the second of two locks rather than the only one.
-    for (const abilityId of PEASANT_SPELL_IDS) {
-      UnitRemoveAbility(u.handle, abilityId);
-    }
-    BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);
-    BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_NUMBER_OF_DICE, 0);
-    BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);
+    prepareCampCreep(u);
     naturalHP.set(GetHandleId(u.handle), BlzGetUnitMaxHP(u.handle));
     spawnedCreeps.push({ unit: u, campUnit: creeps[i], deathTrig: null, charmTrig: null });
   }
+}
+
+/** Ready a freshly made camp creep: invulnerable until the heroes arrive, and
+ *  without the map's repurposed spells or a gold bounty. */
+function prepareCampCreep(u: Unit): void {
+  u.invulnerable = true;
+  // Strip the abilities the map has repurposed for its own spells. Four
+  // creeps carry RoarNeutralHostile natively, which is our Unsummon Heroes;
+  // its stats are zeroed at compile time so it does nothing for them anyway,
+  // and leaving it on means a selected creep shows an "Unsummon Heroes"
+  // button. The trigger that acts on it also checks the caster, so this is
+  // the second of two locks rather than the only one.
+  for (const abilityId of PEASANT_SPELL_IDS) {
+    UnitRemoveAbility(u.handle, abilityId);
+  }
+  BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_BASE, 0);
+  BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_NUMBER_OF_DICE, 0);
+  BlzSetUnitIntegerField(u.handle, UNIT_IF_GOLD_BOUNTY_AWARDED_SIDES_PER_DIE, 0);
 }
 
 /** Remove all spawned creeps (and their corpses). Called when all heroes die,
@@ -461,13 +467,6 @@ function currentDPSAdvantage(): number {
 
 /** Compute DPS and EHP scale factors for creep stat scaling. */
 function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
-  let creepDPS = 0;
-  let creepEHP = 0;
-  for (const c of spawnedCreeps) {
-    creepDPS += getDPS(c.unit.handle);
-    creepEHP += getEffectiveHP(c.unit.handle);
-  }
-
   if (sparringActive) {
     sparringCreepStartHP = SPARRING_HP;
     // What one camp and one copy of the party are worth BEFORE rigging, for
@@ -501,13 +500,25 @@ function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
     return { dpsScale: 1, ehpScale: 1 };
   }
 
+  return roundScaleFactors(spawnedCreeps.map(c => c.unit), fieldedForce(), currentDPSAdvantage());
+}
+
+/** A real round's scale factors for a camp against a force: the camp's damage
+ *  pegged to the force's (measured) damage times the advantage, its effective
+ *  HP to the force's. */
+function roundScaleFactors(
+  creeps: Unit[], force: Unit[], dpsAdvantage: number,
+): { dpsScale: number; ehpScale: number } {
+  const camp = sumForce(creeps);
+  const creepDPS = camp.dps;
+  const creepEHP = camp.ehp;
   // Heroes AND mercenaries, on both axes. The measured DPS already covered the
   // whole force -- it is taken from damage the creeps took, whoever dealt it --
   // but EHP had no measured counterpart and was summed from the heroes alone,
   // so a camp's HP was pegged to a force smaller than the one it would meet.
   // That made every camp easier the better your mercenary was, on every round
   // rather than only before the first measurement.
-  const fielded = sumForce(fieldedForce());
+  const fielded = sumForce(force);
   const forceEHP = fielded.ehp;
   // The measured figure when there is one: it is taken from damage the creeps
   // took, so it already covers whoever dealt it. Before the first match there
@@ -515,7 +526,7 @@ function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
   const forceDPS = measuredHeroDPS > 0 ? measuredHeroDPS : fielded.dps;
   const effectiveCreepDPS = measuredCreepDPS > 0 ? measuredCreepDPS : creepDPS;
   return {
-    dpsScale: effectiveCreepDPS > 0 ? (forceDPS * currentDPSAdvantage()) / effectiveCreepDPS : 1,
+    dpsScale: effectiveCreepDPS > 0 ? (forceDPS * dpsAdvantage) / effectiveCreepDPS : 1,
     ehpScale: creepEHP > 0 ? forceEHP / creepEHP : 1,
   };
 }
@@ -660,23 +671,11 @@ export function scaleCreepStats(heroes: Unit[]): void {
       const scaledHP = Math.max(1, Math.floor(sparringCreepStartHP / perCamp));
       BlzSetUnitMaxHP(h, scaledHP);
       SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
+      BlzSetUnitWeaponIntegerField(h, UNIT_WEAPON_IF_ATTACK_ATTACK_TYPE, 0, 5);
+      c.unit.invulnerable = false;
     } else {
-      // DPS-based damage scaling: keep cooldown, scale base damage to match target DPS
-      const cd = getCooldown(h);
-      const originalDPS = getDPS(h);
-      const targetDPS = originalDPS * dpsScale;
-      const targetAvgDmg = targetDPS * cd;
-      const scaledDamage = Math.max(1, Math.floor(targetAvgDmg - diceAverage(h)));
-
-      // EHP-based HP scaling: keep armor, scale raw HP to match target EHP
-      const scaledHP = Math.max(1, Math.floor(getEffectiveHP(h) * ehpScale / armorMultiplier(h)));
-
-      BlzSetUnitBaseDamage(h, scaledDamage, 0);
-      BlzSetUnitMaxHP(h, scaledHP);
-      SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
+      applyRoundScale(c.unit, dpsScale, ehpScale);
     }
-    BlzSetUnitWeaponIntegerField(h, UNIT_WEAPON_IF_ATTACK_ATTACK_TYPE, 0, 5);
-    c.unit.invulnerable = false;
 
     // Register per-creep death trigger for XP award + item drops (gameplay only)
     if (!sparringActive) {
@@ -717,6 +716,66 @@ export function scaleCreepStats(heroes: Unit[]): void {
   // Both sides are rigged now, so a baseline taken here is honest. Anything
   // earlier reads one side's rigging as the other side's damage.
   if (sparringActive) startMatchSampling();
+}
+
+/** Scale one camp creep for a real round and let it fight. */
+function applyRoundScale(u: Unit, dpsScale: number, ehpScale: number): void {
+  const h = u.handle;
+  // DPS-based damage scaling: keep cooldown, scale base damage to match target DPS
+  const cd = getCooldown(h);
+  const originalDPS = getDPS(h);
+  const targetDPS = originalDPS * dpsScale;
+  const targetAvgDmg = targetDPS * cd;
+  const scaledDamage = Math.max(1, Math.floor(targetAvgDmg - diceAverage(h)));
+
+  // EHP-based HP scaling: keep armor, scale raw HP to match target EHP
+  const scaledHP = Math.max(1, Math.floor(getEffectiveHP(h) * ehpScale / armorMultiplier(h)));
+
+  BlzSetUnitBaseDamage(h, scaledDamage, 0);
+  BlzSetUnitMaxHP(h, scaledHP);
+  SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
+  BlzSetUnitWeaponIntegerField(h, UNIT_WEAPON_IF_ATTACK_ATTACK_TYPE, 0, 5);
+  u.invulnerable = false;
+}
+
+/** Test hook: put the current camp down at (cx, cy) and scale it against
+ *  `force` exactly as a real round would, from the last match's measurement --
+ *  with the damage advantage and an HP multiplier given rather than the
+ *  constants, so a balance harness can try others. The creeps are the
+ *  caller's: no XP, drops or camp-beaten checks are attached. */
+export function spawnScaledCampForTest(
+  cx: number, cy: number, force: Unit[], dpsAdvantage: number, ehpMultiplier: number,
+  rawHP = false,
+): { creeps: Unit[]; dpsScale: number; ehpScale: number } {
+  const camp = getCampData();
+  const creeps: Unit[] = [];
+  if (camp == null) return { creeps, dpsScale: 0, ehpScale: 0 };
+  for (let i = 0; i < camp.creeps.length && i < 9; i++) {
+    const [dx, dy] = GRID_OFFSETS[i];
+    const u = Unit.create(getNeutralAggressive(), FourCC(camp.creeps[i].id), cx + dx, cy + dy, 270);
+    if (u == null) continue;
+    prepareCampCreep(u);
+    creeps.push(u);
+  }
+  const factors = roundScaleFactors(creeps, force, dpsAdvantage);
+  const dpsScale = factors.dpsScale;
+  let ehpScale = factors.ehpScale;
+  if (rawHP) {
+    // Camp raw HP pegged to the force's raw HP, armour left to the measured
+    // damage (which has already had both sides' armour taken out of it).
+    let forceHP = 0;
+    for (const u of force) forceHP += BlzGetUnitMaxHP(u.handle);
+    let campHP = 0;
+    for (const u of creeps) campHP += BlzGetUnitMaxHP(u.handle);
+    ehpScale = campHP > 0 ? forceHP / campHP : 1;
+  }
+  for (const u of creeps) applyRoundScale(u, dpsScale, ehpScale * ehpMultiplier);
+  return { creeps, dpsScale, ehpScale: ehpScale * ehpMultiplier };
+}
+
+/** The advantage a real round gives the camp right now. Exported for tests. */
+export function getCampDPSAdvantage(): number {
+  return currentDPSAdvantage();
 }
 
 // --- The sparring match: the inter-round lobby fight that measures real DPS ---
