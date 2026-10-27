@@ -2,7 +2,8 @@ import { Item, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { registerTest, TestReporter } from './testkit';
 import { gameState } from './state';
-import { TRAIN_INITIAL_MAX_HP } from './sharedData';
+import { TRAIN_INITIAL_MAX_HP, FLAME_RESISTANCE_HP, SHELF } from './sharedData';
+import { Items } from '@objectdata/items';
 import { RESTORE_HP_ID, FLAME_RESISTANCE_ID, PEASANT_ID } from './constants';
 import { getWorldBounds } from './util';
 
@@ -14,12 +15,11 @@ import { getWorldBounds } from './util';
  *  call into AddItemToStock that the game gives no way to read back, so that
  *  half is left to the conditional in stockShop.)
  *
- *  Reports:
- *    beforeRepair   damaged max HP going in
- *    afterRepair    must be exactly TRAIN_INITIAL_MAX_HP
- *    goldSpent      1 -- the repair is charged for
- *    afterUpgrade   repair-then-upgrade must stack from 100, proving the reset
- *                   is a floor and not a permanent cap */
+ *  Expects:
+ *    afterRepair    exactly TRAIN_INITIAL_MAX_HP
+ *    goldSpent      the repair's shelf price
+ *    afterUpgrade   repair-then-upgrade stacks from the starting max HP,
+ *                   proving the reset is a floor and not a permanent cap */
 function runRepairTest(t: TestReporter): void {
   const bounds = getWorldBounds();
   const x = GetRectMaxX(bounds) - 400;
@@ -40,15 +40,14 @@ function runRepairTest(t: TestReporter): void {
   UnitAddItem(buyer.handle, repair.handle);
 
   t.after(1, () => {
-    t.report('afterRepair', gameState.trainMaxHP);
-    t.report('goldSpent', goldBefore - gameState.gold);
-    t.report('matchesInitial', gameState.trainMaxHP === TRAIN_INITIAL_MAX_HP ? 1 : 0);
+    t.expect('afterRepair', gameState.trainMaxHP, TRAIN_INITIAL_MAX_HP);
+    t.expect('goldSpent', goldBefore - gameState.gold, SHELF[Items.HeartOfAszune].cost);
 
     // A Flame Resistance bought after repairing must build on 100.
     const upgrade = Item.create(FLAME_RESISTANCE_ID, x, y);
     if (upgrade != null) UnitAddItem(buyer.handle, upgrade.handle);
     t.after(1, () => {
-      t.report('afterUpgrade', gameState.trainMaxHP);
+      t.expect('afterUpgrade', gameState.trainMaxHP, TRAIN_INITIAL_MAX_HP + FLAME_RESISTANCE_HP);
       buyer.destroy();
       t.done();
     });

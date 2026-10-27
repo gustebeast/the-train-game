@@ -11,11 +11,6 @@ import { getTrain, getTrackWagon } from './train';
 import { placedTracks } from './track/state';
 import { TRACK_SIZE } from './track/constants';
 
-function expect(t: TestReporter, key: string, actual: number, want: number): void {
-  t.report(key, actual);
-  if (actual !== want) t.fail(key, 'expected ' + I2S(want) + ', got ' + I2S(actual));
-}
-
 /** Grid coordinate of a world coordinate, for asserting a layout in the units
  *  the layout was written in. */
 function toGrid(world: number): number {
@@ -52,8 +47,8 @@ function runLobbyVisionTest(t: TestReporter): void {
   loadInterRoundLobby();
   // Two DIFFERENT purchases: the second mercenary is its own contract, and
   // calling the first one twice quietly leaves you with one.
-  expect(t, 'firstContract', buyMercContract() ? 1 : 0, 1);
-  expect(t, 'secondContract', buySecondContract() ? 1 : 0, 1);
+  t.expectTrue('firstContract', buyMercContract());
+  t.expectTrue('secondContract', buySecondContract());
   refreshInterRoundLobbyRoster();
 
   const humans = getHumanPlayers();
@@ -67,12 +62,12 @@ function runLobbyVisionTest(t: TestReporter): void {
     if (GetPlayerAlliance(getNeutralPassive().handle, p.handle, ALLIANCE_SHARED_VISION)) sharers += 1;
     if (GetPlayerAlliance(getTrainPlayer().handle, p.handle, ALLIANCE_SHARED_VISION)) sharers += 1;
   }
-  expect(t, 'controlSharersSeen', sharers, humans.length * 2);
+  t.expect('controlSharersSeen', sharers, humans.length * 2);
 
   const heroes = getInterRoundLobbyHeroUnits();
   const mercs = getInterRoundLobbyMercUnits();
-  expect(t, 'heroesStanding', heroes.length, 4);
-  expect(t, 'mercsStanding', mercs.length, 2);
+  t.expect('heroesStanding', heroes.length, 4);
+  t.expect('mercsStanding', mercs.length, 2);
 
   const props: Unit[] = [];
   for (const h of heroes) props.push(h);
@@ -96,8 +91,8 @@ function runLobbyVisionTest(t: TestReporter): void {
       }
     }
   }
-  expect(t, 'propsLeakingVision', leaking, 0);
-  expect(t, 'propsOnNeutralExtra', onExtra, props.length);
+  t.expect('propsLeakingVision', leaking, 0);
+  t.expect('propsOnNeutralExtra', onExtra, props.length);
 
   // Layout, asserted off the SPOT TABLE rather than off the units standing on
   // it: the shape is the thing being fixed, and it has to be right whether or
@@ -115,24 +110,24 @@ function runLobbyVisionTest(t: TestReporter): void {
     if (gy > 0) north += 1;
     if (gy < 0) south += 1;
   }
-  expect(t, 'spotsInColumn', column.length, 6);
-  expect(t, 'offColumn', offColumn, 0);
-  expect(t, 'onCentreLine', onCentreLine, 0);
-  expect(t, 'northOfCentre', north, 3);
-  expect(t, 'southOfCentre', south, 3);
-  expect(t, 'mercY0', toGrid(spots.mercs[0].y), 3);
-  expect(t, 'mercY1', toGrid(spots.mercs[1].y), 2);
-  expect(t, 'heroY0', toGrid(spots.heroes[0].y), 1);
-  expect(t, 'heroY1', toGrid(spots.heroes[1].y), -1);
-  expect(t, 'heroY2', toGrid(spots.heroes[2].y), -2);
-  expect(t, 'heroY3', toGrid(spots.heroes[3].y), -3);
+  t.expect('spotsInColumn', column.length, 6);
+  t.expect('offColumn', offColumn, 0);
+  t.expect('onCentreLine', onCentreLine, 0);
+  t.expect('northOfCentre', north, 3);
+  t.expect('southOfCentre', south, 3);
+  t.expect('mercY0', toGrid(spots.mercs[0].y), 3);
+  t.expect('mercY1', toGrid(spots.mercs[1].y), 2);
+  t.expect('heroY0', toGrid(spots.heroes[0].y), 1);
+  t.expect('heroY1', toGrid(spots.heroes[1].y), -1);
+  t.expect('heroY2', toGrid(spots.heroes[2].y), -2);
+  t.expect('heroY3', toGrid(spots.heroes[3].y), -3);
 
   // And the units really are standing on those spots.
   let offSpot = 0;
   for (const u of [...mercs, ...heroes]) {
     if (toGrid(u.x) !== 4) offSpot += 1;
   }
-  expect(t, 'unitsOffColumn', offSpot, 0);
+  t.expect('unitsOffColumn', offSpot, 0);
 
   // Vision settles a moment after the units are placed, so look after a beat.
   t.after(2, () => {
@@ -141,7 +136,7 @@ function runLobbyVisionTest(t: TestReporter): void {
     for (const u of [...mercs, ...heroes]) {
       if (!IsVisibleToPlayer(u.x, u.y, me)) unseen += 1;
     }
-    expect(t, 'rosterStillVisible', unseen, 0);
+    t.expect('rosterStillVisible', unseen, 0);
     t.done();
   });
 }

@@ -5,7 +5,7 @@ import { beginNewRun, loadTerrain } from './terrain/load';
 
 /** Verify the burning train's production lock and the wrecked end state.
  *
- *  Reports:
+ *  Expects:
  *    burning          1 once the fire is lit
  *    manaBurning      train mana while burning (production locked => 0)
  *    wrecked          1 once max HP has been eaten down to the floor
@@ -39,21 +39,21 @@ function runBurnTest(t: TestReporter): void {
   SetUnitState(train.handle, UNIT_STATE_LIFE, 1);
 
   t.after(1, () => {
-    t.report('burning', isBurning() ? 1 : 0);
-    t.report('manaBurning', train.mana);
+    t.expectTrue('burning', isBurning());
+    t.expect('manaBurning', train.mana, 0);
   });
 
   // 4 -> 1 is three ticks; allow plenty of slack for a loaded VM.
   t.after(9, () => {
-    t.report('wrecked', isWrecked() ? 1 : 0);
-    t.report('maxHpFloor', gameState.trainMaxHP);
-    t.report('manaWrecked', train.mana);
+    t.expectTrue('wrecked', isWrecked());
+    t.expect('maxHpFloor', gameState.trainMaxHP, 1);
+    t.expect('manaWrecked', train.mana, 0);
 
     // The water bucket's effect. On a wrecked train it must do nothing.
     extinguish();
     t.after(2, () => {
-      t.report('burningAfterWater', isBurning() ? 1 : 0);
-      t.report('manaAfterWater', train.mana);
+      t.expectTrue('burningAfterWater', isBurning());
+      t.expect('manaAfterWater', train.mana, 0);
       t.done();
     });
   });
