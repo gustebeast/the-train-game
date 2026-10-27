@@ -14,8 +14,8 @@ const HORSE_BUFF = FourCC('Bblo');
  *
  *  Each item grants its own spell (the Greater one, not both); every ability
  *  item spell has a 60s cooldown. Both go on the caster, another peasant, a
- *  hero or a mercenary. Frenzy's numbers are 50%/2 hp/s (75%/4 Greater) and it
- *  drains a hero; Imbue With Horse adds Wind Walk's 70% to move speed for 10s
+ *  hero or a mercenary. Frenzy's numbers are 50%/2 hp/s (75%/4 Greater) for 10s,
+ *  and it drains a hero; Imbue With Horse adds Wind Walk's 70% to move speed for 10s
  *  -- 20s with the Greater essence. */
 function runAbilitySpells(t: TestReporter): void {
   beginNewRun();
@@ -80,6 +80,8 @@ function granting(t: TestReporter): void {
         t.expect('plainDrain', BlzGetAbilityRealLevelField(plainAb, ABILITY_RLF_DAMAGE_PER_SECOND_UHF2, 0), 2);
         t.expect('greaterRate', BlzGetAbilityRealLevelField(greaterAb, ABILITY_RLF_ATTACK_SPEED_BONUS_PERCENT, 0), 0.75);
         t.expect('greaterDrain', BlzGetAbilityRealLevelField(greaterAb, ABILITY_RLF_DAMAGE_PER_SECOND_UHF2, 0), 4);
+        t.expect('plainFrenzy10s', BlzGetAbilityRealLevelField(plainAb, ABILITY_RLF_DURATION_NORMAL, 0), 10);
+        t.expect('greaterFrenzy10s', BlzGetAbilityRealLevelField(greaterAb, ABILITY_RLF_DURATION_NORMAL, 0), 10);
         horse(t, hero);
       });
     });

@@ -55,6 +55,11 @@ export const IMBUE_HORSE_ABILITY = 'A016';
 export const GREATER_IMBUE_HORSE_ABILITY = 'A017';
 /** Every ability item spell's cooldown, in seconds (all of them on Q). */
 export const ABILITY_ITEM_COOLDOWN = 60;
+/** The salesperson's prices: an ability item, and Upgrade Peasant Ability. */
+export const ABILITY_ITEM_PRICE = 1;
+export const UPGRADE_ABILITY_PRICE = 1;
+/** Unholy Frenzy's duration, plain and Greater, in seconds. */
+export const UNHOLY_FRENZY_DURATION = 10;
 
 // --- Stock spells taken over -------------------------------------------------
 
