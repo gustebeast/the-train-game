@@ -316,7 +316,10 @@ compiletime(({ objectData, constants }) => {
     { id: 'ahdu', variableType: 2, dataPointer: 0, value: 0 }, // heroDuration
     { id: 'aare', variableType: 2, dataPointer: 0, value: 0 }, // areaOfEffect
   ];
-  const forcedMods: { [rawcode: string]: { id: string; variableType: number; dataPointer: number; value: number }[] } = {
+  type ForcedMod = { id: string; variableType: number; dataPointer: number; value: number | string; levelOrVariation?: number };
+  const noMana: ForcedMod = { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 };
+  const noRequirement: ForcedMod = { id: 'areq', variableType: 3, dataPointer: 0, value: '', levelOrVariation: 0 };
+  const forcedMods: { [rawcode: string]: ForcedMod[] } = {
     ANcl: [ // Channel
       { id: 'Ncl1', variableType: 2, dataPointer: 1, value: 0 }, // followThroughTime
       { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
@@ -342,13 +345,31 @@ compiletime(({ objectData, constants }) => {
     // A copy starts from the stock Transmute, not from the ANtm fix above, so
     // it needs its own: no gold, and free for a peasant with no mana.
     // concat, not a spread: spreads break this block's eval (see project notes).
-    // Vacuum Resources, a COPY of Channel (see the vacuum block): no target,
-    // and it must not disable the peasant's other abilities while it runs.
-    A013: zeroedSpellCost.concat([
+    // Peasant ability item spells (see their blocks). Copies, so these REPLACE
+    // what the copy inherits -- which is why none of them lists the cooldown
+    // or duration it sets itself. No mana: a peasant has none.
+    // Vacuum Resources, a copy of Channel: no target, and it must not disable
+    // the peasant's other abilities while it runs.
+    A013: [
+      { id: 'amcs', variableType: 0, dataPointer: 0, value: 0 }, // manaCost
       { id: 'Ncl2', variableType: 0, dataPointer: 2, value: 0 }, // targetType: none
       { id: 'Ncl4', variableType: 2, dataPointer: 4, value: 0 }, // artDuration
       { id: 'Ncl5', variableType: 0, dataPointer: 5, value: 0 }, // disableOtherAbilities
-    ]),
+    ],
+    // Unholy Frenzy and Bloodlust both wait on an upgrade in melee (Necromancer
+    // and Shaman training); with it the cast is simply refused. Not per level.
+    A014: [noMana, noRequirement], // Unholy Frenzy
+    A015: [noMana, noRequirement],
+    // Imbue With Horse, a copy of Bloodlust: speed only -- no attack rate and
+    // no growing the target.
+    A016: [noMana, noRequirement,
+      { id: 'Blo1', variableType: 2, dataPointer: 1, value: 0 }, // attack speed
+      { id: 'Blo3', variableType: 2, dataPointer: 3, value: 0 }, // scaling
+    ],
+    A017: [noMana, noRequirement,
+      { id: 'Blo1', variableType: 2, dataPointer: 1, value: 0 },
+      { id: 'Blo3', variableType: 2, dataPointer: 3, value: 0 },
+    ],
     A012: zeroedSpellCost.concat([
       { id: 'Ntm1', variableType: 2, dataPointer: 1, value: 0 }, // goldCostFactor
       { id: 'Ntm2', variableType: 2, dataPointer: 2, value: 0 }, // lumberCostFactor
@@ -389,7 +410,7 @@ compiletime(({ objectData, constants }) => {
             inherited.value = forced.value;
           } else {
             const mod = new Modification();
-            Object.assign(mod, forced, { levelOrVariation: 1, u1: 0 });
+            Object.assign(mod, { levelOrVariation: 1, u1: 0 }, forced);
             obj.modifications.push(mod);
           }
         }
@@ -401,7 +422,7 @@ compiletime(({ objectData, constants }) => {
           for (const forced of mods) {
             if (!obj.modifications.some((m: any) => m.id === forced.id)) {
               const mod = new Modification();
-              Object.assign(mod, forced, { levelOrVariation: 1, u1: 0 });
+              Object.assign(mod, { levelOrVariation: 1, u1: 0 }, forced);
               obj.modifications.push(mod);
             }
           }
@@ -414,7 +435,7 @@ compiletime(({ objectData, constants }) => {
         obj.oldId = rawcode;
         for (const forced of mods) {
           const mod = new Modification();
-          Object.assign(mod, forced, { levelOrVariation: 1, u1: 0 });
+          Object.assign(mod, { levelOrVariation: 1, u1: 0 }, forced);
           obj.modifications.push(mod);
         }
         result.w3a.originalTable.objects.push(obj);
@@ -670,15 +691,31 @@ compiletime(({ objectData, constants }) => {
   // itself does nothing when clicked. Campaign items, so creeps never drop them.
   const resourceVacuum = objectData.items.get(constants.items.GlyphOfPurification)!;
   resourceVacuum.name = 'Resource Vacuum';
-  resourceVacuum.tooltipBasic = resourceVacuum.name;
   resourceVacuum.description = 'Grants Vacuum Resources (Q): pulls the wood and stone lying within a tile of you into one pile of each.';
-  resourceVacuum.tooltipExtended = resourceVacuum.description;
   const greaterResourceVacuum = objectData.items.get(constants.items.EnchantedGemstone)!;
   greaterResourceVacuum.name = 'Greater Resource Vacuum';
-  greaterResourceVacuum.tooltipBasic = greaterResourceVacuum.name;
   greaterResourceVacuum.description = 'Grants Vacuum Resources (Q): pulls the wood and stone lying within two tiles of you into one pile of each.';
-  greaterResourceVacuum.tooltipExtended = greaterResourceVacuum.description;
-  for (const abilityItem of [resourceVacuum, greaterResourceVacuum]) {
+  const unholyBone = objectData.items.get(constants.items.BloodKey)!;
+  unholyBone.name = 'Unholy Bone';
+  unholyBone.description = 'Grants Unholy Frenzy (Q): a friendly unit attacks 50% faster, losing 2 hit points a second. A peasant chops and mines faster.';
+  const greaterUnholyBone = objectData.items.get(constants.items.GhostKey)!;
+  greaterUnholyBone.name = 'Greater Unholy Bone';
+  greaterUnholyBone.description = 'Grants Unholy Frenzy (Q): a friendly unit attacks 75% faster, losing 4 hit points a second. A peasant chops and mines faster.';
+  const horseEssence = objectData.items.get(constants.items.MoonKey)!;
+  horseEssence.name = 'Horse Essence';
+  horseEssence.description = 'Grants Imbue With Horse (Q): a friendly unit moves 70% faster for 10 seconds.';
+  const greaterHorseEssence = objectData.items.get(constants.items.SunKey)!;
+  greaterHorseEssence.name = 'Greater Horse Essence';
+  greaterHorseEssence.description = 'Grants Imbue With Horse (Q): a friendly unit moves 70% faster for 20 seconds.';
+  const iconFor: [typeof unholyBone, string][] = [
+    [resourceVacuum, 'BTNTornado'], [greaterResourceVacuum, 'BTNTornado'],
+    [unholyBone, 'BTNBoneChimes'], [greaterUnholyBone, 'BTNBoneChimes'],
+    [horseEssence, 'BTNRiderlessHorse'], [greaterHorseEssence, 'BTNRiderlessHorse'],
+  ];
+  for (const [abilityItem, icon] of iconFor) {
+    abilityItem.tooltipBasic = abilityItem.name;
+    abilityItem.tooltipExtended = abilityItem.description;
+    abilityItem.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\' + icon + '.blp';
     abilityItem.goldCost = 2;
     abilityItem.stockMaximum = 10;
     abilityItem.stockReplenishInterval = 3600;
@@ -691,7 +728,6 @@ compiletime(({ objectData, constants }) => {
     abilityItem.perishable = false;
     // Sellable so the salesperson can buy it back; the regular shop hands it back.
     abilityItem.canBeSoldToMerchants = true;
-    abilityItem.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNTornado.blp';
   }
 
   // Upgrade Peasant Ability: used up on purchase, turning the buyer's ability
@@ -700,7 +736,7 @@ compiletime(({ objectData, constants }) => {
   const upgradeAbility = objectData.items.get(constants.items.Mooncrystal)!;
   upgradeAbility.name = 'Upgrade Peasant Ability';
   upgradeAbility.tooltipBasic = upgradeAbility.name;
-  upgradeAbility.description = 'Turns the peasant ability item you are holding into its Greater version. Resource Vacuum becomes Greater Resource Vacuum, which reaches two tiles instead of one. Refunded if you have nothing to upgrade.';
+  upgradeAbility.description = 'Turns the peasant ability item you are holding into its Greater version: a Greater Resource Vacuum reaches two tiles, a Greater Unholy Bone frenzies harder, a Greater Horse Essence lasts twice as long. Refunded if you have nothing to upgrade.';
   upgradeAbility.tooltipExtended = upgradeAbility.description;
   upgradeAbility.goldCost = 3;
   upgradeAbility.stockMaximum = 10;
@@ -713,7 +749,8 @@ compiletime(({ objectData, constants }) => {
   upgradeAbility.classification = 'PowerUp';
   upgradeAbility.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGlyph.blp';
 
-  for (const unbreakable of [axe, pickaxe, bucket, bucketFull, bossKey, resourceVacuum, greaterResourceVacuum]) {
+  for (const unbreakable of [axe, pickaxe, bucket, bucketFull, bossKey, resourceVacuum, greaterResourceVacuum,
+    unholyBone, greaterUnholyBone, horseEssence, greaterHorseEssence]) {
     unbreakable.hitPoints = 999999;
   }
 
@@ -1411,6 +1448,8 @@ compiletime(({ objectData, constants }) => {
   const BOSS_INFERNO = 'A010';
   const ADD_THUNDER_CLAP = 'A011';
   const VACUUM_ABILITY = 'A013';
+  /** Every ability item spell shares one cooldown and one key (Q). */
+  const ABILITY_ITEM_COOLDOWN = 60;
 
   /** Thunder Clap's mana cost, the same at all three levels. Stamped onto the
    *  copy below rather than inherited, so the add's mana pool can be defined as
@@ -1482,7 +1521,7 @@ compiletime(({ objectData, constants }) => {
     // Not 0: Channel reads 0 as "channel until interrupted" (see the dash).
     vacuum.followThroughTime = 0.01;
     vacuum.castingTime = 0;
-    vacuum.cooldown = 3;
+    vacuum.cooldown = ABILITY_ITEM_COOLDOWN;
     // Its own order string: give/take is 'channel' and the dash 'flare', and
     // two abilities on one unit sharing an order is one of them never firing.
     vacuum.baseOrderIDundefined = 'whirlwind';
@@ -1492,11 +1531,72 @@ compiletime(({ objectData, constants }) => {
     vacuum.effect = '';
     vacuum.name = 'Vacuum Resources';
     vacuum.tooltipNormal = 'Vacuum Resources';
-    vacuum.tooltipNormalExtended = 'Pull the wood and stone lying near you into one pile of each: within one tile with a Resource Vacuum, two with a Greater Resource Vacuum.';
+    vacuum.tooltipNormalExtended = 'Pull the wood and stone lying near you into one pile of each: within one tile with a Resource Vacuum, two with a Greater Resource Vacuum.|n|cffffcc00Cooldown:|r 60 seconds.';
     vacuum.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNTornado.blp';
     vacuum.hotkeyNormal = 'Q';
     vacuum.buttonPositionNormalX = 0;
     vacuum.buttonPositionNormalY = 2;
+  }
+
+  // Unholy Frenzy (Q), from the Unholy Bones: faster attacks -- which for a
+  // peasant means faster chopping and mining -- for a drain on hit points. A
+  // peasant is invulnerable, so the drain only bites when it is cast on a
+  // hero or a mercenary. Stock duration (45s).
+  type FrenzyAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>
+    & { attackSpeedBonusPercent: number; damagePerSecondundefined: number };
+  const frenzies: [string, number, number, string][] = [
+    ['A014', 0.5, 2, 'Unholy Frenzy'],
+    ['A015', 0.75, 4, 'Unholy Frenzy'],
+  ];
+  for (const [rawcode, attackRate, drain, name] of frenzies) {
+    const frenzy = objectData.abilities.copy(constants.abilities.UnholyFrenzy, rawcode) as FrenzyAbility | undefined;
+    if (frenzy == null) continue;
+    frenzy.heroAbility = false;
+    frenzy.levels = 1;
+    frenzy.attackSpeedBonusPercent = attackRate;
+    frenzy.damagePerSecondundefined = drain;
+    frenzy.durationNormal = 45;
+    frenzy.durationHero = 45;
+    frenzy.cooldown = ABILITY_ITEM_COOLDOWN;
+    frenzy.castRange = 500;
+    // invulnerable: peasants are, and casting it on a peasant is the point.
+    frenzy.targetsAllowed = 'air,ground,friend,self,vulnerable,invulnerable,organic';
+    frenzy.name = name;
+    frenzy.tooltipNormal = name;
+    frenzy.tooltipNormalExtended = 'Increases a friendly unit\'s attack rate by ' + String(Math.round(attackRate * 100))
+      + '%, but drains ' + String(drain) + ' hit points per second. A peasant chops and mines faster. Lasts 45 seconds.|n|cffffcc00Cooldown:|r 60 seconds.';
+    frenzy.hotkeyNormal = 'Q';
+    frenzy.buttonPositionNormalX = 0;
+    frenzy.buttonPositionNormalY = 2;
+  }
+
+  // Imbue With Horse (Q), from the Horse Essences: Wind Walk's top speed
+  // (+70%), on the caster, another peasant, a hero or a mercenary. 10 seconds, 20
+  // with the Greater. A copy of Bloodlust with the attack rate and the growth
+  // taken out (forced above).
+  type BloodlustAbility = NonNullable<ReturnType<typeof objectData.abilities.get>>
+    & { movementSpeedIncreasePercentundefined: number };
+  const imbues: [string, number][] = [['A016', 10], ['A017', 20]];
+  for (const [rawcode, seconds] of imbues) {
+    const imbue = objectData.abilities.copy(constants.abilities.Bloodlust, rawcode) as BloodlustAbility | undefined;
+    if (imbue == null) continue;
+    imbue.heroAbility = false;
+    imbue.levels = 1;
+    imbue.movementSpeedIncreasePercentundefined = 0.7;
+    imbue.durationNormal = seconds;
+    imbue.durationHero = seconds;
+    imbue.cooldown = ABILITY_ITEM_COOLDOWN;
+    imbue.castRange = 500;
+    // Self, other peasants (invulnerable), heroes and mercenaries.
+    imbue.targetsAllowed = 'air,ground,friend,self,vulnerable,invulnerable,organic';
+    imbue.name = 'Imbue With Horse';
+    imbue.tooltipNormal = 'Imbue With Horse';
+    imbue.tooltipNormalExtended = 'A friendly unit moves 70% faster for ' + String(seconds)
+      + ' seconds.|n|cffffcc00Cooldown:|r 60 seconds.';
+    imbue.iconNormal = 'ReplaceableTextures\\CommandButtons\\BTNRiderlessHorse.blp';
+    imbue.hotkeyNormal = 'Q';
+    imbue.buttonPositionNormalX = 0;
+    imbue.buttonPositionNormalY = 2;
   }
 
   const clap = objectData.abilities.copy(constants.abilities.ThunderClap, ADD_THUNDER_CLAP);

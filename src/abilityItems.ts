@@ -2,7 +2,10 @@ import { Trigger } from 'w3ts';
 import { registerSaveSegment } from './save';
 import { isPeasantAbilityItem } from './itemRules';
 import { nextFrame, forEachUnitOfPlayer, INVENTORY_SLOTS } from './util';
-import { PEASANT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID } from './constants';
+import {
+  PEASANT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
+  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
+} from './constants';
 
 /**
  * Which peasant holds which ability item, kept across boards and in the save.
@@ -21,7 +24,10 @@ import { PEASANT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID } from './co
 const held = new Map<number, number>();
 
 /** Save codes, so a save holds a digit instead of a rawcode. Append only. */
-const SAVE_CODES: number[] = [RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID];
+const SAVE_CODES: number[] = [
+  RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
+  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
+];
 
 function peasantOf(playerId: number): unit | null {
   let found: unit | null = null;

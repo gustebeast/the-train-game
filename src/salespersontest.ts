@@ -5,9 +5,10 @@ import { beginNewRun, loadInterRoundLobby, loadTerrain } from './terrain/load';
 import { setCampForTest } from './creeps';
 import { CREEP_CAMPS } from './creepCamps';
 import { forEachUnitInWorld, forEachUnitOfPlayer, getHumanPlayers, INVENTORY_SLOTS } from './util';
-import { stockSalesperson } from './salesperson';
+import { stockSalesperson, getOfferedAbilityItem } from './salesperson';
 import {
   AXE_ID, PEASANT_ID, SALESPERSON_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID,
+  UNHOLY_BONE_ID, HORSE_ESSENCE_ID,
 } from './constants';
 
 const LAST = INVENTORY_SLOTS - 1;
@@ -109,7 +110,9 @@ function selling(t: TestReporter, sp: unit, p: unit, hero: unit, mainShop: unit)
 registerTest('salesperson', runSalesperson);
 
 /** He turns up on every snow round (a level 3 camp's round) and on no other:
- *  five rounds of each, counting him in the world after the real load. */
+ *  five rounds of each, counting him in the world after the real load. Each
+ *  visit offers one ability item, and the first three visits offer all three
+ *  -- no repeats within a lap. */
 function runSalespersonSpawn(t: TestReporter): void {
   beginNewRun();
   let winterCamp = -1;
@@ -120,16 +123,25 @@ function runSalespersonSpawn(t: TestReporter): void {
   }
   let winterRounds = 0;
   let summerRounds = 0;
+  const offered: number[] = [];
   for (let round = 1; round <= 5; round++) {
     setCampForTest(winterCamp);
     loadTerrain(round);
     if (countSalespeople() === 1) winterRounds += 1;
+    offered.push(getOfferedAbilityItem());
     setCampForTest(summerCamp);
     loadTerrain(round);
     if (countSalespeople() === 0) summerRounds += 1;
   }
   t.expect('everySnowRound', winterRounds, 5);
   t.expect('noOtherRound', summerRounds, 5);
+  const firstLap = [offered[0], offered[1], offered[2]];
+  let covered = 0;
+  for (const item of [RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, HORSE_ESSENCE_ID]) {
+    if (firstLap.indexOf(item) !== -1) covered += 1;
+  }
+  t.expect('firstLapOffersAllThree', covered, 3);
+  t.expect('nextLapOffersOne', offered[3] !== 0 ? 1 : 0, 1);
   t.done();
 }
 

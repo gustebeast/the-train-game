@@ -119,8 +119,18 @@ export const RESOURCE_VACUUM_ID = FourCC(Items.GlyphOfPurification);
 export const GREATER_RESOURCE_VACUUM_ID = FourCC(Items.EnchantedGemstone);
 /** Salesperson item: turns the buyer's ability item into its Greater version. */
 export const UPGRADE_PEASANT_ABILITY_ID = FourCC(Items.Mooncrystal);
-/** Vacuum Resources, granted by either vacuum. Q, like every ability item's spell. */
+export const UNHOLY_BONE_ID = FourCC(Items.BloodKey);
+export const GREATER_UNHOLY_BONE_ID = FourCC(Items.GhostKey);
+export const HORSE_ESSENCE_ID = FourCC(Items.MoonKey);
+export const GREATER_HORSE_ESSENCE_ID = FourCC(Items.SunKey);
+/** The spells they grant, all on Q. Vacuum Resources serves both vacuums (the
+ *  reach is read off the item); the others are one ability per item, since
+ *  the Greater version differs in its numbers. */
 export const VACUUM_ABILITY_ID = FourCC('A013');
+export const UNHOLY_FRENZY_ABILITY_ID = FourCC('A014');
+export const GREATER_UNHOLY_FRENZY_ABILITY_ID = FourCC('A015');
+export const IMBUE_HORSE_ABILITY_ID = FourCC('A016');
+export const GREATER_IMBUE_HORSE_ABILITY_ID = FourCC('A017');
 
 /** Everything the shop sells that is consumed on acquisition. */
 export const SHOP_UPGRADE_ITEM_IDS: readonly number[] = [

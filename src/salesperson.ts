@@ -3,8 +3,11 @@ import { Units } from '@objectdata/units';
 import { gameState, syncState } from './state';
 import { showFloatingText } from './items';
 import { INVENTORY_SLOTS, nextFrame } from './util';
+import { registerSaveSegment, parseFields } from './save';
+import { deriveSeed } from './rng';
 import {
   SALESPERSON_ID, PEASANT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID,
+  UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
   UPGRADE_PEASANT_ABILITY_ID,
 } from './constants';
 
@@ -18,30 +21,112 @@ import {
  * syncState overwrites. A purchase that turns out to be useless is not charged
  * and its item is taken back.
  */
-const PRICES = new Map<number, number>([
-  [RESOURCE_VACUUM_ID, 2],
-  [UPGRADE_PEASANT_ABILITY_ID, 3],
-]);
+/** The ability items he sells, one per visit, each with its Greater version.
+ *  The keys are save codes: append only, never reorder. */
+const ABILITY_ITEMS: [string, number, number][] = [
+  ['v', RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID],
+  ['u', UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID],
+  ['h', HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID],
+];
 
-/** What he pays for an ability item sold back to him. Nothing else is bought. */
-const BUYBACK = new Map<number, number>([
-  [RESOURCE_VACUUM_ID, 1],
-  [GREATER_RESOURCE_VACUUM_ID, 2],
-]);
-
+const ITEM_PRICE = 2;
+const UPGRADE_PRICE = 3;
+/** What he pays for an ability item sold back to him: 1, or 2 for a Greater.
+ *  Nothing else is bought. */
+const BUYBACK = new Map<number, number>();
 /** Each ability item and its Greater version. */
-const GREATER_VERSION = new Map<number, number>([
-  [RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID],
-]);
+const GREATER_VERSION = new Map<number, number>();
+const PRICES = new Map<number, number>([[UPGRADE_PEASANT_ABILITY_ID, UPGRADE_PRICE]]);
+for (const [, plain, greater] of ABILITY_ITEMS) {
+  BUYBACK.set(plain, 1);
+  BUYBACK.set(greater, 2);
+  GREATER_VERSION.set(plain, greater);
+  PRICES.set(plain, ITEM_PRICE);
+}
 
-/** Stock a freshly spawned salesperson. Deferred a frame, as for the shop, so
- *  the adds land after the unit fully exists. */
+// --- what's on offer -------------------------------------------------------
+//
+// One ability item per visit, walked like the dealer's challenges: a seeded
+// shuffle of the whole list, no repeats until every item has been offered,
+// then a fresh shuffle for the next lap. Seeded per save, so a reload brings
+// back the same sequence.
+
+/** Stream id for the offer order (see rng.deriveSeed). */
+const OFFER_STREAM = 3;
+let seed = 0;
+let cycles = 0;
+/** Keys offered this lap. */
+let seen: string[] = [];
+let offeredKey: string | null = null;
+
+function shuffledKeys(): string[] {
+  const keys = ABILITY_ITEMS.map(([key]) => key);
+  let state = ((seed !== 0 ? seed : 1) + cycles * 2654435761) % 4294967296;
+  for (let i = keys.length - 1; i > 0; i--) {
+    state = (1664525 * state + 1013904223) % 4294967296;
+    const j = state % (i + 1);
+    const tmp = keys[i];
+    keys[i] = keys[j];
+    keys[j] = tmp;
+  }
+  return keys;
+}
+
+/** Move the offer on to the next item of the lap. Called once per visit. */
+function advanceOffer(): void {
+  if (seed === 0) seed = deriveSeed(OFFER_STREAM);
+  let next = shuffledKeys().find(key => !seen.includes(key));
+  if (next == null) {
+    seen = [];
+    cycles += 1;
+    next = shuffledKeys()[0];
+  }
+  offeredKey = next;
+  seen.push(next);
+}
+
+/** The ability item on offer at the current visit, or 0 before the first. */
+export function getOfferedAbilityItem(): number {
+  for (const [key, plain] of ABILITY_ITEMS) if (key === offeredKey) return plain;
+  return 0;
+}
+
+registerSaveSegment('sp',
+  () => {
+    const parts: string[] = ['s=' + tostring(seed)];
+    if (cycles > 0) parts.push('n=' + tostring(cycles));
+    if (offeredKey != null) parts.push('o=' + offeredKey);
+    if (seen.length > 0) parts.push('p=' + seen.join(','));
+    return parts.join(';');
+  },
+  (raw) => {
+    const fields = parseFields(raw);
+    seed = tonumber(fields['s'] ?? '') ?? 0;
+    cycles = tonumber(fields['n'] ?? '') ?? 0;
+    const o = fields['o'];
+    offeredKey = o != null && o !== '' ? o : null;
+    const p = fields['p'];
+    seen = p != null && p !== '' ? p.split(',') : [];
+  },
+  () => {
+    seed = 0;
+    cycles = 0;
+    seen = [];
+    offeredKey = null;
+  },
+);
+
+/** Stock a freshly spawned salesperson with the next item of the rotation and
+ *  the upgrade. Deferred a frame, as for the shop, so the adds land after the
+ *  unit fully exists. */
 export function stockSalesperson(salesperson: unit): void {
+  advanceOffer();
+  const offered = getOfferedAbilityItem();
   const t = CreateTimer()!;
   TimerStart(t, 0, false, () => {
     DestroyTimer(t);
     if (GetUnitTypeId(salesperson) === 0) return;
-    AddItemToStock(salesperson, RESOURCE_VACUUM_ID, 10, 10);
+    AddItemToStock(salesperson, offered, 10, 10);
     AddItemToStock(salesperson, UPGRADE_PEASANT_ABILITY_ID, 10, 10);
   });
 }

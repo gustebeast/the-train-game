@@ -167,6 +167,8 @@ function vacuuming(t: TestReporter, p: unit): void {
     t.expect('stonePileSize', stone.length === 1 ? GetItemCharges(stone[0]) : -1, 2);
     t.expect('trackLeftAlone', GetItemY(track) === cy - T ? 1 : 0, 1);
     t.expect('farWoodLeftAlone', GetItemX(farWood) === cx + 2 * T ? 1 : 0, 1);
+    const cd = BlzGetUnitAbilityCooldownRemaining(p, VACUUM_ABILITY_ID);
+    t.expect('cooldown60', cd > 55 && cd <= 60 ? 1 : 0, 1);
 
     // Greater: picking it up swaps the plain one out, and reaches two tiles.
     UnitAddItem(p, CreateItem(GREATER_RESOURCE_VACUUM_ID, cx, cy)!);
@@ -175,7 +177,9 @@ function vacuuming(t: TestReporter, p: unit): void {
       t.expect('plainSwappedOut', looseItems(cx, cy, 2, RESOURCE_VACUUM_ID).length, 1);
       t.expect('stillGrantsQ', GetUnitAbilityLevel(p, VACUUM_ABILITY_ID), 1);
       for (const it of looseItems(cx, cy, 2, RESOURCE_VACUUM_ID)) RemoveItem(it);
-      t.after(3, () => {
+      // Skip the cooldown rather than wait a minute for it.
+      BlzEndUnitAbilityCooldown(p, VACUUM_ABILITY_ID);
+      t.after(0.2, () => {
         IssueImmediateOrder(p, 'whirlwind');
         t.after(0.5, () => {
           const wood2 = looseItems(cx, cy, 2, WOOD_ID);

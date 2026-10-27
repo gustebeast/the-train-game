@@ -4,6 +4,7 @@ import {
   BUCKET_ID, BUCKET_FULL_ID, REROLL_ITEM_ID, BOSS_KEY_ITEM_ID,
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
   SHOP_UPGRADE_ITEM_IDS, UNKNOWN_UNIT_ID, RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID,
+  UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
 } from './constants';
 
 /**
@@ -55,7 +56,10 @@ function isPeasantUtility(itemTypeId: number): boolean {
 
 /** Bought from the Secret Salesperson: grants its peasant a special ability
  *  and lives in the last inventory slot, out of the way of the carried item. */
-const PEASANT_ABILITY_ITEM_IDS: number[] = [RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID];
+const PEASANT_ABILITY_ITEM_IDS: number[] = [
+  RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID,
+  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID,
+];
 
 export function isPeasantAbilityItem(itemTypeId: number): boolean {
   return PEASANT_ABILITY_ITEM_IDS.indexOf(itemTypeId) !== -1;

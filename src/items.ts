@@ -7,6 +7,8 @@ import {
   WOOD_ID, STONE_ID, TRACK_PIECE_ID, BUCKET_ID, BUCKET_FULL_ID,
   PEASANT_ID, TRAIN_ID, TRACK_WAGON_ID, CRATE_ID,
   RESOURCE_VACUUM_ID, GREATER_RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID,
+  UNHOLY_BONE_ID, GREATER_UNHOLY_BONE_ID, UNHOLY_FRENZY_ABILITY_ID, GREATER_UNHOLY_FRENZY_ABILITY_ID,
+  HORSE_ESSENCE_ID, GREATER_HORSE_ESSENCE_ID, IMBUE_HORSE_ABILITY_ID, GREATER_IMBUE_HORSE_ABILITY_ID,
   BUILD_TRACK_ABILITY_ID, BRIDGE_ABILITY_ID, FILL_ABILITY_ID, WATER_TRAIN_ABILITY_ID,
 } from './constants';
 
@@ -95,10 +97,14 @@ const ITEM_GATED_ABILITIES: ReadonlyArray<readonly [number, number]> = [
   [BUCKET_FULL_ID, WATER_TRAIN_ABILITY_ID],
   [RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID],
   [GREATER_RESOURCE_VACUUM_ID, VACUUM_ABILITY_ID],
+  [UNHOLY_BONE_ID, UNHOLY_FRENZY_ABILITY_ID],
+  [GREATER_UNHOLY_BONE_ID, GREATER_UNHOLY_FRENZY_ABILITY_ID],
+  [HORSE_ESSENCE_ID, IMBUE_HORSE_ABILITY_ID],
+  [GREATER_HORSE_ESSENCE_ID, GREATER_IMBUE_HORSE_ABILITY_ID],
 ];
 
 /** Grant or revoke item-gated abilities (build track, bridge, fill, water
- *  train, vacuum). An ability two items grant is kept while either is held. */
+ *  train, and the ability items' spells). An ability two items grant is kept while either is held. */
 export function updateBuildAbility(u: Unit): void {
   if (u.typeId !== PEASANT_ID) return;
   const granted = new Set<number>();
