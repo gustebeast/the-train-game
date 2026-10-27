@@ -1,7 +1,7 @@
 import { getArmedChallenge, ChallengeDef } from './challenges';
+import { onPlayerLeave } from './playerLeave';
 import { CHALLENGE_COST } from './sharedData';
 import { onBoardChanged } from './boardSignal';
-import { getHumanPlayers } from './util';
 
 /**
  * The armed challenge's overlay.
@@ -225,9 +225,7 @@ export function initChallengeUI(): void {
   if (!listening) {
     listening = true;
     onBoardChanged(() => draw());
-    const leave = CreateTrigger();
-    for (const p of getHumanPlayers()) TriggerRegisterPlayerEvent(leave, p.handle, EVENT_PLAYER_LEAVE);
-    TriggerAddAction(leave, () => draw());
+    onPlayerLeave(() => draw());
   }
   draw();
 }

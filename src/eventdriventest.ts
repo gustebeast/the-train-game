@@ -209,6 +209,11 @@ function runCargoEvents(t: TestReporter): void {
   loadTerrain(0);
   const train = getTrain();
   const wagon = getTrackWagon();
+  if (train == null || wagon == null) {
+    t.fail('train', 'loadTerrain stood up no train');
+    t.done();
+    return;
+  }
   const me = getHumanPlayers()[0];
   const wait = ONE_FRAME * 2;
 
@@ -253,7 +258,8 @@ function runCargoEvents(t: TestReporter): void {
         // A new round replaces both cars. Cargo that arrives on the NEW engine
         // must show there.
         loadTerrain(0);
-        setStorageItem(getTrain(), WOOD_ID, 1);
+        const newTrain = getTrain();
+        if (newTrain != null) setStorageItem(newTrain, WOOD_ID, 1);
         t.after(wait, () => {
           expect(t, 'woodOnNewTrain', cargoShowing().wood ? 1 : 0, 1);
           t.done();

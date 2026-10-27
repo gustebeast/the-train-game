@@ -124,6 +124,11 @@ function addRosterToInterRoundLobby(): void {
   if (hasInterRoundLobbyRerollTargets()) stock(REROLL_ITEM_ID);
 }
 
+/** The units that are actually there, for the upgrade effect. */
+function present(...units: Array<Unit | null>): Unit[] {
+  return units.filter((u): u is Unit => u != null);
+}
+
 // Effect path: Abilities\Spells\Items\{id}\{id}Target.mdl
 const EFFECT_ID = 'AIem';
 
@@ -184,12 +189,12 @@ export function initShop(): void {
 
     if (itemTypeId === FLAME_RESISTANCE_ID) {
       gameState.trainMaxHP += FLAME_RESISTANCE_HP;
-      effectTargets = [getTrain()];
+      effectTargets = present(getTrain());
     } else if (itemTypeId === RESTORE_HP_ID) {
       // Back to the starting value, not to whatever it was before the fire:
       // Flame Resistance upgrades bought earlier really are lost.
       gameState.trainMaxHP = TRAIN_INITIAL_MAX_HP;
-      effectTargets = [getTrain()];
+      effectTargets = present(getTrain());
       // The train is whole again, so the pair swaps back without waiting for
       // the next inter-round lobby -- otherwise repairing would cost you the chance to
       // upgrade this visit.
@@ -197,13 +202,13 @@ export function initShop(): void {
     } else if (itemTypeId === TRACK_MANUFACTURING_ID) {
       gameState.trainMaxMana = math.max(TRACK_MANUFACTURING_MIN_MANA,
         gameState.trainMaxMana - TRACK_MANUFACTURING_MANA);
-      effectTargets = [getTrain()];
+      effectTargets = present(getTrain());
     } else if (itemTypeId === RESOURCE_CAPACITY_ID) {
       gameState.trainCargoMaxStack += RESOURCE_CAPACITY_STEP;
-      effectTargets = [getTrain()];
+      effectTargets = present(getTrain());
     } else if (itemTypeId === TRACK_CAPACITY_ID) {
       gameState.trainTrackMaxStack += TRACK_CAPACITY_STEP;
-      effectTargets = [getTrackWagon()];
+      effectTargets = present(getTrackWagon());
     } else if (itemTypeId === CRATE_CAPACITY_ID) {
       gameState.crateMaxStack += CRATE_CAPACITY_STEP;
       // The shop is in the inter-round lobby, where the START crate displays capacity as
@@ -327,8 +332,8 @@ export function initDealerOffer(): void {
   const selected = Trigger.create();
   const deselected = Trigger.create();
   Players.forEach(p => {
-    TriggerRegisterPlayerUnitEvent(selected.handle, p.handle, EVENT_PLAYER_UNIT_SELECTED, undefined);
-    TriggerRegisterPlayerUnitEvent(deselected.handle, p.handle, EVENT_PLAYER_UNIT_DESELECTED, undefined);
+    selected.registerPlayerUnitEvent(p, EVENT_PLAYER_UNIT_SELECTED, undefined);
+    deselected.registerPlayerUnitEvent(p, EVENT_PLAYER_UNIT_DESELECTED, undefined);
   });
   selected.addAction(() => {
     const u = GetTriggerUnit();

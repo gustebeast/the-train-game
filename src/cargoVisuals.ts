@@ -1,4 +1,4 @@
-import { Unit } from 'w3ts';
+import { Trigger, Unit } from 'w3ts';
 import { WOOD_ID, STONE_ID, TRACK_PIECE_ID } from './constants';
 import { STONE_MODEL, WOOD_MODEL, SMALL_TRACK_MODEL } from './sharedData';
 import { findItemByType } from './items';
@@ -63,11 +63,11 @@ function hasCargo(u: Unit, itemTypeId: number): boolean {
 }
 
 /** Create/destroy the visual's effect to match the unit's current cargo. */
-function syncVisual(v: CargoVisual, u: Unit): void {
-  const alive = u != null && unitExists(u.handle);
-  const show = alive && hasCargo(u, v.itemTypeId);
+function syncVisual(v: CargoVisual, u: Unit | null): void {
+  const show = u != null && unitExists(u.handle) && hasCargo(u, v.itemTypeId);
+  const attachedHere = u != null && v.attachedTo === u.handle;
 
-  if (v.effect != null && (!show || v.attachedTo !== u.handle)) {
+  if (v.effect != null && (!show || !attachedHere)) {
     // Scale to 0 before destroying so the model vanishes instantly instead
     // of lingering through its death animation
     BlzSetSpecialEffectScale(v.effect, 0);
@@ -75,7 +75,7 @@ function syncVisual(v: CargoVisual, u: Unit): void {
     v.effect = null;
     v.attachedTo = null;
   }
-  if (show && v.effect == null) {
+  if (show && u != null && v.effect == null) {
     const e = AddSpecialEffectTarget(v.model, u.handle, v.attachPoint);
     if (e != null) {
       BlzSetSpecialEffectScale(e, v.scale);
@@ -114,12 +114,10 @@ function syncAll(): void {
  * an effect off a car that is no longer the current one.
  */
 export function initCargoVisuals(): void {
-  const items = CreateTrigger();
-  for (let i = 0; i < bj_MAX_PLAYER_SLOTS; i++) {
-    TriggerRegisterPlayerUnitEvent(items, Player(i)!, EVENT_PLAYER_UNIT_PICKUP_ITEM, null!);
-    TriggerRegisterPlayerUnitEvent(items, Player(i)!, EVENT_PLAYER_UNIT_DROP_ITEM, null!);
-  }
-  TriggerAddAction(items, () => {
+  const items = Trigger.create();
+  items.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
+  items.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DROP_ITEM);
+  items.addAction(() => {
     const u = GetTriggerUnit();
     const train = getTrain();
     const wagon = getTrackWagon();

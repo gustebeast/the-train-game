@@ -20,7 +20,7 @@ import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { onCampCleared, onCampFightStarted } from './bossKey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
-import { forEachUnitOfPlayer, isAlive, unitExists } from './util';
+import { forEachUnitOfPlayer, isAlive, unitExists, forEachUnitInRange } from './util';
 
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
@@ -315,7 +315,7 @@ export function getCampData(): CreepCamp | null {
 /** Clean up the previous cage trigger (if any) without spawning creeps. */
 export function cleanupCage(): void {
   if (cageTrigger != null) {
-    DestroyTrigger(cageTrigger.handle);
+    cageTrigger.destroy();
     cageTrigger = null;
   }
   cageDestructable = null;
@@ -1159,10 +1159,7 @@ export function registerCageTrigger(): void {
     // (GetKillingUnit() doesn't work for destructable death events)
     let nearest: unit | null = null;
     let bestDist = math.huge;
-    const g = CreateGroup()!;
-    GroupEnumUnitsInRange(g, cx, cy, 300, null!);
-    ForGroup(g, () => {
-      const u = GetEnumUnit()!;
+    forEachUnitInRange(cx, cy, 300, u => {
       if (GetUnitTypeId(u) !== PEASANT_ID) return;
       const dx = GetUnitX(u) - cx;
       const dy = GetUnitY(u) - cy;
@@ -1172,12 +1169,11 @@ export function registerCageTrigger(): void {
         nearest = u;
       }
     });
-    DestroyGroup(g);
     if (nearest != null) {
       UnitAddAbility(nearest, SUMMON_ABILITY_ID);
     }
     cageDestructable = null;
     cageTrigger = null;
-    DestroyTrigger(trig.handle);
+    trig.destroy();
   });
 }

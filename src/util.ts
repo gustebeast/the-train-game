@@ -39,6 +39,17 @@ export function forEachUnitInWorld(cb: (u: unit) => void): void {
   DestroyGroup(g);
 }
 
+/** Run cb for every unit within `radius` of (x, y). */
+export function forEachUnitInRange(x: number, y: number, radius: number, cb: (this: void, u: unit) => void): void {
+  const g = CreateGroup()!;
+  GroupEnumUnitsInRange(g, x, y, radius, undefined);
+  ForGroup(g, () => {
+    const u = GetEnumUnit();
+    if (u != null) cb(u);
+  });
+  DestroyGroup(g);
+}
+
 /** Run cb for every unit a player owns.
  *
  *  The group is created, enumerated and destroyed here, and cb only ever sees a

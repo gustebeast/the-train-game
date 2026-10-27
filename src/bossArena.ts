@@ -5,7 +5,7 @@ import { dealPartyForHumans } from './bossParty';
 import { spawnHeroes, getSpawnedHeroes, endHeroState, chooseAllHeroes } from './heroes';
 import { spawnMercWithHeroes, getLivingMercCount } from './mercenary';
 import { getBossHeroSpots, getBossMercSpots, getBossSpot } from './terrain/spawn';
-import { forEachUnitOfPlayer, getHumanPlayers, nextFrame, isAlive } from './util';
+import { forEachUnitOfPlayer, getHumanPlayers, nextFrame, isAlive, forEachUnitInWorld } from './util';
 
 /**
  * The boss fight itself: who stands where, and how it ends.
@@ -101,11 +101,8 @@ function partyStanding(): boolean {
 /** Is the boss, or anything it called down, still on the board? */
 function enemiesRemain(): boolean {
   let remain = false;
-  const g = CreateGroup()!;
-  GroupEnumUnitsInRect(g, GetPlayableMapRect()!, undefined);
-  ForGroup(g, () => {
-    const u = GetEnumUnit();
-    if (remain || u == null) return;
+  forEachUnitInWorld(u => {
+    if (remain) return;
     const id = GetUnitTypeId(u);
     if (id !== BOSS_ID && id !== BOSS_ADD_ID) return;
     // Matched by type, so one the party has charmed has to be left out by
@@ -115,7 +112,6 @@ function enemiesRemain(): boolean {
     if (!isAlive(u)) return;
     remain = true;
   });
-  DestroyGroup(g);
   return remain;
 }
 
@@ -190,10 +186,9 @@ export function startBossFight(): void {
   trig.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DEATH);
   // Charm ends a fight as surely as a death -- the last hostile infernal
   // changing hands leaves nothing to beat -- but it is no death, so it needs
-  // its own event. The boss's side is registered explicitly: registering for
-  // "any unit" covers the player slots, not neutral.
+  // its own event. "Any unit" covers every slot up to bj_MAX_PLAYER_SLOTS,
+  // neutral aggressive included, so the boss's side needs nothing extra.
   trig.registerAnyUnitEvent(EVENT_PLAYER_UNIT_CHANGE_OWNER);
-  trig.registerPlayerUnitEvent(MapPlayer.fromIndex(PLAYER_NEUTRAL_AGGRESSIVE)!, EVENT_PLAYER_UNIT_CHANGE_OWNER, undefined);
   for (const p of getHumanPlayers()) trig.registerPlayerEvent(p, EVENT_PLAYER_LEAVE);
   // A frame later: inside the death event the dying unit can still read as
   // alive to the checks below, and judging it standing would miss the ending.

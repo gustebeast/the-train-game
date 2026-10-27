@@ -1,3 +1,4 @@
+import { Trigger } from 'w3ts';
 import { AXE_ID, PICKAXE_ID, BUCKET_ID, BUCKET_FULL_ID } from './constants';
 import { getWorldBounds, nextFrame } from './util';
 
@@ -173,12 +174,10 @@ export function initMinimapIcons(): void {
     refreshNextFrame(it);
   };
 
-  const moves = CreateTrigger();
-  for (let i = 0; i < bj_MAX_PLAYER_SLOTS; i++) {
-    TriggerRegisterPlayerUnitEvent(moves, Player(i)!, EVENT_PLAYER_UNIT_PICKUP_ITEM, null!);
-    TriggerRegisterPlayerUnitEvent(moves, Player(i)!, EVENT_PLAYER_UNIT_DROP_ITEM, null!);
-  }
-  TriggerAddAction(moves, () => refreshNextFrame(GetManipulatedItem()));
+  const moves = Trigger.create();
+  moves.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
+  moves.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DROP_ITEM);
+  moves.addAction(() => refreshNextFrame(GetManipulatedItem()));
 
   itemDeath = CreateTrigger();
   TriggerAddAction(itemDeath, () => {

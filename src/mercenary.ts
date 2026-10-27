@@ -99,7 +99,7 @@ let currentHeroOwnerIds: number[] = [];
  *  trigger destroyed only in its own action would leak one per spawn. */
 function clearMercDeathTrigger(sl: MercSlot): void {
   if (sl.deathTrig == null) return;
-  DestroyTrigger(sl.deathTrig.handle);
+  sl.deathTrig.destroy();
   sl.deathTrig = null;
 }
 
@@ -325,7 +325,7 @@ function spawnMercUnit(sl: MercSlot, owner: MapPlayer, x: number, y: number): vo
   clearMercDeathTrigger(sl);
   const deathTrig = Trigger.create();
   sl.deathTrig = deathTrig;
-  TriggerRegisterUnitEvent(deathTrig.handle, u.handle, EVENT_UNIT_DEATH);
+  deathTrig.registerUnitEvent(u, EVENT_UNIT_DEATH);
   deathTrig.addAction(() => {
     if (sl.unit != null && sl.unit.handle === GetTriggerUnit()) {
       sl.items = getInventoryItemIds(sl.unit.handle);
@@ -334,7 +334,7 @@ function spawnMercUnit(sl: MercSlot, owner: MapPlayer, x: number, y: number): vo
       sl.unit = null;
     }
     if (sl.deathTrig === deathTrig) { sl.deathTrig = null; }
-    DestroyTrigger(deathTrig.handle);
+    deathTrig.destroy();
   });
 }
 
