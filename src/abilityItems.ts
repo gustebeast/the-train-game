@@ -1,8 +1,8 @@
 import { Trigger } from 'w3ts';
 import { registerSaveSegment } from './save';
 import { isPeasantAbilityItem } from './itemRules';
-import { nextFrame, firstPeasantOf, findInventoryItem, giveItems } from './util';
-import { PEASANT_ID, ABILITY_ITEM_IDS } from './constants';
+import { nextFrame, firstPeasantOf, findInventoryItem, giveItems, onSpellEffect } from './util';
+import { PEASANT_ID, ABILITY_ITEM_IDS, ABILITY_ITEM_FAMILIES } from './constants';
 
 /**
  * Which peasant holds which ability item, kept across boards and in the save.
@@ -49,7 +49,61 @@ export function getHeldAbilityItem(playerId: number): number {
   return held.get(playerId) ?? 0;
 }
 
+/**
+ * The spell cooldowns, which belong to the item rather than the peasant.
+ *
+ * A peasant only has an item's spell while holding the item (items.ts adds
+ * and removes it), and an ability added afresh starts off cooldown -- so
+ * dropping the item and picking it back up, or passing it to another peasant,
+ * would skip the cooldown. Instead each cast notes when its item's spell is
+ * ready again, and the spell is put back on that cooldown whenever it is
+ * granted anew.
+ */
+const readyAt = new Map<item, number>();
+/** Game time for readyAt: a timer that never fires, read for its elapsed time. */
+const clock = CreateTimer();
+
+/** The ability items that grant each spell (both vacuums grant the one spell). */
+const GRANTED_BY = new Map<number, number[]>();
+for (const { plain, greater, spell, greaterSpell } of ABILITY_ITEM_FAMILIES) {
+  if (spell != null) GRANTED_BY.set(spell, [...(GRANTED_BY.get(spell) ?? []), plain]);
+  if (greaterSpell != null) GRANTED_BY.set(greaterSpell, [...(GRANTED_BY.get(greaterSpell) ?? []), greater]);
+}
+
+function itemGranting(u: unit, abilityId: number): item | null {
+  const types = GRANTED_BY.get(abilityId);
+  if (types == null) return null;
+  return findInventoryItem(u, id => types.includes(id));
+}
+
+/** A spell was just granted to `u` by an ability item it holds: put it back on
+ *  whatever is left of that item's cooldown. Any other ability is ignored. */
+export function restoreItemCooldown(u: unit, abilityId: number): void {
+  const it = itemGranting(u, abilityId);
+  if (it == null) return;
+  const ready = readyAt.get(it);
+  if (ready == null) return;
+  const remaining = ready - TimerGetElapsed(clock);
+  if (remaining > 0) BlzStartUnitAbilityCooldown(u, abilityId, remaining);
+  else readyAt.delete(it);
+}
+
+/** An item replaced by another (the Greater version) keeps its cooldown. Call
+ *  before the new item reaches an inventory. */
+export function carryItemCooldown(from: item, to: item): void {
+  const ready = readyAt.get(from);
+  readyAt.delete(from);
+  if (ready != null) readyAt.set(to, ready);
+}
+
 export function initAbilityItems(): void {
+  TimerStart(clock, 1000000000, false, () => {});
+  GRANTED_BY.forEach((_, abilityId) => {
+    onSpellEffect(abilityId, caster => {
+      const it = itemGranting(caster.handle, abilityId);
+      if (it != null) readyAt.set(it, TimerGetElapsed(clock) + BlzGetUnitAbilityCooldown(caster.handle, abilityId, 0));
+    });
+  });
   const t = Trigger.create();
   t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
   t.registerAnyUnitEvent(EVENT_PLAYER_UNIT_DROP_ITEM);

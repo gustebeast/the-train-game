@@ -18,6 +18,7 @@ import './abilityItemTest'; // Resource Vacuum: holding, vacuuming, keeping
 import './salespersonTest'; // Secret Salesperson: buying, upgrading, selling back
 import './abilitySpellTest'; // Unholy Frenzy and Imbue With Horse, cast for real
 import './muscleMilkTest'; // Muscle Milk: bigger stacks, storage limits kept
+import './itemCooldownTest'; // ability item cooldowns survive a drop and a hand-over
 import './campTest'; // camp rotation: even levels, one lap per level
 import './dayNightTest'; // the clock must stay frozen, lobbies included
 import './saveTest'; // a save round trip, as the chooser and -load read it

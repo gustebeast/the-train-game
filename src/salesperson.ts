@@ -2,7 +2,8 @@ import { Trigger } from 'w3ts';
 import { Units } from '@objectdata/units';
 import { syncGold, trySpendGold, gainGold } from './state';
 import { showFloatingText } from './items';
-import { nextFrame, findInventoryItem, unitExists, giveItems, giveKit } from './util';
+import { nextFrame, findInventoryItem, unitExists, giveKit } from './util';
+import { carryItemCooldown } from './abilityItems';
 import { registerSaveSegment, parseFields } from './save';
 import { deriveSeed, STREAMS } from './rng';
 import { ABILITY_ITEM_PRICE, UPGRADE_ABILITY_PRICE } from './sharedData';
@@ -155,9 +156,12 @@ export function initSalesperson(): void {
 
     if (upgrading != null) {
       RemoveItem(sold);
-      const greater = GREATER_VERSION.get(GetItemTypeId(upgrading))!;
+      const greater = CreateItem(GREATER_VERSION.get(GetItemTypeId(upgrading))!, GetUnitX(buyer), GetUnitY(buyer));
+      if (greater != null) {
+        carryItemCooldown(upgrading, greater);
+        UnitAddItem(buyer, greater);
+      }
       RemoveItem(upgrading);
-      giveItems(buyer, [greater]);
     }
     // An ability item goes on into the buyer's inventory as a pickup, where
     // items.ts gives it the last slot (swapping out any one already held).
