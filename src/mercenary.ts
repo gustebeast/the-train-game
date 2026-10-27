@@ -24,7 +24,6 @@ import { UNKNOWN_UNIT_ID, MAX_MERCS, MAX_PLAYERS } from './constants';
  *  the engine's drop. */
 const MERC_INVENTORY_ABILITY_ID = FourCC(Abilities.InventoryHero);
 
-/** Must match the tileset used by rollCreepCamp in creeps.ts. */
 
 // ---------------------------------------------------------------------------
 // Persistent state (saved via the 'mm' segment)
@@ -397,14 +396,14 @@ export function getSpawnedMercUnits(): Unit[] {
 
 /** Take the mercenaries off the field, keeping their kit.
  *
- *  releaseMercUnit snapshots and forgets them but leaves the units standing,
+ *  releaseMercUnits snapshots and forgets them but leaves the units standing,
  *  because the callers it was written for (the unsummon sweep, the round reset)
  *  remove the units themselves straight afterwards. The sparring match has no such
  *  sweep -- its combatants belong to a non-human player nothing else touches --
  *  so it needs the units gone as well. */
 export function removeSpawnedMercUnits(): void {
   const live = getSpawnedMercUnits();
-  releaseMercUnit();   // snapshots kit first, then drops the references
+  releaseMercUnits();   // snapshots kit first, then drops the references
   for (const u of live) {
     if (unitExists(u.handle)) RemoveUnit(u.handle);
   }
@@ -412,7 +411,7 @@ export function removeSpawnedMercUnits(): void {
 
 /** Snapshot every mercenary's kit and drop the live-unit references. Called
  *  before the unsummon sweep / round reset removes the units themselves. */
-export function releaseMercUnit(): void {
+export function releaseMercUnits(): void {
   for (const sl of slots) {
     if (sl.unit != null && unitExists(sl.unit.handle)) {
       sl.items = getInventoryItemIds(sl.unit.handle);
@@ -499,7 +498,7 @@ function createRosterMercUnit(slotIndex: number, x: number, y: number): Unit | n
   return u;
 }
 
-/** The mercenary display units standing in the inter-round lobby. For tests. */
+/** The mercenary display units standing in the inter-round lobby. */
 export function getInterRoundLobbyMercUnits(): Unit[] {
   return lobbyMercs.map(e => e.unit);
 }

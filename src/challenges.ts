@@ -91,8 +91,8 @@ export function armChallenge(id: string): void {
   boardChanged();
 }
 
-/** Disarm without paying. Segment reset, and how a lost wager is spent at the
- *  end of a round so it never reaches the save. */
+/** Disarm without paying: how a lost wager is spent at the end of a round, so
+ *  it never reaches the save. */
 export function clearChallenges(): void {
   armedId = null;
   boardChanged();
@@ -160,7 +160,8 @@ export function getOfferedChallenge(): ChallengeDef | null {
 
 // --- save -----------------------------------------------------------------
 
-/** "s=<seed>;a=<armedId>;p=<id,id,...>" */
+/** "s=<seed>;n=<cycles>;a=<armedId>;o=<offeredId>;p=<id,id,...>" -- n, a, o
+ *  and p only when set. */
 function encodeChallenges(): string {
   const parts: string[] = ['s=' + tostring(seed)];
   if (cycles > 0) parts.push('n=' + tostring(cycles));

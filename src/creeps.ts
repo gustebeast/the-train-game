@@ -291,13 +291,13 @@ export function forceLevel3Camp(): boolean {
   return true;
 }
 
-/** Which camp is selected, as an index into CREEP_CAMPS. Exported for the
- *  rotation test, which needs to tell two camps apart. */
 /** Test hook: the camp the next board will cage, by index into CREEP_CAMPS. */
 export function setCampForTest(index: number): void {
   campIndex = index;
 }
 
+/** Which camp is selected, as an index into CREEP_CAMPS. Exported for the
+ *  rotation test, which needs to tell two camps apart. */
 export function getCampIndex(): number | null {
   return campIndex;
 }

@@ -12,7 +12,7 @@ import { DEFAULT_TRACK, TRACK_SIZE, skinFor } from '../track/constants';
 import { getNeutralPassive, getNeutralExtra, getTrainPlayer } from '../teams';
 import { registerResourceDest, pauseResourceDrops, resumeResourceDrops } from '../harvest';
 import { spawnStrangeRock } from '../bossRock';
-import { placedTracks, setVictoryTile, setBossVictoryTile, resetVictoryTriggered } from '../track/state';
+import { placedTracks, setVictoryTile, setBossVictoryTile, resetLineEnd } from '../track/state';
 import { initReadyZone, cleanupReady } from '../ready';
 import { labelUnit } from '../unitLabels';
 import { setCrate, setCrateStart } from '../items';
@@ -178,7 +178,7 @@ function clearBoard(): void {
   boardEffects.length = 0;
   resumeResourceDrops();
   placedTracks.length = 0;
-  resetVictoryTriggered();
+  resetLineEnd();
   bossHeroSpots = [];
   bossMercSpots = [];
   bossSpot = null;

@@ -608,15 +608,6 @@ function bossFloorTerrain(gx: number, gy: number): Terrain {
   return BOSS_FLOOR[wrap(-gy)][wrap(gx)];
 }
 
-/**
- * The boss arena: a square of dungeon floor patterned with diamonds, ringed by
- * lava that cannot be walked onto.
- *
- * Built through the same Grid the rounds and lobbies use, so it spawns, paints
- * and cleans up through exactly one code path -- the lava's pathing blockers
- * included, since they are destructables and the terrain sweep already removes
- * every destructable on load.
- */
 /** Hero places, north to south along the west wall. */
 const BOSS_HERO_SPOTS: ReadonlyArray<GridPos> = [
   { x: -3, y: 2 }, { x: -3, y: 1 }, { x: -3, y: -1 }, { x: -3, y: -2 },
@@ -628,6 +619,15 @@ const BOSS_MERC_SPOTS: ReadonlyArray<GridPos> = [
 /** Where the boss waits. */
 const BOSS_SPOT: GridPos = { x: 3, y: 0 };
 
+/**
+ * The boss arena: a square of dungeon floor patterned with diamonds, ringed by
+ * lava that cannot be walked onto.
+ *
+ * Built through the same Grid the rounds and lobbies use, so it spawns, paints
+ * and cleans up through exactly one code path -- the lava's pathing blockers
+ * included, since they are destructables and the terrain sweep already removes
+ * every destructable on load.
+ */
 export function generateBossBattlefield(): Grid {
   const grid = createGrid();
 

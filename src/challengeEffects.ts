@@ -120,6 +120,11 @@ export function isShoulderCamActive(): boolean {
   return otsActive;
 }
 
+/** The sky the chase camera looks into. The path once lost its backslashes
+ *  (single ones in a JS string are swallowed), and an invalid sky path renders
+ *  nothing, so the view showed black above the horizon. */
+const SHOULDER_CAM_SKY = 'Environment\\Sky\\LordaeronSummerSky\\LordaeronSummerSky.mdl';
+
 /** Turn the chase camera on or off.
  *
  *  Also the entry point for the -thirdperson cheat, so the view can be tried
@@ -127,11 +132,6 @@ export function isShoulderCamActive(): boolean {
  *  distance, angle and position are re-applied on every global tick, so wheeling
  *  out or scrolling away snaps back within half a second rather than letting a
  *  player escape the handicap. */
-/** The sky the chase camera looks into. The path once lost its backslashes
- *  (single ones in a JS string are swallowed), and an invalid sky path renders
- *  nothing, so the view showed black above the horizon. */
-const SHOULDER_CAM_SKY = 'Environment\\Sky\\LordaeronSummerSky\\LordaeronSummerSky.mdl';
-
 function setShoulderCam(active: boolean): void {
   if (otsActive === active) return;
   otsActive = active;

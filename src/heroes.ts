@@ -9,7 +9,7 @@ import { gameState } from './state';
 import { getNeutralExtra } from './teams';
 import { isSummonUpgradePurchased } from './summonUpgrade';
 import { forEachUnitInWorld, getHumanPlayers, getInventoryItemIds, giveItems, nextFrame, isAlive, unitExists } from './util';
-import { spawnMercWithHeroes, releaseMercUnit } from './mercenary';
+import { spawnMercWithHeroes, releaseMercUnits } from './mercenary';
 
 /** Convert a FourCC integer to a 4-character string. */
 function fourCCStr(id: number): string {
@@ -276,8 +276,6 @@ export function initRandomHeroes(): void {
   if (heroPlayersFromSave) heroPlayersFromSave = false; else pickLeastBusyHeroPlayers();
 }
 
-/** Choose the 2 heroes with the lowest XP from the roster.
- *  If all XP is equal, pick 2 at random. Sets chosenIndices. */
 /** Field the WHOLE roster, not the usual two.
  *
  *  The boss fight is the one time everybody comes: an ordinary round summons
@@ -384,7 +382,7 @@ export function resetHeroState(): void {
   if (heroesSpawned && spawnedHeroes.length > 0) {
     snapshotHeroItems();
   }
-  releaseMercUnit(); // snapshots merc items if its unit still exists
+  releaseMercUnits(); // snapshots each mercenary's kit while its unit still exists
   heroesSpawned = false;
   forgetSpawnedHeroes();
   peasantOwnerMap.clear();
@@ -440,9 +438,6 @@ function transferPeasantsAndSpawnHeroes(casterX: number, casterY: number): void 
   spawnMercWithHeroes(casterX, casterY, spawnedHeroes.map(s => s.unit.owner.id));
 }
 
-/** Create one hero unit from allHeroes[dataIdx] with XP, skills and items
- *  applied. Tome stat bonuses land one frame later (hero stats must finalize
- *  first). Shared by round summons and the inter-round lobby hero display. */
 /**
  * The ONE way a hero is put on the map.
  *
@@ -541,7 +536,7 @@ export function endHeroState(): void {
   // Snapshot items before removing heroes; same for the mercenary, whose
   // unit is removed by the sweep below
   snapshotHeroItems();
-  releaseMercUnit();
+  releaseMercUnits();
 
   // Remove heroes and anything they summoned (not kill — avoids dead hero
   // portraits in the UI). Human players only ever own peasants outside hero
@@ -574,13 +569,13 @@ export function endHeroState(): void {
   forEachPeasant(u => UnitRemoveAbility(u, UNSUMMON_ABILITY_ID));
 }
 
-/** Grant the Unsummon Heroes ability to all peasants. Called when all creeps are dead. */
 /** How many heroes are fielded this round. Diagnostics for the tests, which
  *  need to see that a roster was chosen without spawning anybody. */
 export function getChosenHeroCount(): number {
   return chosenIndices.length;
 }
 
+/** Grant the Unsummon Heroes ability to all peasants. Called when all creeps are dead. */
 export function grantUnsummonToAllPeasants(): void {
   forEachPeasant(u => UnitAddAbility(u, UNSUMMON_ABILITY_ID));
 }
@@ -643,8 +638,7 @@ export function syncInterRoundLobbyHeroes(positions: Array<{ x: number; y: numbe
   }
 }
 
-/** The display units currently standing in the inter-round lobby. For tests,
- *  which need to ask who owns them and where they stand. */
+/** The display units currently standing in the inter-round lobby. */
 export function getInterRoundLobbyHeroUnits(): Unit[] {
   return lobbyHeroes.map(e => e.unit);
 }
@@ -683,11 +677,6 @@ function createRosterHeroUnit(dataIdx: number, x: number, y: number): Unit | nul
   return createPlaceholder(owner, x, y, allHeroes[dataIdx].items);
 }
 
-/** Reroll the inter-round lobby hero represented by unitHandle: swap its slot in
- *  allHeroes to a random hero type not currently in the roster, keeping
- *  XP, items and tome bonuses (skills are hero-specific and reset), and
- *  replace the inter-round lobby unit in place. Returns false if unitHandle is not a
- *  inter-round lobby hero or no candidate types remain. */
 /** Next hero off the shared reroll queue.
  *
  *  ONE queue for the whole inter-round lobby, not a fresh roll per hero: rerolling your
@@ -717,6 +706,11 @@ function nextQueuedHeroType(candidates: number[]): number {
   return candidates[0];
 }
 
+/** Reroll the inter-round lobby hero represented by unitHandle: swap its slot in
+ *  allHeroes to a random hero type not currently in the roster, keeping
+ *  XP, items and tome bonuses (skills are hero-specific and reset), and
+ *  replace the inter-round lobby unit in place. Returns false if unitHandle is not a
+ *  inter-round lobby hero or no candidate types remain. */
 export function rerollInterRoundLobbyHero(unitHandle: unit): boolean {
   const entry = lobbyHeroes.find(e => e.unit.handle === unitHandle);
   if (entry == null) return false;
