@@ -47,15 +47,20 @@ export function initTeams(): void {
 
   SetPlayerTeam(enemy.handle, 1);
 
-  // DPS check player -- computer-controlled, allied (no vision) with humans.
-  // Allied but WITHOUT vision, for everyone. The first human used to be given
+  // DPS check player -- computer-controlled, neutral with humans, and WITHOUT
+  // vision, for everyone. The first human used to be given
   // vision of the sparring match as a special case, which meant one player
   // watched the match light up while the others saw nothing, and it
   // was not a choice anybody made. -viewdps hands it to whoever asks instead.
-  SetPlayerTeam(dpsCheckPlayer.handle, 0);
+  // A team of its own, as well as no alliance: sharing the humans' team is
+  // the other way the game counts a player as on their side.
+  SetPlayerTeam(dpsCheckPlayer.handle, 2);
   SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
+  // Neutral -- passive both ways -- rather than allied: an ally's hero dying
+  // is announced to every player ("Your ally's hero has fallen"), and the DPS
+  // check's heroes die all round long, out of sight beyond the wall.
   for (const p of humanPlayers) {
-    setAllianceBoth(dpsCheckPlayer, p, bj_ALLIANCE_ALLIED);
+    setAllianceBoth(dpsCheckPlayer, p, bj_ALLIANCE_NEUTRAL);
   }
   // DPS check heroes must be enemies with neutral aggressive
   SetPlayerAlliance(dpsCheckPlayer.handle, enemy.handle, ALLIANCE_PASSIVE, false);
