@@ -604,11 +604,6 @@ export function getSpawnedHeroes(): Unit[] {
   return spawnedHeroes.map(s => s.unit);
 }
 
-/** Whether heroes are currently summoned (gameplay hero mode is active). */
-export function areHeroesSpawned(): boolean {
-  return heroesSpawned;
-}
-
 // --- Inter-round lobby hero display + reroll ---------------------------------
 
 /** Neutral display copies of the hero roster, inter-round lobby only.
