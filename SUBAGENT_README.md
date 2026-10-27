@@ -161,6 +161,12 @@ cd .worktrees/<name>
 npm run build          # writes .worktrees/<name>/dist/bin/TheTrainGame.w3x
 ```
 
+**Handing the user a branch build to try:** copy it into their WC3 Download
+folder as `TheTrainGame-<name>.w3x`, never over `TheTrainGame.w3x`. That
+file is `main`'s build: the lead's publish step rewrites it (and the GitHub
+`beta` release) after every merge, and a branch build in its place gets
+mistaken for main.
+
 Rules that keep this safe:
 
 - **cd into your worktree before building.** The build keys off the current
