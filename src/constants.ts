@@ -3,7 +3,7 @@ import { Items } from '@objectdata/items';
 import { Units } from '@objectdata/units';
 import { Upgrades } from '@objectdata/upgrades';
 import {
-  UNKNOWN_UNIT, STRANGE_ROCK, DASH_ABILITY, KEY_THROW_ABILITY, BOSS_UNIT, BOSS_ADD_UNIT,
+  UNKNOWN_UNIT, STRANGE_ROCK, DASH_ABILITY, BOSS_UNIT, BOSS_ADD_UNIT,
   BOSS_INFERNO_ABILITY, CRITTER_TYPES, SALESPERSON_UNIT, VACUUM_ABILITY, UNHOLY_FRENZY_ABILITY,
   GREATER_UNHOLY_FRENZY_ABILITY, IMBUE_HORSE_ABILITY, GREATER_IMBUE_HORSE_ABILITY, PEASANT_SPELLS,
   SHELF,
@@ -19,7 +19,6 @@ export const WATER_ID = FourCC(Units.Burrow);
 // The objects compiletime.ts mints; their rawcodes live in sharedData.ts.
 export const UNKNOWN_UNIT_ID = FourCC(UNKNOWN_UNIT);
 export const STRANGE_ROCK_ID = FourCC(STRANGE_ROCK);
-export const KEY_THROW_ABILITY_ID = FourCC(KEY_THROW_ABILITY);
 export const BOSS_ID = FourCC(BOSS_UNIT);
 export const BOSS_ADD_ID = FourCC(BOSS_ADD_UNIT);
 export const BOSS_INFERNO_ABILITY_ID = FourCC(BOSS_INFERNO_ABILITY);

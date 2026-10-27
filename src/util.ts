@@ -58,7 +58,7 @@ export function forEachDestructable(cb: (this: void, d: destructable) => void): 
 }
 
 /** Run cb for every unit within `radius` of (x, y). */
-export function forEachUnitInRange(x: number, y: number, radius: number, cb: (this: void, u: unit) => void): void {
+function forEachUnitInRange(x: number, y: number, radius: number, cb: (this: void, u: unit) => void): void {
   const g = CreateGroup()!;
   GroupEnumUnitsInRange(g, x, y, radius, undefined);
   ForGroup(g, () => {

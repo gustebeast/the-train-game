@@ -19,7 +19,7 @@ import { beginNight, endNight, isNight } from './dayNight';
 import { getNeutralExtra, getNeutralPassive, toggleDPSVision } from './teams';
 import { getDpsMeasurementReport } from './creeps';
 import { makeDancer } from './dance';
-import { checkWatchedChallenges } from './challengeWatch';
+import { checkUnionRules } from './challengeWatch';
 import { spawnBoss } from './boss';
 import { firstPeasantOf, getHumanPlayers, onChatCommand, onChatCommandWithArg } from './util';
 
@@ -156,9 +156,9 @@ export function initCheat(): void {
     clearChallenges();
     armChallenge(def.id);
     applyChallengeEffects();
-    // Armed mid-round: the watched challenges otherwise only look when a tool
-    // is picked up or the line changes.
-    checkWatchedChallenges();
+    // Armed mid-round, tools may already be in hand; Union Rules otherwise only
+    // looks when someone picks one up. (Living Dangerously hears the arming.)
+    checkUnionRules();
     print('Armed ' + I2S(n) + '. |cffffcc00' + def.name + '|r: ' + def.description);
   });
 

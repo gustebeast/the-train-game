@@ -2,7 +2,7 @@ import { Timer, Trigger } from 'w3ts';
 import { isInGameplay } from './state';
 import { createTimer, destroyTimer } from './timers';
 import { onLineChanged } from './track/state';
-import { isChallengeArmed } from './challenges';
+import { isChallengeArmed, onArmedChallengeChanged } from './challenges';
 import {
   CH_BRINK, CH_SOLO_TOOLS, BRINK_TRACKS,
   noteBrinkTime, resetBrinkTime, noteToolSharingBroken, playersHaveLaidTrack,
@@ -81,22 +81,17 @@ function updateBrink(): void {
   }
 }
 
-/** Check Union Rules now, if it is in play. */
-function checkUnionRules(): void {
+/** Check Union Rules now, if it is in play. Arming it mid-round (the
+ *  -challenge cheat) calls this, since tools may already be in hand. */
+export function checkUnionRules(): void {
   if (!isInGameplay() || !isChallengeArmed(CH_SOLO_TOOLS)) return;
   checkToolSharing();
 }
 
-/** Judge both watched challenges now, for one armed mid-round (the
- *  -challenge cheat): tools may already be in hand, and the train already
- *  near the end of the line. */
-export function checkWatchedChallenges(): void {
-  checkUnionRules();
-  updateBrink();
-}
-
 export function initChallengeWatch(): void {
   onLineChanged(() => updateBrink());
+  // Paid, spent or armed mid-round: the clock starts or stops with it.
+  onArmedChallengeChanged(() => updateBrink());
 
   const pickup = Trigger.create();
   pickup.registerAnyUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM);
