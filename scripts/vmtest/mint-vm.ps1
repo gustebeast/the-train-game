@@ -148,9 +148,29 @@ try {
   Vnc-Tap $c 0xFF1B; Start-Sleep -Milliseconds 200; Vnc-Tap $c 0xFF0D
 
   # 2. Battle.net: "Could not log in" -> Continue Offline.
+  #
+  # Waited for, not timed: Battle.net (as of WC3 3.0) can spend well over a
+  # minute "Connecting..." before it gives up and offers the prompt, and a
+  # click sent before it is up lands on nothing -- every later step then runs
+  # blind and the mint fails far from the cause. So watch the prompt's blue
+  # Retry button, and fail here, loudly, if it never comes.
   Write-Host "Waiting for Battle.net offline prompt..."
-  Start-Sleep -Seconds 25
+  $probe = Join-Path $OutDir 'bnet-probe.png'
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $up = $false
+  while (-not $up -and $sw.Elapsed.TotalSeconds -lt 240) {
+    Start-Sleep -Seconds 5
+    Vnc-Shot $c $probe
+    Add-Type -AssemblyName System.Drawing
+    $bmp = [System.Drawing.Bitmap]::FromFile($probe)
+    try { $px = $bmp.GetPixel($ui.bnetRetry[0], $ui.bnetRetry[1]) } finally { $bmp.Dispose() }
+    $up = ($px.B -gt 180 -and $px.R -lt 80)
+  }
   Shot $c 'bnet-offline-prompt'
+  if (-not $up) {
+    throw "Battle.net never offered Continue Offline (4 minutes). If it sits at 'Connecting...', the base snapshot was taken while logged in: log Battle.net out on the base and re-snapshot (VM-SETUP.md). See $OutDir"
+  }
+  Write-Host "  prompt up after $([int]$sw.Elapsed.TotalSeconds)s"
   Vnc-Click $c $ui.bnetContinueOffline[0] $ui.bnetContinueOffline[1]
   Start-Sleep -Seconds 10
   Shot $c 'bnet-main'
