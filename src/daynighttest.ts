@@ -17,7 +17,7 @@ function runDayNightTest(t: TestReporter): void {
   t.after(8, () => {
     const second = GetFloatGameState(GAME_STATE_TIME_OF_DAY);
     t.report('timeAfter8s', R2I(second * 1000));
-    const drift = R2I(math.abs(second - first) * 1000);
+    const drift = R2I(Math.abs(second - first) * 1000);
     t.report('driftThousandths', drift);
     if (drift !== 0) {
       t.fail('clockFrozen', 'time of day moved by ' + I2S(drift) + '/1000 hours in 8s');

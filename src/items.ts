@@ -80,7 +80,7 @@ function addToStack(target: Unit, itemTypeId: number, charges: number, inStorage
 function moveCharges(source: Item, dest: Unit, inStorageSlot: boolean): number {
   const room = getMaxStack(dest) - chargesOf(dest, source.typeId);
   if (room <= 0) return 0;
-  const moved = math.min(source.charges, room);
+  const moved = Math.min(source.charges, room);
   addToStack(dest, source.typeId, moved, inStorageSlot);
   source.charges -= moved;
   if (source.charges <= 0) RemoveItem(source.handle);
@@ -576,7 +576,7 @@ export function initItems(): void {
         return;
       }
       const total = matchingResource.charges + picked.charges;
-      const kept = math.min(total, maxStack);
+      const kept = Math.min(total, maxStack);
       const remainder = total - kept;
 
       matchingResource.charges = kept;

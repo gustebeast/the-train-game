@@ -284,8 +284,8 @@ function runSparringRestart(t: TestReporter): void {
       t.expect('meatMercNotDuplicated', swapped.mercs, 1);
       t.expect('meatHeroesNotDuplicated', swapped.heroes, before.heroes);
       t.expect('meatMercNotHumanOwned', measureFieldedForce().mercsOwnedByHumans, 0);
-      const moved = math.abs(GetCameraTargetPositionX() - cameraX)
-        + math.abs(GetCameraTargetPositionY() - cameraY);
+      const moved = Math.abs(GetCameraTargetPositionX() - cameraX)
+        + Math.abs(GetCameraTargetPositionY() - cameraY);
       t.report('meatCameraMoved', moved);
       if (moved > 64) t.fail('meatCameraMoved', 'camera jumped');
 

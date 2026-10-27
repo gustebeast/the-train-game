@@ -1,4 +1,4 @@
-import { gameState, syncGold } from './state';
+import { gainGold } from './state';
 import { boardChanged } from './boardSignal';
 import { registerSaveSegment, parseFields, parseList } from './save';
 import { deriveSeed, shuffleSeeded, STREAMS } from './rng';
@@ -105,8 +105,7 @@ export function completeChallenge(id: string): void {
   const def = findDef(id);
   armedId = null;
   boardChanged();
-  gameState.gold += CHALLENGE_BONUS;
-  syncGold();
+  gainGold(CHALLENGE_BONUS);
   print('Challenge complete: ' + (def != null ? def.name : id)
     + '! +' + I2S(CHALLENGE_BONUS) + ' bonus gold.');
 }

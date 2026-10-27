@@ -1,6 +1,6 @@
 import { Trigger } from 'w3ts';
 import { Units } from '@objectdata/units';
-import { gameState, syncState } from './state';
+import { syncGold, trySpendGold, gainGold } from './state';
 import { showFloatingText } from './items';
 import { nextFrame, findInventoryItem, unitExists, giveItems, giveKit } from './util';
 import { registerSaveSegment, parseFields } from './save';
@@ -122,7 +122,7 @@ function upgradableItem(buyer: unit): item | null {
 /** Take back an item the buyer shouldn't have, uncharged. */
 function refuse(buyer: unit, sold: item, msg: string): void {
   RemoveItem(sold);
-  syncState(); // put back the native gold the engine took
+  syncGold(); // put back the native gold the engine took
   showFloatingText(buyer, msg);
 }
 
@@ -139,30 +139,28 @@ export function initSalesperson(): void {
     const price = PRICES.get(itemType);
     if (price == null) return;
 
-    if (gameState.gold < price) {
-      refuse(buyer, sold, 'Not enough gold!');
-      return;
-    }
     if (GetUnitTypeId(buyer) !== PEASANT_ID) {
       refuse(buyer, sold, 'Only peasants can buy here!');
       return;
     }
+    const upgrading = itemType === UPGRADE_PEASANT_ABILITY_ID ? upgradableItem(buyer) : null;
+    if (itemType === UPGRADE_PEASANT_ABILITY_ID && upgrading == null) {
+      refuse(buyer, sold, 'Nothing to upgrade!');
+      return;
+    }
+    if (!trySpendGold(price)) {
+      refuse(buyer, sold, 'Not enough gold!');
+      return;
+    }
 
-    if (itemType === UPGRADE_PEASANT_ABILITY_ID) {
-      const current = upgradableItem(buyer);
-      if (current == null) {
-        refuse(buyer, sold, 'Nothing to upgrade!');
-        return;
-      }
+    if (upgrading != null) {
       RemoveItem(sold);
-      const greater = GREATER_VERSION.get(GetItemTypeId(current))!;
-      RemoveItem(current);
+      const greater = GREATER_VERSION.get(GetItemTypeId(upgrading))!;
+      RemoveItem(upgrading);
       giveItems(buyer, [greater]);
     }
     // An ability item goes on into the buyer's inventory as a pickup, where
     // items.ts gives it the last slot (swapping out any one already held).
-    gameState.gold -= price;
-    syncState();
   });
 }
 
@@ -206,10 +204,10 @@ export function initSalespersonBuyback(): void {
     // The engine pays its own price for the item AFTER this handler (seen in
     // game: 250 native gold for a hero's claws), so the shared gold is copied
     // back over it a frame later, not now.
-    nextFrame(() => syncState());
+    nextFrame(() => syncGold());
     if (atSalesperson && payout != null && GetUnitTypeId(seller) === PEASANT_ID) {
       RemoveItem(sold);
-      gameState.gold += payout;
+      gainGold(payout);
       return;
     }
     const charges = GetItemCharges(sold);

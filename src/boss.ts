@@ -37,7 +37,8 @@ export function spawnBoss(x: number, y: number): Unit | null {
 
 /** The stock Infernal the meteor drops, which we swap out for ours. */
 const STOCK_INFERNAL_ID = FourCC(Units.Infernal);
-/** How long a summoned infernal lives, matching the ability's own duration. */
+/** How long an add lives. Ours alone: the stock summon (and with it the
+ *  ability's own duration) is removed before it lands, see installAddSwap. */
 const ADD_LIFETIME = 180;
 /** Buff id every timed-life summon uses. */
 const TIMED_LIFE_BUFF = FourCC('BTLF');

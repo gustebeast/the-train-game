@@ -448,7 +448,7 @@ export function syncInterRoundLobbyMercs(positions: Array<{ x: number; y: number
     const sl = slots[i];
     if (sl.typeId === 0 || sl.dead) continue;
     if (lobbyMercs.some(e => e.slotIndex === i)) continue;
-    const pos = positions[math.min(i, positions.length - 1)];
+    const pos = positions[Math.min(i, positions.length - 1)];
     const u = createRosterMercUnit(i, pos.x, pos.y);
     if (u == null) continue;
     lobbyMercs.push({ unit: u, slotIndex: i });

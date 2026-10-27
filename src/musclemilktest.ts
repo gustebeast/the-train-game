@@ -32,7 +32,7 @@ function looseCharges(p: unit, typeId: number): number {
   const r = Rect(GetUnitX(p) - 250, GetUnitY(p) - 250, GetUnitX(p) + 250, GetUnitY(p) + 250)!;
   EnumItemsInRect(r, undefined, () => {
     const it = GetEnumItem();
-    if (it != null && GetItemTypeId(it) === typeId && !IsItemOwned(it)) n += math.max(GetItemCharges(it), 1);
+    if (it != null && GetItemTypeId(it) === typeId && !IsItemOwned(it)) n += Math.max(GetItemCharges(it), 1);
   });
   RemoveRect(r);
   return n;

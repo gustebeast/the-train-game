@@ -126,8 +126,8 @@ function trackCenter(track: Unit): GridPos {
 function overshootOffset(cur: GridPos, nxt: GridPos): { ox: number; oy: number } {
   const dx = nxt.x - cur.x;
   const dy = nxt.y - cur.y;
-  const ox = math.abs(dx) >= math.abs(dy) ? OVERSHOOT * (dx > 0 ? 1 : -1) : 0;
-  const oy = math.abs(dy) > math.abs(dx) ? OVERSHOOT * (dy > 0 ? 1 : -1) : 0;
+  const ox = Math.abs(dx) >= Math.abs(dy) ? OVERSHOOT * (dx > 0 ? 1 : -1) : 0;
+  const oy = Math.abs(dy) > Math.abs(dx) ? OVERSHOOT * (dy > 0 ? 1 : -1) : 0;
   return { ox, oy };
 }
 

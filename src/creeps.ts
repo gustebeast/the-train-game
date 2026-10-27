@@ -438,7 +438,7 @@ function getEffectiveHP(u: unit): number {
 /** How much further a unit's armour stretches its hit points (negative armour
  *  counted as none). */
 function armorMultiplier(u: unit): number {
-  return 1 + 0.06 * math.max(0, BlzGetUnitArmor(u));
+  return 1 + 0.06 * Math.max(0, BlzGetUnitArmor(u));
 }
 
 /** Total effective HP and damage across a set of units.
@@ -645,12 +645,12 @@ export function scaleCreepStats(heroes: Unit[]): void {
   const targetXP = isFirstCamp ? FIRST_CAMP_XP : TARGET_XP;
   let levelSum = 0;
   for (const c of spawnedCreeps) {
-    levelSum += math.max(1, GetUnitLevel(c.unit.handle));
+    levelSum += Math.max(1, GetUnitLevel(c.unit.handle));
   }
   const creepXPRewards: number[] = [];
   for (const c of spawnedCreeps) {
-    const level = math.max(1, GetUnitLevel(c.unit.handle));
-    creepXPRewards.push(math.max(1, math.floor(level / levelSum * targetXP)));
+    const level = Math.max(1, GetUnitLevel(c.unit.handle));
+    creepXPRewards.push(Math.max(1, Math.floor(level / levelSum * targetXP)));
   }
 
   // Apply scaled stats and remove invulnerability
@@ -662,8 +662,8 @@ export function scaleCreepStats(heroes: Unit[]): void {
       // High HP so heroes can't kill them; damage left at defaults to measure actual creep DPS
       // Split per CAMP: spawnedCreeps holds every copy's creeps, and dividing
       // the pool by all of them would leave each creep a sixth of its share.
-      const perCamp = math.max(1, spawnedCreeps.length / SPARRING_COPIES.length);
-      const scaledHP = math.max(1, math.floor(sparringCreepStartHP / perCamp));
+      const perCamp = Math.max(1, spawnedCreeps.length / SPARRING_COPIES.length);
+      const scaledHP = Math.max(1, Math.floor(sparringCreepStartHP / perCamp));
       BlzSetUnitMaxHP(h, scaledHP);
       SetUnitState(h, UNIT_STATE_LIFE, scaledHP);
     } else {
@@ -672,10 +672,10 @@ export function scaleCreepStats(heroes: Unit[]): void {
       const originalDPS = getDPS(h);
       const targetDPS = originalDPS * dpsScale;
       const targetAvgDmg = targetDPS * cd;
-      const scaledDamage = math.max(1, math.floor(targetAvgDmg - diceAverage(h)));
+      const scaledDamage = Math.max(1, Math.floor(targetAvgDmg - diceAverage(h)));
 
       // EHP-based HP scaling: keep armor, scale raw HP to match target EHP
-      const scaledHP = math.max(1, math.floor(getEffectiveHP(h) * ehpScale / armorMultiplier(h)));
+      const scaledHP = Math.max(1, Math.floor(getEffectiveHP(h) * ehpScale / armorMultiplier(h)));
 
       BlzSetUnitBaseDamage(h, scaledDamage, 0);
       BlzSetUnitMaxHP(h, scaledHP);
@@ -775,7 +775,7 @@ function teardownSparringMatch(record: boolean): void {
  *  when it has, or when there is no match to wait for. */
 export function getSparringSecondsToMinimum(): number {
   if (sparringTimer == null) return 0;
-  return math.max(0, SPARRING_MIN_SECONDS - sparringTimer.elapsed);
+  return Math.max(0, SPARRING_MIN_SECONDS - sparringTimer.elapsed);
 }
 
 /** What the sparring match is doing right now. Diagnostics only -- nothing in the
@@ -868,7 +868,7 @@ const sparringHome = new Map<number, number>();
 
 function nearestCopy(x: number, y: number): number {
   let best = 0;
-  let bestD = math.huge;
+  let bestD = Infinity;
   for (let i = 0; i < SPARRING_COPIES.length; i++) {
     const dx = SPARRING_COPIES[i].x - x;
     const dy = SPARRING_COPIES[i].y - y;

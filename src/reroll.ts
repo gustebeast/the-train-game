@@ -1,5 +1,5 @@
 import { Trigger, Unit } from 'w3ts';
-import { gameState, syncState } from './state';
+import { trySpendGold, gainGold } from './state';
 import { REROLL_ITEM_ID, REROLL_ABILITY_ID } from './constants';
 import { rerollInterRoundLobbyHero } from './heroes';
 import { rerollInterRoundLobbyMerc } from './mercenary';
@@ -26,13 +26,10 @@ export function initReroll(): void {
   buyTrigger.addAction(() => {
     const item = GetSoldItem();
     if (item == null || GetItemTypeId(item) !== REROLL_ITEM_ID) return;
-    if (gameState.gold < REROLL_COST) {
+    if (!trySpendGold(REROLL_COST)) {
       RemoveItem(item);
       print('Not enough gold for a Hero Reroll.');
-      return;
     }
-    gameState.gold -= REROLL_COST;
-    syncState();
   });
 
   // Refund: pawning the item back grants the gold to everyone (shared gold)
@@ -44,8 +41,7 @@ export function initReroll(): void {
     // The Secret Salesperson buys nothing but ability items (salesperson.ts).
     if (isSalespersonPawn()) return;
     RemoveItem(item); // don't leave it in the shop's pawn inventory
-    gameState.gold += REROLL_COST;
-    syncState();
+    gainGold(REROLL_COST);
     print('Hero Reroll refunded.');
   });
 

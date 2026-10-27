@@ -42,7 +42,7 @@ export function vacuumResources(x: number, y: number, reach: number): void {
     });
     if (found.length === 0) continue;
     let total = 0;
-    for (const it of found) total += math.max(GetItemCharges(it), 1);
+    for (const it of found) total += Math.max(GetItemCharges(it), 1);
     const pile = found[0];
     for (let i = 1; i < found.length; i++) RemoveItem(found[i]);
     SetItemPosition(pile, cx + offset, cy);

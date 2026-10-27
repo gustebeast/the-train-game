@@ -64,7 +64,7 @@ function runReadyCases(t: TestReporter): void {
     { id: 'readytest_plain', want: 3 },
     // Shrinking as time passes, as the sparring match's remaining minimum
     // does -- a wait that never shrinks would never let the countdown end.
-    { id: 'readytest_wait', seconds: () => math.max(0, 7 - (clock.elapsed - waitFrom)), want: 7 },
+    { id: 'readytest_wait', seconds: () => Math.max(0, 7 - (clock.elapsed - waitFrom)), want: 7 },
     {
       id: 'readytest_late',
       // 0 when asked at the start, 2 when asked at zero, 0 after that.
@@ -86,7 +86,7 @@ function runReadyCases(t: TestReporter): void {
     registerReadyZone(c.id, 'Test countdown', t.guard(() => {
       const took = clock.elapsed - started;
       t.report(c.id, took);
-      if (math.abs(took - c.want) > 0.6) {
+      if (Math.abs(took - c.want) > 0.6) {
         t.fail(c.id, 'expected about ' + I2S(c.want) + 's');
       }
       // Off the circle before the next one, so it cannot fire again.
@@ -104,7 +104,7 @@ function runReadyCases(t: TestReporter): void {
     const dy = GetUnitY(p) - y;
     t.report(c.id + '_landedDX', dx);
     t.report(c.id + '_landedDY', dy);
-    if (math.abs(dx) > 100 || math.abs(dy) > 100) {
+    if (Math.abs(dx) > 100 || Math.abs(dy) > 100) {
       t.fail(c.id, 'peasant landed off the circle');
       SetUnitPosition(p, homeX, homeY);
       clock.destroy();

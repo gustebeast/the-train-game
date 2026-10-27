@@ -85,3 +85,20 @@ export function syncGold(): void {
   getHumanPlayers().forEach(p => p.setState(PLAYER_STATE_RESOURCE_GOLD, gameState.gold));
 }
 
+/** Pay `cost` from the shared purse. False, with nothing taken, when it holds
+ *  less. Either way native gold is put back to match the purse: a shop sale
+ *  has already taken the engine's own price from the buyer by the time any
+ *  handler runs. */
+export function trySpendGold(cost: number): boolean {
+  const affordable = gameState.gold >= cost;
+  if (affordable) gameState.gold -= cost;
+  syncGold();
+  return affordable;
+}
+
+/** Add to the shared purse and show it. */
+export function gainGold(amount: number): void {
+  gameState.gold += amount;
+  syncGold();
+}
+

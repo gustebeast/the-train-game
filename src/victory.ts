@@ -3,7 +3,7 @@ import { setVictoryTriggered } from './track/state';
 import { extinguish, getTrain, getTrackWagon } from './train';
 import { clearChallenges } from './challenges';
 import { cancelNightForVictory } from './daynight';
-import { gameState, syncGold } from './state';
+import { gameState, gainGold } from './state';
 import { saveToFile } from './save';
 import { rollCreepCamp } from './creeps';
 import { chooseHeroes, chooseHeroPlayers, snapshotHeroItems } from './heroes';
@@ -41,10 +41,9 @@ export function triggerVictory(lastTrack: Unit): void {
  *  previous offer, so a player could choose between two. */
 export function awardVictory(): void {
   gameState.round += 1;
-  gameState.gold += GOLD_PER_ROUND;
+  gainGold(GOLD_PER_ROUND);
   // Spend any unpaid (lost) wagers so armed challenges never reach the save
   clearChallenges();
-  syncGold();
   rollCreepCamp();
   chooseHeroes();
   chooseHeroPlayers();

@@ -95,11 +95,11 @@ const MIN_COUNTDOWN = 3;
  *  rounded up, so a wait of 6.2 is never cut to 6. */
 function extraWait(zone: ActiveZone): number {
   if (zone.config.seconds == null) return 0;
-  return math.max(0, math.ceil(zone.config.seconds()));
+  return Math.max(0, Math.ceil(zone.config.seconds()));
 }
 
 function startCountdown(zone: ActiveZone): void {
-  zone.countdownStep = math.max(MIN_COUNTDOWN, extraWait(zone));
+  zone.countdownStep = Math.max(MIN_COUNTDOWN, extraWait(zone));
   // An unnamed zone counts down bare: "3...", with no "<message> in".
   print((zone.config.message === '' ? '' : zone.config.message + ' in ') + I2S(zone.countdownStep) + '...');
   zone.countdownTimer = Timer.create();

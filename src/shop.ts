@@ -1,7 +1,7 @@
 import { Trigger, Unit } from 'w3ts';
 import { Players } from 'w3ts/globals';
 import { Units } from '@objectdata/units';
-import { gameState, syncState } from './state';
+import { gameState, syncState, syncGold, trySpendGold } from './state';
 import {
   SHELF, ShelfItem, TRAIN_INITIAL_MAX_HP, FLAME_RESISTANCE_HP, TRACK_MANUFACTURING_MANA,
   TRACK_MANUFACTURING_MIN_MANA, RESOURCE_CAPACITY_STEP, TRACK_CAPACITY_STEP, CRATE_CAPACITY_STEP,
@@ -128,6 +128,16 @@ function addRosterToInterRoundLobby(): void {
   if (hasInterRoundLobbyRerollTargets()) stock(REROLL_ITEM_ID);
 }
 
+/** Whether the shop will honour a purchase of this item right now. One-time
+ *  upgrades already owned, and contracts that cannot be signed, are not: the
+ *  sale is swallowed without charging. */
+function forSale(itemTypeId: number): boolean {
+  if (itemTypeId === SUMMON_UPGRADE_ITEM_ID) return !isSummonUpgradePurchased();
+  if (itemTypeId === MERC_CONTRACT_ID) return canBuyMercContract() && mercContractsUseful();
+  if (itemTypeId === MERC_CONTRACT_2_ID) return canBuySecondContract() && mercContractsUseful();
+  return true;
+}
+
 /** The units that are actually there, for the upgrade effect. */
 function present(...units: Array<Unit | null>): Unit[] {
   return units.filter((u): u is Unit => u != null);
@@ -169,25 +179,15 @@ export function initShop(): void {
     const cost = shelf.cost;
     const buyer = Unit.fromEvent();
 
-    // One-time upgrades already owned — swallow the item without charging
-    if (itemTypeId === SUMMON_UPGRADE_ITEM_ID && isSummonUpgradePurchased()) {
+    if (!forSale(itemTypeId)) {
+      RemoveItem(item);
+      syncGold(); // put back the native gold the engine took
+      return;
+    }
+    if (!trySpendGold(cost)) {
       RemoveItem(item);
       return;
     }
-    if (itemTypeId === MERC_CONTRACT_ID && (!canBuyMercContract() || !mercContractsUseful())) {
-      RemoveItem(item);
-      return;
-    }
-    if (itemTypeId === MERC_CONTRACT_2_ID && (!canBuySecondContract() || !mercContractsUseful())) {
-      RemoveItem(item);
-      return;
-    }
-
-    if (gameState.gold < cost) {
-      RemoveItem(item);
-      return;
-    }
-    gameState.gold -= cost;
 
     let effectTargets: Unit[] = [];
 
@@ -204,7 +204,7 @@ export function initShop(): void {
       // upgrade this visit.
       stock(FLAME_RESISTANCE_ID);
     } else if (itemTypeId === TRACK_MANUFACTURING_ID) {
-      gameState.trainMaxMana = math.max(TRACK_MANUFACTURING_MIN_MANA,
+      gameState.trainMaxMana = Math.max(TRACK_MANUFACTURING_MIN_MANA,
         gameState.trainMaxMana - TRACK_MANUFACTURING_MANA);
       effectTargets = present(getTrain());
     } else if (itemTypeId === RESOURCE_CAPACITY_ID) {

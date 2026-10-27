@@ -56,7 +56,7 @@ export function nearestUnitInRange(
   x: number, y: number, radius: number, matches: (this: void, u: unit) => boolean,
 ): unit | null {
   let nearest: unit | null = null;
-  let bestDist = math.huge;
+  let bestDist = Infinity;
   forEachUnitInRange(x, y, radius, u => {
     if (!matches(u)) return;
     const dx = GetUnitX(u) - x;

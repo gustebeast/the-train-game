@@ -83,7 +83,7 @@ export function startDanceSession(bpm: number): void {
 function untilNextBeat(): number {
   if (beatPeriod <= 0 || songClock == null) return 0;
   const elapsed = songClock.elapsed;
-  const into = elapsed - math.floor(elapsed / beatPeriod) * beatPeriod;
+  const into = elapsed - Math.floor(elapsed / beatPeriod) * beatPeriod;
   return beatPeriod - into;
 }
 

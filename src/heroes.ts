@@ -16,9 +16,9 @@ import { spawnMercWithHeroes, releaseMercUnits } from './mercenary';
 /** Convert a FourCC integer to a 4-character string. */
 function fourCCStr(id: number): string {
   return string.char(
-    math.floor(id / 0x1000000) % 256,
-    math.floor(id / 0x10000) % 256,
-    math.floor(id / 0x100) % 256,
+    Math.floor(id / 0x1000000) % 256,
+    Math.floor(id / 0x10000) % 256,
+    Math.floor(id / 0x100) % 256,
     id % 256,
   );
 }
@@ -492,7 +492,7 @@ export function spawnHeroes(
   heroesSpawned = true;
   for (let i = 0; i < indices.length; i++) {
     const dataIdx = indices[i];
-    const owner = owners[math.min(i, owners.length - 1)];
+    const owner = owners[Math.min(i, owners.length - 1)];
     const hero = spawnHeroUnit(dataIdx, owner, x, y);
     if (hero != null) {
       spawnedHeroes.push({ unit: hero, dataIdx, deathTrig: null });
@@ -638,7 +638,7 @@ export function syncInterRoundLobbyHeroes(positions: Array<{ x: number; y: numbe
   for (let dataIdx = 0; dataIdx < allHeroes.length; dataIdx++) {
     if (allHeroes[dataIdx].typeId === 0) continue;
     if (lobbyHeroes.some(e => e.dataIdx === dataIdx)) continue;
-    const pos = positions[math.min(dataIdx, positions.length - 1)];
+    const pos = positions[Math.min(dataIdx, positions.length - 1)];
     const unit = createRosterHeroUnit(dataIdx, pos.x, pos.y);
     if (unit != null) lobbyHeroes.push({ unit, dataIdx });
   }
@@ -870,7 +870,7 @@ export function initHeroes(): void {
       // once it has landed, or the next summon would stand the hero up without
       // it.
       nextFrame(() => {
-        if (unitExists(u)) allHeroes[dataIdx].xp = math.max(allHeroes[dataIdx].xp, GetHeroXP(u));
+        if (unitExists(u)) allHeroes[dataIdx].xp = Math.max(allHeroes[dataIdx].xp, GetHeroXP(u));
       });
       return;
     }
