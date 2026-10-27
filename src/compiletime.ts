@@ -581,18 +581,31 @@ compiletime(({ objectData, constants }) => {
     art.attackBonus = 0;
   }
 
-  // Axe item
-  const axe = objectData.items.get(constants.items.SturdyWarAxe)!;
-  axe.name = 'Axe';
-  axe.description = 'Allows chopping trees which can be given to the train and converted to tracks, or used to build bridges across water.';
-  axe.tooltipExtended = axe.description;
-  axe.goldCost = 0;
-  axe.canBeDropped = true;
-  axe.droppedWhenCarrierDies = true;
-  axe.perishable = false;
-  axe.canBeSoldToMerchants = false;
-  axe.abilities = '';
-  axe.modelUsed = 'war3mapImported\\AxeGround.mdx';
+  // A peasant's tool: free, dropped where its carrier falls, never sold back.
+  const authorTool = (rawcode: string, name: string, description: string, model: string) => {
+    const tool = objectData.items.get(rawcode)!;
+    tool.name = name;
+    tool.description = description;
+    tool.tooltipExtended = description;
+    tool.goldCost = 0;
+    tool.canBeDropped = true;
+    tool.droppedWhenCarrierDies = true;
+    tool.perishable = false;
+    tool.canBeSoldToMerchants = false;
+    tool.abilities = '';
+    tool.modelUsed = model;
+    return tool;
+  };
+  const axe = authorTool(constants.items.SturdyWarAxe, 'Axe',
+    'Allows chopping trees which can be given to the train and converted to tracks, or used to build bridges across water.',
+    'war3mapImported\\AxeGround.mdx');
+  const pickaxe = authorTool(constants.items.RustyMiningPick, 'Pickaxe',
+    'Allows mining rocks which can be given to the train and converted to tracks.',
+    'war3mapImported\\PickaxeGround.mdx');
+  const bucket = authorTool(constants.items.EmptyVial, 'Empty Bucket',
+    'Can be filled with water and used on the train to restore HP.', shared.BUCKET_MODEL);
+  const bucketFull = authorTool(constants.items.FullVial, 'Full Bucket',
+    'Can be used on the train to restore HP.', shared.BUCKET_FULL_MODEL);
 
   // The Strange Key: dropped by a level 3 creep camp cleared without losing
   // anybody, and the only thing that breaks the Strange Rock barring the way to
@@ -615,51 +628,6 @@ compiletime(({ objectData, constants }) => {
   bossKey.numberOfCharges = 1;
   bossKey.perishable = true;
 
-  // Pickaxe item
-  const pickaxe = objectData.items.get(constants.items.RustyMiningPick)!;
-  pickaxe.name = 'Pickaxe';
-  pickaxe.description = 'Allows mining rocks which can be given to the train and converted to tracks.';
-  pickaxe.tooltipExtended = pickaxe.description;
-  pickaxe.goldCost = 0;
-  pickaxe.canBeDropped = true;
-  pickaxe.droppedWhenCarrierDies = true;
-  pickaxe.perishable = false;
-  pickaxe.canBeSoldToMerchants = false;
-  pickaxe.abilities = '';
-  pickaxe.modelUsed = 'war3mapImported\\PickaxeGround.mdx';
-
-  // Empty bucket item
-  const bucket = objectData.items.get(constants.items.EmptyVial)!;
-  bucket.name = 'Empty Bucket';
-  bucket.description = 'Can be filled with water and used on the train to restore HP.';
-  bucket.tooltipExtended = bucket.description;
-  bucket.goldCost = 0;
-  bucket.canBeDropped = true;
-  bucket.droppedWhenCarrierDies = true;
-  bucket.perishable = false;
-  bucket.canBeSoldToMerchants = false;
-  bucket.abilities = '';
-  bucket.modelUsed = 'war3mapImported\\Bucket.mdx';
-
-  // Bucket full item
-  const bucketFull = objectData.items.get(constants.items.FullVial)!;
-  bucketFull.name = 'Full Bucket';
-  bucketFull.description = 'Can be used on the train to restore HP.';
-  bucketFull.tooltipExtended = bucketFull.description;
-  bucketFull.goldCost = 0;
-  bucketFull.canBeDropped = true;
-  bucketFull.droppedWhenCarrierDies = true;
-  bucketFull.perishable = false;
-  bucketFull.canBeSoldToMerchants = false;
-  bucketFull.abilities = '';
-  bucketFull.modelUsed = 'war3mapImported\\BucketFull.mdx';
-
-  // The tools and the key can't be destroyed by attacking them: items have hit
-  // points, and A-clicking a tool on the ground used to break it, which loses a
-  // whole round's worth of chopping, mining or watering -- or the only key to
-  // the boss. 999999, the same as the indestructible granite; no attack in the
-  // map comes close. Wood, stone and track pieces are left breakable: losing
-  // one is a nuisance, not a lost round.
   // Peasant ability items, sold by the Secret Salesperson. Carried in the last
   // inventory slot, apart from the one carried item (items.ts), and passed to
   // another peasant like any item. Holding one grants its spell; the item
@@ -731,46 +699,46 @@ compiletime(({ objectData, constants }) => {
   upgradeAbility.classification = 'PowerUp';
   upgradeAbility.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGlyph.blp';
 
+  // The tools and the key can't be destroyed by attacking them: items have hit
+  // points, and A-clicking a tool on the ground used to break it, which loses a
+  // whole round's worth of chopping, mining or watering -- or the only key to
+  // the boss. 999999, the same as the indestructible granite; no attack in the
+  // map comes close. Wood, stone and track pieces are left breakable: losing
+  // one is a nuisance, not a lost round.
   for (const unbreakable of [axe, pickaxe, bucket, bucketFull, bossKey, resourceVacuum, greaterResourceVacuum,
     unholyBone, greaterUnholyBone, horseEssence, greaterHorseEssence, muscleMilk, greaterMuscleMilk]) {
     unbreakable.hitPoints = 999999;
   }
 
-  // Wood resource item (IronwoodBranch — normal holdable item)
-  const wood = objectData.items.get(constants.items.IronwoodBranch)!;
-  wood.name = 'Wood';
-  wood.description = 'Can be given to the train and converted to tracks, or used to build bridges across water.';
-  wood.tooltipExtended = wood.description;
-  wood.classification = 'Charged';
-  wood.goldCost = 0;
-  wood.canBeDropped = true;
-  wood.droppedWhenCarrierDies = true;
-  wood.perishable = false;
-  wood.useAutomaticallyWhenAcquired = false;
-  wood.canBeSoldToMerchants = false;
-  wood.abilities = '';
-  wood.numberOfCharges = 1;
-  wood.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNBundleOfLumber.blp';
-  wood.modelUsed = shared.WOOD_MODEL;
-  wood.scalingValue = 0.4;
-
-  // Stone resource item (GemFragment — normal holdable item)
-  const stone = objectData.items.get(constants.items.GemFragment)!;
-  stone.name = 'Stone';
-  stone.description = 'Can be given to the train and converted to tracks.';
-  stone.tooltipExtended = stone.description;
-  stone.classification = 'Charged';
-  stone.goldCost = 0;
-  stone.canBeDropped = true;
-  stone.droppedWhenCarrierDies = true;
-  stone.perishable = false;
-  stone.useAutomaticallyWhenAcquired = false;
-  stone.canBeSoldToMerchants = false;
-  stone.abilities = '';
-  stone.numberOfCharges = 1;
-  stone.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNGolemStormBolt.blp';
-  stone.modelUsed = shared.STONE_MODEL;
-  stone.scalingValue = 0.4;
+  // The carried resources: one charge per item, stacked by the game (items.ts).
+  // Breakable, unlike the tools -- losing one is a nuisance, not a round.
+  const authorResource = (rawcode: string, name: string, description: string, icon: string, model: string, scale: number): void => {
+    const resource = objectData.items.get(rawcode)!;
+    resource.name = name;
+    resource.description = description;
+    resource.tooltipExtended = description;
+    resource.classification = 'Charged';
+    resource.goldCost = 0;
+    resource.canBeDropped = true;
+    resource.droppedWhenCarrierDies = true;
+    resource.perishable = false;
+    resource.useAutomaticallyWhenAcquired = false;
+    resource.canBeSoldToMerchants = false;
+    resource.abilities = '';
+    resource.numberOfCharges = 1;
+    resource.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\' + icon + '.blp';
+    resource.modelUsed = model;
+    resource.scalingValue = scale;
+  };
+  authorResource(constants.items.IronwoodBranch, 'Wood',
+    'Can be given to the train and converted to tracks, or used to build bridges across water.',
+    'BTNBundleOfLumber', shared.WOOD_MODEL, 0.4);
+  authorResource(constants.items.GemFragment, 'Stone',
+    'Can be given to the train and converted to tracks.',
+    'BTNGolemStormBolt', shared.STONE_MODEL, 0.4);
+  authorResource(constants.items.MechanicalCritter, 'Track Piece',
+    'A section of railway track which can be placed adjacent to the previous track piece',
+    'BTNHumanBuild', 'war3mapImported\\OmniTrack.mdx', 0.5);
 
   // Tree destructables: one tree wall per biome
   for (const treeId of [shared.TREE_WALLS.summer, shared.TREE_WALLS.fall, shared.TREE_WALLS.winter]) {
@@ -904,24 +872,6 @@ compiletime(({ objectData, constants }) => {
   crate.scalingValueundefined = 1;
   crate.shadowTextureBuilding = 'ShadowCrates';
   crate.normal = [constants.abilities.InventoryHero, constants.abilities.InvulnerableNeutral].join(',');
-
-  // Track piece item (MechanicalCritter — placeholder for track building)
-  const trackPiece = objectData.items.get(constants.items.MechanicalCritter)!;
-  trackPiece.name = 'Track Piece';
-  trackPiece.description = 'A section of railway track which can be placed adjacent to the previous track piece';
-  trackPiece.tooltipExtended = trackPiece.description;
-  trackPiece.classification = 'Charged';
-  trackPiece.goldCost = 0;
-  trackPiece.canBeDropped = true;
-  trackPiece.droppedWhenCarrierDies = true;
-  trackPiece.perishable = false;
-  trackPiece.useAutomaticallyWhenAcquired = false;
-  trackPiece.canBeSoldToMerchants = false;
-  trackPiece.abilities = '';
-  trackPiece.numberOfCharges = 1;
-  trackPiece.interfaceIcon = 'ReplaceableTextures\\CommandButtons\\BTNHumanBuild.blp';
-  trackPiece.modelUsed = 'war3mapImported\\OmniTrack.mdx';
-  trackPiece.scalingValue = 0.5;
 
   // The peasant's three targeted spells: each a stock spell taken over as a
   // free cast at point-blank range, with the trigger deciding what the target

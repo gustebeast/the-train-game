@@ -126,6 +126,9 @@ export const STONE_MODEL = 'Doodads\\LordaeronSummer\\Rocks\\Lords_Rock\\Lords_R
 export const WOOD_MODEL = 'Doodads\\Felwood\\Props\\FelwoodLogStraight\\FelwoodLogStraight.mdx';
 /** A track piece small enough to carry: in a peasant's hand, and in the wagon. */
 export const SMALL_TRACK_MODEL = 'war3mapImported\\OmniTrackSmall.mdx';
+/** The bucket, on the ground and in a peasant's hand. */
+export const BUCKET_MODEL = 'war3mapImported\\Bucket.mdx';
+export const BUCKET_FULL_MODEL = 'war3mapImported\\BucketFull.mdx';
 
 // --- What a peasant shows it is carrying ----------------------------------------
 
@@ -140,8 +143,8 @@ export const CARRIED_TOOLS: { [itemRawcode: string]: Attachment } = {
   [Items.SturdyWarAxe]: { ability: Abilities.ItemDamageBonusPlus7, model: 'war3mapImported\\Axe.mdx', point: 'left,hand' },
   [Items.RustyMiningPick]: { ability: Abilities.ItemDamageBonusPlus8, model: 'war3mapImported\\Pickaxe.mdx', point: 'left,hand' },
   [Items.MechanicalCritter]: { ability: Abilities.ItemDamageBonusPlus10, model: SMALL_TRACK_MODEL, point: 'left,hand' },
-  [Items.EmptyVial]: { ability: Abilities.ItemDamageBonusPlus2, model: 'war3mapImported\\Bucket.mdx', point: 'left,hand' },
-  [Items.FullVial]: { ability: Abilities.ItemDamageBonusPlus4, model: 'war3mapImported\\BucketFull.mdx', point: 'left,hand' },
+  [Items.EmptyVial]: { ability: Abilities.ItemDamageBonusPlus2, model: BUCKET_MODEL, point: 'left,hand' },
+  [Items.FullVial]: { ability: Abilities.ItemDamageBonusPlus4, model: BUCKET_FULL_MODEL, point: 'left,hand' },
 };
 
 /** The orb over a peasant standing in a ready circle. */
