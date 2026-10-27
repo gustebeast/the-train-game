@@ -81,7 +81,17 @@ export interface TestReporter {
   /** Wrap a callback (trigger action, etc.) so a throw inside it is reported
    *  rather than silently swallowed. */
   guard(fn: (this: void) => void): (this: void) => void;
+  /** Run `then` as soon as `ready()` holds, checked four times a second; if it
+   *  has not held within `timeout` seconds, fail `key` and end the run.
+   *
+   *  Prefer this to a fixed after(): a fixed wait is either longer than it
+   *  needs to be on every run, or too short on a slow one -- and a test that
+   *  waits on the thing it needs states what that is. */
+  waitFor(key: string, ready: (this: void) => boolean, timeout: number, then: (this: void) => void): void;
 }
+
+/** How often waitFor looks. */
+const WAIT_POLL = 0.25;
 
 /** How a measurement is written down. Shared by report and expect so a value
  *  and the expectation it failed against are always formatted the same way. */
@@ -133,6 +143,20 @@ function createReporter(name: string): TestReporter {
     },
     after: (delay, fn) => {
       Timer.create().start(delay, false, reporter.guard(fn));
+    },
+    waitFor: (key, ready, timeout, then) => {
+      let waited = 0;
+      const look = (): void => {
+        if (ready()) { then(); return; }
+        waited += WAIT_POLL;
+        if (waited >= timeout) {
+          reporter.fail(key, 'not within ' + string.format('%.0f', timeout) + 's');
+          reporter.done();
+          return;
+        }
+        reporter.after(WAIT_POLL, look);
+      };
+      look();
     },
   };
   return reporter;

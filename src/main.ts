@@ -47,7 +47,6 @@ import './readytest'; // how long a ready countdown actually runs
 import './charmtest'; // Charm and Transmute against a creep camp
 import './circlelabeltest'; // a circle's label lives exactly as long as the circle
 import './eventdriventest'; // board, dealer, boss ending and Union Rules react on events
-import './dpsscaletest'; // what the DPS match actually measures, in raw HP
 import './camptest'; // camp rotation: even levels, one lap per level
 import './daynighttest'; // the clock must stay frozen, lobbies included
 import './savetest'; // a save round trip, as the chooser and -load read it

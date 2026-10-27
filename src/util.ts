@@ -66,6 +66,22 @@ export function forEachUnitOfPlayer(owner: player, cb: (this: void, u: unit) => 
   DestroyGroup(g);
 }
 
+/** Remove units, summons first.
+ *
+ *  A summon survives RemoveUnit once whatever summoned it has been removed:
+ *  measured, a Far Seer's Feral Spirit wolves swept in the same pass as the
+ *  Far Seer stayed on the map, while the same wolves removed with the Far Seer
+ *  still standing went. So every summon goes before anything that could have
+ *  summoned it. */
+export function removeUnitsSummonsFirst(units: ReadonlyArray<unit>): void {
+  for (const u of units) {
+    if (IsUnitType(u, UNIT_TYPE_SUMMONED)) RemoveUnit(u);
+  }
+  for (const u of units) {
+    if (!IsUnitType(u, UNIT_TYPE_SUMMONED) && unitExists(u)) RemoveUnit(u);
+  }
+}
+
 /** Whether a unit handle still refers to a unit on the map -- it has not been
  *  removed. A dead unit still exists until its corpse is gone. */
 export function unitExists(u: unit): boolean {

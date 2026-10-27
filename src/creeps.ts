@@ -20,11 +20,13 @@ import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
 import { onCampCleared, onCampFightStarted } from './bossKey';
 import { TRACK_SIZE } from './track/constants';
 import { seededInt } from './rng';
-import { forEachUnitOfPlayer, isAlive, unitExists, forEachUnitInRange } from './util';
+import { forEachUnitOfPlayer, isAlive, unitExists, forEachUnitInRange, removeUnitsSummonsFirst } from './util';
 
 const TARGET_XP = 100;
 const FIRST_CAMP_XP = 90;
-const SPARRING_DURATION = 30;
+/** How long a sparring match runs. Exported so tests wait on it rather than on
+ *  a number of their own. */
+export const SPARRING_DURATION = 30;
 
 /**
  * The sparring match is fought six times over, at once, and measured as one.
@@ -72,7 +74,7 @@ const SPARRING_COPIES: ReadonlyArray<{ x: number; y: number; approach: number }>
  * quarter, and a full 30 seconds only improves that to about a sixth. The ready
  * countdown waits for it -- see sparringSecondsToMinimum.
  */
-const SPARRING_MIN_SECONDS = 10;
+export const SPARRING_MIN_SECONDS = 10;
 /** How far from its camp each copy's party starts. */
 const SPARRING_APPROACH = 4 * TRACK_SIZE;
 /** How far one of the match's units may wander from its own copy before it is
@@ -555,16 +557,10 @@ function computeScaleFactors(): { dpsScale: number; ehpScale: number } {
  *  summons standing in front of it. */
 export function dpsSampleBreakdown(): {
   creepHPLost: number; ourHPLost: number; summonHPLost: number;
-  trackedOurs: number; trackedSummons: number; trackedCreeps: number;
   removals: number; removalCredit: number;
 } {
-  let summons = 0;
-  for (const e of trackedOurs) if (e.summon) summons += 1;
   return {
     creepHPLost, ourHPLost, summonHPLost,
-    trackedOurs: trackedOurs.length,
-    trackedSummons: summons,
-    trackedCreeps: trackedCreeps.length,
     removals: sparringRemovals, removalCredit: sparringRemovalCredit,
   };
 }
@@ -789,8 +785,11 @@ function teardownSparringMatch(record: boolean): void {
       c.unit.destroy();
     }
     forgetSpawnedCreeps();
-    // Order matters: the mercenary's kit is snapshotted off its live unit, so
-    // that has to happen before the sweep removes it.
+    // Order matters twice over. Summons go first: one whose summoner has
+    // already been removed cannot be, and a Far Seer's wolves survived every
+    // match that way. And the mercenary's kit is snapshotted off its live
+    // unit, so that happens before the sweep removes it.
+    clearCheckPlayerSummons();
     removeSpawnedMercUnits();
     clearSpawnedHeroUnits();
     clearCheckPlayerUnits();
@@ -811,11 +810,10 @@ export function sparringSecondsToMinimum(): number {
  *  game reads this; it exists so a test can watch the sparring match from the
  *  outside instead of inferring it. */
 export function getSparringStatus(): {
-  mode: boolean; creeps: number; heroes: number; mercs: number; timer: boolean;
+  creeps: number; heroes: number; mercs: number; timer: boolean;
   elapsed: number; campIndex: number; copies: number;
 } {
   return {
-    mode: sparringActive,
     copies: SPARRING_COPIES.length,
     campIndex: campIndex ?? -1,
     mercs: getSpawnedMercUnits().length,
@@ -941,10 +939,16 @@ function leashSparring(u: unit): void {
  *  match brings onto the field is owned by the check player, whether or not
  *  this file knew it would exist. */
 function clearCheckPlayerUnits(): void {
-  const checkId = GetPlayerId(getDPSCheckPlayer().handle);
+  const all: unit[] = [];
+  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => { all.push(u); });
+  removeUnitsSummonsFirst(all);
+}
+
+/** Just the summons the check player owns, ahead of the units that summoned
+ *  them; see teardownSparringMatch. */
+function clearCheckPlayerSummons(): void {
   forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
-    if (GetPlayerId(GetOwningPlayer(u)) !== checkId) return;
-    RemoveUnit(u);
+    if (IsUnitType(u, UNIT_TYPE_SUMMONED)) RemoveUnit(u);
   });
 }
 
@@ -997,7 +1001,9 @@ let dpsSampler: Timer | null = null;
  *  dies or expires between samples loses at most a fraction of a second of
  *  contribution. */
 const DPS_SAMPLE_INTERVAL = 0.25;
-const SPARRING_HP = 99999;
+/** The HP every combatant in the match is rigged to (the creeps share it per
+ *  camp). Exported for the tests. */
+export const SPARRING_HP = 99999;
 
 /** Rig a unit so the match cannot kill it, and start watching its HP. */
 function trackForDPS(list: TrackedHP[], u: unit, rig: boolean): void {
