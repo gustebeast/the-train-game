@@ -217,7 +217,12 @@ one per clone:
    a required update first — click **Restart Now** and wait.)
 2. Launch WC3 online once (Battle.net → Warcraft III → Play). Reaching the main
    menu with **MULTIPLAYER enabled** confirms the offline grace is refreshed.
-3. Close WC3, shut the guest down cleanly, and take a fresh powered-off snapshot
+3. **Log Battle.net OUT** (account menu → Log Out) so it rests on "Welcome
+   back" asking for a password. A clone of a base that is still logged in
+   sits at "Connecting…" forever with no network and never offers Continue
+   Offline, and WC3 3.0 then has no way into Single Player (found Oct 2026).
+   Logged out, the clones get "Could not log in → Continue Offline".
+4. Close WC3, shut the guest down cleanly, and take a fresh powered-off snapshot
    (`base-off2`). All clones will inherit the refreshed entitlement.
 
 The saved "keep me logged in" token is **single-use across clones** — the first

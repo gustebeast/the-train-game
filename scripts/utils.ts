@@ -4,6 +4,8 @@ import * as path from "path";
 import { createLogger, format, transports } from "winston";
 const { combine, timestamp, printf } = format;
 const luamin = require('luamin');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { writeLegacyFormats } = require("./legacy-format.js");
 
 export interface IProjectConfig {
   mapFolder: string;
@@ -144,6 +146,11 @@ export function compileMap(config: IProjectConfig) {
     const lua = fs.readFileSync(mapLua).toString();
     fs.writeFileSync(mapLua, lua.replace(/SetPlayerRaceSelectable\(([^,]+),\s*true\)/g, 'SetPlayerRaceSelectable($1, false)'));
   }
+
+  // Formats the WC3 2.0.4 client reads, whichever editor saved the map: the
+  // test VMs are pinned to 2.0.4, because 3.0 cannot run offline, and 3.0
+  // reads the older formats too (scripts/legacy-format.js).
+  writeLegacyFormats(`./dist/${config.mapFolder}`);
 
   logger.info("Transpiling TypeScript to Lua...");
   execSync('tstl -p tsconfig.json', { stdio: 'inherit' });

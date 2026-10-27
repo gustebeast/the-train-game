@@ -102,6 +102,11 @@
         1009,
         392
       ],
+      "_bnetRetryComment": "Centre of the blue Retry button on Battle.net's 'Could not log in' prompt, as the 2.0.4-era Battle.net in base-off5 draws it. mint-vm.ps1 waits for this pixel to turn blue before clicking Continue Offline. (The Battle.net that ships with WC3 3.0 draws the prompt at Retry 827,575 / Continue Offline 827,615 -- but 3.0 cannot play offline at all, so the VMs stay on 2.0.4.)",
+      "bnetRetry": [
+        1009,
+        352
+      ],
       "bnetPlay": [
         156,
         611
