@@ -575,15 +575,18 @@ export function spawnUnscaledCampCopy(cx: number, cy: number): Unit[] {
   return creeps;
 }
 
-/** One copy of the current camp at (cx, cy), scaled against `force` as a round
- *  scales it but with the damage scale given: the DPS check's fights, each
- *  trying a scale of its own. */
-export function spawnCampCopy(cx: number, cy: number, force: Unit[], dpsScale: number): Unit[] {
-  const creeps = spawnUnscaledCampCopy(cx, cy);
+/** Scale a camp copy against `force` as a round scales it, but with the damage
+ *  scale given: the DPS check's fights, each trying a scale of its own. */
+export function scaleCampCopy(creeps: Unit[], force: Unit[], dpsScale: number): void {
   const campHP = sumForce(creeps).hp;
   const hpScale = campHP > 0 ? sumForce(force).hp / campHP : 1;
   for (const u of creeps) applyRoundScale(u, dpsScale, hpScale);
-  return creeps;
+}
+
+/** Units' own attack damage per second, summed: what the estimate scales from,
+ *  and what the DPS check carries its answer from one round to the next in. */
+export function getStatDPS(units: Unit[]): number {
+  return sumForce(units).dps;
 }
 
 // --- Cage death trigger ------------------------------------------------------
