@@ -329,7 +329,7 @@ CONVERGE_CASES.push({
 });
 const CONVERGE_CAP = 480;
 
-for (const c of CONVERGE_CASES) {
+function registerConverge(c: ConvergeCase): void {
   registerTest('bfconverge' + c.name, (t: TestReporter) => {
     beginNewRun();
     setRosterForTest(c.heroes);
@@ -371,6 +371,8 @@ for (const c of CONVERGE_CASES) {
   }, CONVERGE_CAP + 60);
 }
 
+for (const c of CONVERGE_CASES) registerConverge(c);
+
 
 // --- Balance: a warm start -----------------------------------------------------
 
@@ -391,7 +393,7 @@ const WARM_CAP = 300;
 
 for (const w of WARM_CASES) {
   // The cold reference for round two: the same party against round two's camp.
-  CONVERGE_CASES.push({ name: w.c.name + tostring(w.next), heroes: w.c.heroes, mercs: w.c.mercs, camp: w.next });
+  registerConverge({ name: w.c.name + tostring(w.next), heroes: w.c.heroes, mercs: w.c.mercs, camp: w.next });
   registerTest('bfwarm' + w.c.name, (t: TestReporter) => {
     beginNewRun();
     setRosterForTest(w.c.heroes);

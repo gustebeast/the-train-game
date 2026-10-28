@@ -442,12 +442,19 @@ let observations: Observation[] = [];
 let center = 0;
 let spread = 0;
 /** How wide the next fights are spread, in log scale: a step's width, the
- *  first guess's with nothing learned (about x0.5 to x2) and with something
- *  learned (about x0.8 to x1.3), and the narrowest once the answer is firm. */
+ *  first guess's (about x0.5 to x2), and the narrowest once the answer is
+ *  firm. The first guess is spread that wide even when it was learned: a
+ *  learned guess is closer, but measured against a new camp it was still off
+ *  by up to 2x -- the camp's own spells and armour matter as well as the
+ *  party's -- and spread narrow, the first fights all landed on one side. */
 const START_SPREAD = 0.35;
 const COLD_SPREAD = 0.7;
-const WARM_SPREAD = 0.25;
 const MIN_SPREAD = 0.06;
+/** Where the guess stood at the start of the current STEP_SECONDS, and when
+ *  that was; see refit. */
+let stepFrom = 0;
+let stepFromTime = 0;
+const STEP_SECONDS = 15;
 /** Whether the first guess has been made; see firstGuess. */
 let guessed = false;
 /** The party's and the camp's own attack damage, as the first fight found
@@ -509,7 +516,9 @@ function firstGuess(force: Unit[], creeps: Unit[]): void {
   const estimate = campStatDPS > 0 ? partyStatDPS / campStatDPS : 1;
   const ratio = learnedRatio ?? getCampDPSAdvantage();
   center = Math.log(Math.max(0.05, estimate * ratio));
-  spread = learnedRatio != null ? WARM_SPREAD : COLD_SPREAD;
+  spread = COLD_SPREAD;
+  stepFrom = center;
+  stepFromTime = now();
   firstScale = Math.exp(center);
   firstWasWarm = learnedRatio != null;
   setCampDamageScale(Math.exp(center));
@@ -616,16 +625,30 @@ function refit(fromGeneration: number): void {
       centerError = slope < 0
         ? sigma / -slope * Math.sqrt(1 / near.length + (crossing - mx) ** 2 / (sxx / sw * near.length))
         : Infinity;
-      // Never further than a spread past the results in hand.
+      // Within the scales actually fought: there are results either side of
+      // the target, so the crossing is among them, and a curve run on past
+      // the last of them is a guess no fight supports -- it put a Blademaster
+      // and Lich at x11.5 against an answer of x6.7.
       let lo = near[0].x; let hi = near[0].x;
       for (const o of near) { lo = Math.min(lo, o.x); hi = Math.max(hi, o.x); }
       // And no more than half a spread per result: the first fits, on a
       // handful of points either side, swung the guess 60% too far.
-      const reach = Math.max(lo - spread, Math.min(hi + spread, crossing));
+      const reach = Math.max(lo, Math.min(hi, crossing));
       center = Math.max(center - spread / 2, Math.min(center + spread / 2, reach));
       spread = Math.max(MIN_SPREAD, Math.min(START_SPREAD, 2 * centerError));
     }
   }
+  // However it moved: at most a step per STEP_SECONDS. Per result was not
+  // enough -- a burst of results swung a Blademaster and Lich from x4 to x10
+  // in one go, against an answer of x7.
+  if (now() - stepFromTime >= STEP_SECONDS) {
+    stepFrom = history.length > 0 ? history[history.length - 1] : center;
+    stepFromTime = now();
+  }
+  // Half that once there are results either side: from then on the answer is
+  // being refined, not hunted for.
+  const maxStep = bracketed ? START_SPREAD / 2 : START_SPREAD;
+  center = Math.max(stepFrom - maxStep, Math.min(stepFrom + maxStep, center));
   history.push(center);
   setCampDamageScale(Math.exp(center));
   if (isConverged()) {
