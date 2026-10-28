@@ -8,7 +8,9 @@ import {
 import { CREEP_CAMPS } from '../creepCamps';
 import { HeroData, setRosterForTest, spawnHeroes, getChosenHeroCount, hasHeroes, getChosenHeroData } from '../heroes';
 import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from '../mercenary';
-import { getDPSCheckStatus, getDPSStation, startDPSCheck, RIGGED_SECONDS } from '../dpsCheck';
+import {
+  getDPSCheckStatus, getDPSStation, startDPSCheck, stopDPSCheck, setDPSLayoutForTest, RIGGED_SECONDS,
+} from '../dpsCheck';
 import { getDPSCheckPlayer, getNeutralAggressive, toggleDPSVision } from '../teams';
 import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem, forEachDestructable } from '../util';
 import { loadInterRoundLobby, beginNewRun, loadTerrain } from '../terrain/load';
@@ -352,4 +354,92 @@ for (const c of CONVERGE_CASES) {
     };
     t.after(1, watch);
   }, CONVERGE_CAP + 60);
+}
+
+// --- Balance: which station layout? ------------------------------------------
+
+/**
+ * Balance harness ('bf...', out of the sweep): the same party and camp run
+ * under different station layouts, to see whether more, tighter stations
+ * settle the answer sooner without the fights leaking into each other or the
+ * AI spreading itself thin. Reports the estimate every 30 s, the stray count
+ * (unit-ticks spent nearer another station than its own) and casts per
+ * station in the opening.
+ */
+interface Layout {
+  name: string; stations: Array<{ x: number; y: number }>;
+  approach: number; leash: number; angles: number[];
+}
+
+function row(y: number, n: number, spacing: number): Array<{ x: number; y: number }> {
+  const out: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < n; i++) out.push({ x: (i - (n - 1) / 2) * spacing, y });
+  return out;
+}
+
+const ALONG = [0, 25, -25, 180, 155, 205];
+const ACROSS = [90, 270, 65, 115, 245, 295];
+
+const LAYOUTS: Layout[] = [
+  { name: 'a12', stations: [...row(-2400, 6, 1000), ...row(2650, 6, 1000)], approach: 450, leash: 500, angles: ALONG },
+  { name: 'b16', stations: [...row(-2400, 8, 750), ...row(2650, 8, 750)], approach: 450, leash: 375, angles: ACROSS },
+  { name: 'c20', stations: [...row(-2400, 10, 600), ...row(2650, 10, 600)], approach: 400, leash: 300, angles: ACROSS },
+  // Today's spacing, approached from above and below -- the game's layout
+  // since the layout runs found it strays far less for the same answer.
+  { name: 'a12x', stations: [...row(-2400, 6, 1000), ...row(2650, 6, 1000)], approach: 450, leash: 500, angles: ACROSS },
+  {
+    name: 'd24', stations: [...row(-2400, 10, 600), ...row(2150, 7, 850), ...row(3150, 7, 850)],
+    approach: 400, leash: 300, angles: ACROSS,
+  },
+];
+const LAYOUT_CAP = 300;
+/** The game's own layout, restored after each run. */
+const DEFAULT_LAYOUT = LAYOUTS.find(l => l.name === 'a12x')!;
+
+for (const layout of LAYOUTS) {
+  for (const c of CONVERGE_CASES) {
+    if (c.name === 'tcdr') continue;
+    registerTest('bflayout' + layout.name + c.name, (t: TestReporter) => {
+      setDPSLayoutForTest(layout.stations, layout.approach, layout.leash, layout.angles);
+      beginNewRun();
+      setRosterForTest(c.heroes);
+      setMercsForTest(c.mercs.map(id => FourCC(id)));
+      setCampForTest(c.camp);
+      loadInterRoundLobby();
+      let casts = 0;
+      const castTrig = CreateTrigger()!;
+      TriggerRegisterPlayerUnitEvent(castTrig, getDPSCheckPlayer().handle, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+      TriggerAddAction(castTrig, () => { if (getDPSCheckStatus().phase === 'rigged') casts += 1; });
+      startDPSCheck();
+      const marks: string[] = [];
+      let lastMark = 0;
+      const watch = (): void => {
+        const s = getDPSCheckStatus();
+        if (s.elapsed - lastMark >= 30) {
+          lastMark = s.elapsed;
+          marks.push(string.format('%d:x%.2f/%d/%.2f', R2I(s.elapsed), s.scale, s.fightsFinished,
+            s.centerError < 100 ? s.centerError : 9.99));
+        }
+        if (s.phase === 'done' || s.elapsed >= LAYOUT_CAP) {
+          DestroyTrigger(castTrig);
+          t.report('stations', s.stations);
+          t.report('converged', s.phase === 'done' ? 1 : 0);
+          t.report('seconds', s.elapsed);
+          t.report('scale', s.scale);
+          t.report('fights', s.fightsFinished);
+          t.report('fightsPerMinute', s.fightsFinished / s.elapsed * 60);
+          t.report('openingCastsPerStation', casts / s.stations);
+          t.report('strayTicks', s.strayTicks);
+          t.report('trace', marks.join(' '));
+          stopDPSCheck();
+          setDPSLayoutForTest(DEFAULT_LAYOUT.stations, DEFAULT_LAYOUT.approach, DEFAULT_LAYOUT.leash,
+            DEFAULT_LAYOUT.angles);
+          t.done();
+          return;
+        }
+        t.after(1, watch);
+      };
+      t.after(1, watch);
+    }, LAYOUT_CAP + 60);
+  }
 }
