@@ -62,3 +62,18 @@ STRING 13
 E
 }
 
+STRING 14
+{
+Player 21
+}
+
+STRING 15
+{
+Player 22
+}
+
+STRING 16
+{
+Force 1
+}
+

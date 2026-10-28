@@ -9,9 +9,10 @@ import { CREEP_CAMPS } from '../creepCamps';
 import { HeroData, setRosterForTest, spawnHeroes, getChosenHeroCount, hasHeroes, getChosenHeroData } from '../heroes';
 import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from '../mercenary';
 import {
-  getDPSCheckStatus, getDPSStation, startDPSCheck, stopDPSCheck, setDPSLayoutForTest, RIGGED_SECONDS,
+  getDPSCheckStatus, getDPSStation, startDPSCheck, stopDPSCheck, setDPSLayoutForTest, resetDPSLayoutForTest,
+  setDPSOwnerLimitForTest, RIGGED_SECONDS,
 } from '../dpsCheck';
-import { getDPSCheckPlayer, getNeutralAggressive, toggleDPSVision } from '../teams';
+import { getDPSCheckPlayers, getNeutralAggressive, toggleDPSVision } from '../teams';
 import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem, forEachDestructable } from '../util';
 import { loadInterRoundLobby, beginNewRun, loadTerrain } from '../terrain/load';
 import { gameState } from '../state';
@@ -19,7 +20,7 @@ import { CAGE_RAW } from '../sharedData';
 import { purchaseSummonUpgrade } from '../summonUpgrade';
 
 /**
- * The DPS check (dpsCheck.ts): twelve copies of the party fighting the round's
+ * The DPS check (dpsCheck.ts): copies of the party fighting the round's
  * camp out beyond the board's wall, first rigged and then for real, until the
  * cage is broken. Nothing about it is visible if it goes wrong -- it just
  * scales the camp off a bad number -- so these hold it to what it must do.
@@ -62,7 +63,7 @@ function countItems(): number {
 
 function checkUnits(): unit[] {
   const out: unit[] = [];
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => { out.push(u); });
+  for (const p of getDPSCheckPlayers()) forEachUnitOfPlayer(p.handle, u => { out.push(u); });
   return out;
 }
 
@@ -104,10 +105,9 @@ function runDPSFields(t: TestReporter): void {
   loadInterRoundLobby();
   startDPSCheck();
   const itemsBefore = countItems();
-  const check = getDPSCheckPlayer().handle;
   let casts = 0;
   const castTrig = CreateTrigger()!;
-  TriggerRegisterPlayerUnitEvent(castTrig, check, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+  for (const p of getDPSCheckPlayers()) TriggerRegisterPlayerUnitEvent(castTrig, p.handle, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
   TriggerAddAction(castTrig, () => { casts += 1; });
 
   t.waitFor('openingFielded', phaseIs('rigged'), START_WAIT, () => t.after(1, () => {
@@ -174,7 +174,7 @@ registerTest('dpsfields', runDPSFields, 240);
  * and by asking the engine whether any of its units is visible to a human.
  */
 function runDPSVision(t: TestReporter): void {
-  const dps = getDPSCheckPlayer().handle;
+  const dps = getDPSCheckPlayers()[getDPSCheckPlayers().length - 1].handle;
   const humans = getHumanPlayers();
   const me = humans[0];
   const sharing = (p: player): boolean => GetPlayerAlliance(dps, p, ALLIANCE_SHARED_VISION);
@@ -393,8 +393,6 @@ const LAYOUTS: Layout[] = [
   },
 ];
 const LAYOUT_CAP = 300;
-/** The game's own layout, restored after each run. */
-const DEFAULT_LAYOUT = LAYOUTS.find(l => l.name === 'a12x')!;
 
 for (const layout of LAYOUTS) {
   for (const c of CONVERGE_CASES) {
@@ -408,7 +406,7 @@ for (const layout of LAYOUTS) {
       loadInterRoundLobby();
       let casts = 0;
       const castTrig = CreateTrigger()!;
-      TriggerRegisterPlayerUnitEvent(castTrig, getDPSCheckPlayer().handle, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+      for (const p of getDPSCheckPlayers()) TriggerRegisterPlayerUnitEvent(castTrig, p.handle, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
       TriggerAddAction(castTrig, () => { if (getDPSCheckStatus().phase === 'rigged') casts += 1; });
       startDPSCheck();
       const marks: string[] = [];
@@ -432,8 +430,7 @@ for (const layout of LAYOUTS) {
           t.report('strayTicks', s.strayTicks);
           t.report('trace', marks.join(' '));
           stopDPSCheck();
-          setDPSLayoutForTest(DEFAULT_LAYOUT.stations, DEFAULT_LAYOUT.approach, DEFAULT_LAYOUT.leash,
-            DEFAULT_LAYOUT.angles);
+          resetDPSLayoutForTest();
           t.done();
           return;
         }
@@ -441,5 +438,144 @@ for (const layout of LAYOUTS) {
       };
       t.after(1, watch);
     }, LAYOUT_CAP + 60);
+  }
+}
+
+// --- Balance: how many stations can one AI run? ------------------------------
+
+/**
+ * Balance harness ('bf...', out of the sweep): one AI, 3 to 18 stations, all
+ * 1000 apart and approached across, so only the count changes. Above 12 the
+ * extra stations go in a second row in the tall top band. Runs only the
+ * rigged opening -- everything alive throughout, so casts are comparable --
+ * three times per count, and reports casts per station and the opening's
+ * scale. A count the AI cannot keep up with shows as fewer casts per station
+ * and a weaker party (a lower scale).
+ */
+const AI_LOAD_SLOTS: Array<{ x: number; y: number }> = [
+  ...row(-2400, 6, 1000), ...row(2200, 6, 1000), ...row(3150, 6, 1000),
+];
+const AI_LOAD_COUNTS = [3, 6, 9, 12, 15, 18];
+const AI_LOAD_REPEATS = 3;
+const MKPAL: ConvergeCase = {
+  name: 'mkpal', camp: 217, mercs: ['nogl'], heroes: [
+    hero(Units.MountainKing, 300, [[Abilities.StormBolt, 2], [Abilities.ThunderClap, 1], [Abilities.Bash, 1]]),
+    hero(Units.Paladin, 300, [[Abilities.HolyLight, 2], [Abilities.DevotionAura, 1], [Abilities.DivineShield, 1]]),
+  ],
+};
+
+for (const c of [CONVERGE_CASES[0], MKPAL]) {
+  for (const n of AI_LOAD_COUNTS) {
+    registerTest('bfaiload' + c.name + tostring(n), (t: TestReporter) => {
+      // Spread across the slots rather than the first n, so a small count is
+      // not all in one row.
+      const stations: Array<{ x: number; y: number }> = [];
+      for (let i = 0; i < n; i++) stations.push(AI_LOAD_SLOTS[Math.floor(i * AI_LOAD_SLOTS.length / n)]);
+      setDPSLayoutForTest(stations, 400, 450, ACROSS);
+      beginNewRun();
+      setRosterForTest(c.heroes);
+      setMercsForTest(c.mercs.map(id => FourCC(id)));
+      setCampForTest(c.camp);
+      loadInterRoundLobby();
+      let casts = 0;
+      const castTrig = CreateTrigger()!;
+      for (const p of getDPSCheckPlayers()) TriggerRegisterPlayerUnitEvent(castTrig, p.handle, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+      TriggerAddAction(castTrig, () => { if (getDPSCheckStatus().phase === 'rigged') casts += 1; });
+      const perStation: string[] = [];
+      const scales: string[] = [];
+      let sumPer = 0;
+      let sumScale = 0;
+      const rep = (k: number): void => {
+        if (k >= AI_LOAD_REPEATS) {
+          DestroyTrigger(castTrig);
+          t.report('stations', n);
+          t.report('castsPerStation', perStation.join(' '));
+          t.report('meanCastsPerStation', sumPer / AI_LOAD_REPEATS);
+          t.report('openingScales', scales.join(' '));
+          t.report('meanOpeningScale', sumScale / AI_LOAD_REPEATS);
+          resetDPSLayoutForTest();
+          t.done();
+          return;
+        }
+        casts = 0;
+        startDPSCheck();
+        t.waitFor('opening' + I2S(k), phaseIs('fights'), RIGGED_SECONDS + 5, () => {
+          const s = getDPSCheckStatus();
+          perStation.push(string.format('%.2f', casts / n));
+          scales.push(string.format('%.2f', s.riggedScale));
+          sumPer += casts / n;
+          sumScale += s.riggedScale;
+          stopDPSCheck();
+          t.after(1, () => rep(k + 1));
+        });
+      };
+      rep(0);
+    }, 120);
+  }
+}
+
+// --- Balance: the same 18 stations on one AI or on three ---------------------
+
+/**
+ * Balance harness ('bf...', out of the sweep): the game's own layout, with the
+ * stations run by one check player or shared among all three. The rigged
+ * opening only, three times over, as in bfaiload; also reports how many
+ * casts came from each check player, so an AI that never casts shows.
+ */
+for (const c of [CONVERGE_CASES[0], MKPAL]) {
+  for (const owners of [1, 3]) {
+    registerTest('bfaiowners' + c.name + tostring(owners), (t: TestReporter) => {
+      resetDPSLayoutForTest();
+      setDPSOwnerLimitForTest(owners);
+      beginNewRun();
+      setRosterForTest(c.heroes);
+      setMercsForTest(c.mercs.map(id => FourCC(id)));
+      setCampForTest(c.camp);
+      loadInterRoundLobby();
+      const players = getDPSCheckPlayers();
+      const byPlayer: number[] = players.map(() => 0);
+      let casts = 0;
+      const castTrig = CreateTrigger()!;
+      for (const p of players) TriggerRegisterPlayerUnitEvent(castTrig, p.handle, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+      TriggerAddAction(castTrig, () => {
+        if (getDPSCheckStatus().phase !== 'rigged') return;
+        casts += 1;
+        const owner = GetOwningPlayer(GetTriggerUnit()!);
+        for (let i = 0; i < players.length; i++) if (players[i].handle === owner) byPlayer[i] += 1;
+      });
+      const perStation: string[] = [];
+      const scales: string[] = [];
+      let sumPer = 0;
+      let sumScale = 0;
+      let n = 0;
+      const rep = (k: number): void => {
+        if (k >= AI_LOAD_REPEATS) {
+          DestroyTrigger(castTrig);
+          t.report('stations', n);
+          t.report('owners', owners);
+          t.report('castsPerStation', perStation.join(' '));
+          t.report('meanCastsPerStation', sumPer / AI_LOAD_REPEATS);
+          t.report('openingScales', scales.join(' '));
+          t.report('meanOpeningScale', sumScale / AI_LOAD_REPEATS);
+          t.report('castsByPlayer', byPlayer.map(v => tostring(v)).join(' '));
+          resetDPSLayoutForTest();
+          t.done();
+          return;
+        }
+        casts = 0;
+        startDPSCheck();
+        t.waitFor('opening' + tostring(k), phaseIs('fights'), RIGGED_SECONDS + 5, () => {
+          const s = getDPSCheckStatus();
+          n = s.stations;
+          perStation.push(string.format('%.2f', casts / n));
+          scales.push(string.format('%.2f', s.riggedScale));
+          sumPer += casts / n;
+          sumScale += s.riggedScale;
+          stopDPSCheck();
+          t.after(1, () => rep(k + 1));
+        });
+      };
+      rep(0);
+    }, 120);
   }
 }

@@ -7,7 +7,8 @@ import { HeroData, getChosenHeroData, spawnHeroFromData } from './heroes';
 import { MercData, getLivingMercData, spawnMercFromData } from './mercenary';
 import { isChallengeArmed } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
-import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
+import { getDPSCheckPlayers, getNeutralAggressive } from './teams';
+import { MapPlayer } from 'w3ts';
 import { forEachUnitOfPlayer, forEachInventoryItem, isAlive, unitExists, removeUnitsSummonsFirst } from './util';
 
 /**
@@ -24,7 +25,7 @@ import { forEachUnitOfPlayer, forEachInventoryItem, isAlive, unitExists, removeU
  * moment a round loads until its cage is broken, so all the time the players
  * spend working towards the camp goes into the answer. Nothing it measures
  * changes in that time: the party and the camp are settled when the round
- * loads. Twelve copies of the party fight at once, each against its own copy
+ * loads. Eighteen copies of the party fight at once, each against its own copy
  * of the camp:
  *
  *   1. RIGGED OPENING (RIGGED_SECONDS). Every unit is rigged so nothing dies,
@@ -38,28 +39,30 @@ import { forEachUnitOfPlayer, forEachInventoryItem, isAlive, unitExists, removeU
  *      current best guess, and each approaching from its own side. A finished
  *      fight is a point -- scale tried, margin won or lost by -- and a line
  *      through the points says where the margin crosses the target. The next
- *      fights are spread round that, narrower as the answer firms up, so twelve
- *      fights at a time test twelve scales at a time.
+ *      fights are spread round that, narrower as the answer firms up, so
+ *      eighteen fights at a time test eighteen scales at a time.
  *
  * It stops when the cage is broken -- banking how the long-running unfinished
  * fights stand -- or once the answer has stopped moving (isConverged). Any
  * board load ends it (spawn.ts clearBoard).
  *
- * Every unit of ours belongs to the one check player: it is the only slot the
- * map makes a computer, and an AI in any other slot never casts.
+ * Every unit of ours belongs to one of the check players (teams.ts), which
+ * share the stations out: only a slot the map makes a computer runs an AI
+ * that casts, and one AI casts less per station the more it runs.
  */
 
 // --- Where the fights happen -------------------------------------------------
 
 /**
- * Twelve stations: six in a row below the board and six above, 1000 apart.
+ * Eighteen stations, 1000 apart: a row of six below the board and two rows of
+ * six in the taller band above.
  *
  * The board's edge is y +-1344 and its wall a cell beyond; a second, full-width
  * wall at y +-1664 (spawn.ts) keeps every fight further out than a test fight
  * the user could not hear from the board (about 500 out). The rows' ground
  * runs from there to the map edge: y -1728..-3072 below, 1728..3584 above.
  */
-const ROW_YS: ReadonlyArray<number> = [-2400, 2650];
+const ROW_YS: ReadonlyArray<number> = [-2400, 2200, 3150];
 const STATION_XS: ReadonlyArray<number> = [-2500, -1500, -500, 500, 1500, 2500];
 let STATIONS: ReadonlyArray<{ x: number; y: number }> = (() => {
   const out: Array<{ x: number; y: number }> = [];
@@ -67,7 +70,7 @@ let STATIONS: ReadonlyArray<{ x: number; y: number }> = (() => {
   return out;
 })();
 /** How far from its camp a party starts. */
-let APPROACH = 450;
+let APPROACH = 400;
 /** Sides a party may come in from, in degrees: from above or below, across the
  *  row, drawn afresh every fight so which unit gets hit first varies
  *  independently of the scale being tried. Across rather than along it:
@@ -77,7 +80,7 @@ let APPROACH_ANGLES: ReadonlyArray<number> = [90, 270, 65, 115, 245, 295];
 /** How far a unit may wander from its station before it is sent back: half
  *  the spacing, so no fight drifts into its neighbour's, and beyond APPROACH,
  *  so a party is not walked onto its camp before the camp is down. */
-let LEASH = 500;
+let LEASH = 450;
 
 // --- Timing ------------------------------------------------------------------
 
@@ -120,6 +123,25 @@ let deathTrig: Trigger | null = null;
 
 function now(): number {
   return clock != null ? clock.elapsed : 0;
+}
+
+/** The computer player that runs station i: the stations are dealt out in
+ *  turn, so each AI's share is spread over every row. */
+function stationOwner(i: number): MapPlayer {
+  const players = getDPSCheckPlayers();
+  const n = ownerLimit > 0 ? Math.min(ownerLimit, players.length) : players.length;
+  return players[i % n];
+}
+
+/** For tests: run the stations on only the first n check players (0: all). */
+let ownerLimit = 0;
+export function setDPSOwnerLimitForTest(n: number): void {
+  ownerLimit = n;
+}
+
+/** Every unit any check player owns. */
+function forEachCheckUnit(cb: (this: void, u: unit) => void): void {
+  for (const p of getDPSCheckPlayers()) forEachUnitOfPlayer(p.handle, cb);
 }
 
 /** Which station each of the check's units belongs to, by handle id: recorded
@@ -197,11 +219,13 @@ function finish(): void {
 
 export function initDPSCheck(): void {
   // Creeps dying in the check would level its heroes mid-fight.
-  SetPlayerHandicapXP(getDPSCheckPlayer().handle, 0);
+  for (const p of getDPSCheckPlayers()) SetPlayerHandicapXP(p.handle, 0);
   // A hero or mercenary dying drops what it carries: take it first. Items are
   // the check's own copies, but on the ground they would be anybody's.
   deathTrig = Trigger.create();
-  TriggerRegisterPlayerUnitEvent(deathTrig.handle, getDPSCheckPlayer().handle, EVENT_PLAYER_UNIT_DEATH, undefined);
+  for (const p of getDPSCheckPlayers()) {
+    TriggerRegisterPlayerUnitEvent(deathTrig.handle, p.handle, EVENT_PLAYER_UNIT_DEATH, undefined);
+  }
   deathTrig.addAction(() => {
     const u = GetTriggerUnit();
     if (u == null) return;
@@ -215,12 +239,12 @@ export function initDPSCheck(): void {
 // --- Fielding ----------------------------------------------------------------
 
 /** Put one copy of the party down at `angle` from station `i`, owned by the
- *  check player, and return it. */
+ *  station's check player, and return it. */
 function fieldParty(i: number, angle: number): Unit[] {
   const st = STATIONS[i];
   const x = st.x + APPROACH * Cos(angle * bj_DEGTORAD);
   const y = st.y + APPROACH * Sin(angle * bj_DEGTORAD);
-  const check = getDPSCheckPlayer();
+  const check = stationOwner(i);
   const force: Unit[] = [];
   for (const h of heroes) {
     const u = spawnHeroFromData(h, check, x, y);
@@ -253,7 +277,7 @@ function randomAngle(): number {
 /** Remove one station's units -- party, summons, camp -- or every station's. */
 function clearStation(i: number | null): void {
   const units: unit[] = [];
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
+  forEachCheckUnit(u => {
     if (i == null || home.get(GetHandleId(u)) === i) units.push(u);
   });
   forEachUnitOfPlayer(getNeutralAggressive().handle, u => {
@@ -279,7 +303,7 @@ function clearField(): void {
 /** Keep every unit of the check's at its own station; anything new is a
  *  summon, a charmed creep or an illusion, and belongs where it appeared. */
 function leash(): void {
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
+  forEachCheckUnit(u => {
     if (!isAlive(u)) return;
     const id = GetHandleId(u);
     let i = home.get(id);
@@ -347,14 +371,13 @@ function beginRigged(): void {
 }
 
 function rigAndWatch(): void {
-  const check = getDPSCheckPlayer().handle;
   const creeps: unit[] = [];
   forEachUnitOfPlayer(getNeutralAggressive().handle, u => {
     if (ourCreeps.has(GetHandleId(u))) creeps.push(u);
   });
   partyHP = 0;
   let n = 0;
-  forEachUnitOfPlayer(check, u => {
+  forEachCheckUnit(u => {
     if (home.get(GetHandleId(u)) === 0) partyHP += BlzGetUnitMaxHP(u);
   });
   campHP = 0;
@@ -370,7 +393,7 @@ function rigAndWatch(): void {
     SetUnitInvulnerable(c, false);
     rigged.push({ unit: c, lastHP: share, summon: false, out: false });
   }
-  forEachUnitOfPlayer(check, u => {
+  forEachCheckUnit(u => {
     BlzSetUnitMaxHP(u, RIG_HP);
     SetUnitState(u, UNIT_STATE_LIFE, RIG_HP);
     rigged.push({ unit: u, lastHP: RIG_HP, summon: false, out: false });
@@ -392,7 +415,6 @@ function rigAndWatch(): void {
  *  charmed) is credited once with the HP it would have had in a round. */
 function sampleRigged(): void {
   const creepOwner = getNeutralAggressive().handle;
-  const check = getDPSCheckPlayer().handle;
   for (const w of rigged) {
     if (w.out || !unitExists(w.unit)) continue;
     const hp = GetUnitState(w.unit, UNIT_STATE_LIFE);
@@ -411,7 +433,7 @@ function sampleRigged(): void {
   }
   // New on our side: a summon or illusion (its own HP), or a charmed creep
   // (rigged, as it is now part of the force).
-  forEachUnitOfPlayer(check, u => {
+  forEachCheckUnit(u => {
     for (const w of rigged) if (w.unit === u) return;
     const summon = IsUnitType(u, UNIT_TYPE_SUMMONED) || IsUnitIllusion(u);
     if (!summon) {
@@ -733,6 +755,14 @@ export function setDPSLayoutForTest(
   LEASH = leash;
   fights.length = 0;
   for (let i = 0; i < STATIONS.length; i++) fights.push(null);
+}
+
+const DEFAULT_LAYOUT = { stations: STATIONS, approach: APPROACH, leash: LEASH, angles: APPROACH_ANGLES };
+
+/** For tests: back to the game's own layout, on every check player. */
+export function resetDPSLayoutForTest(): void {
+  setDPSLayoutForTest(DEFAULT_LAYOUT.stations, DEFAULT_LAYOUT.approach, DEFAULT_LAYOUT.leash, DEFAULT_LAYOUT.angles);
+  ownerLimit = 0;
 }
 
 /** For tests: where station i stands. */
