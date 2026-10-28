@@ -9,9 +9,10 @@ import { CREEP_CAMPS } from '../creepCamps';
 import { HeroData, setRosterForTest, spawnHeroes, getChosenHeroCount, hasHeroes, getChosenHeroData } from '../heroes';
 import { setMercsForTest, spawnMercWithHeroes, buyMercContract, hasActiveMerc } from '../mercenary';
 import {
-  getDPSCheckStatus, getDPSStation, startDPSCheck, stopDPSCheck, setDPSLayoutForTest, RIGGED_SECONDS,
+  getDPSCheckStatus, getDPSStation, startDPSCheck, stopDPSCheck, resetDPSLearningForTest,
+  finishDPSCheckForTest, getDPSLearnedRatio,
 } from '../dpsCheck';
-import { getDPSCheckPlayer, getNeutralAggressive, toggleDPSVision } from '../teams';
+import { getDPSCheckPlayers, getNeutralAggressive, toggleDPSVision } from '../teams';
 import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem, forEachDestructable } from '../util';
 import { loadInterRoundLobby, beginNewRun, loadTerrain } from '../terrain/load';
 import { gameState } from '../state';
@@ -19,7 +20,7 @@ import { CAGE_RAW } from '../sharedData';
 import { purchaseSummonUpgrade } from '../summonUpgrade';
 
 /**
- * The DPS check (dpsCheck.ts): twelve copies of the party fighting the round's
+ * The DPS check (dpsCheck.ts): copies of the party fighting the round's
  * camp out beyond the board's wall, first rigged and then for real, until the
  * cage is broken. Nothing about it is visible if it goes wrong -- it just
  * scales the camp off a bad number -- so these hold it to what it must do.
@@ -62,7 +63,7 @@ function countItems(): number {
 
 function checkUnits(): unit[] {
   const out: unit[] = [];
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => { out.push(u); });
+  for (const p of getDPSCheckPlayers()) forEachUnitOfPlayer(p.handle, u => { out.push(u); });
   return out;
 }
 
@@ -75,9 +76,6 @@ function rowCreeps(): unit[] {
   return out;
 }
 
-function phaseIs(p: string): () => boolean {
-  return () => getDPSCheckStatus().phase === p;
-}
 
 // --- Fields, measures, fights ------------------------------------------------
 
@@ -86,12 +84,10 @@ function phaseIs(p: string): () => boolean {
  * Far Seer and Priestess at level 5 and an Ogre Lord -- against a fixed camp,
  * so the counts are exact.
  *
- * - The opening fields every station: two heroes and a mercenary each, all the
- *   check player's, and a whole camp each; nothing nearer the board than the
- *   keep-out wall.
- * - The opening ends in a positive scale and an empty field: no rigged unit or
- *   dropped item outlives it.
- * - Real fights then finish -- a result each, the party leashed to its own
+ * - Every station fields two heroes and a mercenary, all a check player's,
+ *   and a whole camp; nothing nearer the board than the keep-out wall; every
+ *   station casts; and a first guess is set straight away.
+ * - Fights then finish -- a result each, the party leashed to its own
  *   station, no hero's items left on the ground.
  */
 function runDPSFields(t: TestReporter): void {
@@ -104,13 +100,13 @@ function runDPSFields(t: TestReporter): void {
   loadInterRoundLobby();
   startDPSCheck();
   const itemsBefore = countItems();
-  const check = getDPSCheckPlayer().handle;
   let casts = 0;
   const castTrig = CreateTrigger()!;
-  TriggerRegisterPlayerUnitEvent(castTrig, check, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+  for (const p of getDPSCheckPlayers()) TriggerRegisterPlayerUnitEvent(castTrig, p.handle, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
   TriggerAddAction(castTrig, () => { casts += 1; });
 
-  t.waitFor('openingFielded', phaseIs('rigged'), START_WAIT, () => t.after(1, () => {
+  resetDPSLearningForTest();
+  t.waitFor('fielded', () => rowCreeps().length > 0, START_WAIT, () => t.after(1, () => {
     const s = getDPSCheckStatus();
     const camp = CREEP_CAMPS[FIELD_CAMP];
     let heroes = 0;
@@ -126,14 +122,15 @@ function runDPSFields(t: TestReporter): void {
     t.expect('creepsFielded', rowCreeps().length, s.stations * camp.creeps.length);
     t.expect('checkUnitsNearBoard', nearBoard, 0);
     t.expect('mercsOwnedByHumans', measureFieldedForce().mercsOwnedByHumans, 0);
+    t.report('firstScale', s.firstScale);
+    t.report('partyStatDPS', s.partyStatDPS);
+    t.report('campStatDPS', s.campStatDPS);
+    if (s.firstScale <= 0) t.fail('firstScale', 'no first guess');
+    t.expectFalse('firstGuessCold', s.warm);
 
-    t.waitFor('openingEnds', phaseIs('fights'), RIGGED_SECONDS + 5, () => {
-      const after = getDPSCheckStatus();
-      t.report('riggedScale', after.riggedScale);
-      t.report('castsInOpening', casts);
-      if (after.riggedScale <= 0) t.fail('riggedScale', 'must be positive');
-      if (casts < s.stations) t.fail('castsInOpening', 'expected every station to have cast');
-      t.expect('itemsLeftByOpening', countItems() - itemsBefore, 0);
+    t.after(10, () => {
+      t.report('castsInTenSeconds', casts);
+      if (casts < s.stations) t.fail('castsInTenSeconds', 'expected every station to have cast');
 
       t.waitFor('firstFights', () => getDPSCheckStatus().fightsFinished >= s.stations, 150, () => {
         const st = getDPSCheckStatus();
@@ -174,7 +171,7 @@ registerTest('dpsfields', runDPSFields, 240);
  * and by asking the engine whether any of its units is visible to a human.
  */
 function runDPSVision(t: TestReporter): void {
-  const dps = getDPSCheckPlayer().handle;
+  const dps = getDPSCheckPlayers()[getDPSCheckPlayers().length - 1].handle;
   const humans = getHumanPlayers();
   const me = humans[0];
   const sharing = (p: player): boolean => GetPlayerAlliance(dps, p, ALLIANCE_SHARED_VISION);
@@ -186,7 +183,7 @@ function runDPSVision(t: TestReporter): void {
   beginNewRun();
   loadInterRoundLobby();
   startDPSCheck();
-  t.waitFor('fielded', phaseIs('rigged'), START_WAIT, () => t.after(1, () => {
+  t.waitFor('fielded', () => rowCreeps().length > 0, START_WAIT, () => t.after(1, () => {
     let fielded = 0;
     let seen = 0;
     for (const u of [...checkUnits(), ...rowCreeps()]) {
@@ -208,8 +205,8 @@ registerTest('dpsvision', runDPSVision);
 /**
  * - A round loading starts the check, against that round's camp.
  * - Any other board stops it and clears the field.
- * - Breaking the round's cage once the opening is done stops it, leaves a
- *   scale set, and clears the field.
+ * - Breaking the round's cage stops it, leaves a scale set, and clears the
+ *   field.
  */
 function runDPSRound(t: TestReporter): void {
   beginNewRun();
@@ -223,7 +220,17 @@ function runDPSRound(t: TestReporter): void {
   setCampForTest(FIELD_CAMP);
   loadTerrain(gameState.round);
   t.report('heroesChosen', getChosenHeroData().length);
-  t.waitFor('roundStartsIt', phaseIs('rigged'), START_WAIT, () => t.after(1, () => {
+  t.waitFor('roundStartsIt', () => rowCreeps().length > 0, START_WAIT, () => t.after(1, () => {
+    const g = getDPSCheckStatus();
+    t.report('firstScale', g.firstScale);
+    t.report('partyStatDPS', g.partyStatDPS);
+    t.report('campStatDPS', g.campStatDPS);
+    t.report('firstForce', g.firstForce);
+    t.report('firstCamp', g.firstCamp);
+    t.report('checkUnits', checkUnits().length);
+    // A check started straight after another must start clean: the last
+    // check's fights once survived into it and "finished" in its first second.
+    t.expect('fightsFinishedAt1s', g.fightsFinished, 0);
     t.expect('creepsForThisCamp', rowCreeps().length, CREEP_CAMPS[FIELD_CAMP].creeps.length * getDPSCheckStatus().stations);
 
     loadInterRoundLobby();
@@ -233,7 +240,7 @@ function runDPSRound(t: TestReporter): void {
       t.expect('rowCreepsAfterLobby', rowCreeps().length, 0);
 
       loadTerrain(gameState.round);
-      t.waitFor('fightsBegin', phaseIs('fights'), RIGGED_SECONDS + 5, () => t.after(3, () => {
+      t.waitFor('fightsBegin', () => rowCreeps().length > 0, START_WAIT, () => t.after(3, () => {
         let cage: destructable | null = null;
         forEachDestructable(d => { if (GetDestructableTypeId(d) === FourCC(CAGE_RAW)) cage = d; });
         if (cage == null) { t.fail('cage', 'no cage on the round board'); t.done(); return; }
@@ -314,15 +321,23 @@ const CONVERGE_CASES: ConvergeCase[] = [
     ],
   },
 ];
+CONVERGE_CASES.push({
+  name: 'mkpal', camp: 217, mercs: ['nogl'], heroes: [
+    hero(Units.MountainKing, 300, [[Abilities.StormBolt, 2], [Abilities.ThunderClap, 1], [Abilities.Bash, 1]]),
+    hero(Units.Paladin, 300, [[Abilities.HolyLight, 2], [Abilities.DevotionAura, 1], [Abilities.DivineShield, 1]]),
+  ],
+});
 const CONVERGE_CAP = 480;
 
-for (const c of CONVERGE_CASES) {
+function registerConverge(c: ConvergeCase): void {
   registerTest('bfconverge' + c.name, (t: TestReporter) => {
     beginNewRun();
     setRosterForTest(c.heroes);
     setMercsForTest(c.mercs.map(id => FourCC(id)));
     setCampForTest(c.camp);
     loadInterRoundLobby();
+    // Cold: what earlier tests learned would be a head start.
+    resetDPSLearningForTest();
     startDPSCheck();
     const marks: string[] = [];
     let lastMark = 0;
@@ -335,7 +350,7 @@ for (const c of CONVERGE_CASES) {
       if (s.phase === 'done' || s.elapsed >= CONVERGE_CAP) {
         t.report('converged', s.phase === 'done' ? 1 : 0);
         t.report('seconds', s.elapsed);
-        t.report('riggedScale', s.riggedScale);
+        t.report('firstScale', s.firstScale);
         t.report('scale', s.scale);
         t.report('error', s.centerError);
         t.report('fights', s.fightsFinished);
@@ -356,90 +371,75 @@ for (const c of CONVERGE_CASES) {
   }, CONVERGE_CAP + 60);
 }
 
-// --- Balance: which station layout? ------------------------------------------
+for (const c of CONVERGE_CASES) registerConverge(c);
+
+
+// --- Balance: a warm start -----------------------------------------------------
 
 /**
- * Balance harness ('bf...', out of the sweep): the same party and camp run
- * under different station layouts, to see whether more, tighter stations
- * settle the answer sooner without the fights leaking into each other or the
- * AI spreading itself thin. Reports the estimate every 30 s, the stray count
- * (unit-ticks spent nearer another station than its own) and casts per
- * station in the opening.
+ * Balance harness ('bf...', out of the sweep): one round to learn from, then
+ * the next round's check started warm, against a different camp -- the case
+ * the learning is for. Round one runs until it settles or 4 minutes, and its
+ * cage is broken (which is when a round learns). Round two is traced every 15
+ * s; compare it with bfconverge run cold on the same camp (the 'next' cases).
  */
-interface Layout {
-  name: string; stations: Array<{ x: number; y: number }>;
-  approach: number; leash: number; angles: number[];
-}
-
-function row(y: number, n: number, spacing: number): Array<{ x: number; y: number }> {
-  const out: Array<{ x: number; y: number }> = [];
-  for (let i = 0; i < n; i++) out.push({ x: (i - (n - 1) / 2) * spacing, y });
-  return out;
-}
-
-const ALONG = [0, 25, -25, 180, 155, 205];
-const ACROSS = [90, 270, 65, 115, 245, 295];
-
-const LAYOUTS: Layout[] = [
-  { name: 'a12', stations: [...row(-2400, 6, 1000), ...row(2650, 6, 1000)], approach: 450, leash: 500, angles: ALONG },
-  { name: 'b16', stations: [...row(-2400, 8, 750), ...row(2650, 8, 750)], approach: 450, leash: 375, angles: ACROSS },
-  { name: 'c20', stations: [...row(-2400, 10, 600), ...row(2650, 10, 600)], approach: 400, leash: 300, angles: ACROSS },
-  // Today's spacing, approached from above and below -- the game's layout
-  // since the layout runs found it strays far less for the same answer.
-  { name: 'a12x', stations: [...row(-2400, 6, 1000), ...row(2650, 6, 1000)], approach: 450, leash: 500, angles: ACROSS },
-  {
-    name: 'd24', stations: [...row(-2400, 10, 600), ...row(2150, 7, 850), ...row(3150, 7, 850)],
-    approach: 400, leash: 300, angles: ACROSS,
-  },
+const WARM_CASES: Array<{ c: ConvergeCase; next: number }> = [
+  { c: CONVERGE_CASES[0], next: 217 },
+  { c: CONVERGE_CASES[1], next: 90 },
+  { c: CONVERGE_CASES[2], next: 217 },
 ];
-const LAYOUT_CAP = 300;
-/** The game's own layout, restored after each run. */
-const DEFAULT_LAYOUT = LAYOUTS.find(l => l.name === 'a12x')!;
+const WARM_LEARN_CAP = 240;
+const WARM_CAP = 300;
 
-for (const layout of LAYOUTS) {
-  for (const c of CONVERGE_CASES) {
-    if (c.name === 'tcdr') continue;
-    registerTest('bflayout' + layout.name + c.name, (t: TestReporter) => {
-      setDPSLayoutForTest(layout.stations, layout.approach, layout.leash, layout.angles);
-      beginNewRun();
-      setRosterForTest(c.heroes);
-      setMercsForTest(c.mercs.map(id => FourCC(id)));
-      setCampForTest(c.camp);
-      loadInterRoundLobby();
-      let casts = 0;
-      const castTrig = CreateTrigger()!;
-      TriggerRegisterPlayerUnitEvent(castTrig, getDPSCheckPlayer().handle, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
-      TriggerAddAction(castTrig, () => { if (getDPSCheckStatus().phase === 'rigged') casts += 1; });
-      startDPSCheck();
-      const marks: string[] = [];
-      let lastMark = 0;
-      const watch = (): void => {
-        const s = getDPSCheckStatus();
-        if (s.elapsed - lastMark >= 30) {
-          lastMark = s.elapsed;
-          marks.push(string.format('%d:x%.2f/%d/%.2f', R2I(s.elapsed), s.scale, s.fightsFinished,
-            s.centerError < 100 ? s.centerError : 9.99));
-        }
-        if (s.phase === 'done' || s.elapsed >= LAYOUT_CAP) {
-          DestroyTrigger(castTrig);
-          t.report('stations', s.stations);
-          t.report('converged', s.phase === 'done' ? 1 : 0);
-          t.report('seconds', s.elapsed);
-          t.report('scale', s.scale);
-          t.report('fights', s.fightsFinished);
-          t.report('fightsPerMinute', s.fightsFinished / s.elapsed * 60);
-          t.report('openingCastsPerStation', casts / s.stations);
-          t.report('strayTicks', s.strayTicks);
-          t.report('trace', marks.join(' '));
-          stopDPSCheck();
-          setDPSLayoutForTest(DEFAULT_LAYOUT.stations, DEFAULT_LAYOUT.approach, DEFAULT_LAYOUT.leash,
-            DEFAULT_LAYOUT.angles);
-          t.done();
-          return;
-        }
-        t.after(1, watch);
-      };
-      t.after(1, watch);
-    }, LAYOUT_CAP + 60);
-  }
+for (const w of WARM_CASES) {
+  // The cold reference for round two: the same party against round two's camp.
+  registerConverge({ name: w.c.name + tostring(w.next), heroes: w.c.heroes, mercs: w.c.mercs, camp: w.next });
+  registerTest('bfwarm' + w.c.name, (t: TestReporter) => {
+    beginNewRun();
+    setRosterForTest(w.c.heroes);
+    setMercsForTest(w.c.mercs.map(id => FourCC(id)));
+    setCampForTest(w.c.camp);
+    loadInterRoundLobby();
+    resetDPSLearningForTest();
+    startDPSCheck();
+    const learnRound = (): void => {
+      const s = getDPSCheckStatus();
+      if (s.phase === 'done' || s.elapsed >= WARM_LEARN_CAP) {
+        t.report('firstRoundScale', s.scale);
+        t.report('firstRoundSeconds', s.elapsed);
+        finishDPSCheckForTest();
+        const learned = getDPSLearnedRatio();
+        t.report('learnedRatio', learned ?? -1);
+        if (learned == null) { t.fail('learnedRatio', 'nothing learned'); t.done(); return; }
+        setCampForTest(w.next);
+        startDPSCheck();
+        const marks: string[] = [];
+        let lastMark = -15;
+        const second = (): void => {
+          const s2 = getDPSCheckStatus();
+          if (s2.elapsed - lastMark >= 15) {
+            lastMark = s2.elapsed;
+            marks.push(string.format('%ds:x%.2f(%d)', R2I(s2.elapsed), s2.scale, s2.fightsFinished));
+          }
+          if (s2.phase === 'done' || s2.elapsed >= WARM_CAP) {
+            t.report('warm', s2.warm ? 1 : 0);
+            t.report('firstScale', s2.firstScale);
+            t.report('converged', s2.phase === 'done' ? 1 : 0);
+            t.report('seconds', s2.elapsed);
+            t.report('scale', s2.scale);
+            t.report('error', s2.centerError);
+            t.report('trace', marks.join(' '));
+            stopDPSCheck();
+            t.done();
+            return;
+          }
+          t.after(1, second);
+        };
+        t.after(1, second);
+        return;
+      }
+      t.after(1, learnRound);
+    };
+    t.after(1, learnRound);
+  }, WARM_LEARN_CAP + WARM_CAP + 60);
 }

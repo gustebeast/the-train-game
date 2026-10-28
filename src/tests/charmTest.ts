@@ -7,8 +7,8 @@ import { startBossFight, setBossArenaCallbacks, getBossArenaCallbacks } from '..
 import { setMercsForTest, spawnMercFromData, spawnMercWithHeroes, getSpawnedMercUnits, removeSpawnedMercUnits } from '../mercenary';
 import { CREEP_CAMPS } from '../creepCamps';
 import { setCampForTest, getCampOrigin } from '../creeps';
-import { getDPSCheckStatus, startDPSCheck, RIGGED_SECONDS } from '../dpsCheck';
-import { getDPSCheckPlayer } from '../teams';
+import { getDPSCheckStatus, startDPSCheck } from '../dpsCheck';
+import { getDPSCheckPlayers } from '../teams';
 import { purchaseSummonUpgrade } from '../summonUpgrade';
 import { CAGE_RAW } from '../sharedData';
 import { PEASANT_ID, SUMMON_ABILITY_ID, UNSUMMON_ABILITY_ID, BOSS_ID, BOSS_ADD_ID, BOSS_KEY_ITEM_ID } from '../constants';
@@ -22,9 +22,8 @@ import { getHumanPlayers, forEachUnitOfPlayer, forEachGroundItem, forEachDestruc
  * the caster's owner alive, Transmute kills it outright. The camp's own logic
  * only ever looked at deaths, so each needs checking -- in a real round, where
  * "camp defeated" grants Unsummon Heroes, the Tough Camp challenge and the
- * Strange Key; and in the DPS check, where a creep changing sides or losing
- * all of its rigged HP at once lands straight in the opening's measurement,
- * and a charmed creep has to end a real fight as surely as a dead one.
+ * Strange Key; and in the DPS check, where a charmed creep has to end a fight
+ * as surely as a dead one.
  *
  * Level 6, so both ultimates are learned. The camp is kobolds (two Kobolds and a
  * Kobold Geomancer): both spells refuse creeps above level 5.
@@ -303,8 +302,7 @@ registerTest('charmkey', runCharmKey);
 // --- In the DPS check ----------------------------------------------------------
 
 /** The check with this party, left to the AI: does it cast either ultimate,
- *  does the rigged opening still come out a sane positive scale, and do real
- *  fights end when the camp has been charmed and transmuted away? */
+ *  and do fights end when the camp has been charmed and transmuted away? */
 function runCharmCheck(t: TestReporter): void {
   beginNewRun();
   setRosterForTest([ALCHEMIST, DARK_RANGER]);
@@ -314,21 +312,16 @@ function runCharmCheck(t: TestReporter): void {
   loadInterRoundLobby();
   startDPSCheck();
 
-  const check = getDPSCheckPlayer().handle;
   const casts = new Map<string, number>();
   const trig = CreateTrigger()!;
-  TriggerRegisterPlayerUnitEvent(trig, check, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
+  for (const p of getDPSCheckPlayers()) TriggerRegisterPlayerUnitEvent(trig, p.handle, EVENT_PLAYER_UNIT_SPELL_EFFECT, undefined);
   TriggerAddAction(trig, () => {
     const name = GetObjectName(GetSpellAbilityId()) ?? '?';
     casts.set(name, (casts.get(name) ?? 0) + 1);
   });
 
-  t.waitFor('openingEnds', () => getDPSCheckStatus().phase === 'fights', RIGGED_SECONDS + 5, () => {
+  t.after(1, () => {
     const s = getDPSCheckStatus();
-    t.report('riggedScale', s.riggedScale);
-    // Before the fix this party measured -1055 DPS: a charmed creep's rigging
-    // read as damage dealt in reverse.
-    if (s.riggedScale <= 0 || s.riggedScale > 50) t.fail('riggedScale', 'outside anything a real party produces');
     t.waitFor('fightsEnd', () => getDPSCheckStatus().fightsFinished >= s.stations, 120, () => {
       DestroyTrigger(trig);
       const cn: string[] = [];

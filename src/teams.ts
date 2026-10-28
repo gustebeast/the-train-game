@@ -1,8 +1,11 @@
 import { MapPlayer } from 'w3ts';
 import { getHumanPlayers } from './util';
 
-/** Player 22: computer-controlled hero owner for the inter-round lobby DPS check. */
-const DPS_CHECK_PLAYER_INDEX = 22;
+/** The DPS check's computer players (dpsCheck.ts): 22, then 20 and 21. Each
+ *  runs its own share of the stations -- one AI casts less per station the
+ *  more it runs (measured: about 10-15% weaker past 12) -- and each must be
+ *  set up as a computer in the map, or its AI never casts. */
+const DPS_CHECK_PLAYER_INDICES: ReadonlyArray<number> = [22, 20, 21];
 /** Player 23: owns the train (and inter-round lobby vision water). */
 const TRAIN_PLAYER_INDEX = 23;
 
@@ -17,7 +20,6 @@ export function initTeams(): void {
   const neutralPassive = getNeutralPassive();
   const neutralExtra = getNeutralExtra();
   const enemy = getNeutralAggressive();
-  const dpsCheckPlayer = getDPSCheckPlayer();
   const trainPlayer = getTrainPlayer();
 
   humanPlayers.forEach((p: MapPlayer) => {
@@ -54,18 +56,27 @@ export function initTeams(): void {
   // was not a choice anybody made. -viewdps hands it to whoever asks instead.
   // A team of its own, as well as no alliance: sharing the humans' team is
   // the other way the game counts a player as on their side.
-  SetPlayerTeam(dpsCheckPlayer.handle, 2);
-  SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
-  // Neutral -- passive both ways -- rather than allied: an ally's hero dying
-  // is announced to every player ("Your ally's hero has fallen"), and the DPS
-  // check's heroes die all round long, out of sight beyond the wall.
-  for (const p of humanPlayers) {
-    setAllianceBoth(dpsCheckPlayer, p, bj_ALLIANCE_NEUTRAL);
+  const checkPlayers = getDPSCheckPlayers();
+  for (const dpsCheckPlayer of checkPlayers) {
+    SetPlayerTeam(dpsCheckPlayer.handle, 2);
+    SetPlayerController(dpsCheckPlayer.handle, MAP_CONTROL_COMPUTER);
+    // Neutral -- passive both ways -- rather than allied: an ally's hero dying
+    // is announced to every player ("Your ally's hero has fallen"), and the DPS
+    // check's heroes die all round long, out of sight beyond the wall.
+    for (const p of humanPlayers) {
+      setAllianceBoth(dpsCheckPlayer, p, bj_ALLIANCE_NEUTRAL);
+    }
+    // Neutral with each other too: not allied, so no AI sends units to help
+    // another's station; not enemies, so neighbouring stations leave each
+    // other alone.
+    for (const other of checkPlayers) {
+      if (other.handle !== dpsCheckPlayer.handle) SetPlayerAllianceStateBJ(dpsCheckPlayer.handle, other.handle, bj_ALLIANCE_NEUTRAL);
+    }
+    // DPS check heroes must be enemies with neutral aggressive
+    SetPlayerAlliance(dpsCheckPlayer.handle, enemy.handle, ALLIANCE_PASSIVE, false);
+    SetPlayerAlliance(enemy.handle, dpsCheckPlayer.handle, ALLIANCE_PASSIVE, false);
+    StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\common.ai');
   }
-  // DPS check heroes must be enemies with neutral aggressive
-  SetPlayerAlliance(dpsCheckPlayer.handle, enemy.handle, ALLIANCE_PASSIVE, false);
-  SetPlayerAlliance(enemy.handle, dpsCheckPlayer.handle, ALLIANCE_PASSIVE, false);
-  StartMeleeAI(dpsCheckPlayer.handle, 'scripts\\common.ai');
 
   // Train owner -- no AI, allied with vision to humans and the neutrals
   SetPlayerTeam(trainPlayer.handle, 0);
@@ -118,10 +129,16 @@ export function toggleDPSVision(who: player): boolean {
   const id = GetPlayerId(who);
   const on = !(dpsVision[id] ?? false);
   dpsVision[id] = on;
-  SetPlayerAlliance(getDPSCheckPlayer().handle, who, ALLIANCE_SHARED_VISION, on);
+  for (const p of getDPSCheckPlayers()) SetPlayerAlliance(p.handle, who, ALLIANCE_SHARED_VISION, on);
   return on;
 }
 
+/** The first DPS check player (22), for anything that needs one AI player. */
 export function getDPSCheckPlayer(): MapPlayer {
-  return MapPlayer.fromIndex(DPS_CHECK_PLAYER_INDEX)!;
+  return MapPlayer.fromIndex(DPS_CHECK_PLAYER_INDICES[0])!;
+}
+
+/** Every DPS check player. */
+export function getDPSCheckPlayers(): MapPlayer[] {
+  return DPS_CHECK_PLAYER_INDICES.map(i => MapPlayer.fromIndex(i)!);
 }

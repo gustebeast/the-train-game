@@ -1,14 +1,15 @@
 import { Timer, Trigger, Unit } from 'w3ts';
 import {
   getCampData, getCampDPSAdvantage, setCampDamageScale, getCampDamageScale,
-  spawnCampCopy, spawnUnscaledCampCopy, onCageBroken,
+  spawnUnscaledCampCopy, scaleCampCopy, getStatDPS, onCageBroken,
 } from './creeps';
 import { HeroData, getChosenHeroData, spawnHeroFromData } from './heroes';
 import { MercData, getLivingMercData, spawnMercFromData } from './mercenary';
 import { isChallengeArmed } from './challenges';
 import { CH_TOUGH_CAMP } from './challengeList';
-import { getDPSCheckPlayer, getNeutralAggressive } from './teams';
-import { forEachUnitOfPlayer, forEachInventoryItem, isAlive, unitExists, removeUnitsSummonsFirst } from './util';
+import { getDPSCheckPlayers, getNeutralAggressive } from './teams';
+import { MapPlayer } from 'w3ts';
+import { forEachUnitOfPlayer, forEachInventoryItem, isAlive, removeUnitsSummonsFirst } from './util';
 
 /**
  * The DPS check: how hard the next camp should hit, found by fighting it.
@@ -24,42 +25,51 @@ import { forEachUnitOfPlayer, forEachInventoryItem, isAlive, unitExists, removeU
  * moment a round loads until its cage is broken, so all the time the players
  * spend working towards the camp goes into the answer. Nothing it measures
  * changes in that time: the party and the camp are settled when the round
- * loads. Twelve copies of the party fight at once, each against its own copy
+ * loads. Eighteen copies of the party fight at once, each against its own copy
  * of the camp:
  *
- *   1. RIGGED OPENING (RIGGED_SECONDS). Every unit is rigged so nothing dies,
- *      and HP lost is counted both ways. The ratio is the party's damage
- *      against the camp's, everything alive and every spell cast -- an upper
- *      bound on the party, and a first guess at the scale, ready seconds into
- *      the round.
+ *   - A FIRST GUESS, from the units' own attack damage -- times what the
+ *     last round learned about how far that estimate is off for this run's
+ *     parties (learnedRatio), or the advantage when nothing has been learned.
+ *     It is only a starting point, so the first fights are spread wide round
+ *     it: about x0.5 to x2 cold, x0.8 to x1.3 warm.
  *
- *   2. REAL FIGHTS, for as long as there is time. Real HP, the camp scaled as a
- *      round scales it, each station at its own damage scale spread around the
- *      current best guess, and each approaching from its own side. A finished
- *      fight is a point -- scale tried, margin won or lost by -- and a line
- *      through the points says where the margin crosses the target. The next
- *      fights are spread round that, narrower as the answer firms up, so twelve
- *      fights at a time test twelve scales at a time.
+ *   - REAL FIGHTS, for as long as there is time. Real HP, the camp scaled as a
+ *     round scales it, each station at its own damage scale spread around the
+ *     current best guess, and each approaching from its own side. A finished
+ *     fight is a point -- scale tried, margin won or lost by -- and an S-shaped
+ *     curve through the points says where the margin crosses the target. A
+ *     fight already lopsided at 20 s is called there, so the stations spend
+ *     their time on the close ones. The next fights are spread round the
+ *     crossing, narrower as the answer firms up, so eighteen fights at a time
+ *     test eighteen scales at a time.
+ *
+ * There used to be a rigged opening -- nobody could die, HP lost counted both
+ * ways -- for the first guess. It was right for some parties and far off for
+ * others (x0.7 for a Blademaster and Lich whose answer was about x2: rigged,
+ * its Mirror Images soaked the camp), and a far-off guess cost minutes.
  *
  * It stops when the cage is broken -- banking how the long-running unfinished
  * fights stand -- or once the answer has stopped moving (isConverged). Any
  * board load ends it (spawn.ts clearBoard).
  *
- * Every unit of ours belongs to the one check player: it is the only slot the
- * map makes a computer, and an AI in any other slot never casts.
+ * Every unit of ours belongs to one of the check players (teams.ts), which
+ * share the stations out: only a slot the map makes a computer runs an AI
+ * that casts, and one AI casts less per station the more it runs.
  */
 
 // --- Where the fights happen -------------------------------------------------
 
 /**
- * Twelve stations: six in a row below the board and six above, 1000 apart.
+ * Eighteen stations, 1000 apart: a row of six below the board and two rows of
+ * six in the taller band above.
  *
  * The board's edge is y +-1344 and its wall a cell beyond; a second, full-width
  * wall at y +-1664 (spawn.ts) keeps every fight further out than a test fight
  * the user could not hear from the board (about 500 out). The rows' ground
  * runs from there to the map edge: y -1728..-3072 below, 1728..3584 above.
  */
-const ROW_YS: ReadonlyArray<number> = [-2400, 2650];
+const ROW_YS: ReadonlyArray<number> = [-2400, 2200, 3150];
 const STATION_XS: ReadonlyArray<number> = [-2500, -1500, -500, 500, 1500, 2500];
 let STATIONS: ReadonlyArray<{ x: number; y: number }> = (() => {
   const out: Array<{ x: number; y: number }> = [];
@@ -67,7 +77,7 @@ let STATIONS: ReadonlyArray<{ x: number; y: number }> = (() => {
   return out;
 })();
 /** How far from its camp a party starts. */
-let APPROACH = 450;
+let APPROACH = 400;
 /** Sides a party may come in from, in degrees: from above or below, across the
  *  row, drawn afresh every fight so which unit gets hit first varies
  *  independently of the scale being tried. Across rather than along it:
@@ -77,12 +87,10 @@ let APPROACH_ANGLES: ReadonlyArray<number> = [90, 270, 65, 115, 245, 295];
 /** How far a unit may wander from its station before it is sent back: half
  *  the spacing, so no fight drifts into its neighbour's, and beyond APPROACH,
  *  so a party is not walked onto its camp before the camp is down. */
-let LEASH = 500;
+let LEASH = 450;
 
 // --- Timing ------------------------------------------------------------------
 
-/** How long the rigged opening runs. */
-export const RIGGED_SECONDS = 10;
 /** How long an unfinished fight must have run for its lead to count when
  *  the cage breaks. Measured: the side ahead at 10 s won 81% of fights, at
  *  20 s 95%. */
@@ -90,8 +98,10 @@ const MIN_BANKED_SECONDS = 10;
 /** A safety net: a fight still going after this long is called on its lead. */
 const FIGHT_CAP = 120;
 const TICK = 0.5;
-/** The HP every unit is rigged to in the opening (the camp shares it). */
-const RIG_HP = 99999;
+/** A fight this far from the target this long in is called on its lead:
+ *  measured, the side ahead at 20 s went on to win 95% of fights. */
+const CALL_SECONDS = 20;
+const CALL_MARGIN = 0.35;
 
 // --- The target ----------------------------------------------------------------
 
@@ -107,7 +117,7 @@ function targetMargin(): number {
 
 // --- State -------------------------------------------------------------------
 
-type Phase = 'idle' | 'rigged' | 'fights' | 'done';
+type Phase = 'idle' | 'fights' | 'done';
 let phase: Phase = 'idle';
 /** The party being measured, as it was when the check began. */
 let heroes: HeroData[] = [];
@@ -120,6 +130,25 @@ let deathTrig: Trigger | null = null;
 
 function now(): number {
   return clock != null ? clock.elapsed : 0;
+}
+
+/** The computer player that runs station i: the stations are dealt out in
+ *  turn, so each AI's share is spread over every row. */
+function stationOwner(i: number): MapPlayer {
+  const players = getDPSCheckPlayers();
+  const n = ownerLimit > 0 ? Math.min(ownerLimit, players.length) : players.length;
+  return players[i % n];
+}
+
+/** For tests: run the stations on only the first n check players (0: all). */
+let ownerLimit = 0;
+export function setDPSOwnerLimitForTest(n: number): void {
+  ownerLimit = n;
+}
+
+/** Every unit any check player owns. */
+function forEachCheckUnit(cb: (this: void, u: unit) => void): void {
+  for (const p of getDPSCheckPlayers()) forEachUnitOfPlayer(p.handle, cb);
 }
 
 /** Which station each of the check's units belongs to, by handle id: recorded
@@ -151,7 +180,7 @@ export function startDPSCheck(): void {
   // sampling cannot.
   // periodic: watches the fights -- who is still standing, HP lost in the opening, and leashing.
   ticker.start(TICK, true, () => tick());
-  beginRigged();
+  phase = 'fights';
 }
 
 /** Stop and take everything off the field. The answer found so far stays set
@@ -176,12 +205,9 @@ function copyHero(h: HeroData): HeroData {
 /** Bank the unfinished fights as they stand, fix the answer, and stop. The
  *  round's cage has broken: its camp is about to be scaled. */
 function finish(): void {
-  if (phase === 'rigged' && riggedWatching && now() - riggedStart >= MIN_BANKED_SECONDS) {
-    // Found before the opening was over: what it has seen is still a better
-    // guess than the units' own stats.
-    endRigged();
-  } else if (phase === 'fights') {
-    for (const f of fights) {
+  if (phase === 'fights') {
+    for (let i = 0; i < STATIONS.length; i++) {
+      const f = fights[i];
       if (f == null || f.creeps.length === 0) continue;
       const t = now() - f.started;
       // Under ten seconds, who is ahead says too little: in real fights cut
@@ -192,16 +218,19 @@ function finish(): void {
     }
     refit(generation);
   }
+  learn();
   stopDPSCheck();
 }
 
 export function initDPSCheck(): void {
   // Creeps dying in the check would level its heroes mid-fight.
-  SetPlayerHandicapXP(getDPSCheckPlayer().handle, 0);
+  for (const p of getDPSCheckPlayers()) SetPlayerHandicapXP(p.handle, 0);
   // A hero or mercenary dying drops what it carries: take it first. Items are
   // the check's own copies, but on the ground they would be anybody's.
   deathTrig = Trigger.create();
-  TriggerRegisterPlayerUnitEvent(deathTrig.handle, getDPSCheckPlayer().handle, EVENT_PLAYER_UNIT_DEATH, undefined);
+  for (const p of getDPSCheckPlayers()) {
+    TriggerRegisterPlayerUnitEvent(deathTrig.handle, p.handle, EVENT_PLAYER_UNIT_DEATH, undefined);
+  }
   deathTrig.addAction(() => {
     const u = GetTriggerUnit();
     if (u == null) return;
@@ -215,12 +244,12 @@ export function initDPSCheck(): void {
 // --- Fielding ----------------------------------------------------------------
 
 /** Put one copy of the party down at `angle` from station `i`, owned by the
- *  check player, and return it. */
+ *  station's check player, and return it. */
 function fieldParty(i: number, angle: number): Unit[] {
   const st = STATIONS[i];
   const x = st.x + APPROACH * Cos(angle * bj_DEGTORAD);
   const y = st.y + APPROACH * Sin(angle * bj_DEGTORAD);
-  const check = getDPSCheckPlayer();
+  const check = stationOwner(i);
   const force: Unit[] = [];
   for (const h of heroes) {
     const u = spawnHeroFromData(h, check, x, y);
@@ -253,7 +282,7 @@ function randomAngle(): number {
 /** Remove one station's units -- party, summons, camp -- or every station's. */
 function clearStation(i: number | null): void {
   const units: unit[] = [];
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
+  forEachCheckUnit(u => {
     if (i == null || home.get(GetHandleId(u)) === i) units.push(u);
   });
   forEachUnitOfPlayer(getNeutralAggressive().handle, u => {
@@ -272,14 +301,13 @@ function clearField(): void {
   clearStation(null);
   home.clear();
   ourCreeps.clear();
-  rigged = [];
-  for (let i = 0; i < fights.length; i++) fights[i] = null;
+  for (let i = 0; i < STATIONS.length; i++) fights[i] = null;
 }
 
 /** Keep every unit of the check's at its own station; anything new is a
  *  summon, a charmed creep or an illusion, and belongs where it appeared. */
 function leash(): void {
-  forEachUnitOfPlayer(getDPSCheckPlayer().handle, u => {
+  forEachCheckUnit(u => {
     if (!isAlive(u)) return;
     const id = GetHandleId(u);
     let i = home.get(id);
@@ -309,139 +337,7 @@ function nearestStation(x: number, y: number): number {
   return best;
 }
 
-// --- 1. The rigged opening -----------------------------------------------------
-
-interface Watched {
-  unit: unit; lastHP: number;
-  /** One of our summons, keeping its own HP; see sampleRigged. */
-  summon: boolean;
-  /** A creep already taken out of the fight and credited. */
-  out: boolean;
-}
-
-let rigged: Watched[] = [];
-let riggedCreepHPLost = 0;
-let riggedOurHPLost = 0;
-let riggedStart = 0;
-/** One party's natural HP and one camp's, for crediting a creep taken out
- *  outright (Charm, Transmute) with what it would have had in a round. */
-let partyHP = 0;
-let campHP = 0;
-const naturalHP = new Map<number, number>();
-/** False until the opening's units are rigged and being watched. */
-let riggedWatching = false;
-
-function beginRigged(): void {
-  phase = 'rigged';
-  rigged = [];
-  riggedWatching = false;
-  riggedCreepHPLost = 0;
-  riggedOurHPLost = 0;
-  naturalHP.clear();
-  for (let i = 0; i < STATIONS.length; i++) {
-    fieldParty(i, randomAngle());
-    noteCreeps(i, spawnUnscaledCampCopy(STATIONS[i].x, STATIONS[i].y));
-  }
-  // Rigged on the next tick, once tome bonuses (a frame after a hero spawns)
-  // have landed: rigging first would read them as damage.
-}
-
-function rigAndWatch(): void {
-  const check = getDPSCheckPlayer().handle;
-  const creeps: unit[] = [];
-  forEachUnitOfPlayer(getNeutralAggressive().handle, u => {
-    if (ourCreeps.has(GetHandleId(u))) creeps.push(u);
-  });
-  partyHP = 0;
-  let n = 0;
-  forEachUnitOfPlayer(check, u => {
-    if (home.get(GetHandleId(u)) === 0) partyHP += BlzGetUnitMaxHP(u);
-  });
-  campHP = 0;
-  for (const c of creeps) {
-    naturalHP.set(GetHandleId(c), BlzGetUnitMaxHP(c));
-    if (home.get(GetHandleId(c)) === 0) { campHP += BlzGetUnitMaxHP(c); n += 1; }
-  }
-  const share = Math.max(1, Math.floor(RIG_HP / Math.max(1, n)));
-  for (const c of creeps) {
-    BlzSetUnitMaxHP(c, share);
-    SetUnitState(c, UNIT_STATE_LIFE, share);
-    BlzSetUnitWeaponIntegerField(c, UNIT_WEAPON_IF_ATTACK_ATTACK_TYPE, 0, 5);
-    SetUnitInvulnerable(c, false);
-    rigged.push({ unit: c, lastHP: share, summon: false, out: false });
-  }
-  forEachUnitOfPlayer(check, u => {
-    BlzSetUnitMaxHP(u, RIG_HP);
-    SetUnitState(u, UNIT_STATE_LIFE, RIG_HP);
-    rigged.push({ unit: u, lastHP: RIG_HP, summon: false, out: false });
-    const i = home.get(GetHandleId(u));
-    if (i != null) IssuePointOrder(u, 'attack', STATIONS[i].x, STATIONS[i].y);
-  });
-  riggedStart = now();
-  riggedWatching = true;
-}
-
-/** Bank the HP each side has lost since the last look.
- *
- *  HP lost rather than damage events, because HP is what has already had
- *  armour taken out and healing put back -- what the fight actually cost.
- *  Our summons and illusions keep their own HP and may die, as in a round:
- *  rigged, a Blademaster's Mirror Images soaked 70% of the camp's damage for
- *  the whole match and read the camp as twice as strong as it was. A creep
- *  that leaves the fight outright (killed through its pool, so transmuted, or
- *  charmed) is credited once with the HP it would have had in a round. */
-function sampleRigged(): void {
-  const creepOwner = getNeutralAggressive().handle;
-  const check = getDPSCheckPlayer().handle;
-  for (const w of rigged) {
-    if (w.out || !unitExists(w.unit)) continue;
-    const hp = GetUnitState(w.unit, UNIT_STATE_LIFE);
-    if (ourCreeps.has(GetHandleId(w.unit))) {
-      if (hp <= 0.405 || GetOwningPlayer(w.unit) !== creepOwner) {
-        riggedCreepHPLost += campHP > 0
-          ? (naturalHP.get(GetHandleId(w.unit)) ?? 0) * partyHP / campHP : 0;
-        w.out = true;
-        continue;
-      }
-      riggedCreepHPLost += w.lastHP - hp;
-    } else {
-      riggedOurHPLost += w.lastHP - hp;
-    }
-    w.lastHP = hp;
-  }
-  // New on our side: a summon or illusion (its own HP), or a charmed creep
-  // (rigged, as it is now part of the force).
-  forEachUnitOfPlayer(check, u => {
-    for (const w of rigged) if (w.unit === u) return;
-    const summon = IsUnitType(u, UNIT_TYPE_SUMMONED) || IsUnitIllusion(u);
-    if (!summon) {
-      BlzSetUnitMaxHP(u, RIG_HP);
-      SetUnitState(u, UNIT_STATE_LIFE, RIG_HP);
-    }
-    rigged.push({ unit: u, lastHP: GetUnitState(u, UNIT_STATE_LIFE), summon, out: false });
-  });
-}
-
-/** The rigged opening's answer: the scale at which the camp would deal the
- *  party's own damage back, times the advantage. */
-let riggedScale = 0;
-
-function endRigged(): void {
-  sampleRigged();
-  const t = now() - riggedStart;
-  riggedScale = riggedOurHPLost > 0 && t > 0
-    ? riggedCreepHPLost / riggedOurHPLost * getCampDPSAdvantage()
-    : getCampDPSAdvantage();
-  if (riggedScale <= 0) riggedScale = getCampDPSAdvantage();
-  clearField();
-  center = Math.log(riggedScale);
-  spread = START_SPREAD;
-  setCampDamageScale(riggedScale);
-  phase = 'fights';
-  for (let i = 0; i < STATIONS.length; i++) fights[i] = null;
-}
-
-// --- 2. Real fights ------------------------------------------------------------
+// --- Real fights -----------------------------------------------------------------
 
 interface Fight {
   station: number;
@@ -459,13 +355,18 @@ interface Fight {
   campMax: number;
 }
 
+/** Each station's fight, by station index, or null between fights.
+ *
+ *  Index it by station and loop over STATIONS.length, never over this: in Lua
+ *  a null is a hole, and the length of a list with holes is whatever border
+ *  the runtime finds first. Clearing the field by its length stopped early
+ *  and left the last two stations' fights standing into the next check, which
+ *  "finished" them at once with nonsense and dragged the guess to x0.05. */
 const fights: Array<Fight | null> = [];
-for (let i = 0; i < STATIONS.length; i++) fights.push(null);
 
 function startFight(i: number): void {
-  const scale = Math.exp(nextX());
   fights[i] = {
-    station: i, scale, force: fieldParty(i, randomAngle()), creeps: [], started: now(),
+    station: i, scale: 0, force: fieldParty(i, randomAngle()), creeps: [], started: now(),
     generation, forceMax: 0, campMax: 0,
   };
 }
@@ -498,8 +399,13 @@ function lead(f: Fight): number {
 
 function watchFight(f: Fight): void {
   if (f.creeps.length === 0) {
-    // The party has had its frame: measure it and put its camp down.
-    f.creeps = spawnCampCopy(STATIONS[f.station].x, STATIONS[f.station].y, f.force, f.scale);
+    // The party has had its frame (tome bonuses land a frame after a hero
+    // spawns): measure it, put its camp down, and pick the scale to try.
+    f.creeps = spawnUnscaledCampCopy(STATIONS[f.station].x, STATIONS[f.station].y);
+    if (!guessed) firstGuess(f.force, f.creeps);
+    f.scale = Math.exp(nextX());
+    f.generation = generation;
+    scaleCampCopy(f.creeps, f.force, f.scale);
     f.forceMax = maxHP(f.force);
     f.campMax = maxHP(f.creeps);
     noteCreeps(f.station, f.creeps);
@@ -510,10 +416,16 @@ function watchFight(f: Fight): void {
   const partyUp = f.force.some(u => isAlive(u.handle));
   const campUp = campStanding(f).length > 0;
   const t = now() - f.started;
-  if (partyUp && campUp && t < FIGHT_CAP) return;
+  const ahead = partyUp && campUp ? lead(f) : 0;
+  const decided = t >= CALL_SECONDS && Math.abs(ahead - targetMargin()) >= CALL_MARGIN;
+  if (partyUp && campUp && t < FIGHT_CAP && !decided) return;
   if (!campUp) record(f.scale, hpShare(f.force, f.forceMax), 1);
   else if (!partyUp) record(f.scale, -hpShare(campStanding(f), f.campMax), 1);
-  else record(f.scale, lead(f), 0.5);
+  // Called early: counted as finished, a little lighter -- its lead is a
+  // smaller number than the margin it was heading for, though on the right
+  // side of the target.
+  else if (decided) record(f.scale, ahead, 0.8);
+  else record(f.scale, ahead, 0.5);
   clearStation(f.station);
   fights[f.station] = null;
   refit(f.generation);
@@ -529,8 +441,41 @@ let observations: Observation[] = [];
  *  side of it the next fights are spread. */
 let center = 0;
 let spread = 0;
+/** How wide the next fights are spread, in log scale: a step's width, the
+ *  first guess's (about x0.5 to x2), and the narrowest once the answer is
+ *  firm. The first guess is spread that wide even when it was learned: a
+ *  learned guess is closer, but measured against a new camp it was still off
+ *  by up to 2x -- the camp's own spells and armour matter as well as the
+ *  party's -- and spread narrow, the first fights all landed on one side. */
 const START_SPREAD = 0.35;
+const COLD_SPREAD = 0.7;
 const MIN_SPREAD = 0.06;
+/** Where the guess stood at the start of the current STEP_SECONDS, and when
+ *  that was; see refit. */
+let stepFrom = 0;
+let stepFromTime = 0;
+const STEP_SECONDS = 15;
+/** Whether the first guess has been made; see firstGuess. */
+let guessed = false;
+/** The party's and the camp's own attack damage, as the first fight found
+ *  them: what an answer is carried to the next round in (learn). */
+let partyStatDPS = 0;
+let campStatDPS = 0;
+/**
+ * What the last check learned: its answer as a multiple of the units'-own-
+ * damage estimate -- the scale the camp needed, over the scale that would
+ * have matched the party's attack damage. Spells, summons, auras and armour
+ * are what make it differ from 1, and they change little from one round to
+ * the next, so it is a far better first guess than the advantage. Null until
+ * a check has found something.
+ */
+let learnedRatio: number | null = null;
+/** The first guess this check made, and whether it came from learning. */
+let firstScale = 0;
+let firstWasWarm = false;
+/** Diagnostics: how many units the first guess was made from. */
+let firstForce = 0;
+let firstCamp = 0;
 /** The guess after each finished fight, for telling when it has settled. */
 let history: number[] = [];
 /** Counts the guess's unbracketed steps: a step waits for a fight launched
@@ -551,8 +496,55 @@ function resetEstimate(): void {
   spread = START_SPREAD;
   centerError = Infinity;
   bracketed = false;
-  riggedScale = 0;
   generation = 0;
+  guessed = false;
+  partyStatDPS = 0;
+  campStatDPS = 0;
+  firstScale = 0;
+  firstWasWarm = false;
+}
+
+/** The first guess, from the first fight's units: the scale at which the
+ *  camp's attack damage matches the party's, times the learned ratio or, with
+ *  nothing learned, the advantage. */
+function firstGuess(force: Unit[], creeps: Unit[]): void {
+  guessed = true;
+  partyStatDPS = getStatDPS(force);
+  campStatDPS = getStatDPS(creeps);
+  firstForce = force.length;
+  firstCamp = creeps.length;
+  const estimate = campStatDPS > 0 ? partyStatDPS / campStatDPS : 1;
+  const ratio = learnedRatio ?? getCampDPSAdvantage();
+  center = Math.log(Math.max(0.05, estimate * ratio));
+  spread = COLD_SPREAD;
+  stepFrom = center;
+  stepFromTime = now();
+  firstScale = Math.exp(center);
+  firstWasWarm = learnedRatio != null;
+  setCampDamageScale(Math.exp(center));
+}
+
+/** Keep this check's answer, as a ratio to the estimate, for the next. Only an
+ *  answer with results on both sides of the target -- anything else is a
+ *  direction, not an answer. */
+function learn(): void {
+  if (!bracketed || partyStatDPS <= 0 || campStatDPS <= 0) return;
+  learnedRatio = Math.exp(center) * campStatDPS / partyStatDPS;
+}
+
+/** For tests: what breaking the cage does -- bank, learn, stop. */
+export function finishDPSCheckForTest(): void {
+  finish();
+}
+
+/** For tests: forget what earlier checks learned. */
+export function resetDPSLearningForTest(): void {
+  learnedRatio = null;
+}
+
+/** For tests: what earlier checks learned (see learnedRatio). */
+export function getDPSLearnedRatio(): number | null {
+  return learnedRatio;
 }
 
 function nextX(): number {
@@ -616,30 +608,108 @@ function refit(fromGeneration: number): void {
       sxy += o.weight * (o.x - mx) * (o.margin - my);
     }
     const slope = sxx > 0 ? sxy / sxx : 0;
-    if (slope >= 0) {
+    const curve = fitCurve(observations, target);
+    if (slope >= 0 && curve == null) {
       // Noise swamping the trend: stay put and keep sampling wide.
       centerError = Infinity;
       spread = START_SPREAD;
     } else {
-      const crossing = mx + (target - my) / slope;
+      // The crossing from the S-shaped curve when it fits, the line's when not.
+      const crossing = curve ?? mx + (target - my) / slope;
+      // Uncertainty from the line near the crossing: how far the results
+      // scatter about it, over how steep it is.
       let rss = 0;
       for (const o of near) rss += o.weight * (o.margin - (my + slope * (o.x - mx))) ** 2;
       const dof = Math.max(1, near.length - 2);
       const sigma = Math.sqrt(rss / sw * near.length / dof);
-      centerError = sigma / -slope * Math.sqrt(1 / near.length + (crossing - mx) ** 2 / (sxx / sw * near.length));
-      // Never further than a spread past the results in hand.
+      centerError = slope < 0
+        ? sigma / -slope * Math.sqrt(1 / near.length + (crossing - mx) ** 2 / (sxx / sw * near.length))
+        : Infinity;
+      // Within the scales actually fought: there are results either side of
+      // the target, so the crossing is among them, and a curve run on past
+      // the last of them is a guess no fight supports -- it put a Blademaster
+      // and Lich at x11.5 against an answer of x6.7.
       let lo = near[0].x; let hi = near[0].x;
       for (const o of near) { lo = Math.min(lo, o.x); hi = Math.max(hi, o.x); }
       // And no more than half a spread per result: the first fits, on a
       // handful of points either side, swung the guess 60% too far.
-      const reach = Math.max(lo - spread, Math.min(hi + spread, crossing));
+      const reach = Math.max(lo, Math.min(hi, crossing));
       center = Math.max(center - spread / 2, Math.min(center + spread / 2, reach));
       spread = Math.max(MIN_SPREAD, Math.min(START_SPREAD, 2 * centerError));
     }
   }
+  // However it moved: at most a step per STEP_SECONDS. Per result was not
+  // enough -- a burst of results swung a Blademaster and Lich from x4 to x10
+  // in one go, against an answer of x7.
+  if (now() - stepFromTime >= STEP_SECONDS) {
+    stepFrom = history.length > 0 ? history[history.length - 1] : center;
+    stepFromTime = now();
+  }
+  // Half that once there are results either side: from then on the answer is
+  // being refined, not hunted for.
+  const maxStep = bracketed ? START_SPREAD / 2 : START_SPREAD;
+  center = Math.max(stepFrom - maxStep, Math.min(stepFrom + maxStep, center));
   history.push(center);
   setCampDamageScale(Math.exp(center));
-  if (isConverged()) phase = 'done';
+  if (isConverged()) {
+    phase = 'done';
+    learn();
+  }
+}
+
+/** How many of the latest results the curve is fitted to. */
+const CURVE_RESULTS = 150;
+
+/** Lua 5.3 has no math.tanh. */
+function tanh(v: number): number {
+  if (v > 20) return 1;
+  if (v < -20) return -1;
+  const e = Math.exp(2 * v);
+  return (e - 1) / (e + 1);
+}
+
+/**
+ * Fit margin = a + c * tanh(s * (x - x0)) to every result and return where it
+ * crosses the target, or null when it does not fit or does not cross.
+ *
+ * S-shaped because margins are: they flatten out far from the crossing -- a
+ * party crushed at twice the right scale cannot lose by more than everything
+ * -- and some parties win or lose big with little in between (a Mountain King
+ * and Paladin swung +-60 at the same scale). A line only fits near the
+ * crossing; this uses every result. Found by trying steepnesses and centres on
+ * a grid, each with its height and level by least squares.
+ */
+function fitCurve(all: ReadonlyArray<Observation>, target: number): number | null {
+  // The latest results: they are the ones near where the guess now stands,
+  // and the fit's cost grows with how many it reads.
+  const obs = all.length > CURVE_RESULTS ? all.slice(all.length - CURVE_RESULTS) : all;
+  if (obs.length < 8) return null;
+  let lo = obs[0].x; let hi = obs[0].x;
+  for (const o of obs) { lo = Math.min(lo, o.x); hi = Math.max(hi, o.x); }
+  if (hi - lo < 0.05) return null;
+  let best: { a: number; c: number; s: number; x0: number; rss: number } | null = null;
+  for (const steep of [1.5, 3, 6, 12]) {
+    for (let x0 = lo; x0 <= hi; x0 += 0.025) {
+      let sw = 0; let sf = 0; let sy = 0; let sff = 0; let sfy = 0;
+      for (const o of obs) {
+        const f = tanh(steep * (o.x - x0));
+        sw += o.weight; sf += o.weight * f; sy += o.weight * o.margin;
+        sff += o.weight * f * f; sfy += o.weight * f * o.margin;
+      }
+      const det = sw * sff - sf * sf;
+      if (det <= 1e-9) continue;
+      const c = (sw * sfy - sf * sy) / det;
+      const a = (sy - c * sf) / sw;
+      if (c >= 0) continue;   // a harder camp must not help the party
+      let rss = 0;
+      for (const o of obs) rss += o.weight * (o.margin - (a + c * tanh(steep * (o.x - x0)))) ** 2;
+      if (best == null || rss < best.rss) best = { a, c, s: steep, x0, rss };
+    }
+  }
+  if (best == null) return null;
+  const r = (target - best.a) / best.c;
+  if (r <= -0.999 || r >= 0.999) return null;
+  return best.x0 + 0.5 * Math.log((1 + r) / (1 - r)) / best.s;
 }
 
 /** Fights a station must have finished before the answer may be called. */
@@ -675,12 +745,6 @@ function isConverged(): boolean {
 
 function tick(): void {
   leash();
-  if (phase === 'rigged') {
-    if (!riggedWatching) { rigAndWatch(); return; }
-    sampleRigged();
-    if (now() - riggedStart >= RIGGED_SECONDS) endRigged();
-    return;
-  }
   for (let i = 0; i < STATIONS.length; i++) {
     const f = fights[i];
     if (f != null) watchFight(f);
@@ -695,7 +759,7 @@ export function getDPSCheckReport(): string[] {
   const lines: string[] = [];
   const finished = observations.filter(o => o.weight >= 1);
   lines.push('DPS check: ' + phase + ', ' + I2S(R2I(now())) + 's');
-  if (riggedScale > 0) lines.push('Rigged opening: camp damage x' + string.format('%.2f', riggedScale));
+  if (learnedRatio != null) lines.push('Started from last round: x' + string.format('%.2f', learnedRatio) + ' of the estimate');
   lines.push('Fights finished: ' + I2S(finished.length) + (bracketed ? ', target bracketed' : ''));
   const scale = getCampDamageScale();
   lines.push(scale > 0
@@ -710,13 +774,15 @@ export function getDPSCheckReport(): string[] {
 /** For tests: the check's state, read from outside. */
 export function getDPSCheckStatus(): {
   phase: Phase; elapsed: number; stations: number; fightsFinished: number; strayTicks: number;
-  riggedScale: number; scale: number; bracketed: boolean; centerError: number;
+  firstScale: number; warm: boolean; scale: number; bracketed: boolean; centerError: number;
+  partyStatDPS: number; campStatDPS: number; firstForce: number; firstCamp: number;
   observations: ReadonlyArray<Observation>;
 } {
   return {
     phase, elapsed: now(), stations: STATIONS.length, strayTicks,
     fightsFinished: observations.filter(o => o.weight >= 1).length,
-    riggedScale, scale: getCampDamageScale(), bracketed, centerError, observations,
+    firstScale, warm: firstWasWarm, scale: getCampDamageScale(), bracketed, centerError, observations,
+    partyStatDPS, campStatDPS, firstForce, firstCamp,
   };
 }
 
@@ -731,8 +797,15 @@ export function setDPSLayoutForTest(
   APPROACH_ANGLES = angles;
   APPROACH = approach;
   LEASH = leash;
-  fights.length = 0;
-  for (let i = 0; i < STATIONS.length; i++) fights.push(null);
+  for (let i = 0; i < Math.max(STATIONS.length, 64); i++) fights[i] = null;
+}
+
+const DEFAULT_LAYOUT = { stations: STATIONS, approach: APPROACH, leash: LEASH, angles: APPROACH_ANGLES };
+
+/** For tests: back to the game's own layout, on every check player. */
+export function resetDPSLayoutForTest(): void {
+  setDPSLayoutForTest(DEFAULT_LAYOUT.stations, DEFAULT_LAYOUT.approach, DEFAULT_LAYOUT.leash, DEFAULT_LAYOUT.angles);
+  ownerLimit = 0;
 }
 
 /** For tests: where station i stands. */
