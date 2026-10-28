@@ -61,21 +61,23 @@ import { forEachUnitOfPlayer, forEachInventoryItem, isAlive, unitExists, removeU
  */
 const ROW_YS: ReadonlyArray<number> = [-2400, 2650];
 const STATION_XS: ReadonlyArray<number> = [-2500, -1500, -500, 500, 1500, 2500];
-const STATIONS: ReadonlyArray<{ x: number; y: number }> = (() => {
+let STATIONS: ReadonlyArray<{ x: number; y: number }> = (() => {
   const out: Array<{ x: number; y: number }> = [];
   for (const y of ROW_YS) for (const x of STATION_XS) out.push({ x, y });
   return out;
 })();
 /** How far from its camp a party starts. */
-const APPROACH = 450;
-/** Sides a party may come in from, in degrees. Mostly along the row, which is
- *  wide, rather than across it, which is not; drawn afresh every fight so
- *  which unit gets hit first varies independently of the scale being tried. */
-const APPROACH_ANGLES: ReadonlyArray<number> = [0, 25, -25, 180, 155, 205];
+let APPROACH = 450;
+/** Sides a party may come in from, in degrees: from above or below, across the
+ *  row, drawn afresh every fight so which unit gets hit first varies
+ *  independently of the scale being tried. Across rather than along it:
+ *  measured, coming in along the row put parties beside the next station and
+ *  units strayed there three to six times as often, for the same answer. */
+let APPROACH_ANGLES: ReadonlyArray<number> = [90, 270, 65, 115, 245, 295];
 /** How far a unit may wander from its station before it is sent back: half
  *  the spacing, so no fight drifts into its neighbour's, and beyond APPROACH,
  *  so a party is not walked onto its camp before the camp is down. */
-const LEASH = 500;
+let LEASH = 500;
 
 // --- Timing ------------------------------------------------------------------
 
@@ -135,6 +137,7 @@ export function startDPSCheck(): void {
   heroes = getChosenHeroData().map(h => copyHero(h));
   mercs = getLivingMercData().map(m => ({ typeId: m.typeId, items: m.items.map(it => ({ id: it.id, charges: it.charges })) }));
   resetEstimate();
+  strayTicks = 0;
   // Last round's answer is not this round's.
   setCampDamageScale(0);
   if (heroes.length === 0 || getCampData() == null) return;
@@ -187,7 +190,7 @@ function finish(): void {
       // And even after that it is a weaker witness than who won.
       record(f.scale, lead(f), 0.3 * Math.min(1, t / 20));
     }
-    refit();
+    refit(generation);
   }
   stopDPSCheck();
 }
@@ -288,8 +291,13 @@ function leash(): void {
     const dx = GetUnitX(u) - st.x;
     const dy = GetUnitY(u) - st.y;
     if (dx * dx + dy * dy > LEASH * LEASH) IssuePointOrder(u, 'attack', st.x, st.y);
+    if (nearestStation(GetUnitX(u), GetUnitY(u)) !== i) strayTicks += 1;
   });
 }
+
+/** Unit-ticks spent nearer another station than its own: how much the
+ *  fights leak into each other. Diagnostics, for choosing a layout. */
+let strayTicks = 0;
 
 function nearestStation(x: number, y: number): number {
   let best = 0;
@@ -442,6 +450,8 @@ interface Fight {
   /** Empty until the camp is put down, a tick after the party. */
   creeps: Unit[];
   started: number;
+  /** The step the guess was on when this fight was launched; see refit. */
+  generation: number;
   /** Each side's full HP when the fight began: the share of it still
    *  standing is the margin. Kept, because a corpse that decays takes its
    *  max HP with it. */
@@ -456,7 +466,7 @@ function startFight(i: number): void {
   const scale = Math.exp(nextX());
   fights[i] = {
     station: i, scale, force: fieldParty(i, randomAngle()), creeps: [], started: now(),
-    forceMax: 0, campMax: 0,
+    generation, forceMax: 0, campMax: 0,
   };
 }
 
@@ -506,7 +516,7 @@ function watchFight(f: Fight): void {
   else record(f.scale, lead(f), 0.5);
   clearStation(f.station);
   fights[f.station] = null;
-  refit();
+  refit(f.generation);
 }
 
 // --- The estimate --------------------------------------------------------------
@@ -523,6 +533,9 @@ const START_SPREAD = 0.35;
 const MIN_SPREAD = 0.06;
 /** The guess after each finished fight, for telling when it has settled. */
 let history: number[] = [];
+/** Counts the guess's unbracketed steps: a step waits for a fight launched
+ *  since the last one, so steps cannot pile up on results from before it. */
+let generation = 0;
 /** Standard error of the guess, from the fit; Infinity before there is one. */
 let centerError = Infinity;
 let bracketed = false;
@@ -539,6 +552,7 @@ function resetEstimate(): void {
   centerError = Infinity;
   bracketed = false;
   riggedScale = 0;
+  generation = 0;
 }
 
 function nextX(): number {
@@ -566,7 +580,7 @@ function record(scale: number, margin: number, weight: number): void {
  * line. Until the results straddle the target there is no crossing to find,
  * so the guess steps a whole spread the way they point instead.
  */
-function refit(): void {
+function refit(fromGeneration: number): void {
   const target = targetMargin();
   const near = observations.filter(o => Math.abs(o.x - center) <= 3 * Math.max(spread, 0.15));
   const above = near.some(o => o.margin > target);
@@ -577,11 +591,20 @@ function refit(): void {
   if (near.length < STATIONS.length / 2) return;
   if (!bracketed) {
     // Party winning everywhere: the camp needs to hit harder, and vice versa.
+    // To the furthest scale tried, not a spread past it: the next fights are
+    // spread a whole spread either side anyway. Stepping past it on every
+    // finished fight compounded while the next batch was still out -- a
+    // Blademaster and Lich went x0.75 to x3.1 in a minute, then took two more
+    // to come back to x2.
+    // And only on a fight launched since the last step: until one finishes
+    // there is no news about where the last step went.
+    if (fromGeneration < generation) return;
     let edge = near[0].x;
     for (const o of near) edge = above ? Math.max(edge, o.x) : Math.min(edge, o.x);
-    center = edge + (above ? 1 : -1) * START_SPREAD;
+    center = above ? Math.max(center, edge) : Math.min(center, edge);
     spread = START_SPREAD;
     centerError = Infinity;
+    generation += 1;
   } else {
     let sw = 0; let sx = 0; let sy = 0;
     for (const o of near) { sw += o.weight; sx += o.weight * o.x; sy += o.weight * o.margin; }
@@ -607,7 +630,10 @@ function refit(): void {
       // Never further than a spread past the results in hand.
       let lo = near[0].x; let hi = near[0].x;
       for (const o of near) { lo = Math.min(lo, o.x); hi = Math.max(hi, o.x); }
-      center = Math.max(lo - spread, Math.min(hi + spread, crossing));
+      // And no more than half a spread per result: the first fits, on a
+      // handful of points either side, swung the guess 60% too far.
+      const reach = Math.max(lo - spread, Math.min(hi + spread, crossing));
+      center = Math.max(center - spread / 2, Math.min(center + spread / 2, reach));
       spread = Math.max(MIN_SPREAD, Math.min(START_SPREAD, 2 * centerError));
     }
   }
@@ -617,7 +643,9 @@ function refit(): void {
 }
 
 /** Fights a station must have finished before the answer may be called. */
-const MIN_FIGHTS = 3 * STATIONS.length;
+function minFights(): number {
+  return 3 * STATIONS.length;
+}
 /** How many guesses in a row must agree. */
 const SETTLED_GUESSES = 12;
 /** How closely, in log scale (0.03 is about 3%). */
@@ -634,7 +662,7 @@ const SETTLED_WITHIN = 0.03;
  */
 function isConverged(): boolean {
   const finished = observations.filter(o => o.weight >= 1).length;
-  if (finished < MIN_FIGHTS || !bracketed) return false;
+  if (finished < minFights() || !bracketed) return false;
   if (!(centerError < SETTLED_WITHIN)) return false;
   if (history.length < SETTLED_GUESSES) return false;
   for (let i = history.length - SETTLED_GUESSES; i < history.length; i++) {
@@ -681,15 +709,30 @@ export function getDPSCheckReport(): string[] {
 
 /** For tests: the check's state, read from outside. */
 export function getDPSCheckStatus(): {
-  phase: Phase; elapsed: number; stations: number; fightsFinished: number;
+  phase: Phase; elapsed: number; stations: number; fightsFinished: number; strayTicks: number;
   riggedScale: number; scale: number; bracketed: boolean; centerError: number;
   observations: ReadonlyArray<Observation>;
 } {
   return {
-    phase, elapsed: now(), stations: STATIONS.length,
+    phase, elapsed: now(), stations: STATIONS.length, strayTicks,
     fightsFinished: observations.filter(o => o.weight >= 1).length,
     riggedScale, scale: getCampDamageScale(), bracketed, centerError, observations,
   };
+}
+
+/** For tests: replace the layout -- where the stations stand, how far out a
+ *  party starts, how far a unit may stray. Only between checks. */
+export function setDPSLayoutForTest(
+  stations: ReadonlyArray<{ x: number; y: number }>, approach: number, leash: number,
+  angles: ReadonlyArray<number>,
+): void {
+  stopDPSCheck();
+  STATIONS = stations;
+  APPROACH_ANGLES = angles;
+  APPROACH = approach;
+  LEASH = leash;
+  fights.length = 0;
+  for (let i = 0; i < STATIONS.length; i++) fights.push(null);
 }
 
 /** For tests: where station i stands. */
